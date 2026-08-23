@@ -54,12 +54,15 @@
 
 ## 3. 核心算法：异形切割与拼合几何
 
-### 3.1 任意 $M \times N$ 网格与自适应基准矩形
+### 3.1 任意 $M \times N$ 网格与智能最大化自适应基准矩形
 
 拼图算法内核完全支持任意长宽比图片与任意网格 $M \times N$（行数 $M \ge 2$，列数 $N \ge 2$）：
 
-- **棋盘与碎片尺寸解耦**：
-  - 设棋盘可用区域尺寸为 $\text{boardW} \times \text{boardH}$（按原图比例居中自适应）。
+- **智能棋盘最大化居中排布**：
+  - 设游戏工作区可用尺寸为 $W_{\text{avail}} \times H_{\text{avail}}$（扣除底部托盘高度与 Margin）。
+  - 原图长宽比 $R_{\text{img}} = \frac{\text{image.width}}{\text{image.height}}$，工作区长宽比 $R_{\text{avail}} = \frac{W_{\text{avail}}}{H_{\text{avail}}}$。
+  - **最大化占满策略**：
+    $$\begin{cases} \text{boardW} = W_{\text{avail}} \times 0.90, \quad \text{boardH} = \frac{\text{boardW}}{R_{\text{img}}} & (R_{\text{img}} \ge R_{\text{avail}} \text{，图片偏宽/横屏}) \\ \text{boardH} = H_{\text{avail}} \times 0.90, \quad \text{boardW} = \text{boardH} \times R_{\text{img}} & (R_{\text{img}} < R_{\text{avail}} \text{，图片偏高/竖屏/正方形}) \end{cases}$$
   - 单块碎片在屏幕基准尺寸为：
     $$w = \frac{\text{boardW}}{N},\quad h = \frac{\text{boardH}}{M}$$
   - 原图切片对应的像素基准尺寸为：
@@ -215,6 +218,49 @@ class UndoManager {
 }
 ```
 > **性能保障**：300 块碎片的 `PuzzleBoardState` 在内存中仅约 12KB，30 步历史栈占用内存 $< 400\text{KB}$，具备极高的稳定性和零副作用。
+
+---
+
+### 3.7 底部托盘碎片尺寸归一化与动态缩放过渡数学模型
+
+为彻底解决大网格切片（如 $15 \times 20 = 300$ 块或 $20 \times 20 = 400$ 块）下单片极小导致手指难以辨识和点选的问题，设计托盘尺寸归一化模型：
+
+#### A. 托盘基准归一化尺寸与长宽比锁定
+无论棋盘物理尺寸或行列切片数如何变化，托盘中每块碎片按统一的舒适触控基准尺寸展示（设定基准长边 $S_{\text{trayBase}} = 64.0\text{px}$）：
+$$\text{trayScale} = \frac{S_{\text{trayBase}}}{\max(w, h)}$$
+- 托盘中碎片实际占用尺寸：$(w \cdot \text{trayScale},\; h \cdot \text{trayScale})$，严格保持碎片原本的宽高比，避免拉伸变形；
+- 托盘横向步长：$\text{stepX} = w \cdot \text{trayScale} + \text{spacing}$；
+- 托盘最大可滚动距离：$\text{minScrollX} = \min(0, \text{trayWidth} - N_{\text{tray}} \cdot \text{stepX} - \text{margin})$。
+
+#### B. 拖拽进出棋盘的动态平滑缩放与逆变换
+- **提取进入棋盘**：当玩家在托盘中按住某碎片并开始拖拽时，碎片脱离托盘网格，通过 `ScaleEffect`（缓动时长 $0.15\text{s}$）从 $\text{trayScale}$ 平滑过渡至棋盘物理尺寸 $1.0$；
+- **放回托盘**：若玩家释放拖拽后碎片落入托盘区域且未形成吸附，通过 `ScaleEffect` 平滑缩回归一化比例 $\text{trayScale}$ 并重新对齐；
+- **命中测试瞬时逆变换**：
+  在缩放过渡的任意瞬时，触控点 $P_{\text{local}}$ 做逆缩放计算：
+  $$P_{\text{local\_unscaled}} = \left(\frac{P_{\text{local}}.x}{\text{scale}.x},\; \frac{P_{\text{local}}.y}{\text{scale}.y}\right)$$
+  确保手指拖拽抓握点与碎片图样之间绝对静止，零跳变与零抖动。
+
+---
+
+### 3.8 3D 立体浮雕边缘与动态悬浮投影渲染管线 (Bevel & Emboss Pipeline)
+
+为了赋予切片真实的物理实体质感，`PuzzlePieceComponent` 采用多层混合渲染管线：
+
+1. **动态悬浮阴影 (Dynamic Drop Shadow)**：
+   - **静止状态**：在切片几何路径下方绘制轻微向下偏移 $(0, 1.5\text{px})$ 的深色投影（`Color(0x33000000)`，`MaskFilter.blur(BlurStyle.normal, 2.0)`）；
+   - **拖拽悬浮状态**：动态扩大偏移至 $(0, 6.0\text{px})$，模糊半径扩大至 $6.0\text{px}$，营造被手指/光标抓起浮于空中的真实三维空间层次感。
+2. **3D 双色浮雕法向切口 (Bevel Edge Shading)**：
+   - **顶边/左边光照高光 (Top-Left Highlight)**：以偏移 $(-0.5\text{px}, -0.5\text{px})$ 绘制半透明白色高光（`Color(0x99FFFFFF)`），模拟左上方环境漫反射光照；
+   - **底边/右边阴影深色槽 (Bottom-Right Shadow)**：以偏移 $(+0.5\text{px}, +0.5\text{px})$ 绘制半透明黑色深边（`Color(0x66000000)`），营造凹凸咬合的物理厚度与切缝阴影；
+   - **主轮廓抗锯齿包边**：使用平滑贝塞尔封闭路径绘制 $1.5\text{px}$ 中性深色平滑线，确保高分辨率与缩放状态下的边缘极其锐利清晰。
+
+---
+
+### 3.9 托盘多模态横向滚动事件路由 (Multi-modal Gesture Routing)
+
+为满足全平台（移动触控、桌面鼠标拖拽、鼠标滚轮）一致的托盘交互体验：
+- **鼠标滚轮支持**：`JigsawPuzzleGame` 混入 `ScrollDetector`，在 `onScroll(PointerScrollInfo info)` 中判定光标位于托盘矩形时，直接平移 `scrollTray(-deltaY * 0.8)`；
+- **鼠标与触控拖拽支持**：`TrayBackgroundComponent` 捕获托盘背景拖拽事件，结合全局边界阻尼算法保证快速滑动不越界。
 
 ---
 

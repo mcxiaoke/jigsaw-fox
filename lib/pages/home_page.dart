@@ -2,9 +2,70 @@ import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 
+import '../logic/geometry/edge_layout.dart';
+import '../logic/geometry/piece_shape.dart';
 import '../logic/image_source.dart';
 import '../logic/puzzle_model.dart';
 import 'game_page.dart';
+
+/// Custom painter that draws an overlay grid of jigsaw piece edges over the preview image.
+class PuzzleGridPreviewPainter extends CustomPainter {
+  PuzzleGridPreviewPainter({
+    required this.rows,
+    required this.cols,
+    this.seed = 42,
+  }) : edgeLayout = EdgeLayout(rows: rows, cols: cols, seed: seed);
+
+  final int rows;
+  final int cols;
+  final int seed;
+  final EdgeLayout edgeLayout;
+
+  static final Paint _shadowPaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 1.5
+    ..color = const Color(0x66000000)
+    ..isAntiAlias = true;
+
+  static final Paint _linePaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 1.0
+    ..color = const Color(0xCCFFFFFF)
+    ..isAntiAlias = true;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (rows <= 0 || cols <= 0 || size.width <= 0 || size.height <= 0) return;
+
+    final pieceW = size.width / cols;
+    final pieceH = size.height / rows;
+
+    for (var r = 0; r < rows; r++) {
+      for (var c = 0; c < cols; c++) {
+        final edges = edgeLayout.edgesFor(r, c);
+        final shape = PieceShape(
+          edges: edges,
+          width: pieceW,
+          height: pieceH,
+        );
+
+        canvas.save();
+        canvas.translate(c * pieceW, r * pieceH);
+        // Draw shadow line then crisp white line
+        canvas.drawPath(shape.path, _shadowPaint);
+        canvas.drawPath(shape.path, _linePaint);
+        canvas.restore();
+      }
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant PuzzleGridPreviewPainter oldDelegate) {
+    return oldDelegate.rows != rows ||
+        oldDelegate.cols != cols ||
+        oldDelegate.seed != seed;
+  }
+}
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -17,6 +78,7 @@ class _HomePageState extends State<HomePage> {
   PuzzleDifficulty _difficulty = PuzzleDifficulty.presets[2]; // 4x4 recommended
   Uint8List? _imageBytes;
   bool _loading = false;
+  bool _showGridPreview = true;
 
   @override
   void initState() {
@@ -118,7 +180,7 @@ class _HomePageState extends State<HomePage> {
       ),
       body: Center(
         child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 600),
+          constraints: const BoxConstraints(maxWidth: 640),
           child: ListView(
             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
             shrinkWrap: true,
@@ -138,6 +200,20 @@ class _HomePageState extends State<HomePage> {
                         Image.memory(_imageBytes!, fit: BoxFit.cover)
                       else
                         const Center(child: CircularProgressIndicator()),
+
+                      // Real-time slice preview lines overlay
+                      if (_imageBytes != null && _showGridPreview)
+                        Positioned.fill(
+                          child: IgnorePointer(
+                            child: CustomPaint(
+                              painter: PuzzleGridPreviewPainter(
+                                rows: _difficulty.rows,
+                                cols: _difficulty.cols,
+                              ),
+                            ),
+                          ),
+                        ),
+
                       if (_loading)
                         const ColoredBox(
                           color: Colors.black45,
@@ -147,12 +223,26 @@ class _HomePageState extends State<HomePage> {
                   ),
                 ),
               ),
-              const SizedBox(height: 20),
-              Text(
-                '选择难度',
-                style: theme.textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.bold,
-                ),
+              const SizedBox(height: 16),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    '选择难度（${_difficulty.pieceCount} 块）',
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  FilterChip(
+                    avatar: Icon(
+                      _showGridPreview ? Icons.grid_on : Icons.grid_off,
+                      size: 16,
+                    ),
+                    label: const Text('切图预览', style: TextStyle(fontSize: 12)),
+                    selected: _showGridPreview,
+                    onSelected: (val) => setState(() => _showGridPreview = val),
+                  ),
+                ],
               ),
               const SizedBox(height: 10),
               Wrap(
@@ -202,7 +292,7 @@ class _HomePageState extends State<HomePage> {
                   ),
                 ],
               ),
-              const SizedBox(height: 32),
+              const SizedBox(height: 28),
               FilledButton.icon(
                 onPressed: _imageBytes == null ? null : _startGame,
                 icon: const Icon(Icons.play_arrow),

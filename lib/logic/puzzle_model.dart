@@ -22,6 +22,11 @@ class PuzzleDifficulty {
     PuzzleDifficulty(label: '5 × 5 (25 块)', rows: 5, cols: 5),
     PuzzleDifficulty(label: '6 × 6 (36 块)', rows: 6, cols: 6),
     PuzzleDifficulty(label: '6 × 8 (48 块)', rows: 6, cols: 8),
+    PuzzleDifficulty(label: '8 × 8 (64 块)', rows: 8, cols: 8),
+    PuzzleDifficulty(label: '10 × 10 (100 块)', rows: 10, cols: 10),
+    PuzzleDifficulty(label: '12 × 16 (192 块)', rows: 12, cols: 16),
+    PuzzleDifficulty(label: '15 × 20 (300 块)', rows: 15, cols: 20),
+    PuzzleDifficulty(label: '20 × 20 (400 块)', rows: 20, cols: 20),
   ];
 
   @override

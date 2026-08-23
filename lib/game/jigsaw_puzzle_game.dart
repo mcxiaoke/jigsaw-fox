@@ -21,7 +21,7 @@ typedef PuzzleImage = ui.Image;
 Future<PuzzleImage> decodeFlameImage(Uint8List bytes) =>
     decodeImageFromList(bytes);
 
-/// Tray background component that handles horizontal panning to scroll unplaced pieces.
+/// Tray background component that renders a sleek container for unplaced pieces.
 class TrayBackgroundComponent extends PositionComponent
     with DragCallbacks, HasGameReference<JigsawPuzzleGame> {
   TrayBackgroundComponent({
@@ -55,9 +55,9 @@ class TrayBackgroundComponent extends PositionComponent
   }
 }
 
-/// Flame game engine handling jigsaw puzzle canvas, bottom scrollable tray,
-/// batch rendering, deterministic slicing, cluster drag-and-drop, snapping, and undo/redo stacks.
-class JigsawPuzzleGame extends FlameGame {
+/// Flame game engine handling jigsaw puzzle canvas, multi-modal scrollable tray,
+/// smart aspect ratio adaptation, 3D piece rendering, cluster drag-and-drop, and undo/redo.
+class JigsawPuzzleGame extends FlameGame with ScrollDetector, PanDetector {
   JigsawPuzzleGame({
     required this.image,
     required this.rows,
@@ -82,6 +82,7 @@ class JigsawPuzzleGame extends FlameGame {
   final UndoManager undoManager;
 
   static const int _basePriority = 10;
+  static const double targetTrayPieceBaseSize = 64.0; // Standard touch-friendly base size
 
   late Vector2 boardTopLeft;
   late Vector2 boardSize;
@@ -91,7 +92,8 @@ class JigsawPuzzleGame extends FlameGame {
   late Vector2 traySize;
   double _trayScrollX = 0.0;
   double _trayPieceScale = 1.0;
-  double _trayPieceWidth = 60.0;
+  double _trayPieceWidth = 64.0;
+  double _trayPieceHeight = 64.0;
   double _traySpacing = 16.0;
 
   int _topPriority = _basePriority;
@@ -113,31 +115,9 @@ class JigsawPuzzleGame extends FlameGame {
 
   @override
   Future<void> onLoad() async {
-    // 1. Compute Bottom Tray Dimensions
-    final targetTrayH = min(size.y * 0.28, max(size.y * 0.22, 110.0));
-    traySize = Vector2(size.x - 24.0, targetTrayH);
-    trayPosition = Vector2(12.0, size.y - targetTrayH - 12.0);
+    _computeLayout();
 
-    // 2. Compute Board Dimensions inside upper workspace
-    final boardAreaHeight = trayPosition.y - 16.0;
-    final boardAreaWidth = size.x - 24.0;
-    final imageAspect = image.width / image.height;
-
-    var bW = boardAreaWidth * 0.88;
-    var bH = bW / imageAspect;
-    if (bH > boardAreaHeight * 0.88) {
-      bH = boardAreaHeight * 0.88;
-      bW = bH * imageAspect;
-    }
-
-    boardSize = Vector2(bW, bH);
-    boardTopLeft = Vector2(
-      (size.x - boardSize.x) / 2,
-      max(8.0, (boardAreaHeight - boardSize.y) / 2),
-    );
-    pieceSize = Vector2(bW / cols, bH / rows);
-
-    // 3. Draw Board Background Frame
+    // 1. Draw Board Background Frame
     add(
       RectangleComponent(
         position: boardTopLeft.clone(),
@@ -159,7 +139,7 @@ class JigsawPuzzleGame extends FlameGame {
       ),
     );
 
-    // 4. Draw Scrollable Bottom Tray Component
+    // 2. Draw Scrollable Bottom Tray Component
     add(
       TrayBackgroundComponent(
         position: trayPosition.clone(),
@@ -167,7 +147,7 @@ class JigsawPuzzleGame extends FlameGame {
       ),
     );
 
-    // 5. Initialize Edge Layout & Domain State
+    // 3. Initialize Edge Layout & Domain State
     edgeLayout = EdgeLayout(rows: rows, cols: cols, seed: seed);
     _boardState = PuzzleEngine.createInitialState(
       rows: rows,
@@ -176,16 +156,11 @@ class JigsawPuzzleGame extends FlameGame {
       rotationEnabled: rotationEnabled,
     );
 
-    // 6. Compute Tray layout scaling and spacing
-    _trayPieceScale = min(1.0, (traySize.y - 28.0) / pieceSize.y);
-    _trayPieceWidth = pieceSize.x * _trayPieceScale;
-    _traySpacing = 16.0;
-
     final srcPieceW = image.width / cols;
     final srcPieceH = image.height / rows;
     final initialPieces = <PieceState>[];
 
-    // 7. Generate Piece Shapes and arrange inside Bottom Tray
+    // 4. Generate Piece Shapes and arrange inside Bottom Tray with Normalized Size
     var trayIndex = 0;
     for (var r = 0; r < rows; r++) {
       for (var c = 0; c < cols; c++) {
@@ -245,12 +220,75 @@ class JigsawPuzzleGame extends FlameGame {
     undoManager.record(_boardState);
   }
 
+  /// Computes smart board maximizing layout and normalized tray metrics.
+  void _computeLayout() {
+    // 1. Bottom Tray Height (comfortably houses ~64px touch piece)
+    final targetTrayH = min(size.y * 0.28, max(size.y * 0.20, 100.0));
+    traySize = Vector2(size.x - 24.0, targetTrayH);
+    trayPosition = Vector2(12.0, size.y - targetTrayH - 12.0);
+
+    // 2. Smart Board Layout in remaining upper workspace
+    final boardAreaW = size.x - 32.0;
+    final boardAreaH = trayPosition.y - 20.0;
+    final imageAspect = image.width / image.height;
+    final areaAspect = boardAreaW / boardAreaH;
+
+    double bW, bH;
+    if (imageAspect >= areaAspect) {
+      // Image is wider than available space: width is constrained
+      bW = boardAreaW * 0.92;
+      bH = bW / imageAspect;
+    } else {
+      // Image is taller / squarish: height is constrained
+      bH = boardAreaH * 0.92;
+      bW = bH * imageAspect;
+    }
+
+    boardSize = Vector2(bW, bH);
+    boardTopLeft = Vector2(
+      (size.x - bW) / 2,
+      max(8.0, (boardAreaH - bH) / 2 + 8.0),
+    );
+    pieceSize = Vector2(bW / cols, bH / rows);
+
+    // 3. Normalized Tray Scaling (Target max side = 64px, preserving piece aspect ratio)
+    final maxPieceSide = max(pieceSize.x, pieceSize.y);
+    _trayPieceScale = targetTrayPieceBaseSize / maxPieceSide;
+    _trayPieceWidth = pieceSize.x * _trayPieceScale;
+    _trayPieceHeight = pieceSize.y * _trayPieceScale;
+    _traySpacing = 14.0;
+  }
+
   /// Computes the exact screen coordinate for the N-th piece in the bottom tray.
   Vector2 _getTrayPositionForIndex(int index) {
-    final startX = trayPosition.x + 20.0 + _trayScrollX;
+    final startX = trayPosition.x + 18.0 + _trayScrollX;
     final px = startX + index * (_trayPieceWidth + _traySpacing);
-    final py = trayPosition.y + (traySize.y - pieceSize.y * _trayPieceScale) / 2;
+    final py = trayPosition.y + (traySize.y - _trayPieceHeight) / 2;
     return Vector2(px, py);
+  }
+
+  @override
+  void onScroll(PointerScrollInfo info) {
+    super.onScroll(info);
+    final mousePos = info.eventPosition.global;
+    if (mousePos.y >= trayPosition.y && mousePos.y <= trayPosition.y + traySize.y) {
+      final delta = info.scrollDelta.global.y != 0
+          ? -info.scrollDelta.global.y
+          : -info.scrollDelta.global.x;
+      scrollTray(delta * 0.8);
+    }
+  }
+
+  @override
+  void onPanUpdate(DragUpdateInfo info) {
+    super.onPanUpdate(info);
+    final pos = info.eventPosition.global;
+    if (pos.y >= trayPosition.y && pos.y <= trayPosition.y + traySize.y) {
+      final isPieceDragging = _pieces.values.any((p) => p.isDragging);
+      if (!isPieceDragging) {
+        scrollTray(info.delta.global.x);
+      }
+    }
   }
 
   /// Scrolls the bottom tray horizontally.
@@ -258,7 +296,7 @@ class JigsawPuzzleGame extends FlameGame {
     final trayPieces = _pieces.values.where((p) => p.isInTray).toList();
     if (trayPieces.isEmpty) return;
 
-    final contentWidth = trayPieces.length * (_trayPieceWidth + _traySpacing) + 40.0;
+    final contentWidth = trayPieces.length * (_trayPieceWidth + _traySpacing) + 36.0;
     final minScroll = min(0.0, traySize.x - contentWidth);
     const maxScroll = 0.0;
 
@@ -296,7 +334,7 @@ class JigsawPuzzleGame extends FlameGame {
   void handlePieceDragStart(PuzzlePieceComponent piece) {
     _topPriority += 2;
 
-    // If piece was docked in tray, extract it to regular board workspace
+    // If piece was docked in tray, extract it to regular board workspace and animate to 1.0 scale
     for (final p in _pieces.values) {
       if (p.clusterId == piece.clusterId) {
         p.priority = _topPriority;
@@ -307,7 +345,7 @@ class JigsawPuzzleGame extends FlameGame {
       }
     }
 
-    // Rearrange remaining pieces in tray
+    // Re-align remaining pieces in tray
     _realignTrayPieces(animate: true);
   }
 
@@ -323,7 +361,7 @@ class JigsawPuzzleGame extends FlameGame {
   /// Called when user releases drag. Executes snap resolution & cluster merge.
   void handlePieceDragEnd(PuzzlePieceComponent piece) {
     // Check if user dropped piece back onto tray area
-    final inTrayArea = piece.position.y >= trayPosition.y - pieceSize.y * 0.3;
+    final inTrayArea = piece.position.y >= trayPosition.y - pieceSize.y * 0.25;
     final clusterPieces = _pieces.values.where((p) => p.clusterId == piece.clusterId).toList();
 
     // 1. Sync screen coordinates to domain PieceState list
@@ -376,8 +414,9 @@ class JigsawPuzzleGame extends FlameGame {
         onSolved();
       }
     } else if (inTrayArea && clusterPieces.length == 1) {
-      // Return single unlinked piece back into tray
+      // Return single unlinked piece back into tray and scale down to normalized size
       piece.isInTray = true;
+      piece.animateScaleTo(Vector2.all(_trayPieceScale), duration: 0.15);
       _realignTrayPieces(animate: true);
     }
   }
