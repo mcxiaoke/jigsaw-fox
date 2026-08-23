@@ -40,6 +40,8 @@ dependencies:
   dio: ^5.11.0
   shared_preferences: ^2.5.5
   flutter_riverpod: ^3.4.2
+  path_provider: ^2.1.6
+  vector_math: ^2.2.0
 
 dev_dependencies:
   flutter_test:
@@ -62,6 +64,9 @@ flutter:
   # included with your application, so that you can use the icons in
   # the material Icons class.
   uses-material-design: true
+
+  assets:
+    - assets/images/
 
   # To add assets to your application, add an assets section, like this:
   # assets:
