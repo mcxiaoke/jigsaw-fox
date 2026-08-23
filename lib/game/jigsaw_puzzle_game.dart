@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:math';
 import 'dart:ui' as ui;
 
@@ -64,6 +65,7 @@ class JigsawPuzzleGame extends FlameGame with ScrollDetector, PanDetector {
     required this.cols,
     int? seed,
     this.rotationEnabled = false,
+    this.initialSnapshotJson,
     required this.onSolved,
     this.onPieceSnapped,
     this.onProgressChanged,
@@ -75,6 +77,7 @@ class JigsawPuzzleGame extends FlameGame with ScrollDetector, PanDetector {
   final int cols;
   final int seed;
   final bool rotationEnabled;
+  final String? initialSnapshotJson;
   final VoidCallback onSolved;
   final VoidCallback? onPieceSnapped;
   final ValueChanged<int>? onProgressChanged;
@@ -98,6 +101,7 @@ class JigsawPuzzleGame extends FlameGame with ScrollDetector, PanDetector {
 
   int _topPriority = _basePriority;
   bool _isSolved = false;
+  bool _borderFilterActive = false;
 
   late EdgeLayout edgeLayout;
   late PuzzleBoardState _boardState;
@@ -109,6 +113,7 @@ class JigsawPuzzleGame extends FlameGame with ScrollDetector, PanDetector {
 
   bool get canUndo => undoManager.canUndo;
   bool get canRedo => undoManager.canRedo;
+  bool get isBorderFilterActive => _borderFilterActive;
 
   @override
   Color backgroundColor() => const Color(0x00000000);
@@ -217,6 +222,16 @@ class JigsawPuzzleGame extends FlameGame with ScrollDetector, PanDetector {
     }
 
     _boardState = _boardState.copyWith(pieces: initialPieces);
+
+    // 5. Restore from snapshot if available
+    if (initialSnapshotJson != null && initialSnapshotJson!.isNotEmpty) {
+      try {
+        final json = jsonDecode(initialSnapshotJson!) as Map<String, dynamic>;
+        final restored = PuzzleBoardState.fromJson(json);
+        _applyBoardState(restored);
+      } catch (_) {}
+    }
+
     undoManager.record(_boardState);
   }
 
@@ -334,7 +349,6 @@ class JigsawPuzzleGame extends FlameGame with ScrollDetector, PanDetector {
   void handlePieceDragStart(PuzzlePieceComponent piece) {
     _topPriority += 2;
 
-    // If piece was docked in tray, extract it to regular board workspace and animate to 1.0 scale
     for (final p in _pieces.values) {
       if (p.clusterId == piece.clusterId) {
         p.priority = _topPriority;
@@ -345,7 +359,6 @@ class JigsawPuzzleGame extends FlameGame with ScrollDetector, PanDetector {
       }
     }
 
-    // Re-align remaining pieces in tray
     _realignTrayPieces(animate: true);
   }
 
@@ -360,11 +373,9 @@ class JigsawPuzzleGame extends FlameGame with ScrollDetector, PanDetector {
 
   /// Called when user releases drag. Executes snap resolution & cluster merge.
   void handlePieceDragEnd(PuzzlePieceComponent piece) {
-    // Check if user dropped piece back onto tray area
     final inTrayArea = piece.position.y >= trayPosition.y - pieceSize.y * 0.25;
     final clusterPieces = _pieces.values.where((p) => p.clusterId == piece.clusterId).toList();
 
-    // 1. Sync screen coordinates to domain PieceState list
     final out = [0.0, 0.0];
     final updatedPieces = _boardState.pieces.map((p) {
       final comp = _pieces[p.id]!;
@@ -379,7 +390,6 @@ class JigsawPuzzleGame extends FlameGame with ScrollDetector, PanDetector {
 
     _boardState = _boardState.copyWith(pieces: updatedPieces);
 
-    // 2. Run pure engine snap algorithm
     final result = PuzzleEngine.resolveSnap(
       state: _boardState,
       draggedPieceId: piece.id,
@@ -389,7 +399,6 @@ class JigsawPuzzleGame extends FlameGame with ScrollDetector, PanDetector {
       _boardState = result.state;
       undoManager.record(_boardState);
 
-      // Animate snapped pieces into exact pixel alignment
       for (final affectedId in result.affectedPieceIds) {
         final statePiece = _boardState.pieceById(affectedId);
         final comp = _pieces[affectedId]!;
@@ -407,18 +416,54 @@ class JigsawPuzzleGame extends FlameGame with ScrollDetector, PanDetector {
 
       if (result.isCompleted && !_isSolved) {
         _isSolved = true;
-        // Hide piece borders for seamless celebration view
         for (final p in _pieces.values) {
           p.hideBorders = true;
         }
         onSolved();
       }
     } else if (inTrayArea && clusterPieces.length == 1) {
-      // Return single unlinked piece back into tray and scale down to normalized size
       piece.isInTray = true;
       piece.animateScaleTo(Vector2.all(_trayPieceScale), duration: 0.15);
       _realignTrayPieces(animate: true);
     }
+  }
+
+  /// Toggles border pieces filter (highlights/top-prioritizes border pieces).
+  void toggleBorderFilter() {
+    _borderFilterActive = !_borderFilterActive;
+    for (final p in _pieces.values) {
+      final isBorder = edgeLayout.edgesFor(p.r, p.c).isBorder;
+      p.isHighlight = _borderFilterActive && isBorder;
+    }
+  }
+
+  /// Organizes all unlinked/unplaced floating pieces cleanly back into the tray.
+  void organizeTray() {
+    for (final p in _pieces.values) {
+      // If piece is not solved and is single in cluster, park back into tray
+      final clusterSize = _pieces.values.where((o) => o.clusterId == p.clusterId).length;
+      final statePiece = _boardState.pieceById(p.id);
+      if (clusterSize == 1 && !statePiece.isSolved(rows, cols)) {
+        p.isInTray = true;
+        p.animateScaleTo(Vector2.all(_trayPieceScale), duration: 0.2);
+      }
+    }
+    _trayScrollX = 0.0;
+    _realignTrayPieces(animate: true);
+  }
+
+  /// Serializes current board state into Snapshot JSON string.
+  String exportSnapshotJson() {
+    final out = [0.0, 0.0];
+    final updated = _boardState.pieces.map((p) {
+      final comp = _pieces[p.id];
+      if (comp != null) {
+        _screenToNormalized(comp.position, out);
+        return p.copyWith(nx: out[0], ny: out[1], clusterId: comp.clusterId, rot: comp.rot);
+      }
+      return p;
+    }).toList();
+    return jsonEncode(_boardState.copyWith(pieces: updated).toJson());
   }
 
   /// Restores previous snapshot from undo history.
@@ -453,7 +498,6 @@ class JigsawPuzzleGame extends FlameGame with ScrollDetector, PanDetector {
   void hint() {
     final hint = PuzzleEngine.hintFor(_boardState);
 
-    // Move to target
     final updated = _boardState.pieces.map((p) {
       if (p.id == hint.pieceId) {
         return p.copyWith(
@@ -470,7 +514,6 @@ class JigsawPuzzleGame extends FlameGame with ScrollDetector, PanDetector {
       hintsUsed: _boardState.hintsUsed + 1,
     );
 
-    // Re-resolve snap for full cluster integration
     final result = PuzzleEngine.resolveSnap(
       state: _boardState,
       draggedPieceId: hint.pieceId,

@@ -4,40 +4,223 @@ import 'dart:typed_data';
 import 'package:flame/game.dart';
 import 'package:flutter/material.dart';
 
+import '../data/game_repository.dart';
 import '../game/jigsaw_puzzle_game.dart';
 import '../logic/puzzle_model.dart';
 
+/// Full-screen in-game puzzle page matching commercial Jigsaw (`play.jpg`).
 class GamePage extends StatefulWidget {
   const GamePage({
     super.key,
     required this.imageBytes,
     required this.difficulty,
+    this.levelIndex,
+    this.dailyDateStr,
+    this.customId,
+    this.initialSnapshotJson,
   });
 
   final Uint8List imageBytes;
   final PuzzleDifficulty difficulty;
+  final int? levelIndex;
+  final String? dailyDateStr;
+  final String? customId;
+  final String? initialSnapshotJson;
 
   @override
   State<GamePage> createState() => _GamePageState();
 }
 
 class _GamePageState extends State<GamePage> {
-  PuzzleImage? _image;
+  final _repo = GameRepository.instance;
   JigsawPuzzleGame? _game;
-  bool _loading = true;
-  String? _errorMessage;
 
-  bool _showPreview = false;
-  bool _isCompleted = false;
-  int _solvedCount = 0;
-  int _hintsUsed = 0;
+  bool _isSolved = false;
   int _seconds = 0;
   Timer? _timer;
+  int _solvedPieces = 0;
+  bool _showGhostPreview = false;
+  bool _isBorderFiltered = false;
 
   @override
   void initState() {
     super.initState();
-    _loadImageAndStartGame();
+    _startTimer();
+    _loadImage();
+  }
+
+  void _startTimer() {
+    _timer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (!_isSolved && mounted) {
+        setState(() => _seconds++);
+      }
+    });
+  }
+
+  Future<void> _loadImage() async {
+    final img = await decodeFlameImage(widget.imageBytes);
+    final game = JigsawPuzzleGame(
+      image: img,
+      rows: widget.difficulty.rows,
+      cols: widget.difficulty.cols,
+      initialSnapshotJson: widget.initialSnapshotJson,
+      onSolved: _handleSolved,
+      onPieceSnapped: () {
+        _repo.recordSnapStats(pieceCount: 1);
+      },
+      onProgressChanged: (count) {
+        if (mounted) setState(() => _solvedPieces = count);
+        _autoSaveProgress();
+      },
+    );
+
+    if (mounted) {
+      setState(() {
+        _game = game;
+      });
+    }
+  }
+
+  void _autoSaveProgress() {
+    if (_game == null || _isSolved) return;
+    final total = widget.difficulty.pieceCount;
+    final percent = total > 0 ? (_solvedPieces * 100 ~/ total) : 0;
+    final snapshot = _game!.exportSnapshotJson();
+
+    if (widget.levelIndex != null) {
+      _repo.updateLevelProgress(
+        levelIndex: widget.levelIndex!,
+        progressPercent: percent,
+        snapshotJson: snapshot,
+      );
+    } else if (widget.dailyDateStr != null) {
+      _repo.updateDailyProgress(
+        dateStr: widget.dailyDateStr!,
+        progressPercent: percent,
+        snapshotJson: snapshot,
+      );
+    } else if (widget.customId != null) {
+      _repo.updateCustomProgress(
+        id: widget.customId!,
+        progressPercent: percent,
+        snapshotJson: snapshot,
+      );
+    }
+  }
+
+  void _handleSolved() {
+    if (_isSolved) return;
+    _timer?.cancel();
+    setState(() {
+      _isSolved = true;
+      _solvedPieces = widget.difficulty.pieceCount;
+    });
+
+    _repo.recordSnapStats(durationSeconds: _seconds);
+
+    if (widget.levelIndex != null) {
+      _repo.updateLevelProgress(
+        levelIndex: widget.levelIndex!,
+        progressPercent: 100,
+        isCompleted: true,
+        stars: 3,
+        timeSeconds: _seconds,
+      );
+    } else if (widget.dailyDateStr != null) {
+      _repo.updateDailyProgress(
+        dateStr: widget.dailyDateStr!,
+        progressPercent: 100,
+        isCompleted: true,
+        timeSeconds: _seconds,
+      );
+    } else if (widget.customId != null) {
+      _repo.updateCustomProgress(
+        id: widget.customId!,
+        progressPercent: 100,
+        isCompleted: true,
+        timeSeconds: _seconds,
+      );
+    }
+
+    _showVictoryDialog();
+  }
+
+  String get _timeString {
+    final m = (_seconds ~/ 60).toString().padLeft(2, '0');
+    final s = (_seconds % 60).toString().padLeft(2, '0');
+    return '$m:$s';
+  }
+
+  void _showFullImagePreview() {
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => Dialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        clipBehavior: Clip.antiAlias,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Image.memory(widget.imageBytes, fit: BoxFit.contain),
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('关闭预览'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showVictoryDialog() {
+    showDialog<void>(
+      context: context,
+      barrierDismissible: true,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Row(
+          children: [
+            Text('🎉 ', style: TextStyle(fontSize: 24)),
+            Text('恭喜通关！', style: TextStyle(fontWeight: FontWeight.bold)),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ClipRRect(
+              borderRadius: BorderRadius.circular(12),
+              child: Image.memory(
+                widget.imageBytes,
+                height: 160,
+                width: double.infinity,
+                fit: BoxFit.cover,
+              ),
+            ),
+            const SizedBox(height: 16),
+            Text('总用时：$_timeString', style: const TextStyle(fontSize: 16)),
+            Text(
+              '规格：${widget.difficulty.label}',
+              style: const TextStyle(fontSize: 14, color: Colors.black54),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('查看拼图'),
+          ),
+          FilledButton(
+            onPressed: () {
+              Navigator.pop(ctx);
+              Navigator.pop(context);
+            },
+            style: FilledButton.styleFrom(
+              backgroundColor: const Color(0xFF2E7D32),
+            ),
+            child: const Text('返回列表'),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -46,277 +229,28 @@ class _GamePageState extends State<GamePage> {
     super.dispose();
   }
 
-  Future<void> _loadImageAndStartGame() async {
-    setState(() {
-      _loading = true;
-      _errorMessage = null;
-    });
-
-    try {
-      final img = await decodeFlameImage(widget.imageBytes);
-      if (!mounted) return;
-      _image = img;
-      _initNewGame(img);
-      _startTimer();
-      setState(() {
-        _loading = false;
-      });
-    } catch (e) {
-      if (!mounted) return;
-      setState(() {
-        _loading = false;
-        _errorMessage = '图片加载失败: $e';
-      });
-    }
-  }
-
-  void _initNewGame(PuzzleImage img) {
-    _isCompleted = false;
-    _solvedCount = 0;
-    _hintsUsed = 0;
-    _game = JigsawPuzzleGame(
-      image: img,
-      rows: widget.difficulty.rows,
-      cols: widget.difficulty.cols,
-      onSolved: () => _handleSolved(context),
-      onProgressChanged: (count) {
-        if (mounted) {
-          setState(() => _solvedCount = count);
-        }
-      },
-    );
-  }
-
-  void _startTimer() {
-    _timer?.cancel();
-    _seconds = 0;
-    _timer = Timer.periodic(const Duration(seconds: 1), (_) {
-      if (mounted && !_isCompleted) {
-        setState(() => _seconds++);
-      }
-    });
-  }
-
-  void _restartGame() {
-    if (_image == null) return;
-    setState(() {
-      _showPreview = false;
-      _initNewGame(_image!);
-      _startTimer();
-    });
-  }
-
-  String _formatTime(int totalSec) {
-    final m = (totalSec ~/ 60).toString().padLeft(2, '0');
-    final s = (totalSec % 60).toString().padLeft(2, '0');
-    return '$m:$s';
-  }
-
-  void _handleSolved(BuildContext context) {
-    _timer?.cancel();
-    if (mounted) {
-      setState(() => _isCompleted = true);
-    }
-    _showCompletionDialog(context);
-  }
-
-  void _showCompletionDialog(BuildContext context) {
-    final timeStr = _formatTime(_seconds);
-
-    showDialog<void>(
-      context: context,
-      barrierDismissible: true, // Allow tapping outside to view puzzle
-      builder: (dialogContext) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: Row(
-          children: [
-            const Icon(Icons.emoji_events, size: 36, color: Colors.amber),
-            const SizedBox(width: 10),
-            const Expanded(
-              child: Text(
-                '拼图完成！',
-                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 20),
-              ),
-            ),
-            IconButton(
-              icon: const Icon(Icons.close),
-              tooltip: '关闭查看拼图',
-              onPressed: () => Navigator.of(dialogContext).pop(),
-            ),
-          ],
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.primaryContainer.withAlpha(50),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('难度：${widget.difficulty.label}',
-                            style: const TextStyle(fontWeight: FontWeight.w600)),
-                        const SizedBox(height: 4),
-                        Text('用时：$timeStr'),
-                        const SizedBox(height: 4),
-                        Text('提示次数：$_hintsUsed 次'),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 10),
-            const Text(
-              '💡 提示：点击「查看拼图」或对话框外部可返回棋盘欣赏与核对完整图片。',
-              style: TextStyle(fontSize: 12, color: Colors.grey),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton.icon(
-            onPressed: () => Navigator.of(dialogContext).pop(),
-            icon: const Icon(Icons.visibility),
-            label: const Text('查看拼图'),
-          ),
-          OutlinedButton(
-            onPressed: () {
-              Navigator.of(dialogContext).pop();
-              _restartGame();
-            },
-            child: const Text('再来一局'),
-          ),
-          FilledButton(
-            onPressed: () {
-              Navigator.of(dialogContext).pop();
-              Navigator.of(context).pop();
-            },
-            child: const Text('返回首页'),
-          ),
-        ],
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final totalCount = widget.difficulty.pieceCount;
-
     return Scaffold(
-      appBar: AppBar(
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
-          tooltip: '返回',
-          onPressed: () => Navigator.of(context).pop(),
-        ),
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              widget.difficulty.label,
-              style: theme.textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            Text(
-              _isCompleted
-                  ? '🎉 拼图已完成 · 耗时 ${_formatTime(_seconds)}'
-                  : '用时 ${_formatTime(_seconds)} · 已对齐 $_solvedCount / $totalCount',
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: _isCompleted
-                    ? Colors.green
-                    : theme.colorScheme.onSurfaceVariant,
-                fontWeight: _isCompleted ? FontWeight.bold : FontWeight.normal,
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          if (!_isCompleted) ...[
-            IconButton(
-              icon: const Icon(Icons.undo),
-              tooltip: '撤销',
-              onPressed: () {
-                _game?.undo();
-                setState(() {});
-              },
-            ),
-            IconButton(
-              icon: const Icon(Icons.redo),
-              tooltip: '重做',
-              onPressed: () {
-                _game?.redo();
-                setState(() {});
-              },
-            ),
-            IconButton(
-              icon: const Icon(Icons.lightbulb_outline),
-              tooltip: '提示一块',
-              onPressed: () {
-                _game?.hint();
-                setState(() => _hintsUsed++);
-              },
-            ),
-          ],
-          IconButton(
-            icon: Icon(
-              _showPreview ? Icons.visibility : Icons.visibility_off,
-              color: _showPreview ? theme.colorScheme.primary : null,
-            ),
-            tooltip: '原图预览',
-            onPressed: () => setState(() => _showPreview = !_showPreview),
-          ),
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            tooltip: '重新开始',
-            onPressed: _restartGame,
-          ),
-        ],
-      ),
+      backgroundColor: const Color(0xFFE2E6EA),
       body: SafeArea(
         child: Stack(
           children: [
-            // 1. Flame Game Viewport
-            if (_loading)
-              const Center(child: CircularProgressIndicator())
-            else if (_errorMessage != null)
-              Center(child: Text(_errorMessage!))
-            else if (_game != null)
-              GameWidget(
-                game: _game!,
-              ),
+            // 1. Core Flame Game Canvas
+            if (_game != null)
+              Positioned.fill(child: GameWidget(game: _game!))
+            else
+              const Center(child: CircularProgressIndicator()),
 
-            // 2. Full-scale overlay preview
-            if (_showPreview)
+            // 2. Ghost semi-transparent original image overlay
+            if (_showGhostPreview)
               Positioned.fill(
-                child: GestureDetector(
-                  onTap: () => setState(() => _showPreview = false),
-                  child: Container(
-                    color: Colors.black54,
-                    alignment: Alignment.center,
-                    child: Container(
-                      margin: const EdgeInsets.all(32),
-                      decoration: BoxDecoration(
-                        border: Border.all(color: Colors.white, width: 3),
-                        borderRadius: BorderRadius.circular(12),
-                        boxShadow: const [
-                          BoxShadow(
-                            color: Colors.black87,
-                            blurRadius: 16,
-                            spreadRadius: 4,
-                          ),
-                        ],
-                      ),
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(9),
+                child: IgnorePointer(
+                  child: Opacity(
+                    opacity: 0.35,
+                    child: Center(
+                      child: Padding(
+                        padding: const EdgeInsets.only(bottom: 120),
                         child: Image.memory(widget.imageBytes, fit: BoxFit.contain),
                       ),
                     ),
@@ -324,43 +258,114 @@ class _GamePageState extends State<GamePage> {
                 ),
               ),
 
-            // 3. Completion Floating Banner (when dialog is dismissed)
-            if (_isCompleted)
+            // 3. Top 6-Button Toolbar matching play.jpg
+            Positioned(
+              top: 0,
+              left: 0,
+              right: 0,
+              child: Container(
+                color: Colors.white.withValues(alpha: 0.92),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    // Back arrow (auto-saves snapshot)
+                    IconButton(
+                      icon: const Icon(Icons.arrow_back, color: Colors.black87),
+                      onPressed: () {
+                        _autoSaveProgress();
+                        Navigator.of(context).pop();
+                      },
+                    ),
+
+                    // Border Filter Button
+                    IconButton(
+                      icon: Icon(
+                        Icons.border_outer,
+                        color: _isBorderFiltered ? const Color(0xFF2E7D32) : Colors.black54,
+                      ),
+                      tooltip: '边缘碎片筛选',
+                      onPressed: () {
+                        _game?.toggleBorderFilter();
+                        setState(() => _isBorderFiltered = _game?.isBorderFilterActive ?? false);
+                      },
+                    ),
+
+                    // Clean / Organize Tray Button (Broom / Sweep)
+                    IconButton(
+                      icon: const Icon(Icons.cleaning_services_outlined, color: Colors.black54),
+                      tooltip: '一键整理托盘',
+                      onPressed: () => _game?.organizeTray(),
+                    ),
+
+                    // Hint Button (Lightbulb)
+                    IconButton(
+                      icon: const Icon(Icons.lightbulb_outline, color: Colors.amber),
+                      tooltip: '智能提示',
+                      onPressed: () => _game?.hint(),
+                    ),
+
+                    // Ghost Transparency Eye
+                    IconButton(
+                      icon: Icon(
+                        _showGhostPreview ? Icons.visibility : Icons.visibility_off_outlined,
+                        color: _showGhostPreview ? const Color(0xFF2E7D32) : Colors.black54,
+                      ),
+                      tooltip: '半透明底图',
+                      onPressed: () => setState(() => _showGhostPreview = !_showGhostPreview),
+                    ),
+
+                    // Full image thumbnail preview
+                    IconButton(
+                      icon: const Icon(Icons.image_outlined, color: Colors.black87),
+                      tooltip: '查看原图',
+                      onPressed: _showFullImagePreview,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+
+            // 4. Floating Victory Banner when solved and dialog closed
+            if (_isSolved)
               Positioned(
                 bottom: 16,
-                left: 16,
-                right: 16,
-                child: Card(
-                  elevation: 6,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(16),
+                left: 20,
+                right: 20,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF2E7D32),
+                    borderRadius: BorderRadius.circular(24),
+                    boxShadow: const [
+                      BoxShadow(color: Colors.black38, blurRadius: 10, offset: Offset(0, 4)),
+                    ],
                   ),
-                  color: theme.colorScheme.surfaceContainerHighest,
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 10,
-                    ),
-                    child: Row(
-                      children: [
-                        const Icon(Icons.check_circle, color: Colors.green, size: 28),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: Text(
-                            '拼图已完美完成！耗时 ${_formatTime(_seconds)}',
-                            style: const TextStyle(fontWeight: FontWeight.bold),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        '🎉 拼图完成！耗时 $_timeString',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 15,
+                        ),
+                      ),
+                      Row(
+                        children: [
+                          TextButton(
+                            onPressed: _showVictoryDialog,
+                            child: const Text('结算成绩', style: TextStyle(color: Colors.white70)),
                           ),
-                        ),
-                        TextButton(
-                          onPressed: () => _showCompletionDialog(context),
-                          child: const Text('结算成绩'),
-                        ),
-                        FilledButton(
-                          onPressed: _restartGame,
-                          child: const Text('再来一局'),
-                        ),
-                      ],
-                    ),
+                          FilledButton(
+                            onPressed: () => Navigator.pop(context),
+                            style: FilledButton.styleFrom(backgroundColor: Colors.white),
+                            child: const Text('返回', style: TextStyle(color: Color(0xFF2E7D32))),
+                          ),
+                        ],
+                      ),
+                    ],
                   ),
                 ),
               ),
