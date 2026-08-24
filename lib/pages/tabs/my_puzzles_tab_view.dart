@@ -69,6 +69,7 @@ class _MyPuzzlesTabViewState extends State<MyPuzzlesTabView> {
       initialDifficulty: item.difficulty,
       completedPieceCounts: item.completedPieceCounts.toSet(),
       title: '${item.title} · 难度选择',
+      savedProgressPercent: item.isCompleted ? null : item.progressPercent,
       onDelete: () async {
         await _repo.deleteCustomPuzzle(item.id);
         if (mounted) {
@@ -78,14 +79,35 @@ class _MyPuzzlesTabViewState extends State<MyPuzzlesTabView> {
           );
         }
       },
+      onResetProgress: () async {
+        await _repo.updateCustomProgress(
+          id: item.id,
+          progressPercent: 0,
+          snapshotJson: null,
+          isCompleted: item.isCompleted,
+        );
+        if (!mounted) return;
+        await Navigator.of(context).push(
+          MaterialPageRoute<void>(
+            builder: (_) => GamePage(
+              imageBytes: bytes,
+              difficulty: item.difficulty,
+              customId: item.id,
+              initialSnapshotJson: null,
+            ),
+          ),
+        );
+        setState(() {});
+      },
       onStart: (diff) async {
+        final isSameDiff = diff.pieceCount == item.difficulty.pieceCount;
         await Navigator.of(context).push(
           MaterialPageRoute<void>(
             builder: (_) => GamePage(
               imageBytes: bytes,
               difficulty: diff,
               customId: item.id,
-              initialSnapshotJson: item.savedSnapshotJson,
+              initialSnapshotJson: isSameDiff && !item.isCompleted ? item.savedSnapshotJson : null,
             ),
           ),
         );

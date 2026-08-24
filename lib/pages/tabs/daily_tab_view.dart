@@ -35,14 +35,36 @@ class _DailyTabViewState extends State<DailyTabView> {
       initialDifficulty: item.difficulty,
       completedPieceCounts: item.completedPieceCounts.toSet(),
       title: '${item.date} 挑战 · 难度选择',
+      savedProgressPercent: item.isCompleted ? null : item.progressPercent,
+      onResetProgress: () async {
+        await _repo.updateDailyProgress(
+          dateStr: item.date,
+          progressPercent: 0,
+          snapshotJson: null,
+          isCompleted: item.isCompleted,
+        );
+        if (!mounted) return;
+        await Navigator.of(context).push(
+          MaterialPageRoute<void>(
+            builder: (_) => GamePage(
+              imageBytes: imgBytes,
+              difficulty: item.difficulty,
+              dailyDateStr: item.date,
+              initialSnapshotJson: null,
+            ),
+          ),
+        );
+        setState(() {});
+      },
       onStart: (diff) async {
+        final isSameDiff = diff.pieceCount == item.difficulty.pieceCount;
         await Navigator.of(context).push(
           MaterialPageRoute<void>(
             builder: (_) => GamePage(
               imageBytes: imgBytes,
               difficulty: diff,
               dailyDateStr: item.date,
-              initialSnapshotJson: item.savedSnapshotJson,
+              initialSnapshotJson: isSameDiff && !item.isCompleted ? item.savedSnapshotJson : null,
             ),
           ),
         );

@@ -66,18 +66,6 @@ class _JigsawOverlayPainter extends CustomPainter {
   }
 }
 
-class DifficultyTier {
-  const DifficultyTier({
-    required this.difficulty,
-    required this.tag,
-    required this.estimatedMinutes,
-  });
-
-  final PuzzleDifficulty difficulty;
-  final String tag;
-  final String estimatedMinutes;
-}
-
 /// A bottom sheet dialog matching the commercial jigsaw piece selection UI.
 class ChooseDifficultySheet extends StatefulWidget {
   const ChooseDifficultySheet({
@@ -90,6 +78,8 @@ class ChooseDifficultySheet extends StatefulWidget {
     this.isUnlocked = true,
     this.lockedMessage,
     this.onDelete,
+    this.savedProgressPercent,
+    this.onResetProgress,
   });
 
   final Uint8List imageBytes;
@@ -100,6 +90,8 @@ class ChooseDifficultySheet extends StatefulWidget {
   final bool isUnlocked;
   final String? lockedMessage;
   final Future<void> Function()? onDelete;
+  final int? savedProgressPercent;
+  final VoidCallback? onResetProgress;
 
   static Future<void> show({
     required BuildContext context,
@@ -111,6 +103,8 @@ class ChooseDifficultySheet extends StatefulWidget {
     bool isUnlocked = true,
     String? lockedMessage,
     Future<void> Function()? onDelete,
+    int? savedProgressPercent,
+    VoidCallback? onResetProgress,
   }) {
     return showModalBottomSheet<void>(
       context: context,
@@ -125,6 +119,8 @@ class ChooseDifficultySheet extends StatefulWidget {
         isUnlocked: isUnlocked,
         lockedMessage: lockedMessage,
         onDelete: onDelete,
+        savedProgressPercent: savedProgressPercent,
+        onResetProgress: onResetProgress,
       ),
     );
   }
@@ -141,67 +137,20 @@ class _ChooseDifficultySheetState extends State<ChooseDifficultySheet> {
   bool _imageLoaded = false;
   late bool _showGridOverlay;
 
-  static const List<DifficultyTier> _tiers = [
-    DifficultyTier(
-      difficulty: PuzzleDifficulty(label: '3 × 3 (9 块)', rows: 3, cols: 3),
-      tag: '新手入门',
-      estimatedMinutes: '1~2分钟',
-    ),
-    DifficultyTier(
-      difficulty: PuzzleDifficulty(label: '3 × 4 (12 块)', rows: 3, cols: 4),
-      tag: '轻松休闲',
-      estimatedMinutes: '2~3分钟',
-    ),
-    DifficultyTier(
-      difficulty: PuzzleDifficulty(label: '4 × 4 (16 块)', rows: 4, cols: 4),
-      tag: '经典标准',
-      estimatedMinutes: '3~5分钟',
-    ),
-    DifficultyTier(
-      difficulty: PuzzleDifficulty(label: '4 × 6 (24 块)', rows: 4, cols: 6),
-      tag: '趣味进阶',
-      estimatedMinutes: '5~8分钟',
-    ),
-    DifficultyTier(
-      difficulty: PuzzleDifficulty(label: '6 × 6 (36 块)', rows: 6, cols: 6),
-      tag: '探索挑战',
-      estimatedMinutes: '8~12分钟',
-    ),
-    DifficultyTier(
-      difficulty: PuzzleDifficulty(label: '6 × 8 (48 块)', rows: 6, cols: 8),
-      tag: '高阶进阶',
-      estimatedMinutes: '12~18分钟',
-    ),
-    DifficultyTier(
-      difficulty: PuzzleDifficulty(label: '8 × 8 (64 块)', rows: 8, cols: 8),
-      tag: '大师挑战',
-      estimatedMinutes: '18~25分钟',
-    ),
-    DifficultyTier(
-      difficulty: PuzzleDifficulty(label: '10 × 10 (100 块)', rows: 10, cols: 10),
-      tag: '专家试炼',
-      estimatedMinutes: '30+分钟',
-    ),
-    DifficultyTier(
-      difficulty: PuzzleDifficulty(label: '12 × 16 (192 块)', rows: 12, cols: 16),
-      tag: '宗师挑战',
-      estimatedMinutes: '50+分钟',
-    ),
-    DifficultyTier(
-      difficulty: PuzzleDifficulty(label: '20 × 20 (400 块)', rows: 20, cols: 20),
-      tag: '终极地狱',
-      estimatedMinutes: '1.5小时+',
-    ),
-  ];
+  PuzzleAspectRatio get _aspectRatio =>
+      PuzzleAspectRatio.fromSize(_imageWidth, _imageHeight);
+
+  List<DifficultyTier> get _currentTiers => _aspectRatio.tiers;
 
   @override
   void initState() {
     super.initState();
     _showGridOverlay = _repo.gridPreviewEnabled;
-    _selectedDifficulty = _tiers
+    final defaultTiers = PuzzleAspectRatio.square1x1.tiers;
+    _selectedDifficulty = defaultTiers
         .firstWhere(
           (t) => t.difficulty.pieceCount == widget.initialDifficulty.pieceCount,
-          orElse: () => _tiers[0],
+          orElse: () => defaultTiers[0],
         )
         .difficulty;
     _decodeImageSize();
@@ -216,6 +165,18 @@ class _ChooseDifficultySheetState extends State<ChooseDifficultySheet> {
           _imageWidth = frame.image.width.toDouble();
           _imageHeight = frame.image.height.toDouble();
           _imageLoaded = true;
+
+          final aspect = PuzzleAspectRatio.fromSize(_imageWidth, _imageHeight);
+          final tiers = aspect.tiers;
+          _selectedDifficulty = tiers
+              .firstWhere(
+                (t) => t.difficulty.pieceCount == widget.initialDifficulty.pieceCount,
+                orElse: () => tiers.firstWhere(
+                  (t) => t.difficulty.recommended,
+                  orElse: () => tiers[0],
+                ),
+              )
+              .difficulty;
         });
       }
     } catch (_) {}
@@ -225,7 +186,17 @@ class _ChooseDifficultySheetState extends State<ChooseDifficultySheet> {
     if (!_imageLoaded || _imageWidth <= 0 || _imageHeight <= 0) {
       return _selectedDifficulty;
     }
-    return _selectedDifficulty.adaptiveForSize(_imageWidth, _imageHeight);
+    // Match against current tiers
+    final tiers = _currentTiers;
+    return tiers
+        .firstWhere(
+          (t) => t.difficulty.pieceCount == _selectedDifficulty.pieceCount,
+          orElse: () => tiers.firstWhere(
+            (t) => t.difficulty.recommended,
+            orElse: () => tiers[0],
+          ),
+        )
+        .difficulty;
   }
 
   Future<void> _confirmDelete() async {
@@ -240,15 +211,15 @@ class _ChooseDifficultySheetState extends State<ChooseDifficultySheet> {
             Text('删除自制拼图'),
           ],
         ),
-        content: Text('确定要删除「${widget.title}」吗？相关进度将被清除。'),
+        content: Text('确定要永久删除「${widget.title}」吗？删除后不可恢复。'),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
+            onPressed: () => Navigator.of(ctx).pop(false),
             child: const Text('取消'),
           ),
           FilledButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            style: FilledButton.styleFrom(backgroundColor: Colors.red),
+            style: FilledButton.styleFrom(backgroundColor: Colors.redAccent),
+            onPressed: () => Navigator.of(ctx).pop(true),
             child: const Text('确定删除'),
           ),
         ],
@@ -257,111 +228,142 @@ class _ChooseDifficultySheetState extends State<ChooseDifficultySheet> {
 
     if (ok == true && mounted) {
       Navigator.of(context).pop();
-      await widget.onDelete?.call();
+      widget.onDelete?.call();
     }
   }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final size = MediaQuery.sizeOf(context);
     final effectiveDiff = _effectiveDifficulty;
-    final aspect = (_imageLoaded && _imageHeight > 0) ? (_imageWidth / _imageHeight) : 1.0;
-    final isEffectivePassed = widget.completedPieceCounts.contains(effectiveDiff.pieceCount);
+    final currentTiers = _currentTiers;
 
-    final selectedTier = _tiers.firstWhere(
-      (t) => t.difficulty.pieceCount == _selectedDifficulty.pieceCount,
-      orElse: () => _tiers[0],
+    final selectedTier = currentTiers.firstWhere(
+      (t) => t.difficulty.pieceCount == effectiveDiff.pieceCount,
+      orElse: () => currentTiers[0],
     );
 
+    final isEffectivePassed =
+        widget.completedPieceCounts.contains(effectiveDiff.pieceCount);
+
     return Container(
-      height: size.height * 0.90,
       decoration: const BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
       ),
-      child: Column(
-        children: [
-          // Top bar with Title & Grid Preview toggle & Delete (if UGC) & Close
-          Padding(
-            padding: const EdgeInsets.fromLTRB(20, 16, 12, 8),
+      child: SafeArea(
+        top: false,
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              // Drag handle bar
+              Center(
+                child: Container(
+                  margin: const EdgeInsets.only(top: 10, bottom: 6),
+                  width: 44,
+                  height: 4.5,
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade300,
+                    borderRadius: BorderRadius.circular(3),
+                  ),
+                ),
+              ),
+
+              // Header with Title & Action Icons
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
             child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
+                const Icon(Icons.grid_view_rounded, color: Color(0xFF2E7D32), size: 22),
+                const SizedBox(width: 8),
                 Expanded(
                   child: Text(
                     widget.title,
                     style: theme.textTheme.titleMedium?.copyWith(
                       fontWeight: FontWeight.bold,
-                      fontSize: 18,
+                      fontSize: 17,
                     ),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
                 ),
-                IconButton(
-                  icon: Icon(
-                    _showGridOverlay ? Icons.grid_on : Icons.grid_off,
-                    color: _showGridOverlay ? const Color(0xFF2E7D32) : Colors.black45,
-                    size: 22,
-                  ),
-                  tooltip: _showGridOverlay ? '隐藏切片网格' : '显示切片网格',
-                  onPressed: () {
-                    setState(() => _showGridOverlay = !_showGridOverlay);
-                    _repo.gridPreviewEnabled = _showGridOverlay;
-                  },
-                ),
+
+                // UGC Delete Button if available
                 if (widget.onDelete != null)
                   IconButton(
                     icon: const Icon(Icons.delete_outline, color: Colors.redAccent, size: 22),
-                    tooltip: '删除此自制拼图',
+                    tooltip: '删除此拼图',
                     onPressed: _confirmDelete,
                   ),
-                TextButton(
-                  onPressed: () => Navigator.of(context).pop(),
-                  child: const Text(
-                    '关闭',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.black54,
-                    ),
+
+                // Grid preview lines toggle button
+                IconButton(
+                  icon: Icon(
+                    _showGridOverlay ? Icons.grid_on : Icons.grid_off,
+                    color: _showGridOverlay ? const Color(0xFF2E7D32) : Colors.grey,
+                    size: 22,
                   ),
+                  tooltip: _showGridOverlay ? '隐藏网格切线预览' : '显示网格切线预览',
+                  onPressed: () {
+                    setState(() {
+                      _showGridOverlay = !_showGridOverlay;
+                      _repo.gridPreviewEnabled = _showGridOverlay;
+                    });
+                  },
+                ),
+
+                IconButton(
+                  icon: const Icon(Icons.close, color: Colors.black54, size: 22),
+                  onPressed: () => Navigator.of(context).pop(),
                 ),
               ],
             ),
           ),
 
-          // High-res Image Preview with Real-time Jigsaw Grid Overlay
-          Expanded(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 6),
-              child: Center(
-                child: AspectRatio(
-                  aspectRatio: aspect,
-                  child: Container(
-                    clipBehavior: Clip.antiAlias,
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(16),
-                      boxShadow: const [
-                        BoxShadow(
-                          color: Colors.black12,
-                          blurRadius: 12,
-                          offset: Offset(0, 4),
-                        ),
-                      ],
-                    ),
+          const Divider(height: 1),
+          const SizedBox(height: 10),
+
+          // High-Res Image Preview with Dynamic Jigsaw Cut Grid Overlay
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20),
+            child: Center(
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(16),
+                child: Container(
+                  constraints: const BoxConstraints(
+                    maxHeight: 200,
+                    maxWidth: 320,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade100,
+                    borderRadius: BorderRadius.circular(16),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.10),
+                        blurRadius: 10,
+                        offset: const Offset(0, 3),
+                      ),
+                    ],
+                  ),
+                  child: AspectRatio(
+                    aspectRatio: _imageLoaded && _imageWidth > 0 && _imageHeight > 0
+                        ? _imageWidth / _imageHeight
+                        : 1.0,
                     child: Stack(
                       fit: StackFit.expand,
                       children: [
-                        Image.memory(widget.imageBytes, fit: BoxFit.cover),
+                        Image.memory(
+                          widget.imageBytes,
+                          fit: BoxFit.cover,
+                          filterQuality: FilterQuality.medium,
+                        ),
                         if (_showGridOverlay)
-                          Positioned.fill(
-                            child: CustomPaint(
-                              painter: _JigsawOverlayPainter(
-                                rows: effectiveDiff.rows,
-                                cols: effectiveDiff.cols,
-                              ),
+                          CustomPaint(
+                            painter: _JigsawOverlayPainter(
+                              rows: effectiveDiff.rows,
+                              cols: effectiveDiff.cols,
                             ),
                           ),
                       ],
@@ -406,14 +408,36 @@ class _ChooseDifficultySheetState extends State<ChooseDifficultySheet> {
 
           const SizedBox(height: 6),
 
-          // Difficulty Info Header
+          // Difficulty & Aspect Ratio Info Header
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 20),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
+            child: Wrap(
+              alignment: WrapAlignment.center,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              spacing: 6,
+              runSpacing: 4,
               children: [
+                // Aspect Ratio Badge
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFE3F2FD),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: const Color(0xFF90CAF9)),
+                  ),
+                  child: Text(
+                    _aspectRatio.label,
+                    style: const TextStyle(
+                      fontSize: 11.5,
+                      fontWeight: FontWeight.bold,
+                      color: Color(0xFF0D47A1),
+                    ),
+                  ),
+                ),
+
+                // Tier Tag Badge
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                   decoration: BoxDecoration(
                     color: const Color(0xFFE8F5E9),
                     borderRadius: BorderRadius.circular(8),
@@ -421,27 +445,28 @@ class _ChooseDifficultySheetState extends State<ChooseDifficultySheet> {
                   child: Text(
                     selectedTier.tag,
                     style: const TextStyle(
-                      fontSize: 12,
+                      fontSize: 11.5,
                       fontWeight: FontWeight.bold,
                       color: Color(0xFF1B5E20),
                     ),
                   ),
                 ),
-                const SizedBox(width: 8),
+
                 Text(
-                  '${effectiveDiff.rows} × ${effectiveDiff.cols} (${effectiveDiff.pieceCount} 块)',
+                  '${effectiveDiff.cols} × ${effectiveDiff.rows} (${effectiveDiff.pieceCount} 块)',
                   style: theme.textTheme.titleMedium?.copyWith(
                     fontWeight: FontWeight.bold,
                     color: Colors.black87,
+                    fontSize: 14.5,
                   ),
                 ),
-                const SizedBox(width: 8),
+
                 Text(
                   '⏱️ ${selectedTier.estimatedMinutes}',
-                  style: const TextStyle(fontSize: 12, color: Colors.black54),
+                  style: const TextStyle(fontSize: 11.5, color: Colors.black54),
                 ),
-                if (isEffectivePassed) ...[
-                  const SizedBox(width: 8),
+
+                if (isEffectivePassed)
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                     decoration: BoxDecoration(
@@ -452,12 +477,12 @@ class _ChooseDifficultySheetState extends State<ChooseDifficultySheet> {
                     child: const Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Icon(Icons.check_circle, size: 13, color: Color(0xFF2E7D32)),
+                        Icon(Icons.check_circle, size: 12, color: Color(0xFF2E7D32)),
                         SizedBox(width: 2),
                         Text(
                           '已通关',
                           style: TextStyle(
-                            fontSize: 11,
+                            fontSize: 10.5,
                             fontWeight: FontWeight.bold,
                             color: Color(0xFF2E7D32),
                           ),
@@ -465,21 +490,20 @@ class _ChooseDifficultySheetState extends State<ChooseDifficultySheet> {
                       ],
                     ),
                   ),
-                ],
               ],
             ),
           ),
           const SizedBox(height: 12),
 
-          // Horizontal scroll of puzzle difficulty tiers
+          // Horizontal scroll of puzzle difficulty tiers for current aspect ratio
           SingleChildScrollView(
             scrollDirection: Axis.horizontal,
             padding: const EdgeInsets.symmetric(horizontal: 20),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                for (final tier in _tiers) ...[
-                  _buildPieceOption(tier),
+                for (final tier in currentTiers) ...[
+                  _buildPieceOption(tier, isSelected: tier.difficulty.pieceCount == effectiveDiff.pieceCount),
                   const SizedBox(width: 10),
                 ],
               ],
@@ -488,56 +512,110 @@ class _ChooseDifficultySheetState extends State<ChooseDifficultySheet> {
 
           const SizedBox(height: 18),
 
-          // Big Start CTA Button
+          // Big Start CTA Button with Saved Progress Detection
           Padding(
-            padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
-            child: SizedBox(
-              width: double.infinity,
-              height: 52,
-              child: FilledButton(
-                onPressed: widget.isUnlocked
-                    ? () {
-                        Navigator.of(context).pop();
-                        widget.onStart(effectiveDiff);
-                      }
-                    : null,
-                style: FilledButton.styleFrom(
-                  backgroundColor: widget.isUnlocked ? const Color(0xFF2E7D32) : Colors.grey.shade400,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(26),
-                  ),
-                  elevation: widget.isUnlocked ? 2 : 0,
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
+            padding: const EdgeInsets.fromLTRB(24, 0, 24, 20),
+            child: Builder(
+              builder: (context) {
+                final hasSavedProgress = widget.savedProgressPercent != null && widget.savedProgressPercent! > 0;
+                final isMatchingSavedDiff = _selectedDifficulty.pieceCount == widget.initialDifficulty.pieceCount;
+
+                return Column(
+                  mainAxisSize: MainAxisSize.min,
                   children: [
-                    if (!widget.isUnlocked) ...[
-                      const Icon(Icons.lock, size: 18, color: Colors.white70),
-                      const SizedBox(width: 6),
+                    if (widget.isUnlocked && hasSavedProgress && isMatchingSavedDiff) ...[
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 10),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFE8F5E9),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: const Color(0xFF81C784)),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(Icons.history, size: 16, color: Color(0xFF2E7D32)),
+                              const SizedBox(width: 6),
+                              Text(
+                                '⚡ 检测到未完成存档 (已拼 ${widget.savedProgressPercent}%)',
+                                style: const TextStyle(
+                                  fontSize: 12.5,
+                                  fontWeight: FontWeight.bold,
+                                  color: Color(0xFF2E7D32),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
                     ],
-                    Text(
-                      !widget.isUnlocked
-                          ? '关卡未解锁 (请先通关前序关卡)'
-                          : (isEffectivePassed ? '重玩此难度' : '开始'),
-                      style: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                        letterSpacing: 1.5,
+                    SizedBox(
+                      width: double.infinity,
+                      height: 52,
+                      child: FilledButton(
+                        onPressed: widget.isUnlocked
+                            ? () {
+                                Navigator.of(context).pop();
+                                widget.onStart(effectiveDiff);
+                              }
+                            : null,
+                        style: FilledButton.styleFrom(
+                          backgroundColor: widget.isUnlocked ? const Color(0xFF2E7D32) : Colors.grey.shade400,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(26),
+                          ),
+                          elevation: widget.isUnlocked ? 2 : 0,
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            if (!widget.isUnlocked) ...[
+                              const Icon(Icons.lock, size: 18, color: Colors.white70),
+                              const SizedBox(width: 6),
+                            ],
+                            Text(
+                              !widget.isUnlocked
+                                  ? '关卡未解锁 (请先通关前序关卡)'
+                                  : (hasSavedProgress && isMatchingSavedDiff
+                                      ? '继续游玩 (进度 ${widget.savedProgressPercent}%)'
+                                      : (isEffectivePassed ? '重玩此难度' : '开始')),
+                              style: const TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                                letterSpacing: 1.5,
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
+                    if (widget.isUnlocked && hasSavedProgress && isMatchingSavedDiff && widget.onResetProgress != null) ...[
+                      const SizedBox(height: 6),
+                      TextButton.icon(
+                        onPressed: () {
+                          Navigator.of(context).pop();
+                          widget.onResetProgress?.call();
+                        },
+                        icon: const Icon(Icons.refresh, size: 16, color: Colors.black54),
+                        label: const Text('放弃进度并重新开始', style: TextStyle(color: Colors.black54, fontSize: 13)),
+                      ),
+                    ],
                   ],
-                ),
-              ),
+                );
+              },
             ),
           ),
         ],
       ),
+    ),
+    ),
     );
   }
 
-  Widget _buildPieceOption(DifficultyTier tier) {
+  Widget _buildPieceOption(DifficultyTier tier, {required bool isSelected}) {
     final opt = tier.difficulty;
-    final isSelected = opt.pieceCount == _selectedDifficulty.pieceCount;
     final isPassed = widget.completedPieceCounts.contains(opt.pieceCount);
 
     Color bgColor;
@@ -577,8 +655,8 @@ class _ChooseDifficultySheetState extends State<ChooseDifficultySheet> {
       borderRadius: BorderRadius.circular(16),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 180),
-        width: 72,
-        height: 76,
+        width: 76,
+        height: 78,
         decoration: BoxDecoration(
           color: bgColor,
           borderRadius: BorderRadius.circular(16),

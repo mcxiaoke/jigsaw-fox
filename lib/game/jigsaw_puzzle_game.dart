@@ -518,6 +518,10 @@ class JigsawPuzzleGame extends FlameGame with ScrollDetector, PanDetector {
     _trayScrollX = 0.0;
     undoManager.clear();
 
+    _boardGhostComp.opacity = _boardGhostOpacity;
+    _boardGhostComp.priority = 0;
+    _boardOutlineRect.paint.color = const Color(0x66FFFFFF);
+
     _boardState = PuzzleEngine.createInitialState(
       rows: rows,
       cols: cols,
@@ -618,13 +622,14 @@ class JigsawPuzzleGame extends FlameGame with ScrollDetector, PanDetector {
       draggedPieceId: piece.id,
     );
 
-    if (result.didSnap || result.didMerge) {
+    if (result.didSnap || result.didMerge || result.isCompleted || _boardState.isSolved) {
       _boardState = result.state;
       undoManager.record(_boardState);
 
       for (final affectedId in result.affectedPieceIds) {
         final statePiece = _boardState.pieceById(affectedId);
-        final comp = _pieces[affectedId]!;
+        final comp = _pieces[affectedId];
+        if (comp == null) continue;
         comp.isInTray = false;
         comp.scale.setFrom(Vector2.all(_zoom));
         comp.clusterId = statePiece.clusterId;
@@ -639,8 +644,11 @@ class JigsawPuzzleGame extends FlameGame with ScrollDetector, PanDetector {
       onProgressChanged?.call(solvedCount);
       onStateUpdated?.call();
 
-      if (result.isCompleted && !_isSolved) {
+      if ((result.isCompleted || _boardState.isSolved) && !_isSolved) {
         _isSolved = true;
+        _boardGhostComp.opacity = 1.0;
+        _boardGhostComp.priority = 1000;
+        _boardOutlineRect.paint.color = const Color(0x00000000);
         for (final p in _pieces.values) {
           p.hideBorders = true;
         }
@@ -733,14 +741,33 @@ class JigsawPuzzleGame extends FlameGame with ScrollDetector, PanDetector {
       final comp = _pieces[p.id]!;
       comp.clusterId = p.clusterId;
       comp.rot = p.rot;
+
+      // 正确识别棋盘碎片与托盘碎片
+      final isOnBoard = (p.nx >= -0.10 && p.nx <= 1.10 && p.ny >= -0.10 && p.ny <= 1.10);
+      comp.isInTray = !isOnBoard;
+
       final targetScreenPos = _normalizedToScreen(p.nx, p.ny);
       comp.animateTo(targetScreenPos);
-      if (!comp.isInTray) {
+      if (isOnBoard) {
         comp.scale.setAll(_zoom);
+      } else {
+        comp.scale.setAll(_trayPieceScale);
       }
     }
+    _realignTrayPieces(animate: false);
     onProgressChanged?.call(solvedCount);
     onStateUpdated?.call();
+
+    if (_boardState.isSolved && !_isSolved) {
+      _isSolved = true;
+      _boardGhostComp.opacity = 1.0;
+      _boardGhostComp.priority = 1000;
+      _boardOutlineRect.paint.color = const Color(0x00000000);
+      for (final p in _pieces.values) {
+        p.hideBorders = true;
+      }
+      onSolved();
+    }
   }
 
   /// Automatically snaps one unsolved piece into place.
@@ -799,8 +826,11 @@ class JigsawPuzzleGame extends FlameGame with ScrollDetector, PanDetector {
     onProgressChanged?.call(solvedCount);
     onStateUpdated?.call();
 
-    if (result.isCompleted && !_isSolved) {
+    if ((result.isCompleted || _boardState.isSolved) && !_isSolved) {
       _isSolved = true;
+      _boardGhostComp.opacity = 1.0;
+      _boardGhostComp.priority = 1000;
+      _boardOutlineRect.paint.color = const Color(0x00000000);
       for (final p in _pieces.values) {
         p.hideBorders = true;
       }

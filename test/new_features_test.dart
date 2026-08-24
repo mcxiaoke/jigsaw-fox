@@ -234,7 +234,7 @@ void main() {
                   ChooseDifficultySheet.show(
                     context: context,
                     imageBytes: kTestTransparentImage,
-                    initialDifficulty: const PuzzleDifficulty(label: '3 × 3 (9 块)', rows: 3, cols: 3),
+                    initialDifficulty: const PuzzleDifficulty(label: '4 × 4 (16 块)', rows: 4, cols: 4),
                     title: '我的爱犬照片',
                     onDelete: () async {
                       deleteCalled = true;
@@ -280,6 +280,47 @@ void main() {
 
       expect(find.text('自制新拼图'), findsOneWidget);
       expect(find.text('我的自制合辑'), findsOneWidget);
+    });
+
+    testWidgets('ChooseDifficultySheet renders saved progress banner & continue button', (tester) async {
+      var resetCalled = false;
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: Builder(
+              builder: (context) => ElevatedButton(
+                onPressed: () {
+                  ChooseDifficultySheet.show(
+                    context: context,
+                    imageBytes: kTestTransparentImage,
+                    initialDifficulty: const PuzzleDifficulty(label: '4 × 4 (16 块)', rows: 4, cols: 4),
+                    title: '第 5 关 · 难度选择',
+                    savedProgressPercent: 85,
+                    onResetProgress: () {
+                      resetCalled = true;
+                    },
+                    onStart: (_) {},
+                  );
+                },
+                child: const Text('Open Sheet'),
+              ),
+            ),
+          ),
+        ),
+      );
+
+      await tester.tap(find.text('Open Sheet'));
+      await tester.pumpAndSettle();
+
+      // Check saved progress indicator banner
+      expect(find.text('⚡ 检测到未完成存档 (已拼 85%)'), findsOneWidget);
+      expect(find.text('继续游玩 (进度 85%)'), findsOneWidget);
+      expect(find.text('放弃进度并重新开始'), findsOneWidget);
+
+      // Tap reset button
+      await tester.tap(find.text('放弃进度并重新开始'));
+      await tester.pumpAndSettle();
+      expect(resetCalled, isTrue);
     });
   });
 }

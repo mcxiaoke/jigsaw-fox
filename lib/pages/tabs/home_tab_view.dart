@@ -63,14 +63,36 @@ class _HomeTabViewState extends State<HomeTabView> {
       isUnlocked: level.isUnlocked,
       lockedMessage: '请先通关第 ${level.index - 1} 关解锁此关卡',
       title: '第 ${level.index} 关 · ${level.isUnlocked ? "难度选择" : "关卡预览(未解锁)"}',
+      savedProgressPercent: level.isCompleted ? null : level.progressPercent,
+      onResetProgress: () async {
+        await _repo.updateLevelProgress(
+          levelIndex: level.index,
+          progressPercent: 0,
+          snapshotJson: null,
+          isCompleted: level.isCompleted,
+        );
+        if (!mounted) return;
+        await Navigator.of(context).push(
+          MaterialPageRoute<void>(
+            builder: (_) => GamePage(
+              imageBytes: imgBytes,
+              difficulty: level.difficulty,
+              levelIndex: level.index,
+              initialSnapshotJson: null,
+            ),
+          ),
+        );
+        setState(() {});
+      },
       onStart: (diff) async {
+        final isSameDiff = diff.pieceCount == level.difficulty.pieceCount;
         await Navigator.of(context).push(
           MaterialPageRoute<void>(
             builder: (_) => GamePage(
               imageBytes: imgBytes,
               difficulty: diff,
               levelIndex: level.index,
-              initialSnapshotJson: level.savedSnapshotJson,
+              initialSnapshotJson: isSameDiff && !level.isCompleted ? level.savedSnapshotJson : null,
             ),
           ),
         );

@@ -79,20 +79,21 @@ class GameRepository {
     for (var i = 1; i <= totalLevels; i++) {
       final assetPath = assetSamples[(i - 1) % assetSamples.length];
 
-      // Tier difficulty progression (16 -> 36 -> 64 -> 100)
+      // Tier difficulty progression (16 -> 25 -> 36 -> 64 -> 100 -> 225)
+      final squareTiers = PuzzleAspectRatio.square1x1.tiers;
       PuzzleDifficulty diff;
-      if (i <= 5) {
-        diff = PuzzleDifficulty.presets[0]; // 3x3 (9)
-      } else if (i <= 15) {
-        diff = PuzzleDifficulty.presets[1]; // 3x4 (12)
-      } else if (i <= 30) {
-        diff = PuzzleDifficulty.presets[2]; // 4x4 (16)
+      if (i <= 10) {
+        diff = squareTiers[0].difficulty; // 4x4 (16)
+      } else if (i <= 25) {
+        diff = squareTiers[1].difficulty; // 5x5 (25)
       } else if (i <= 50) {
-        diff = PuzzleDifficulty.presets[5]; // 6x6 (36)
+        diff = squareTiers[2].difficulty; // 6x6 (36)
       } else if (i <= 75) {
-        diff = PuzzleDifficulty.presets[7]; // 8x8 (64)
+        diff = squareTiers[3].difficulty; // 8x8 (64)
+      } else if (i <= 90) {
+        diff = squareTiers[4].difficulty; // 10x10 (100)
       } else {
-        diff = PuzzleDifficulty.presets[8]; // 10x10 (100)
+        diff = squareTiers[6].difficulty; // 15x15 (225)
       }
 
       // Read saved status from SharedPreferences
@@ -176,13 +177,14 @@ class GameRepository {
     }
 
     // Default preset samples for "My Puzzles"
+    final squareTiers = PuzzleAspectRatio.square1x1.tiers;
     _customPuzzles = [
       CustomPuzzleItem(
         id: 'sample_01',
         title: '巴黎埃菲尔铁塔晨曦',
         imagePathOrUrl: assetSamples[0],
         isLocalFile: false,
-        difficulty: PuzzleDifficulty.presets[2], // 16
+        difficulty: squareTiers[0].difficulty, // 16
         createdAt: DateTime.now().subtract(const Duration(days: 2)),
       ),
       CustomPuzzleItem(
@@ -190,7 +192,7 @@ class GameRepository {
         title: '午后阳光与香浓拿铁',
         imagePathOrUrl: assetSamples[1],
         isLocalFile: false,
-        difficulty: PuzzleDifficulty.presets[5], // 36
+        difficulty: squareTiers[2].difficulty, // 36
         createdAt: DateTime.now().subtract(const Duration(days: 1)),
       ),
       CustomPuzzleItem(
@@ -198,7 +200,7 @@ class GameRepository {
         title: '草地上奔跑的小柴犬',
         imagePathOrUrl: assetSamples[2],
         isLocalFile: false,
-        difficulty: PuzzleDifficulty.presets[7], // 64
+        difficulty: squareTiers[3].difficulty, // 64
         createdAt: DateTime.now(),
       ),
     ];

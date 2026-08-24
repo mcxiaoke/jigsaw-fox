@@ -6,7 +6,7 @@ import '../models/puzzle_state.dart';
 /// Pure domain puzzle engine handling snapping, cluster merging, hints, and solved state checks.
 class PuzzleEngine {
   /// Default snap threshold as a ratio of single piece size.
-  static const double defaultSnapRatio = 0.42;
+  static const double defaultSnapRatio = 0.48;
 
   /// Creates a new puzzle board state with scattered pieces.
   static PuzzleBoardState createInitialState({
@@ -106,31 +106,40 @@ class PuzzleEngine {
           dx,
           dy,
         );
+
+        // Lock in exact normalized coordinates for pieces in this aligned cluster
+        currentPieces = currentPieces.map((p) {
+          if (p.clusterId == clusterId && (!state.rotationEnabled || p.rot % 4 == 0)) {
+            final tnx = p.targetNx(state.cols);
+            final tny = p.targetNy(state.rows);
+            if ((p.nx - tnx).abs() <= 0.05 && (p.ny - tny).abs() <= 0.05) {
+              return p.copyWith(nx: tnx, ny: tny);
+            }
+          }
+          return p;
+        }).toList();
+
         didSnap = true;
         break;
       }
     }
 
     // 2. Check Snap to Neighbors (both on-board and free-floating)
-    // Refresh cluster pieces after potential board snap
     final activeClusterPieces = currentPieces.where((p) => p.clusterId == clusterId).toList();
 
     for (final pA in activeClusterPieces) {
       for (final pB in currentPieces) {
         if (pB.clusterId == clusterId) continue; // Same cluster, skip
 
-        // Check if pB is an orthogonal neighbor of pA in the puzzle grid
         final dr = pB.r - pA.r;
         final dc = pB.c - pA.c;
         final isOrthogonalNeighbor = (dr.abs() + dc.abs()) == 1;
         if (!isOrthogonalNeighbor) continue;
 
-        // Check orientation compatibility
         if (state.rotationEnabled && (pA.rot % 4 != pB.rot % 4)) {
           continue;
         }
 
-        // Expected offset from pA to pB in normalized coordinates
         final expectedDx = dc * (1.0 / state.cols);
         final expectedDy = dr * (1.0 / state.rows);
 
@@ -140,7 +149,6 @@ class PuzzleEngine {
         final offsetError = Point(actualDx, actualDy).distanceTo(Point(expectedDx, expectedDy));
 
         if (offsetError <= snapDist) {
-          // Snap cluster A to align with pB
           final alignDx = actualDx - expectedDx;
           final alignDy = actualDy - expectedDy;
 
@@ -151,7 +159,6 @@ class PuzzleEngine {
             alignDy,
           );
 
-          // Merge cluster A into cluster B's id
           final targetClusterId = pB.clusterId;
           currentPieces = currentPieces.map((p) {
             if (p.clusterId == clusterId) {
@@ -169,7 +176,7 @@ class PuzzleEngine {
       if (didMerge) break;
     }
 
-    // Also check if multiple neighbor clusters now touch and should be merged
+    // 3. Also check if multiple neighbor clusters now touch and should be merged
     currentPieces = _mergeAllAdjacentClusters(currentPieces, state.rows, state.cols, state.rotationEnabled);
 
     final newState = state.copyWith(pieces: currentPieces);
@@ -206,7 +213,7 @@ class PuzzleEngine {
     int rows,
     int cols,
     bool rotationEnabled, {
-    double epsilon = 0.005,
+    double epsilon = 0.035,
   }) {
     var result = List<PieceState>.from(pieces);
     var changed = true;
@@ -250,46 +257,99 @@ class PuzzleEngine {
   static PuzzleBoardState rotateCluster({
     required PuzzleBoardState state,
     required int pieceId,
-    int steps = 1,
   }) {
-    if (!state.rotationEnabled) return state;
-
     final targetPiece = state.pieceById(pieceId);
     final clusterId = targetPiece.clusterId;
+    final clusterPieces = state.piecesInCluster(clusterId);
+
+    // Compute center of cluster for rotation
+    var minNx = 1.0, maxNx = 0.0, minNy = 1.0, maxNy = 0.0;
+    for (final p in clusterPieces) {
+      minNx = min(minNx, p.nx);
+      maxNx = max(maxNx, p.nx + 1.0 / state.cols);
+      minNy = min(minNy, p.ny);
+      maxNy = max(maxNy, p.ny + 1.0 / state.rows);
+    }
+    final centerNx = (minNx + maxNx) / 2.0;
+    final centerNy = (minNy + maxNy) / 2.0;
 
     final updated = state.pieces.map((p) {
-      if (p.clusterId == clusterId) {
-        return p.copyWith(rot: (p.rot + steps) % 4);
-      }
-      return p;
+      if (p.clusterId != clusterId) return p;
+
+      final relX = p.nx + (0.5 / state.cols) - centerNx;
+      final relY = p.ny + (0.5 / state.rows) - centerNy;
+
+      // 90° clockwise rotation: (x, y) -> (-y, x)
+      final newRelX = -relY;
+      final newRelY = relX;
+
+      final newNx = centerNx + newRelX - (0.5 / state.cols);
+      final newNy = centerNy + newRelY - (0.5 / state.rows);
+
+      return p.copyWith(
+        nx: newNx,
+        ny: newNy,
+        rot: (p.rot + 1) % 4,
+      );
     }).toList();
 
     return state.copyWith(pieces: updated);
   }
 
-  /// Finds the smartest piece to give as a hint.
+  /// Provides an intelligent hint by identifying the most strategic unplaced piece.
   static HintResult hintFor(PuzzleBoardState state) {
-    final edgeLayout = EdgeLayout(rows: state.rows, cols: state.cols, seed: state.seed);
-
-    // 1. Find pieces that are not yet solved
-    final unsolved = state.pieces.where((p) => !p.isSolved(state.rows, state.cols)).toList();
-    if (unsolved.isEmpty) {
-      final first = state.pieces.first;
-      return HintResult(
-        pieceId: first.id,
-        targetNx: first.targetNx(state.cols),
-        targetNy: first.targetNy(state.rows),
-      );
+    // 1. Find all pieces not currently at their target slot
+    final unplaced = state.pieces.where((p) => !p.isSolved(state.rows, state.cols)).toList();
+    if (unplaced.isEmpty) {
+      return HintResult(pieceId: state.pieces.first.id, targetNx: 0, targetNy: 0);
     }
 
-    // 2. Prefer corner pieces if none are solved yet
-    final corners = unsolved.where((p) => edgeLayout.edgesFor(p.r, p.c).isCorner).toList();
-    final candidate = corners.isNotEmpty ? corners.first : unsolved.first;
+    // 2. Prefer border / corner pieces, or pieces adjacent to already placed clusters
+    unplaced.sort((a, b) {
+      final aEdges = EdgeLayout(rows: state.rows, cols: state.cols, seed: state.seed).edgesFor(a.r, a.c);
+      final bEdges = EdgeLayout(rows: state.rows, cols: state.cols, seed: state.seed).edgesFor(b.r, b.c);
+      if (aEdges.isCorner && !bEdges.isCorner) return -1;
+      if (!aEdges.isCorner && bEdges.isCorner) return 1;
+      if (aEdges.isBorder && !bEdges.isBorder) return -1;
+      if (!aEdges.isBorder && bEdges.isBorder) return 1;
+      return a.id.compareTo(b.id);
+    });
 
+    final targetPiece = unplaced.first;
     return HintResult(
-      pieceId: candidate.id,
-      targetNx: candidate.targetNx(state.cols),
-      targetNy: candidate.targetNy(state.rows),
+      pieceId: targetPiece.id,
+      targetNx: targetPiece.targetNx(state.cols),
+      targetNy: targetPiece.targetNy(state.rows),
     );
   }
+}
+
+/// Result returned after resolving a piece placement transition.
+class BoardTransitionResult {
+  const BoardTransitionResult({
+    required this.state,
+    required this.didSnap,
+    required this.didMerge,
+    required this.affectedPieceIds,
+    required this.isCompleted,
+  });
+
+  final PuzzleBoardState state;
+  final bool didSnap;
+  final bool didMerge;
+  final List<int> affectedPieceIds;
+  final bool isCompleted;
+}
+
+/// Target coordinate result for a hint operation.
+class HintResult {
+  const HintResult({
+    required this.pieceId,
+    required this.targetNx,
+    required this.targetNy,
+  });
+
+  final int pieceId;
+  final double targetNx;
+  final double targetNy;
 }

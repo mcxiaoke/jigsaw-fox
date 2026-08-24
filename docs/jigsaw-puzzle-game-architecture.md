@@ -50,31 +50,33 @@
 
 ## 3. 核心算法：异形切割与拼合几何
 
-### 3.1 任意 $M \times N$ 网格与智能最大化自适应基准矩形
+### 3.1 5 种标准比例与正方形基础切片单元模型
 
-内核完全支持任意长宽比图片与任意网格 $M \times N$（行数 $M \ge 2$，列数 $N \ge 2$）：
+内核支持 5 种规整的标准图片比例（`1:1`、`2:3`、`3:2`、`3:4`、`4:3`），且每种比例的网格划分严格满足：
+$$\frac{\text{cols}}{\text{rows}} = \frac{W_{\text{image}}}{H_{\text{image}}}$$
 
+- **严格正方形基础切片 ($w = h$)**：
+  在屏幕棋盘基准尺寸下：
+  $$w = \frac{\text{boardW}}{\text{cols}}, \quad h = \frac{\text{boardH}}{\text{rows}} = \frac{\text{boardW} \cdot \frac{H_{\text{image}}}{W_{\text{image}}}}{\text{cols} \cdot \frac{H_{\text{image}}}{W_{\text{image}}}} = \frac{\text{boardW}}{\text{cols}} = w$$
+  因此，切片在施加贝塞尔凹凸卡扣前，基础单元格恒定为严格正方形。
 - **智能棋盘最大化居中排布**：
   - 设游戏工作区可用尺寸为 $W_{\text{avail}} \times H_{\text{avail}}$（扣除底部托盘高度与 Margin）。
   - 原图长宽比 $R_{\text{img}} = \frac{\text{image.width}}{\text{image.height}}$，工作区长宽比 $R_{\text{avail}} = \frac{W_{\text{avail}}}{H_{\text{avail}}}$。
   - **最大化占满策略**：
     $$\begin{cases} \text{boardW} = W_{\text{avail}} \times 0.90, \quad \text{boardH} = \frac{\text{boardW}}{R_{\text{img}}} & (R_{\text{img}} \ge R_{\text{avail}} \text{，图片偏宽/横屏}) \\ \text{boardH} = H_{\text{avail}} \times 0.90, \quad \text{boardW} = \text{boardH} \times R_{\text{img}} & (R_{\text{img}} < R_{\text{avail}} \text{，图片偏高/竖屏/正方形}) \end{cases}$$
-  - 单块碎片在屏幕基准尺寸：
-    $$w = \frac{\text{boardW}}{N},\quad h = \frac{\text{boardH}}{M}$$
   - 原图切片对应的像素基准尺寸：
-    $$\text{srcW} = \frac{\text{image.width}}{N},\quad \text{srcH} = \frac{\text{image.height}}{M}$$
-  - 当原图或网格为长方形时（$w \neq h$），凹凸 Tab 深度按所在边的物理长度分轴独立计算。
+    $$\text{srcW} = \frac{\text{image.width}}{\text{cols}},\quad \text{srcH} = \frac{\text{image.height}}{\text{rows}} \quad (\text{srcW} = \text{srcH})$$
 
 ```
-       列 0        列 1        列 2        列 (N-1)
+       列 0        列 1        列 2        列 (cols-1)
     ┌───────────┬───────────┬───────────┬───────────┐
-行 0 │  (0, 0)   │  (0, 1)   │  (0, 2)   │  (0, N-1) │  h
+行 0 │  (0, 0)   │  (0, 1)   │  (0, 2)   │ (0,cols-1)│  h
     ├───────────┼───────────┼───────────┼───────────┤
-行 1 │  (1, 0)   │  (1, 1)   │  (1, 2)   │  (1, N-1) │  h
+行 1 │  (1, 0)   │  (1, 1)   │  (1, 2)   │ (1,cols-1)│  h
     ├───────────┼───────────┼───────────┼───────────┤
-行 M-1(M-1, 0)  │  (M-1, 1) │  (M-1, 2) │ (M-1, N-1)│  h
+行 R │  (R-1, 0) │  (R-1, 1) │  (R-1, 2) │ (R-1, C-1)│  h
     └───────────┴───────────┴───────────┴───────────┘
-          w           w           w           w
+          w           w           w           w  (w == h)
 ```
 
 ---

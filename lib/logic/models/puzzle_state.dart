@@ -40,7 +40,7 @@ class PieceState {
   double targetNy(int rows) => r / rows;
 
   /// Check if the piece is at its solved slot (within epsilon) and correctly oriented.
-  bool isSolved(int rows, int cols, {double epsilon = 0.005}) {
+  bool isSolved(int rows, int cols, {double epsilon = 0.035}) {
     final tnx = targetNx(cols);
     final tny = targetNy(rows);
     return (nx - tnx).abs() <= epsilon &&

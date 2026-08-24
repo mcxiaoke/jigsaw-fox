@@ -11,18 +11,22 @@ import '../data/models/custom_puzzle_item.dart';
 import '../logic/puzzle_model.dart';
 
 enum CropRatio {
-  square('1:1 正方形', 1.0, 1080, 1080),
-  portrait('3:4 竖屏', 3 / 4, 1080, 1440),
-  landscape('4:3 横屏', 4 / 3, 1440, 1080);
+  square('1:1 正方形', 1.0, 1080, 1080, PuzzleAspectRatio.square1x1, Icons.crop_square),
+  portrait2x3('2:3 竖屏', 2 / 3, 960, 1440, PuzzleAspectRatio.portrait2x3, Icons.crop_portrait),
+  landscape3x2('3:2 横屏', 3 / 2, 1440, 960, PuzzleAspectRatio.landscape3x2, Icons.crop_landscape),
+  portrait3x4('3:4 竖屏', 3 / 4, 1080, 1440, PuzzleAspectRatio.portrait3x4, Icons.crop_portrait),
+  landscape4x3('4:3 横屏', 4 / 3, 1440, 1080, PuzzleAspectRatio.landscape4x3, Icons.crop_landscape);
 
-  const CropRatio(this.label, this.ratio, this.targetWidth, this.targetHeight);
+  const CropRatio(this.label, this.ratio, this.targetWidth, this.targetHeight, this.aspectRatio, this.icon);
   final String label;
   final double ratio; // width / height
   final double targetWidth;
   final double targetHeight;
+  final PuzzleAspectRatio aspectRatio;
+  final IconData icon;
 }
 
-/// Interactive photo cropping & puzzle creation page with large adaptive viewport and standard aspect ratios.
+/// Interactive photo cropping & puzzle creation page with large adaptive viewport and 5 standard aspect ratios.
 class CropPuzzlePage extends StatefulWidget {
   const CropPuzzlePage({super.key, required this.rawBytes});
 
@@ -44,13 +48,18 @@ class _CropPuzzlePageState extends State<CropPuzzlePage> {
       TextEditingController(text: '我的自制拼图');
 
   CropRatio _selectedRatio = CropRatio.square;
-  PuzzleDifficulty _selectedDifficulty = PuzzleDifficulty.presets[0]; // default 3x3 for fast play
+  late PuzzleDifficulty _selectedDifficulty;
   ui.Image? _decodedImage;
   bool _isSaving = false;
 
   @override
   void initState() {
     super.initState();
+    final defaultTiers = _selectedRatio.aspectRatio.tiers;
+    _selectedDifficulty = defaultTiers.firstWhere(
+      (t) => t.difficulty.recommended,
+      orElse: () => defaultTiers[0],
+    ).difficulty;
     _decodeImage();
   }
 
@@ -58,7 +67,23 @@ class _CropPuzzlePageState extends State<CropPuzzlePage> {
     final codec = await ui.instantiateImageCodec(widget.rawBytes);
     final frame = await codec.getNextFrame();
     if (mounted) {
-      setState(() => _decodedImage = frame.image);
+      setState(() {
+        _decodedImage = frame.image;
+        // Automatically suggest closest ratio matching the uploaded photo
+        final detected = PuzzleAspectRatio.fromSize(
+          frame.image.width.toDouble(),
+          frame.image.height.toDouble(),
+        );
+        _selectedRatio = CropRatio.values.firstWhere(
+          (c) => c.aspectRatio == detected,
+          orElse: () => CropRatio.square,
+        );
+        final tiers = _selectedRatio.aspectRatio.tiers;
+        _selectedDifficulty = tiers.firstWhere(
+          (t) => t.difficulty.recommended,
+          orElse: () => tiers[0],
+        ).difficulty;
+      });
     }
   }
 
@@ -73,6 +98,11 @@ class _CropPuzzlePageState extends State<CropPuzzlePage> {
     setState(() {
       _selectedRatio = ratio;
       _transformController.value = Matrix4.identity();
+      final tiers = ratio.aspectRatio.tiers;
+      _selectedDifficulty = tiers.firstWhere(
+        (t) => t.difficulty.recommended,
+        orElse: () => tiers[0],
+      ).difficulty;
     });
   }
 
@@ -118,59 +148,50 @@ class _CropPuzzlePageState extends State<CropPuzzlePage> {
         srcW.clamp(1.0, imgW),
         srcH.clamp(1.0, imgH),
       );
-
       final dstRect = ui.Rect.fromLTWH(0, 0, targetW, targetH);
 
-      canvas.drawImageRect(
-        _decodedImage!,
-        srcRect,
-        dstRect,
-        ui.Paint()
-          ..filterQuality = ui.FilterQuality.high
-          ..isAntiAlias = true,
+      final paint = Paint()
+        ..filterQuality = ui.FilterQuality.high
+        ..isAntiAlias = true;
+
+      canvas.drawImageRect(_decodedImage!, srcRect, dstRect, paint);
+      final croppedImage = await recorder.endRecording().toImage(
+        targetW.toInt(),
+        targetH.toInt(),
       );
 
-      final picture = recorder.endRecording();
-      final croppedUiImage =
-          await picture.toImage(targetW.toInt(), targetH.toInt());
-      final byteData =
-          await croppedUiImage.toByteData(format: ui.ImageByteFormat.png);
-      final pngBytes = byteData!.buffer.asUint8List();
+      final byteData = await croppedImage.toByteData(format: ui.ImageByteFormat.png);
+      if (byteData == null) throw Exception('图片导出失败');
+      final pngBytes = byteData.buffer.asUint8List();
 
-      // Save PNG bytes to application sandbox
-      final docsDir = await getApplicationDocumentsDirectory();
-      final customDir = Directory('${docsDir.path}/custom_puzzles');
+      final dir = await getApplicationDocumentsDirectory();
+      final customDir = Directory('${dir.path}/custom_puzzles');
       if (!await customDir.exists()) {
         await customDir.create(recursive: true);
       }
 
-      final timestamp = DateTime.now().millisecondsSinceEpoch;
-      final savedFilePath = '${customDir.path}/custom_$timestamp.png';
-      final file = File(savedFilePath);
-      await file.writeAsBytes(pngBytes, flush: true);
+      final fileName = 'puzzle_${DateTime.now().millisecondsSinceEpoch}.png';
+      final file = File('${customDir.path}/$fileName');
+      await file.writeAsBytes(pngBytes);
 
-      final title = _titleController.text.trim().isEmpty
-          ? '自制拼图 $timestamp'
-          : _titleController.text.trim();
-
-      final newItem = CustomPuzzleItem(
-        id: 'custom_$timestamp',
-        title: title,
-        imagePathOrUrl: savedFilePath,
+      final customItem = CustomPuzzleItem(
+        id: 'ugc_${DateTime.now().millisecondsSinceEpoch}',
+        title: _titleController.text.trim().isEmpty ? '我的自制拼图' : _titleController.text.trim(),
+        imagePathOrUrl: file.path,
         isLocalFile: true,
         difficulty: _selectedDifficulty,
         createdAt: DateTime.now(),
       );
 
-      await GameRepository.instance.addCustomPuzzle(newItem);
+      await GameRepository.instance.addCustomPuzzle(customItem);
 
       if (mounted) {
-        Navigator.of(context).pop(newItem);
+        Navigator.of(context).pop(customItem);
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('保存自制关卡失败: $e')),
+          SnackBar(content: Text('保存失败: $e')),
         );
       }
     } finally {
@@ -181,50 +202,45 @@ class _CropPuzzlePageState extends State<CropPuzzlePage> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final media = MediaQuery.sizeOf(context);
+    final screenSize = MediaQuery.of(context).size;
 
-    // Calculate maximum comfortable viewport size based on screen dimensions
-    final maxAvailW = min(media.width - 32, 540.0);
-    final maxAvailH = max(240.0, media.height - 380.0);
+    // Viewport Max Dimensions in Crop Area
+    final maxW = screenSize.width - 32;
+    final maxH = screenSize.height * 0.44;
 
+    final targetRatio = _selectedRatio.ratio;
     double boxW, boxH;
-    if (maxAvailW / _selectedRatio.ratio <= maxAvailH) {
-      boxW = maxAvailW;
-      boxH = boxW / _selectedRatio.ratio;
+
+    if (targetRatio >= maxW / maxH) {
+      boxW = maxW;
+      boxH = boxW / targetRatio;
     } else {
-      boxH = maxAvailH;
-      boxW = boxH * _selectedRatio.ratio;
+      boxH = maxH;
+      boxW = boxH * targetRatio;
     }
 
     final viewportSize = Size(boxW, boxH);
+    final currentTiers = _selectedRatio.aspectRatio.tiers;
 
     return Scaffold(
-      backgroundColor: const Color(0xFF1E1E1E),
+      backgroundColor: const Color(0xFF181818),
       appBar: AppBar(
-        title: const Text('裁剪与创建自制拼图', style: TextStyle(color: Colors.white)),
-        backgroundColor: const Color(0xFF121212),
-        iconTheme: const IconThemeData(color: Colors.white),
+        backgroundColor: const Color(0xFF181818),
+        foregroundColor: Colors.white,
+        elevation: 0,
+        title: const Text(
+          '裁剪与自制拼图',
+          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+        ),
         actions: [
           if (_isSaving)
-            const Center(
-              child: Padding(
-                padding: EdgeInsets.symmetric(horizontal: 16),
+            const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 16),
+              child: Center(
                 child: SizedBox(
                   width: 20,
                   height: 20,
                   child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
-                ),
-              ),
-            )
-          else
-            TextButton(
-              onPressed: () => _saveAndCreate(viewportSize),
-              child: const Text(
-                '保存',
-                style: TextStyle(
-                  color: Color(0xFF81C784),
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
                 ),
               ),
             ),
@@ -232,37 +248,39 @@ class _CropPuzzlePageState extends State<CropPuzzlePage> {
       ),
       body: Column(
         children: [
-          const SizedBox(height: 10),
+          const SizedBox(height: 8),
 
-          // Standard Aspect Ratio Selector (1:1, 3:4, 4:3)
-          Padding(
+          // Standard 5 Aspect Ratios Horizontal Scroll Bar
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
             padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: SegmentedButton<CropRatio>(
-              segments: const [
-                ButtonSegment(
-                  value: CropRatio.square,
-                  label: Text('1:1 正方形'),
-                  icon: Icon(Icons.crop_square, size: 18),
-                ),
-                ButtonSegment(
-                  value: CropRatio.portrait,
-                  label: Text('3:4 竖屏'),
-                  icon: Icon(Icons.crop_portrait, size: 18),
-                ),
-                ButtonSegment(
-                  value: CropRatio.landscape,
-                  label: Text('4:3 横屏'),
-                  icon: Icon(Icons.crop_landscape, size: 18),
-                ),
+            child: Row(
+              children: [
+                for (final ratio in CropRatio.values) ...[
+                  Padding(
+                    padding: const EdgeInsets.only(right: 8),
+                    child: ChoiceChip(
+                      avatar: Icon(
+                        ratio.icon,
+                        size: 16,
+                        color: _selectedRatio == ratio ? Colors.white : Colors.white70,
+                      ),
+                      label: Text(ratio.label),
+                      selected: _selectedRatio == ratio,
+                      selectedColor: const Color(0xFF2E7D32),
+                      backgroundColor: const Color(0xFF2C2C2C),
+                      labelStyle: TextStyle(
+                        color: _selectedRatio == ratio ? Colors.white : Colors.white70,
+                        fontWeight: FontWeight.w600,
+                        fontSize: 12.5,
+                      ),
+                      onSelected: (selected) {
+                        if (selected) _onRatioChanged(ratio);
+                      },
+                    ),
+                  ),
+                ],
               ],
-              selected: {_selectedRatio},
-              onSelectionChanged: (set) => _onRatioChanged(set.first),
-              style: SegmentedButton.styleFrom(
-                backgroundColor: const Color(0xFF2C2C2C),
-                selectedBackgroundColor: const Color(0xFF2E7D32),
-                foregroundColor: Colors.white70,
-                selectedForegroundColor: Colors.white,
-              ),
             ),
           ),
 
@@ -322,28 +340,44 @@ class _CropPuzzlePageState extends State<CropPuzzlePage> {
                   ),
                 ),
                 const SizedBox(height: 12),
-                Text(
-                  '选择规格',
-                  style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold),
+                Row(
+                  children: [
+                    Text(
+                      '选择规格',
+                      style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold),
+                    ),
+                    const SizedBox(width: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFE3F2FD),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Text(
+                        '正方形切片 · ${_selectedRatio.aspectRatio.label}',
+                        style: const TextStyle(fontSize: 10.5, color: Color(0xFF0D47A1), fontWeight: FontWeight.bold),
+                      ),
+                    ),
+                  ],
                 ),
                 const SizedBox(height: 8),
                 SingleChildScrollView(
                   scrollDirection: Axis.horizontal,
                   child: Row(
                     children: [
-                      for (final diff in [
-                        PuzzleDifficulty.presets[0], // 3x3 (9)
-                        PuzzleDifficulty.presets[1], // 3x4 (12)
-                        PuzzleDifficulty.presets[2], // 4x4 (16)
-                        PuzzleDifficulty.presets[5], // 6x6 (36)
-                        PuzzleDifficulty.presets[7], // 8x8 (64)
-                        PuzzleDifficulty.presets[8], // 10x10 (100)
-                      ]) ...[
+                      for (final tier in currentTiers) ...[
                         ChoiceChip(
-                          label: Text(diff.label),
-                          selected: _selectedDifficulty == diff,
+                          label: Text(tier.difficulty.label),
+                          selected: _selectedDifficulty.pieceCount == tier.difficulty.pieceCount,
+                          selectedColor: const Color(0xFFE8F5E9),
+                          labelStyle: TextStyle(
+                            color: _selectedDifficulty.pieceCount == tier.difficulty.pieceCount
+                                ? const Color(0xFF2E7D32)
+                                : Colors.black87,
+                            fontWeight: FontWeight.bold,
+                          ),
                           onSelected: (selected) {
-                            if (selected) setState(() => _selectedDifficulty = diff);
+                            if (selected) setState(() => _selectedDifficulty = tier.difficulty);
                           },
                         ),
                         const SizedBox(width: 8),

@@ -11,7 +11,7 @@ import '../logic/geometry/piece_shape.dart';
 import 'jigsaw_puzzle_game.dart';
 
 /// Flame component responsible for rendering a jigsaw piece with custom bezier clipping,
-/// 3D embossed borders, dynamic floating drop shadows, normalized tray scaling, and cluster drag-and-drop.
+/// crisp cut outlines, dynamic floating drop shadows, normalized tray scaling, and cluster drag-and-drop.
 class PuzzlePieceComponent extends PositionComponent
     with DragCallbacks, HasGameReference<JigsawPuzzleGame> {
   PuzzlePieceComponent({
@@ -49,8 +49,8 @@ class PuzzlePieceComponent extends PositionComponent
 
   // 3D Shadow paints
   static final Paint _restShadowPaint = Paint()
-    ..color = const Color(0x33000000)
-    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2.0)
+    ..color = const Color(0x28000000)
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 1.5)
     ..isAntiAlias = true;
 
   static final Paint _dragShadowPaint = Paint()
@@ -58,23 +58,11 @@ class PuzzlePieceComponent extends PositionComponent
     ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6.0)
     ..isAntiAlias = true;
 
-  // 3D Bevel & Emboss outline paints
-  static final Paint _highlightBevelPaint = Paint()
-    ..style = PaintingStyle.stroke
-    ..strokeWidth = 1.2
-    ..color = const Color(0x99FFFFFF)
-    ..isAntiAlias = true;
-
-  static final Paint _shadowBevelPaint = Paint()
-    ..style = PaintingStyle.stroke
-    ..strokeWidth = 1.2
-    ..color = const Color(0x66000000)
-    ..isAntiAlias = true;
-
+  // Clean, crisp cutline outline paint
   static final Paint _mainOutlinePaint = Paint()
     ..style = PaintingStyle.stroke
     ..strokeWidth = 1.0
-    ..color = const Color(0x44000000)
+    ..color = const Color(0x3A000000)
     ..isAntiAlias = true;
 
   static final Paint _snapHighlightPaint = Paint()
@@ -88,34 +76,33 @@ class PuzzlePieceComponent extends PositionComponent
   @override
   bool containsLocalPoint(Vector2 point) {
     final offset = ui.Offset(point.x, point.y);
-    // 1. Precise bezier path check under rotation
     if (shape.containsLocalPoint(offset, rot)) {
       return true;
     }
-    // 2. Safe bounding rectangle check for 100% reliable touch/mouse interaction
     return shape.fillRect.contains(offset);
   }
 
   @override
   void render(ui.Canvas canvas) {
-    if (!hideBorders) {
-      canvas.save();
-      if (isDragging && !isInTray) {
-        canvas.translate(0, 6.0);
-        canvas.drawPath(shape.path, _dragShadowPaint);
-      } else {
-        canvas.translate(0, 1.8);
-        canvas.drawPath(shape.path, _restShadowPaint);
-      }
-      canvas.restore();
+    if (hideBorders) return; // When solved, full board renders the crisp complete image
+
+    // 1. Drop shadow when unplaced
+    canvas.save();
+    if (isDragging && !isInTray) {
+      canvas.translate(0, 6.0);
+      canvas.drawPath(shape.path, _dragShadowPaint);
+    } else if (isInTray) {
+      canvas.translate(0, 1.5);
+      canvas.drawPath(shape.path, _restShadowPaint);
     }
+    canvas.restore();
 
     canvas.save();
 
-    // 1. Clip exact jigsaw shape
+    // 2. Clip exact jigsaw shape
     canvas.clipPath(shape.path);
 
-    // 2. Draw texture slice from original image
+    // 3. Draw texture slice from original image
     canvas.drawImageRect(
       image,
       srcRect,
@@ -123,23 +110,11 @@ class PuzzlePieceComponent extends PositionComponent
       _imagePaint,
     );
 
-    // 3. Draw 3D Bevel & Emboss edges
-    if (!hideBorders) {
-      if (isHighlight) {
-        canvas.drawPath(shape.path, _snapHighlightPaint);
-      } else {
-        canvas.save();
-        canvas.translate(0.6, 0.6);
-        canvas.drawPath(shape.path, _shadowBevelPaint);
-        canvas.restore();
-
-        canvas.save();
-        canvas.translate(-0.6, -0.6);
-        canvas.drawPath(shape.path, _highlightBevelPaint);
-        canvas.restore();
-
-        canvas.drawPath(shape.path, _mainOutlinePaint);
-      }
+    // 4. Draw clean, subtle cut line
+    if (isHighlight) {
+      canvas.drawPath(shape.path, _snapHighlightPaint);
+    } else {
+      canvas.drawPath(shape.path, _mainOutlinePaint);
     }
 
     canvas.restore();
@@ -158,7 +133,6 @@ class PuzzlePieceComponent extends PositionComponent
     super.onDragUpdate(event);
     if (!isDragging) return;
 
-    // Use absolute canvasDelta for immediate, direct manipulation without lag or threshold blocking
     final delta = event.canvasDelta;
     game.handlePieceDragUpdate(this, delta);
 

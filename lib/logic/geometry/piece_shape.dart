@@ -18,7 +18,7 @@ class Overhang {
   final double right;
   final double bottom;
 
-  static const double standardTipRatio = 0.245;
+  static const double standardTipRatio = 0.25;
 
   factory Overhang.fromEdges(PieceEdges edges, {double tip = standardTipRatio}) {
     return Overhang(
@@ -146,37 +146,39 @@ class PieceShape {
     final length = tangent.distance;
     if (length == 0) return;
 
-    final u = tangent / length; // Unit tangent vector
+    final u = tangent / length; // Unit tangent along edge
     final sign = edgeType.isTab ? 1.0 : -1.0;
-    final n = normal * sign; // Directed normal vector
-
-    // Smooth standard jigsaw interlocking knob bezier curves
+    final n = normal * sign; // Directed outward normal vector
     final d = tabDepth;
 
-    // Segment 1: base line towards neck
-    final p1 = start + u * (length * 0.35);
-    final cp1 = start + u * (length * 0.20) + n * (d * 0.05);
-    final cp2 = start + u * (length * 0.32) - n * (d * 0.15);
+    // Symmetrical, perfectly smooth circular interlocking jigsaw tab
+    // 1. From start to left neck (p1)
+    final p1 = start + u * (length * 0.36) - n * (d * 0.06);
+    final cp1 = start + u * (length * 0.22);
+    final cp2 = start + u * (length * 0.32) - n * (d * 0.04);
     path.cubicTo(cp1.dx, cp1.dy, cp2.dx, cp2.dy, p1.dx, p1.dy);
 
-    // Segment 2: neck expand out to head tip
-    final mid = start + u * (length * 0.50) + n * d;
-    final cp3 = start + u * (length * 0.38) + n * (d * 1.15);
-    final cp4 = start + u * (length * 0.44) + n * (d * 1.15);
-    final p2 = start + u * (length * 0.48) + n * d;
+    // 2. From left neck (p1) out to bulb left cheek (p2)
+    final p2 = start + u * (length * 0.44) + n * (d * 0.98);
+    final cp3 = start + u * (length * 0.38) + n * (d * 0.35);
+    final cp4 = start + u * (length * 0.39) + n * (d * 0.92);
     path.cubicTo(cp3.dx, cp3.dy, cp4.dx, cp4.dy, p2.dx, p2.dy);
 
-    final cp5 = start + u * (length * 0.52) + n * (d * 1.15);
-    final cp6 = start + u * (length * 0.56) + n * (d * 1.15);
-    path.cubicTo(cp5.dx, cp5.dy, cp6.dx, cp6.dy, mid.dx, mid.dy);
+    // 3. Bulb crown: from left cheek (p2) across apex to right cheek (p3)
+    final p3 = start + u * (length * 0.56) + n * (d * 0.98);
+    final cp5 = start + u * (length * 0.48) + n * (d * 1.04);
+    final cp6 = start + u * (length * 0.52) + n * (d * 1.04);
+    path.cubicTo(cp5.dx, cp5.dy, cp6.dx, cp6.dy, p3.dx, p3.dy);
 
-    // Segment 3: head tip back into neck and exit to end
-    final cp7 = start + u * (length * 0.56) + n * (d * 1.15);
-    final cp8 = start + u * (length * 0.62) + n * (d * 1.15);
-    final p4 = start + u * (length * 0.65);
-    final cp9 = start + u * (length * 0.68) - n * (d * 0.15);
-    final cp10 = start + u * (length * 0.80) + n * (d * 0.05);
+    // 4. From right cheek (p3) down to right neck (p4)
+    final p4 = start + u * (length * 0.64) - n * (d * 0.06);
+    final cp7 = start + u * (length * 0.61) + n * (d * 0.92);
+    final cp8 = start + u * (length * 0.62) + n * (d * 0.35);
     path.cubicTo(cp7.dx, cp7.dy, cp8.dx, cp8.dy, p4.dx, p4.dy);
+
+    // 5. From right neck (p4) to end
+    final cp9 = start + u * (length * 0.68) - n * (d * 0.04);
+    final cp10 = start + u * (length * 0.78);
     path.cubicTo(cp9.dx, cp9.dy, cp10.dx, cp10.dy, end.dx, end.dy);
   }
 

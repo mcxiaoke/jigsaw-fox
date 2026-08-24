@@ -10,24 +10,47 @@ import 'package:jigsawpuzzle/widgets/choose_difficulty_sheet.dart';
 
 void main() {
   test('difficulty preset configuration', () {
-    expect(PuzzleDifficulty.presets.first.pieceCount, 9);
-    expect(PuzzleDifficulty.presets.last.pieceCount, 400);
+    expect(PuzzleDifficulty.presets.first.pieceCount, 16);
+    expect(PuzzleDifficulty.presets.last.pieceCount, 300);
   });
 
-  test('PuzzleDifficulty.adaptiveForSize automatically aligns with image orientation', () {
-    const diff3x4 = PuzzleDifficulty(label: '3 × 4 (12 块)', rows: 3, cols: 4);
+  test('PuzzleAspectRatio detects all 5 standard image ratios correctly', () {
+    // 1:1
+    expect(PuzzleAspectRatio.fromSize(1000, 1000), PuzzleAspectRatio.square1x1);
+    expect(PuzzleAspectRatio.fromSize(1024, 1024), PuzzleAspectRatio.square1x1);
 
-    // 1. Portrait image (3:4 aspect, e.g. W=300, H=400)
-    final portraitAdaptive = diff3x4.adaptiveForSize(300, 400);
-    expect(portraitAdaptive.rows, 4, reason: 'Height should have 4 rows for 3:4 portrait image');
-    expect(portraitAdaptive.cols, 3, reason: 'Width should have 3 cols for 3:4 portrait image');
-    // Resulting single piece aspect ratio = (300/3) / (400/4) = 100 / 100 = 1.0 (Square!)
+    // 2:3 (Portrait)
+    expect(PuzzleAspectRatio.fromSize(800, 1200), PuzzleAspectRatio.portrait2x3);
+    expect(PuzzleAspectRatio.fromSize(960, 1440), PuzzleAspectRatio.portrait2x3);
 
-    // 2. Landscape image (4:3 aspect, e.g. W=400, H=300)
-    final landscapeAdaptive = diff3x4.adaptiveForSize(400, 300);
-    expect(landscapeAdaptive.rows, 3, reason: 'Height should have 3 rows for 4:3 landscape image');
-    expect(landscapeAdaptive.cols, 4, reason: 'Width should have 4 cols for 4:3 landscape image');
-    // Resulting single piece aspect ratio = (400/4) / (300/3) = 100 / 100 = 1.0 (Square!)
+    // 3:2 (Landscape)
+    expect(PuzzleAspectRatio.fromSize(1200, 800), PuzzleAspectRatio.landscape3x2);
+    expect(PuzzleAspectRatio.fromSize(1440, 960), PuzzleAspectRatio.landscape3x2);
+
+    // 3:4 (Portrait)
+    expect(PuzzleAspectRatio.fromSize(900, 1200), PuzzleAspectRatio.portrait3x4);
+    expect(PuzzleAspectRatio.fromSize(1080, 1440), PuzzleAspectRatio.portrait3x4);
+
+    // 4:3 (Landscape)
+    expect(PuzzleAspectRatio.fromSize(1200, 900), PuzzleAspectRatio.landscape4x3);
+    expect(PuzzleAspectRatio.fromSize(1440, 1080), PuzzleAspectRatio.landscape4x3);
+  });
+
+  test('Every difficulty tier for each aspect ratio produces 100% square base cells', () {
+    for (final aspect in PuzzleAspectRatio.values) {
+      for (final tier in aspect.tiers) {
+        final diff = tier.difficulty;
+        // Check cols : rows == aspectCols : aspectRows
+        // meaning (aspectCols / cols) == (aspectRows / rows) => pure square cell!
+        final cellW = aspect.aspectCols / diff.cols;
+        final cellH = aspect.aspectRows / diff.rows;
+        expect(
+          (cellW - cellH).abs() < 1e-6,
+          isTrue,
+          reason: 'Tier ${diff.label} in ${aspect.label} must have equal cell width and height, but got W=$cellW, H=$cellH',
+        );
+      }
+    }
   });
 
   testWidgets('Victory dialog renders with finite constraints without RenderIntrinsicWidth exception', (tester) async {
@@ -161,8 +184,8 @@ void main() {
                   isScrollControlled: true,
                   builder: (_) => ChooseDifficultySheet(
                     imageBytes: kTransparentImage,
-                    initialDifficulty: const PuzzleDifficulty(label: '3 × 3 (9 块)', rows: 3, cols: 3),
-                    completedPieceCounts: const {9, 36},
+                    initialDifficulty: const PuzzleDifficulty(label: '4 × 4 (16 块)', rows: 4, cols: 4),
+                    completedPieceCounts: const {16, 36},
                     title: '第 1 关 · 难度选择',
                     onStart: (_) {},
                   ),
@@ -180,14 +203,14 @@ void main() {
 
     // 1. Check title and header indicator
     expect(find.text('第 1 关 · 难度选择'), findsOneWidget);
-    expect(find.text('已通关'), findsOneWidget); // Header badge for currently selected 9-piece diff
+    expect(find.text('已通关'), findsOneWidget); // Header badge for currently selected 16-piece diff
     expect(find.text('重玩此难度'), findsOneWidget);
 
-    // 2. Check check_circle icons rendered for passed difficulties (9 and 36 + 1 header badge = at least 3 check_circle icons)
+    // 2. Check check_circle icons rendered for passed difficulties (16 and 36 + 1 header badge = at least 3 check_circle icons)
     expect(find.byIcon(Icons.check_circle), findsNWidgets(3));
 
-    // 3. Tap on unpassed difficulty 16 (4x4)
-    await tester.tap(find.text('16'));
+    // 3. Tap on unpassed difficulty 25 (5x5)
+    await tester.tap(find.text('25'));
     await tester.pumpAndSettle();
 
     expect(find.text('开始'), findsOneWidget); // Button switches to '开始'
