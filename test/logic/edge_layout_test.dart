@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:jigsawpuzzle/logic/geometry/edge_curve.dart';
 import 'package:jigsawpuzzle/logic/geometry/edge_layout.dart';
 import 'package:jigsawpuzzle/logic/geometry/edge_type.dart';
 
@@ -19,13 +20,13 @@ void main() {
       final layout = EdgeLayout(rows: 3, cols: 4, seed: 12345);
 
       for (var c = 0; c < 4; c++) {
-        expect(layout.edgesFor(0, c).top, EdgeType.flat);
-        expect(layout.edgesFor(2, c).bottom, EdgeType.flat);
+        expect(layout.edgesFor(0, c).top.isFlat, isTrue);
+        expect(layout.edgesFor(2, c).bottom.isFlat, isTrue);
       }
 
       for (var r = 0; r < 3; r++) {
-        expect(layout.edgesFor(r, 0).left, EdgeType.flat);
-        expect(layout.edgesFor(r, 3).right, EdgeType.flat);
+        expect(layout.edgesFor(r, 0).left.isFlat, isTrue);
+        expect(layout.edgesFor(r, 3).right.isFlat, isTrue);
       }
     });
 
@@ -39,14 +40,14 @@ void main() {
           // Check right neighbor
           if (c + 1 < 6) {
             final rightNeighbor = layout.edgesFor(r, c + 1);
-            expect(current.right.opposite, equals(rightNeighbor.left),
+            expect(current.right.complementary(), equals(rightNeighbor.left),
                 reason: 'Mismatch between piece ($r, $c) right and ($r, ${c + 1}) left');
           }
 
           // Check bottom neighbor
           if (r + 1 < 5) {
             final bottomNeighbor = layout.edgesFor(r + 1, c);
-            expect(current.bottom.opposite, equals(bottomNeighbor.top),
+            expect(current.bottom.complementary(), equals(bottomNeighbor.top),
                 reason: 'Mismatch between piece ($r, $c) bottom and (${r + 1}, $c) top');
           }
         }
@@ -70,17 +71,17 @@ void main() {
 
     test('PieceEdges clockwise rotation', () {
       const edges = PieceEdges(
-        top: EdgeType.flat,
-        right: EdgeType.tab,
-        bottom: EdgeType.blank,
-        left: EdgeType.tab,
+        top: EdgeCurveDescriptor(edgeType: EdgeType.flat),
+        right: EdgeCurveDescriptor(edgeType: EdgeType.tab),
+        bottom: EdgeCurveDescriptor(edgeType: EdgeType.blank),
+        left: EdgeCurveDescriptor(edgeType: EdgeType.tab),
       );
 
       final rot1 = edges.rotateClockwise(1);
-      expect(rot1.top, EdgeType.tab); // Old left
-      expect(rot1.right, EdgeType.flat); // Old top
-      expect(rot1.bottom, EdgeType.tab); // Old right
-      expect(rot1.left, EdgeType.blank); // Old bottom
+      expect(rot1.top.edgeType, EdgeType.tab); // Old left
+      expect(rot1.right.edgeType, EdgeType.flat); // Old top
+      expect(rot1.bottom.edgeType, EdgeType.tab); // Old right
+      expect(rot1.left.edgeType, EdgeType.blank); // Old bottom
 
       final rot4 = edges.rotateClockwise(4);
       expect(rot4, equals(edges));
