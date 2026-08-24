@@ -94,6 +94,7 @@ class PuzzleEngine {
   static BoardTransitionResult resolveSnap({
     required PuzzleBoardState state,
     required int draggedPieceId,
+    Set<int>? onBoardPieceIds,
     double? customSnapDistance,
   }) {
     final snapDist = customSnapDistance ??
@@ -102,6 +103,17 @@ class PuzzleEngine {
     final draggedPiece = state.pieceById(draggedPieceId);
     final clusterId = draggedPiece.clusterId;
     final clusterPieces = state.piecesInCluster(clusterId);
+
+    // 如果指定了棋盘有效碎片且当前被拖拽碎片不在其中，直接返回
+    if (onBoardPieceIds != null && !onBoardPieceIds.contains(draggedPieceId)) {
+      return BoardTransitionResult(
+        state: state,
+        didSnap: false,
+        didMerge: false,
+        affectedPieceIds: [draggedPieceId],
+        isCompleted: state.isSolved,
+      );
+    }
 
     var currentPieces = List<PieceState>.from(state.pieces);
     var didSnap = false;
@@ -146,12 +158,15 @@ class PuzzleEngine {
       }
     }
 
-    // 2. 检查与空中其他碎片的邻居正交相对吸附与集群合并
+    // 2. 检查与空中其他碎片的邻居正交相对吸附与集群合并（严禁合并托盘碎片）
     final activeClusterPieces = currentPieces.where((p) => p.clusterId == clusterId).toList();
 
     for (final pA in activeClusterPieces) {
       for (final pB in currentPieces) {
         if (pB.clusterId == clusterId) continue; // 同一集群，跳过
+        if (onBoardPieceIds != null && !onBoardPieceIds.contains(pB.id)) {
+          continue; // 托盘中的碎片严禁参与空间邻居合并
+        }
 
         final dr = pB.r - pA.r;
         final dc = pB.c - pA.c;
@@ -199,8 +214,14 @@ class PuzzleEngine {
       if (didMerge) break;
     }
 
-    // 3. 级联传递合并：检查是否同时触碰到了第三个集群并触发多重合并
-    currentPieces = _mergeAllAdjacentClusters(currentPieces, state.rows, state.cols, state.rotationEnabled);
+    // 3. 级联传递合并：检查是否同时触碰到了第三个集群并触发多重合并（严禁合并托盘碎片）
+    currentPieces = _mergeAllAdjacentClusters(
+      currentPieces,
+      state.rows,
+      state.cols,
+      state.rotationEnabled,
+      onBoardPieceIds: onBoardPieceIds,
+    );
 
     final newState = state.copyWith(pieces: currentPieces);
     return BoardTransitionResult(
@@ -236,6 +257,7 @@ class PuzzleEngine {
     int rows,
     int cols,
     bool rotationEnabled, {
+    Set<int>? onBoardPieceIds,
     double epsilon = 0.035,
   }) {
     var result = List<PieceState>.from(pieces);
@@ -248,6 +270,10 @@ class PuzzleEngine {
           final pA = result[i];
           final pB = result[j];
           if (pA.clusterId == pB.clusterId) continue;
+          if (onBoardPieceIds != null &&
+              (!onBoardPieceIds.contains(pA.id) || !onBoardPieceIds.contains(pB.id))) {
+            continue; // 托盘碎片绝不参与级联合并
+          }
 
           final dr = pB.r - pA.r;
           final dc = pB.c - pA.c;

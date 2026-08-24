@@ -488,6 +488,10 @@ class _GamePageState extends State<GamePage> {
 
   void _onPointerDown(PointerDownEvent event) {
     _pointerPositions[event.pointer] = event.localPosition;
+    if (_pointerPositions.length >= 2) {
+      _game?.isPinching = true;
+      _game?.cancelAllPieceDragging();
+    }
     if (_pointerPositions.length == 2) {
       final p1 = _pointerPositions.values.first;
       final p2 = _pointerPositions.values.last;
@@ -500,7 +504,7 @@ class _GamePageState extends State<GamePage> {
 
   void _onPointerMove(PointerMoveEvent event) {
     _pointerPositions[event.pointer] = event.localPosition;
-    if (_pointerPositions.length == 2 && _game != null) {
+    if (_pointerPositions.length >= 2 && _game != null) {
       final p1 = _pointerPositions.values.first;
       final p2 = _pointerPositions.values.last;
       final curDist = (p1 - p2).distance;
@@ -508,8 +512,18 @@ class _GamePageState extends State<GamePage> {
       if (_baseDistance > 10.0) {
         final scaleFactor = curDist / _baseDistance;
         final newZoom = (_baseZoom * scaleFactor).clamp(1.0, _game!.maxZoom);
-        final panDelta = curFocal - _baseFocalPoint;
-        final newPan = _basePan + Vector2(panDelta.dx, panDelta.dy);
+
+        // 精准定点缩放几何变换：保持两指中心点在缩放过程中与棋盘内容像素严格锁定
+        final baseTopLeft = _game!.boardTopLeft + _basePan;
+        final focalOffset = _baseFocalPoint - Offset(baseTopLeft.x, baseTopLeft.y);
+        final zoomRatio = newZoom / _baseZoom;
+        final newTopLeftX = curFocal.dx - focalOffset.dx * zoomRatio;
+        final newTopLeftY = curFocal.dy - focalOffset.dy * zoomRatio;
+        final newPan = Vector2(
+          newTopLeftX - _game!.boardTopLeft.x,
+          newTopLeftY - _game!.boardTopLeft.y,
+        );
+
         _game!.setZoomAndPan(newZoom, newPan);
         if (mounted) setState(() {});
       }
@@ -523,6 +537,11 @@ class _GamePageState extends State<GamePage> {
     _pointerPositions.remove(event.pointer);
     if (_pointerPositions.length < 2) {
       _baseDistance = 0.0;
+      Future.delayed(const Duration(milliseconds: 60), () {
+        if (_pointerPositions.length < 2 && mounted) {
+          _game?.isPinching = false;
+        }
+      });
     }
     if (mounted) setState(() {});
   }
@@ -531,6 +550,11 @@ class _GamePageState extends State<GamePage> {
     _pointerPositions.remove(event.pointer);
     if (_pointerPositions.length < 2) {
       _baseDistance = 0.0;
+      Future.delayed(const Duration(milliseconds: 60), () {
+        if (_pointerPositions.length < 2 && mounted) {
+          _game?.isPinching = false;
+        }
+      });
     }
     if (mounted) setState(() {});
   }
@@ -559,7 +583,6 @@ class _GamePageState extends State<GamePage> {
   @override
   Widget build(BuildContext context) {
     final total = widget.difficulty.pieceCount;
-    final percent = total > 0 ? (_solvedPieces * 100 ~/ total) : 0;
     final ghostOpacity = _game?.boardGhostOpacity ?? 0.0;
     final isBorderActive = _game?.isBorderFilterActive ?? false;
 
@@ -682,13 +705,19 @@ class _GamePageState extends State<GamePage> {
                             overflow: TextOverflow.ellipsis,
                           ),
                         ),
-                        // 1. Wallpaper background switcher
+                        // 1. Smart hint tool (Moved to AppBar first position)
+                        IconButton(
+                          icon: const Icon(PhosphorIconsFill.lightbulb, size: 21, color: Colors.amber),
+                          tooltip: '智能提示',
+                          onPressed: () => _game?.hint(),
+                        ),
+                        // 2. Wallpaper background switcher
                         IconButton(
                           icon: const Icon(PhosphorIconsBold.image, size: 21, color: Color(0xFF2E7D32)),
                           tooltip: '更换壁纸背景',
                           onPressed: _openBackgroundSelector,
                         ),
-                        // 2. Fullscreen original image toggle
+                        // 3. Fullscreen original image toggle
                         IconButton(
                           icon: Icon(
                             _showOriginalImage ? PhosphorIconsFill.eye : PhosphorIconsBold.eyeSlash,
@@ -698,7 +727,7 @@ class _GamePageState extends State<GamePage> {
                           tooltip: '查看原图',
                           onPressed: () => setState(() => _showOriginalImage = !_showOriginalImage),
                         ),
-                        // 3. Pause Menu / Options
+                        // 4. Pause Menu / Options
                         IconButton(
                           icon: const Icon(PhosphorIconsBold.pauseCircle, size: 21, color: Colors.black87),
                           tooltip: '暂停与菜单',
@@ -723,7 +752,7 @@ class _GamePageState extends State<GamePage> {
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          // Left: Live Timer & Piece Progress
+                          // Left: Live Timer & Piece Progress (Without redundant percent to prevent overflow)
                           Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
@@ -739,7 +768,7 @@ class _GamePageState extends State<GamePage> {
                                   borderRadius: BorderRadius.circular(8),
                                 ),
                                 child: Text(
-                                  '🧩 $_solvedPieces/$total ($percent%)',
+                                  '🧩 $_solvedPieces/$total',
                                   style: const TextStyle(
                                     fontSize: 11,
                                     fontWeight: FontWeight.bold,
@@ -750,7 +779,7 @@ class _GamePageState extends State<GamePage> {
                             ],
                           ),
 
-                          // Right: Tools (Undo, Redo, Ghost, Border, Organize, Hint)
+                          // Right: Tools (Undo, Redo, Ghost, Border, Organize)
                           Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
@@ -836,14 +865,6 @@ class _GamePageState extends State<GamePage> {
                                 icon: const Icon(PhosphorIconsBold.broom, size: 19, color: Colors.black54),
                                 tooltip: '一键整理托盘',
                                 onPressed: () => _game?.organizeTray(),
-                              ),
-                              IconButton(
-                                visualDensity: VisualDensity.compact,
-                                padding: const EdgeInsets.symmetric(horizontal: 2),
-                                constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
-                                icon: const Icon(PhosphorIconsFill.lightbulb, size: 19, color: Colors.amber),
-                                tooltip: '智能提示',
-                                onPressed: () => _game?.hint(),
                               ),
                             ],
                           ),

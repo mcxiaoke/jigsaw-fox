@@ -266,5 +266,40 @@ void main() {
     expect(game.panOffset.x, 0.0);
     expect(game.panOffset.y, 0.0);
   });
+
+  test('双指缩放放大后，托盘中碎片绝不发生误粘连且 cancelAllPieceDragging 正常工作', () async {
+    final img = await _decodePng();
+    final game = JigsawPuzzleGame(
+      image: img,
+      rows: 3,
+      cols: 3,
+      onSolved: () {},
+    );
+    game.onGameResize(Vector2(400, 800));
+    await game.onLoad();
+
+    // 放大到 3.0 倍
+    game.zoomAt(Vector2(200, 300), 2.0);
+    expect(game.zoom, closeTo(3.0, 0.01));
+
+    // 模拟多指手势触发
+    game.isPinching = true;
+    final piece0 = game.children.whereType<PuzzlePieceComponent>().first;
+    piece0.isDragging = true;
+    piece0.position.setFrom(Vector2(100, 100)); // 临时移动
+
+    // 触发取消
+    game.cancelAllPieceDragging();
+    expect(piece0.isDragging, isFalse);
+
+    // 模拟托盘中的碎片释放拖拽（handlePieceDragEnd），不应发生合并
+    game.handlePieceDragEnd(piece0);
+
+    // 检查所有碎片 clusterId 均为自身 ID，没有任何托盘碎片被合并
+    final allPieces = game.children.whereType<PuzzlePieceComponent>().toList();
+    for (final p in allPieces) {
+      expect(p.clusterId, equals(p.id), reason: '碎片 #${p.id} 不应被误合并');
+    }
+  });
 }
 

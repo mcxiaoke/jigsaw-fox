@@ -118,14 +118,11 @@ class PuzzlePieceComponent extends PositionComponent
   /// 当前是否处于吸附高亮或边缘筛选高亮状态
   bool isHighlight = false;
 
-  /// 碰撞拾取判定：精确测试触摸点是否在碎片实际贝塞尔外轮廓或包围盒内
+  /// 碰撞拾取判定：精确测试触摸点是否在碎片实际贝塞尔外轮廓内
   @override
   bool containsLocalPoint(Vector2 point) {
     final offset = ui.Offset(point.x, point.y);
-    if (shape.containsLocalPoint(offset, rot)) {
-      return true;
-    }
-    return shape.fillRect.contains(offset);
+    return shape.containsLocalPoint(offset, rot);
   }
 
   /// 核心渲染循环（分层渲染管线）
@@ -173,7 +170,7 @@ class PuzzlePieceComponent extends PositionComponent
 
   @override
   void onDragStart(DragStartEvent event) {
-    if (game.isSolved) return;
+    if (game.isSolved || game.isPinching) return;
     super.onDragStart(event);
     isDragging = true;
     game.handlePieceDragStart(this);
@@ -181,9 +178,16 @@ class PuzzlePieceComponent extends PositionComponent
 
   @override
   void onDragUpdate(DragUpdateEvent event) {
-    super.onDragUpdate(event);
+    if (game.isPinching) {
+      if (isDragging) {
+        isDragging = false;
+        game.cancelPieceDrag(this);
+      }
+      return;
+    }
     if (!isDragging) return;
 
+    super.onDragUpdate(event);
     final delta = event.canvasDelta;
     game.handlePieceDragUpdate(this, delta);
 
@@ -217,7 +221,7 @@ class PuzzlePieceComponent extends PositionComponent
     super.onDragCancel(event);
     if (!isDragging) return;
     isDragging = false;
-    game.handlePieceDragEnd(this);
+    game.cancelPieceDrag(this);
   }
 
   /// 带有平滑曲线的缓动平移位移动画

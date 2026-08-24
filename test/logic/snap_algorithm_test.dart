@@ -81,5 +81,36 @@ void main() {
 
       expect(boardState.isSolved, isTrue);
     });
+
+    test('Pieces in tray (not in onBoardPieceIds) must NOT merge with board pieces or neighbor tray pieces', () {
+      // 假设 Piece 0 在棋盘 (0.3, 0.3)，Piece 1 留在托盘 (0.8, 0.3)
+      final pieces = [
+        const PieceState(id: 0, r: 0, c: 0, nx: 0.30, ny: 0.30, clusterId: 0),
+        const PieceState(id: 1, r: 0, c: 1, nx: 0.80, ny: 0.30, clusterId: 1),
+      ];
+
+      final boardState = PuzzleBoardState(
+        rows: 1,
+        cols: 2,
+        seed: 1,
+        pieces: pieces,
+      );
+
+      // 仅 Piece 0 在棋盘上
+      final result = PuzzleEngine.resolveSnap(
+        state: boardState,
+        draggedPieceId: 0,
+        onBoardPieceIds: {0},
+        customSnapDistance: 0.1,
+      );
+
+      // Piece 1 不在棋盘上，严禁发生合并
+      expect(result.didMerge, isFalse);
+      final p0 = result.state.pieceById(0);
+      final p1 = result.state.pieceById(1);
+      expect(p0.clusterId, isNot(equals(p1.clusterId)));
+      expect(p0.clusterId, 0);
+      expect(p1.clusterId, 1);
+    });
   });
 }

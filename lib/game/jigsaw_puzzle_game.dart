@@ -156,6 +156,7 @@ class JigsawPuzzleGame extends FlameGame with ScrollDetector, PanDetector {
   bool _borderFilterActive = false;
   double _boardGhostOpacity = 0.0;
   double get boardGhostOpacity => _boardGhostOpacity;
+  bool isPinching = false;
 
   late EdgeLayout edgeLayout;
   late PuzzleBoardState _boardState;
@@ -596,20 +597,74 @@ class JigsawPuzzleGame extends FlameGame with ScrollDetector, PanDetector {
     }
   }
 
+  /// 取消当前所有碎片的拖拽状态，平滑恢复其原有位置
+  void cancelAllPieceDragging() {
+    for (final p in _pieces.values) {
+      if (p.isDragging) {
+        cancelPieceDrag(p);
+      }
+    }
+  }
+
+  /// 取消指定碎片集群的拖拽并恢复原位
+  void cancelPieceDrag(PuzzlePieceComponent piece) {
+    piece.isDragging = false;
+    final clusterPieces =
+        _pieces.values.where((p) => p.clusterId == piece.clusterId).toList();
+
+    for (final p in clusterPieces) {
+      p.isDragging = false;
+      if (p.isInTray) {
+        p.scale.setAll(_trayPieceScale);
+      } else {
+        p.scale.setAll(_zoom);
+        final statePiece = _boardState.pieceById(p.id);
+        final targetPos = _normalizedToScreen(statePiece.nx, statePiece.ny);
+        p.animateTo(targetPos, duration: 0.15);
+      }
+    }
+    _realignTrayPieces(animate: true);
+  }
+
   /// Called when user releases drag. Executes snap resolution & cluster merge.
   void handlePieceDragEnd(PuzzlePieceComponent piece) {
     final inTrayArea = piece.position.y >= trayPosition.y - pieceSize.y * 0.25;
     final clusterPieces =
         _pieces.values.where((p) => p.clusterId == piece.clusterId).toList();
 
+    // 1. 如果拖回托盘区域且为单块碎片 -> 平滑收纳进托盘，不触发棋盘吸附
+    if (inTrayArea && clusterPieces.length == 1) {
+      piece.isInTray = true;
+      piece.animateScaleTo(Vector2.all(_trayPieceScale), duration: 0.15);
+      _realignTrayPieces(animate: true);
+      onStateUpdated?.call();
+      return;
+    }
+
+    // 2. 如果留在棋盘区域（或者是由多块拼好的集群留在棋盘）
+    for (final p in clusterPieces) {
+      p.isInTray = false;
+    }
+
+    // 棋盘上所有非托盘碎片的 ID 集合
+    final onBoardPieceIds =
+        _pieces.values.where((p) => !p.isInTray).map((p) => p.id).toSet();
+
     final out = [0.0, 0.0];
     final updatedPieces = _boardState.pieces.map((p) {
       final comp = _pieces[p.id];
-      if (comp == null) return p; // 防御：跳过 _pieces 中不存在的碎片
-      _screenToNormalized(comp.position, out);
+      if (comp == null) return p;
+      // 仅针对在棋盘上的碎片计算归一化坐标，托盘碎片保留原有状态
+      if (!comp.isInTray) {
+        _screenToNormalized(comp.position, out);
+        return p.copyWith(
+          nx: out[0],
+          ny: out[1],
+          clusterId: comp.clusterId,
+          rot: comp.rot,
+        );
+      }
       return p.copyWith(
-        nx: out[0],
-        ny: out[1],
         clusterId: comp.clusterId,
         rot: comp.rot,
       );
@@ -620,6 +675,7 @@ class JigsawPuzzleGame extends FlameGame with ScrollDetector, PanDetector {
     final result = PuzzleEngine.resolveSnap(
       state: _boardState,
       draggedPieceId: piece.id,
+      onBoardPieceIds: onBoardPieceIds,
     );
 
     if (result.didSnap || result.didMerge || result.isCompleted || _boardState.isSolved) {
@@ -654,14 +710,8 @@ class JigsawPuzzleGame extends FlameGame with ScrollDetector, PanDetector {
         }
         onSolved();
       }
-    } else if (inTrayArea && clusterPieces.length == 1) {
-      // Returned back into tray -> dock smoothly
-      piece.isInTray = true;
-      piece.animateScaleTo(Vector2.all(_trayPieceScale), duration: 0.15);
-      _realignTrayPieces(animate: true);
-      onStateUpdated?.call();
     } else {
-      // Kept on board -> ensure _zoom scale
+      // 未吸附 -> 确保保持棋盘当前 _zoom 尺寸
       for (final p in clusterPieces) {
         p.isInTray = false;
         p.animateScaleTo(Vector2.all(_zoom), duration: 0.15);
