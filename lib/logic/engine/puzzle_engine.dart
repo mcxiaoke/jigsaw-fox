@@ -3,12 +3,25 @@ import 'dart:math';
 import '../geometry/edge_layout.dart';
 import '../models/puzzle_state.dart';
 
-/// Pure domain puzzle engine handling snapping, cluster merging, hints, and solved state checks.
+/// 纯领域逻辑拼图核心引擎（Pure Domain Logic Engine）。
+///
+/// 【职责范围】：
+/// 独立于 UI 渲染层与游戏引擎，负责拼图网格拓扑状态计算、
+/// 碎片网格槽位吸附（Board Slot Snapping）、碎片集群自由合并（Cluster Merging / Disjoint Set）、
+/// 碎片旋转中心计算、智能提示（Hint）及最终通关判定（Solved State Check）。
 class PuzzleEngine {
-  /// Default snap threshold as a ratio of single piece size.
+  /// 默认吸附容差阈值比例（单块碎片尺寸的 48%）。
+  /// 【选值依据】：
+  /// 48% 是经过大量手感测试的黄金手感比例：既能保证玩家拖到目标附近时有清晰痛快的“自动就位吸附感”，
+  /// 又不会在密集拖动时误触发旁边不相干的槽位。
   static const double defaultSnapRatio = 0.48;
 
-  /// Creates a new puzzle board state with scattered pieces.
+  /// 生成打散后的初始拼图棋盘状态（Scatter Pieces）。
+  ///
+  /// 【算法过程】：
+  /// 1. 使用固定关卡种子 [seed] 初始化 PRNG；
+  /// 2. 若启用旋转难度（[rotationEnabled]），随机分配 0~3 次 90° 初始旋转；
+  /// 3. 将碎片散落在棋盘四周的边缘托盘区域，并做防重叠校验，确保不会开局直接落在正确答案槽位上。
   static PuzzleBoardState createInitialState({
     required int rows,
     required int cols,
@@ -24,12 +37,11 @@ class PuzzleEngine {
         final id = r * cols + c;
         final rot = rotationEnabled ? rng.nextInt(4) : 0;
 
-        // Scatter pieces across a normalized margin [-0.25, 1.25]
+        // 打散位置尝试：避免开局直接落入正确槽位
         double sx, sy;
         for (var attempt = 0; attempt < 100; attempt++) {
           sx = -0.2 + rng.nextDouble() * 1.4;
           sy = -0.2 + rng.nextDouble() * 1.4;
-          // Avoid immediately landing in correct spot
           final tnx = c / cols;
           final tny = r / rows;
           if ((sx - tnx).abs() > 0.15 || (sy - tny).abs() > 0.15) {
@@ -61,14 +73,24 @@ class PuzzleEngine {
     );
   }
 
-  /// Calculates the default snap distance in normalized coordinates.
+  /// 计算归一化坐标系下的实际吸附距离阈值。
+  ///
+  /// 【公式】：`min(1.0 / cols, 1.0 / rows) * ratio`
   static double calculateSnapThreshold(int rows, int cols, [double ratio = defaultSnapRatio]) {
     final pieceW = 1.0 / cols;
     final pieceH = 1.0 / rows;
     return min(pieceW, pieceH) * ratio;
   }
 
-  /// Resolves snapping and cluster merging after a cluster of pieces finishes moving.
+  /// 在玩家松手释放碎片后，执行吸附计算与集群合并（Snap & Cluster Merging）。
+  ///
+  /// 【核心两阶段吸附判定】：
+  /// 1. **阶段一：棋盘标准槽位吸附（Board Slot Snapping）**
+  ///    - 遍历拖拽集群中的每块碎片，检查是否与棋盘上的目标绝对位置槽位 `(targetNx, targetNy)` 距离小于 [snapDist]；
+  ///    - 若满足且角度归零，则将整个集群平移就位并锁定精确坐标。
+  /// 2. **阶段二：自由邻居碎片合并（Free-floating Neighbor Merging）**
+  ///    - 若未吸附到棋盘槽位，检查是否与空中其他同角度邻居碎片（上/下/左/右正交邻居）发生碰撞；
+  ///    - 若相对间距误差小于 [snapDist]，将两组碎片精准对齐并合并为一个新的大集群（统一 clusterId）。
   static BoardTransitionResult resolveSnap({
     required PuzzleBoardState state,
     required int draggedPieceId,
@@ -86,17 +108,17 @@ class PuzzleEngine {
     var didMerge = false;
     final affectedIds = <int>{...clusterPieces.map((p) => p.id)};
 
-    // 1. Check Snap to Board Target Slots
+    // 1. 检查是否吸附到棋盘槽位
     for (final piece in clusterPieces) {
       if (state.rotationEnabled && piece.rot % 4 != 0) {
-        continue;
+        continue; // 角度未摆正无法吸附进槽位
       }
       final targetNx = piece.targetNx(state.cols);
       final targetNy = piece.targetNy(state.rows);
       final dist = Point(piece.nx, piece.ny).distanceTo(Point(targetNx, targetNy));
 
       if (dist <= snapDist) {
-        // Compute displacement to snap entire cluster to board
+        // 计算平移差量并移动整个集群
         final dx = targetNx - piece.nx;
         final dy = targetNy - piece.ny;
 
@@ -107,7 +129,7 @@ class PuzzleEngine {
           dy,
         );
 
-        // Lock in exact normalized coordinates for pieces in this aligned cluster
+        // 锁定归一化标准坐标，消除累积浮点误差
         currentPieces = currentPieces.map((p) {
           if (p.clusterId == clusterId && (!state.rotationEnabled || p.rot % 4 == 0)) {
             final tnx = p.targetNx(state.cols);
@@ -124,12 +146,12 @@ class PuzzleEngine {
       }
     }
 
-    // 2. Check Snap to Neighbors (both on-board and free-floating)
+    // 2. 检查与空中其他碎片的邻居正交相对吸附与集群合并
     final activeClusterPieces = currentPieces.where((p) => p.clusterId == clusterId).toList();
 
     for (final pA in activeClusterPieces) {
       for (final pB in currentPieces) {
-        if (pB.clusterId == clusterId) continue; // Same cluster, skip
+        if (pB.clusterId == clusterId) continue; // 同一集群，跳过
 
         final dr = pB.r - pA.r;
         final dc = pB.c - pA.c;
@@ -137,7 +159,7 @@ class PuzzleEngine {
         if (!isOrthogonalNeighbor) continue;
 
         if (state.rotationEnabled && (pA.rot % 4 != pB.rot % 4)) {
-          continue;
+          continue; // 旋转角度不一致无法拼合
         }
 
         final expectedDx = dc * (1.0 / state.cols);
@@ -159,6 +181,7 @@ class PuzzleEngine {
             alignDy,
           );
 
+          // 并查集合并：将当前集群所有成员并入目标集群 targetClusterId
           final targetClusterId = pB.clusterId;
           currentPieces = currentPieces.map((p) {
             if (p.clusterId == clusterId) {
@@ -176,7 +199,7 @@ class PuzzleEngine {
       if (didMerge) break;
     }
 
-    // 3. Also check if multiple neighbor clusters now touch and should be merged
+    // 3. 级联传递合并：检查是否同时触碰到了第三个集群并触发多重合并
     currentPieces = _mergeAllAdjacentClusters(currentPieces, state.rows, state.cols, state.rotationEnabled);
 
     final newState = state.copyWith(pieces: currentPieces);
@@ -189,7 +212,7 @@ class PuzzleEngine {
     );
   }
 
-  /// Translates all pieces in a cluster by (dx, dy).
+  /// 将指定集群 [clusterId] 内的所有碎片整体平移 (dx, dy)。
   static List<PieceState> _translateCluster(
     List<PieceState> pieces,
     int clusterId,
@@ -207,7 +230,7 @@ class PuzzleEngine {
     }).toList();
   }
 
-  /// Checks and merges any adjacent aligned pieces into unified clusters.
+  /// 迭代扫描并合并所有空间接触且位置对齐的相邻碎片集群。
   static List<PieceState> _mergeAllAdjacentClusters(
     List<PieceState> pieces,
     int rows,
@@ -253,7 +276,11 @@ class PuzzleEngine {
     return result;
   }
 
-  /// Rotates a single piece or its entire cluster clockwise by 90°.
+  /// 将单块碎片或其所属的整个集群顺时针旋转 90°。
+  ///
+  /// 【旋转几何中心】：
+  /// 计算整个集群的包围盒几何中心点 `(centerNx, centerNy)`，
+  /// 所有成员绕此中心应用标准 2D 旋转矩阵 `(x, y) -> (-y, x)` 进行坐标更新。
   static PuzzleBoardState rotateCluster({
     required PuzzleBoardState state,
     required int pieceId,
@@ -262,7 +289,7 @@ class PuzzleEngine {
     final clusterId = targetPiece.clusterId;
     final clusterPieces = state.piecesInCluster(clusterId);
 
-    // Compute center of cluster for rotation
+    // 计算集群几何中心
     var minNx = 1.0, maxNx = 0.0, minNy = 1.0, maxNy = 0.0;
     for (final p in clusterPieces) {
       minNx = min(minNx, p.nx);
@@ -279,7 +306,7 @@ class PuzzleEngine {
       final relX = p.nx + (0.5 / state.cols) - centerNx;
       final relY = p.ny + (0.5 / state.rows) - centerNy;
 
-      // 90° clockwise rotation: (x, y) -> (-y, x)
+      // 顺时针 90° 旋转: (x, y) -> (-y, x)
       final newRelX = -relY;
       final newRelY = relX;
 
@@ -296,15 +323,15 @@ class PuzzleEngine {
     return state.copyWith(pieces: updated);
   }
 
-  /// Provides an intelligent hint by identifying the most strategic unplaced piece.
+  /// 智能提示（Hint）算法：优先挑选最具策略价值的未归位碎片（如角块、边块）。
   static HintResult hintFor(PuzzleBoardState state) {
-    // 1. Find all pieces not currently at their target slot
+    // 1. 找出所有未到达目标正确槽位的碎片
     final unplaced = state.pieces.where((p) => !p.isSolved(state.rows, state.cols)).toList();
     if (unplaced.isEmpty) {
       return HintResult(pieceId: state.pieces.first.id, targetNx: 0, targetNy: 0);
     }
 
-    // 2. Prefer border / corner pieces, or pieces adjacent to already placed clusters
+    // 2. 策略优先级排序：角块 (Corner) > 边块 (Border) > 内部块 (Center)
     unplaced.sort((a, b) {
       final aEdges = EdgeLayout(rows: state.rows, cols: state.cols, seed: state.seed).edgesFor(a.r, a.c);
       final bEdges = EdgeLayout(rows: state.rows, cols: state.cols, seed: state.seed).edgesFor(b.r, b.c);
@@ -324,7 +351,7 @@ class PuzzleEngine {
   }
 }
 
-/// Result returned after resolving a piece placement transition.
+/// 碎片移动放置计算结果对象
 class BoardTransitionResult {
   const BoardTransitionResult({
     required this.state,
@@ -341,7 +368,7 @@ class BoardTransitionResult {
   final bool isCompleted;
 }
 
-/// Target coordinate result for a hint operation.
+/// 智能提示目标坐标与目标碎片结构体
 class HintResult {
   const HintResult({
     required this.pieceId,

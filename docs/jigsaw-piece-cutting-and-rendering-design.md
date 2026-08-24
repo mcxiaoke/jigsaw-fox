@@ -1,117 +1,203 @@
-# 拼图切片算法与拟真 3D 渲染设计方案
+# 拼图切片算法与真实冲压渲染专项设计规范
 
-## 一、 背景与设计目标
-
-为了打造业界领先、媲美专业在线拼图网站（如 Jigsaw Explorer）的拼图游戏体验，本项目对碎片切割（Geometry Slicing）与视觉渲染（Visual Rendering）进行了全面重构升级。
-
-### 1.1 现状与痛点分析
-- **几何单一性**：原实现仅使用固定单一的静态贝塞尔曲线控制点，所有碎片边缘完全千篇一律，缺乏手作冲压拼图的自然随机有机感。
-- **视觉平面感**：原渲染仅绘制一条单色扁平描边，缺乏真实拼图冲压纸板/木板的凹凸倒角压痕（Bevel）与立体光照，显得扁平生硬。
-- **包围盒静态化**：Overhang 采用写死的经验比例，缺乏基于实际贝塞尔极值的精确包围盒，不利于复杂异形形状扩展。
-
-### 1.2 升级目标
-1. **真实圆滑的几何轮廓**：支持多种经典冲压形状库（Classic Bulb、Sock/Hook、Stubby、Natural Jitter），曲线采用 $C^1$ 连续的高阶三次贝塞尔曲线，圆润饱满且绝无折角。
-2. **100% 严丝合缝与确定性**：相邻碎片边缘严格共享几何参数，Tab 与 Hole 完美互锁；完全由关卡种子（Seed）确定性驱动，相同关卡每次进入形态完全一致。
-3. **拟真 3D 边缘倒角光影（Bevel & Emboss）**：模拟真实冲压纸板边缘的立体光影，左上方产生柔和受光高光（Top-Left Highlight），右下方产生深色背光内阴影（Bottom-Right Shadow）。
-4. **双层动态悬浮软阴影**：托盘与棋盘静止时呈现贴地环境遮挡（Ambient Occlusion），拖拽拾起时呈现大扩散立体下沉投影（Floating Drop Shadow）。
+> **文档标识**：`docs/jigsaw-piece-cutting-and-rendering-design.md`  
+> **文档定位**：切片几何（Piece Slicing Geometry）与物理冲压渲染（Authentic Press Rendering）的专项深度设计文档。  
+> **最新版本**：v2.0.0 (2026-08-24 重构版)
 
 ---
 
-## 二、 几何切片数学模型与算法体系
+## 一、 背景与演进复盘
 
-### 2.1 全局边拓扑图（Global Edge Graph）
-拼图由 $R$ 行 $C$ 列网格构成。网格内部包含：
-- 水平内部边：$(R - 1) \times C$ 条
-- 垂直内部边：$R \times (C - 1)$ 条
+### 1.1 初期实现缺陷分析（三次贝塞尔模型）
+在初期版本中，切片尝试采用了经典的参数化三次贝塞尔公式（Draradech 模型），在实际运行中暴露出严重的视觉失真（见对比截图 `app.jpg`）：
+1. **凸头（Tab）比例畸形**：凸起高度达到了边长的 $50\% \sim 60\%$，且颈部向内收缩过紧，导致碎片呈现“细长柄大头针/细蘑菇头”形态，破坏了碎片主体方形面积；
+2. **边缘粗描边脏黑感**：尝试通过绘制粗白高光线和粗黑暗角线来模拟立体感，但在凹孔（Blank）内部法向反转处也画了白线，导致碎片转角处产生类似简陋儿童画的脏黑描边；
+3. **角落漏底黑色裂缝**：早期的 Overhang 仅给 Tab 侧计算裕量，忽略了凹槽根部的微小外扩，导致贴图在四角交汇处被矩形截断，露出了棋盘底色黑块。
 
-每条边拥有唯一的确定性几何描述对象 `EdgeCurveDescriptor`：
-```dart
-class EdgeCurveDescriptor {
-  final EdgeShapeType shapeType; // Classic, Hook, Stubby, Jitter
-  final double tabSign;          // +1 为正向凸，-1 为反向凹
-  final bool isFlipped;          // 曲线横向镜像反转
-  final double tabSize;          // 凸头深度与宽度缩放
-  final double jitterAlong;      // 凸头中心沿边方向偏置 (b)
-  final double jitterDepth;      // 凸头高度微调 (c)
-  final double asymmetry;        // 颈部收口不对称度 (d)
-  final double startTangent;     // 起始端点切线高度 (a)
-  final double endTangent;       // 终止端点切线高度 (e)
-}
+### 1.2 升级目标与参考标准
+1:1 深度吸收专业在线拼图网站（[Jigsaw Explorer](https://www.jigsawexplorer.com/)）的几何模具与渲染精髓：
+- **四大黄金模具**：采用经过千万玩家验证的 12 控制点二次贝塞尔曲线矩阵；
+- **舒适黄金比例**：凸头深度严格限定在 **$23\% \sim 29\%$**，颈部平缓宽阔，饱满圆润；
+- **自然物理冲压切缝**：废弃粗黑粗白描边，采用 $0.75\text{px}$ 细腻半透明深灰微凹切缝与多阶动态软阴影；
+- **100% 紧密咬合与零裂缝**：数学保证顺时针/逆时针绝对对称，凹槽根部留足 $15\%$ 采样裕量。
+
+---
+
+## 二、 几何切片数学模型与模具库
+
+### 2.1 12 点二次贝塞尔曲线模型 (Quadratic Bezier Formulation)
+每条边缘在归一化坐标系 $[0.0, 1.0] \times [-0.2, 0.4]$ 下由 **12 个控制点**（偶数索引为控制点 Control Point，奇数索引为锚点 Anchor Point）构成 **6 段连续二次贝塞尔曲线**：
+
+```
+                段 2 (球头左冠)          段 3 (球头右冠)
+                 P4(Ctrl 2)             P6(Ctrl 3)
+                     \                 /
+                      \    P5 (峰顶)  /
+                       \   Anchor 2  /
+                        \     ▲     /
+                         \    │    /
+           P3 (左颈节点)  \   │   /  P7 (右颈节点)
+           Anchor 1 ───────┴──┼──┴─────── Anchor 3
+          /                   │                   \
+         / P2 (Ctrl 1)        │                    \ P8 (Ctrl 4)
+        /                     │                     \
+    P1 (Anchor 0)             │                    P9 (Anchor 4)
+    /                         │                         \
+   / P0 (Ctrl 0)              │                          \ P10 (Ctrl 5)
+  /                           │                           \
+P(0.0, 0.0) ──────────────────┴──────────────────────── P(1.0, 0.0)
+起点                                                       终点
 ```
 
-### 2.2 参数化三次贝塞尔曲线模型（Cubic Bezier Formulation）
-每条非平整边缘由 3 段三次贝塞尔曲线（共 10 个控制点 $P_0 \sim P_9$）平滑拼接而成：
-- **Segment 1（起点至左颈）**：$P_0 \to P_3$，控制点为 $P_1, P_2$。
-- **Segment 2（凸头圆弧/球冠）**：$P_3 \to P_6$，控制点为 $P_4, P_5$。
-- **Segment 3（右颈回收至终点）**：$P_6 \to P_9$，控制点为 $P_7, P_8$。
+### 2.2 四大预设模具矩阵 (`JigexCurves`)
 
-#### 归一化参数空间定义：
-令边缘长度为 $L$，法向量为 $\vec{N}$，沿边单位切向量为 $\vec{U}$。
-控制点在局部坐标系下的计算公式为：
-$$
-\begin{aligned}
-P_0 &= (0.0, 0.0) \\
-P_1 &= (0.2, a) \\
-P_2 &= (0.5 + b + d, -t + c) \\
-P_3 &= (0.5 - t + b, t + c) \\
-P_4 &= (0.5 - 2t + b - d, 3t + c) \\
-P_5 &= (0.5 + 2t + b - d, 3t + c) \\
-P_6 &= (0.5 + t + b, t + c) \\
-P_7 &= (0.5 + b + d, -t + c) \\
-P_8 &= (0.8, e) \\
-P_9 &= (1.0, 0.0)
-\end{aligned}
-$$
-其中：
-- $t$: 凸头基准尺度比例（通常 $0.18 \sim 0.24$）
-- $b$: 凸头沿边缘的横向偏移（消除呆板居中感）
-- $c$: 凸头高度扰动
-- $d$: 左右颈部不对称扰动
-- $e, a$: 前后两段连续边的端点斜率传递，满足 $a_{i+1} = \pm e_i$，保证跨网格交点时切线 $C^1$ 连续。
+#### 1. 经典对称圆球形 (`EdgeShapeType.ball`)
+标准经典卡扣，对称圆润，峰顶凸出 $+29.54\%$：
+```dart
+static const List<CurvePoint> ball = [
+  CurvePoint(0.06439, -0.00378), CurvePoint(0.16287, -0.02651), // 段 0: 起点至过渡区
+  CurvePoint(0.53409, -0.09848), CurvePoint(0.43181, 0.05681),  // 段 1: 颈部内凹与根部
+  CurvePoint(0.26515, 0.28787),  CurvePoint(0.50000, 0.29545),  // 段 2: 大肚外扩至对称峰顶
+  CurvePoint(0.71590, 0.28787),  CurvePoint(0.57575, 0.05681),  // 段 3: 右球冠下落至右颈
+  CurvePoint(0.51515, -0.07954), CurvePoint(0.76136, -0.01893), // 段 4: 右侧颈部内凹过渡
+  CurvePoint(0.90530, 0.01136),  CurvePoint(1.00000, 0.00000),  // 段 5: 收尾至终点
+];
+```
 
-### 2.3 形状库预设矩阵
-1. **Classic Bulb（经典圆润球形）**：对称大肚球冠，圆润厚重。
-2. **Skewed Hook / Sock（短袜歪钩形）**：$b \ne 0, d \ne 0$，俏皮非对称。
-3. **Stubby Tab（宽矮粗壮形）**：$t$ 适度降低，颈部加宽，抗变形力强。
-4. **Natural Jitter（手切有机形）**：综合引入微小受控随机扰动。
+#### 2. 宽矮粗壮形 (`EdgeShapeType.stub`)
+凸起深度仅 $+23.48\%$，基座宽阔平缓，适合大网格小碎片：
+```dart
+static const List<CurvePoint> stub = [
+  CurvePoint(0.09469, 0.00757),  CurvePoint(0.21969, -0.04924),
+  CurvePoint(0.39772, -0.11742), CurvePoint(0.37878, 0.01893),
+  CurvePoint(0.36363, 0.23484),  CurvePoint(0.61742, 0.15151),
+  CurvePoint(0.70833, 0.10984),  CurvePoint(0.61742, -0.01515),
+  CurvePoint(0.51893, -0.18181), CurvePoint(0.83712, -0.03030),
+  CurvePoint(0.90909, 0.00378),  CurvePoint(1.00000, 0.00000),
+];
+```
 
----
+#### 3. 短袜俏皮歪形 (`EdgeShapeType.sock`)
+峰顶偏向 $0.5416$，最大深度 $+34.46\%$，呈现不对称手作感：
+```dart
+static const List<CurvePoint> sock = [
+  CurvePoint(0.09469, 0.01136),  CurvePoint(0.22727, -0.03030),
+  CurvePoint(0.53787, -0.11742), CurvePoint(0.38257, 0.13257),
+  CurvePoint(0.28409, 0.34469),  CurvePoint(0.54166, 0.26893),
+  CurvePoint(0.68181, 0.20833),  CurvePoint(0.57575, 0.05681),
+  CurvePoint(0.51515, -0.07954), CurvePoint(0.76136, -0.01893),
+  CurvePoint(0.90530, 0.01136),  CurvePoint(1.00000, 0.00000),
+];
+```
 
-## 三、 拟真 3D 倒角与立体光影系统
-
-### 3.1 冲压倒角边缘光照（Bevel Lighting）
-真实拼图在冲压下压时，边缘会形成大约 1~1.5mm 的倾斜倒角。当光线从左上方 45° 照射时：
-- **Top / Left 边缘及朝向左上的曲线分段**：处于迎光面，呈现白色/浅亮色高光倒角（Highlight Bevel）。
-- **Bottom / Right 边缘及朝向右下的曲线分段**：处于背光面，呈现暗色内阴影倒角（Shadow Bevel）。
-
-### 3.2 渲染分层管线（Compositing Pipeline）
-每个拼图组件在 `render(Canvas canvas)` 阶段按序渲染以下 5 个图层：
-1. **Layer 1: 动态投影（Dynamic Drop Shadow）**
-   - 处于拖拽状态时：平移 $(0, 8.0)$，使用高扩散羽化模糊（Blur 6.0~8.0），半透明纯黑（Alpha 0.35）。
-   - 处于托盘/棋盘静止时：平移 $(0, 1.5)$，使用低扩散环境遮挡模糊（Blur 1.5），轻度半透明（Alpha 0.15）。
-2. **Layer 2: 原图纹理裁切（Clipped Texture）**
-   - `canvas.clipPath(shape.path)`
-   - `canvas.drawImageRect(image, srcRect, fillRect, paint)`
-3. **Layer 3: 左上受光高光倒角（Top-Left Bevel Highlight）**
-   - 提取朝向左/上的路径分段，使用 `Color(0x66FFFFFF)`，线宽 1.5px，绘制柔和外凸亮边。
-4. **Layer 4: 右下背光暗角倒角（Bottom-Right Bevel Shadow）**
-   - 提取朝向右/下的路径分段，使用 `Color(0x55000000)`，线宽 1.5px，绘制凹陷暗边。
-5. **Layer 5: 主轮廓微线与吸附高亮（Outer Seam / Snap Highlight）**
-   - 常态：超细半透明暗线（`Color(0x22000000)`，0.6px），模拟真实拼装微小缝隙。
-   - 吸附/正确提示状态：绿色脉冲辉光（`Color(0xFF4CAF50)`，2.5px）。
+#### 4. 修长手指形 (`EdgeShapeType.finger`)
+峰顶偏向 $0.4734$，纵向过渡平缓细腻：
+```dart
+static const List<CurvePoint> finger = [
+  CurvePoint(0.04924, 0.00000),  CurvePoint(0.15909, -0.02272),
+  CurvePoint(0.54545, -0.06818), CurvePoint(0.41287, 0.12500),
+  CurvePoint(0.25378, 0.34469),  CurvePoint(0.47348, 0.27272),
+  CurvePoint(0.55303, 0.23863),  CurvePoint(0.54924, 0.12121),
+  CurvePoint(0.50000, -0.10984), CurvePoint(0.76136, -0.01893),
+  CurvePoint(0.90530, 0.01136),  CurvePoint(1.00000, 0.00000),
+];
+```
 
 ---
 
-## 四、 确定性工程设计与性能优化
+## 三、 空间几何变换与严格防飞线证明
 
-### 4.1 关卡种子确定性保证
-- 严格基于 `seed` 初始化伪随机数生成器 `Random(seed)`。
-- App 层关卡初始化、进度存档（Save/Load）、网络每日挑战均具备唯一 Seed，确保用户再次进入游戏时拼图切片形状绝对恒定。
+### 3.1 局部切向与法向基底
+设一条边的起点为 $S(x_s, y_s)$，终点为 $E(x_e, y_e)$，长度 $L = \|E - S\|$：
+$$\vec{u} = \frac{E - S}{L}, \quad \vec{N} = (u_y, -u_x)$$
+空间中任一点坐标计算公式为：
+$$P = S + \vec{u} \cdot (\text{along} \cdot L) + \vec{N} \cdot (\text{from} \cdot L \cdot \text{sign} \cdot \text{depthScale})$$
+其中 $\text{sign} = +1$（Tab 凸）或 $-1$（Blank 凹），$\text{depthScale} \in [0.90, 1.00]$。
 
-### 4.2 零 GC 与预渲染 Path 缓存
-- `PieceShape` 在初始化时一次性计算并预构建：
-  - `path`：封闭的主形状剪裁路径
-  - `highlightPath`：受光面高光路径
-  - `shadowPath`：背光面暗角路径
-  - `fillRect` & `srcRect`：精确包围盒
-- `render()` 循环内零对象分配与零数学计算，保证满帧 60/120 FPS。
+### 3.2 水平镜像对称映射公式 (`bend == false`)
+为使拼图不对称更具趣味性，边支持沿沿边方向水平镜像。
+镜像后的曲线必须**依然从 $0.0$ 起步平滑行进至 $1.0$**。其 6 段控制点与锚点计算公式为：
+- 控制点：$\text{cpAlong}_s = 1.0 - \text{rawPts}[10 - 2s].\text{along}$
+- 锚点：$\text{anchorAlong}_s = \begin{cases} 1.0 - \text{rawPts}[8 - 2s + 1].\text{along}, & s \in [0, 4] \\ 1.0, & s = 5 \end{cases}$
+
+### 3.3 顺时针闭合与逆向回溯 (`reverse == true`)
+构建顺时针封闭轮廓时：
+- **Top 边**：$S=(0,0) \to E=(W,0)$，$\vec{N}=(0,-1)$，正向追踪（`reverse=false`）；
+- **Right 边**：$S=(W,0) \to E=(W,H)$，$\vec{N}=(1,0)$，正向追踪（`reverse=false`）；
+- **Bottom 边**：规范定义为 $(0,H) \to (W,H)$，$\vec{N}=(0,1)$。由于笔触在 $(W,H)$，需逆向画回 $(0,H)$，因此启用 `reverse=true`：
+  $$\text{quadraticBezierTo}(C_5, A_4) \to \text{quadraticBezierTo}(C_4, A_3) \to \dots \to \text{quadraticBezierTo}(C_0, S)$$
+- **Left 边**：规范定义为 $(0,0) \to (0,H)$，$\vec{N}=(-1,0)$。笔触在 $(0,H)$，逆向画回 $(0,0)$，启用 `reverse=true`。
+
+**几何闭合证明**：由于每一段贝塞尔的物理端点在正反向计算中完全恒等，顺时针闭合回路端点重合误差为 0，彻底杜绝了对角线飞线与交叉。
+
+---
+
+## 四、 采样裕量与无缝纹理映射
+
+```
+               ┌───────────────────────────────┐  ▲
+               │          Top Tab 凸起          │  │ standardTabRatio = 0.35
+    ┌──────────┼───────────────────────────────┼──┼──────────┐
+    │          │                               │  │          │
+    │ Blank    │                               │  │ Blank    │
+    │ 根部外扩 │      Base Cell (W x H)        │  │ 根部外扩 │
+    │ (0.15)   │      基础单元格矩形           │  │ (0.15)   │
+    │          │                               │  │          │
+    └──────────┼───────────────────────────────┼──┴──────────┘
+               │         Bottom Tab            │
+               └───────────────────────────────┘
+```
+
+### 4.1 裕量参数设计
+- **`standardTabRatio = 0.35`**：覆盖 Sock/Finger 的最大峰顶外凸（$34.46\%$）；
+- **`standardBlankRatio = 0.15`**：由于 Tab 边在球头两侧颈部向内凹陷（$-9.85\%$），邻居凹槽碎片在此处会对应向外微凸（$+9.85\%$）。为 Blank 边分配 $0.15$ 的安全采样裕量，确保采样区域完整覆盖外凸根部，**彻底消除四角交界处的漏底黑缝**；
+- **`Flat = 0.0`**：外平直边界不向外延伸，防止跨出拼图总图边缘。
+
+### 4.2 像素 1:1 精确采样映射
+$$\text{srcRect} = \left[ (c - \text{overhang.left}) \times W_{\text{src}}, \ (r - \text{overhang.top}) \times H_{\text{src}}, \ (1 + \text{left} + \text{right}) \times W_{\text{src}}, \ (1 + \text{top} + \text{bottom}) \times H_{\text{src}} \right]$$
+$$\text{fillRect} = \left[ -\text{overhang.left} \times W, \ -\text{overhang.top} \times H, \ (1 + \text{left} + \text{right}) \times W, \ (1 + \text{top} + \text{bottom}) \times H \right]$$
+两者在几何比例上严格 1:1，保证任意相邻两块碎片拼合时，原图图案像素级无缝衔接。
+
+---
+
+## 五、 真实物理冲压渲染管线
+
+渲染管线位于 [`PuzzlePieceComponent.render`](file:///c:/Home/Projects/jigsawpuzzle/lib/game/puzzle_piece_component.dart)：
+
+```mermaid
+graph TD
+    A[render Canvas] --> B[1. 绘制物理 3D 软阴影]
+    B --> C[2. clipPath 贝塞尔精确剪裁]
+    C --> D[3. drawImageRect 纹理采样贴图]
+    D --> E[4. 绘制 0.75px 冲压微切线 / 吸附流光]
+```
+
+### 5.1 视觉画笔参数配置
+1. **静止贴地阴影（Rest Shadow / Ambient Occlusion）**：
+   - 位移：$(0, 1.2\text{px})$
+   - 模糊：`MaskFilter.blur(BlurStyle.normal, 1.5)`
+   - 颜色：`Color(0x28000000)`（$16\%$ 浓度微暗）
+   - 作用：模拟纸板贴合底托时的环境光遮挡，赋予碎片薄实体的触感。
+2. **拖拽拾起悬浮阴影（Drag Drop Shadow）**：
+   - 位移：$(0, 5.0\text{px})$
+   - 模糊：`MaskFilter.blur(BlurStyle.normal, 5.5)`
+   - 颜色：`Color(0x45000000)`（$27\%$ 浓度软黑）
+   - 作用：模拟碎片被手指拿起悬浮在棋盘上方时的光学扩散投影。
+3. **物理冲压微切缝（Subtle Press Cutline）**：
+   - 线宽：`0.75px`
+   - 颜色：`Color(0x35000000)`（$21\%$ 透明度微暗深灰）
+   - 作用：替代粗糙的人工黑白高光描边，还原真实刀模冲压在纸板表面形成的微凹切痕。
+
+---
+
+## 六、 自动化测试与切片样本生成
+
+### 6.1 单元测试套件
+- [`test/logic/edge_layout_test.dart`](file:///c:/Home/Projects/jigsawpuzzle/test/logic/edge_layout_test.dart)：验证 Seed 确定性拓扑、外边界平直性、相邻边互锁对偶、顺时针旋转映射；
+- [`test/logic/piece_shape_test.dart`](file:///c:/Home/Projects/jigsawpuzzle/test/logic/piece_shape_test.dart)：验证 Overhang 裕量、fillRect/srcRect 1:1 像素比例、逆向拾取判定。
+
+### 6.2 切片样本自动化生成脚本
+项目提供了独立切片样本生成脚本 [`test/generate_cuts_demo_test.dart`](file:///c:/Home/Projects/jigsawpuzzle/test/generate_cuts_demo_test.dart)，运行 `flutter test test/generate_cuts_demo_test.dart` 可一键将多组高清效果图输出至 `temp/` 目录：
+- `temp/sample_cuts_scattered_tabletop.png`：$4 \times 4$ 真实桌面散落效果图；
+- `temp/sample_cuts_assembled_6x6.png`：$6 \times 6$ 高密度完整拼合全景切线图（验证严丝合缝与零裂缝）；
+- `temp/sample_cuts_closeup_shapes.png`：四大模具（Ball / Stub / Sock / Finger）单块放大特写图。

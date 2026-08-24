@@ -3,7 +3,7 @@ import 'dart:math';
 import 'edge_curve.dart';
 import 'edge_type.dart';
 
-/// Quad edges of a single puzzle piece with rich parameterized bezier curves.
+/// 单个拼图碎片四条边缘几何描述的结构体集合。
 class PieceEdges {
   const PieceEdges({
     required this.top,
@@ -17,26 +17,40 @@ class PieceEdges {
   final EdgeCurveDescriptor bottom;
   final EdgeCurveDescriptor left;
 
-  /// Returns true if any of the edges is a flat outer border.
+  /// 是否属于外围边框碎片（至少有一条边为平直外框 Flat）
   bool get isBorder =>
       top.isFlat || right.isFlat || bottom.isFlat || left.isFlat;
 
-  /// Returns true if this piece is a corner piece (2 flat edges).
-  bool get isCorner =>
-      [top, right, bottom, left].where((e) => e.isFlat).length == 2;
-
-  /// Returns rotated edges clockwise by [steps] * 90 degrees.
-  PieceEdges rotateClockwise([int steps = 1]) {
-    final s = steps % 4;
-    if (s == 0) return this;
-    if (s == 1) {
-      return PieceEdges(top: left, right: top, bottom: right, left: bottom);
-    }
-    if (s == 2) {
-      return PieceEdges(top: bottom, right: left, bottom: top, left: right);
-    }
-    return PieceEdges(top: right, right: bottom, bottom: left, left: top);
+  /// 是否属于四角角块（至少有两条边为平直外框 Flat）
+  bool get isCorner {
+    var flatCount = 0;
+    if (top.isFlat) flatCount++;
+    if (right.isFlat) flatCount++;
+    if (bottom.isFlat) flatCount++;
+    if (left.isFlat) flatCount++;
+    return flatCount >= 2;
   }
+
+  /// 碎片顺时针旋转 [times] 次（每次 90 度）后的边缘映射。
+  ///
+  /// 【旋转映射原理】：
+  /// 顺时针旋转 90 度时：原 Left 边变为 Top，原 Top 边变为 Right，原 Right 边变为 Bottom，原 Bottom 边变为 Left。
+  PieceEdges rotateClockwise(int times) {
+    var edges = this;
+    final count = times % 4;
+    for (var i = 0; i < count; i++) {
+      edges = PieceEdges(
+        top: edges.left,
+        right: edges.top,
+        bottom: edges.right,
+        left: edges.bottom,
+      );
+    }
+    return edges;
+  }
+
+  /// [rotateClockwise] 的简写别名
+  PieceEdges rotate(int times) => rotateClockwise(times);
 
   @override
   bool operator ==(Object other) =>
@@ -50,95 +64,112 @@ class PieceEdges {
 
   @override
   int get hashCode => Object.hash(top, right, bottom, left);
-
-  @override
-  String toString() =>
-      'PieceEdges(T:${top.edgeType.name}, R:${right.edgeType.name}, B:${bottom.edgeType.name}, L:${left.edgeType.name})';
 }
 
-/// Deterministic edge topology layout generated from rows, cols and random seed.
-/// Generates continuous, smooth, interlocking quadratic bezier curves across the entire board.
+/// 全局拼图网格边缘拓扑布局生成器。
+///
+/// 【核心设计思想与数学保证】：
+/// 1. **公母扣绝对契合**：
+///    拼图内部的水平分割线和垂直分割线，在全局拓扑中各仅生成一次物理定义。
+///    上/下相邻两块碎片共享同一条物理水平分割线（一方为 Tab，另一方为其对偶 Blank）；
+///    左/右相邻两块碎片共享同一条物理垂直分割线（一方为 Tab，另一方为其对偶 Blank）。
+/// 2. **确定性关卡生成（Seed-driven Determinism）**：
+///    使用固定种子 [seed] 初始化伪随机数生成器（`Random(seed)`），
+///    确保相同关卡在不同设备、每次重新进入或存档读档时，生成的拼图卡扣形态 100% 绝对一致。
+/// 3. **四大经典卡扣与镜像翻转的均匀离散分布**：
+///    对每条内部边独立随机分配卡扣形状（Ball, Stub, Sock, Finger）与水平镜像状态（Bend），
+///    使整个拼图盘面千姿百态、极富手切工艺的自然趣味性。
 class EdgeLayout {
   EdgeLayout({
     required this.rows,
     required this.cols,
-    required this.seed,
-  })  : assert(rows >= 2, 'rows must be at least 2'),
-        assert(cols >= 2, 'cols must be at least 2') {
-    _generate();
+    int? seed,
+  }) {
+    _generate(seed ?? 42);
   }
 
+  /// 拼图网格行数
   final int rows;
-  final int cols;
-  final int seed;
 
-  // _h[r][c] stores the horizontal edge descriptor between row r and row r+1 at col c
-  // (from the perspective of the upper piece looking downward at bottom edge)
+  /// 拼图网格列数
+  final int cols;
+
+  /// 水平内部分割线拓扑矩阵：尺寸为 (rows - 1) 行 x cols 列
   late final List<List<EdgeCurveDescriptor>> _h;
 
-  // _v[r][c] stores the vertical edge descriptor between col c and col c+1 at row r
-  // (from the perspective of the left piece looking rightward at right edge)
+  /// 垂直内部分割线拓扑矩阵：尺寸为 rows 行 x (cols - 1) 列
   late final List<List<EdgeCurveDescriptor>> _v;
 
-  void _generate() {
+  /// 基于种子生成全盘拓扑结构
+  void _generate(int seed) {
     final rng = Random(seed);
 
-    // 1. Generate Horizontal Edges: (rows - 1) lines, each of cols segments
-    _h = List.generate(rows - 1, (r) {
-      final rowEdges = <EdgeCurveDescriptor>[];
-      for (var c = 0; c < cols; c++) {
-        final isTab = rng.nextBool();
-        final shapeIndex = rng.nextInt(EdgeShapeType.values.length);
-        final shapeType = EdgeShapeType.values[shapeIndex];
-        final bend = rng.nextBool();
+    // 内部帮助函数：随机生成一个内部边描述子
+    EdgeCurveDescriptor randomDescriptor() {
+      // 1. 随机决定凹凸朝向：50% 概率为 Tab（凸），50% 为 Blank（凹）
+      final isTab = rng.nextBool();
+      final type = isTab ? EdgeType.tab : EdgeType.blank;
 
-        rowEdges.add(
-          EdgeCurveDescriptor(
-            edgeType: isTab ? EdgeType.tab : EdgeType.blank,
-            shapeType: shapeType,
-            bend: bend,
-          ),
-        );
-      }
-      return rowEdges;
-    });
+      // 2. 随机从四大经典形状库中挑选一种模具
+      const shapes = EdgeShapeType.values;
+      final shape = shapes[rng.nextInt(shapes.length)];
 
-    // 2. Generate Vertical Edges: (cols - 1) lines, each of rows segments
-    _v = List.generate(rows, (r) => List<EdgeCurveDescriptor>.filled(cols - 1, EdgeCurveDescriptor.flat));
+      // 3. 随机决定是否水平镜像翻转（带来更丰富的不对称形态）
+      final bend = rng.nextBool();
 
-    for (var c = 0; c < cols - 1; c++) {
-      for (var r = 0; r < rows; r++) {
-        final isTab = rng.nextBool();
-        final shapeIndex = rng.nextInt(EdgeShapeType.values.length);
-        final shapeType = EdgeShapeType.values[shapeIndex];
-        final bend = rng.nextBool();
+      // 4. 深度缩放：微量抖动（0.90 ~ 1.00），使每块碎片既协调又独一无二
+      final depthScale = 0.90 + rng.nextDouble() * 0.10;
 
-        _v[r][c] = EdgeCurveDescriptor(
-          edgeType: isTab ? EdgeType.tab : EdgeType.blank,
-          shapeType: shapeType,
-          bend: bend,
-        );
-      }
+      return EdgeCurveDescriptor(
+        edgeType: type,
+        shapeType: shape,
+        bend: bend,
+        depthScale: depthScale,
+      );
     }
+
+    // 1. 生成所有内部水平边：位于第 r 行与第 r+1 行之间
+    _h = List.generate(
+      rows - 1,
+      (_) => List.generate(cols, (_) => randomDescriptor()),
+    );
+
+    // 2. 生成所有内部垂直边：位于第 c 列与第 c+1 列之间
+    _v = List.generate(
+      rows,
+      (_) => List.generate(cols - 1, (_) => randomDescriptor()),
+    );
   }
 
-  /// Derives four edge curves for a piece at row [r] and col [c].
-  PieceEdges edgesFor(int r, int c) {
-    assert(r >= 0 && r < rows, 'row out of bounds');
-    assert(c >= 0 && c < cols, 'col out of bounds');
+  /// 获取指定网格单元格 (row, col) 碎片的四条边几何描述。
+  ///
+  /// 【外框与内边匹配规则】：
+  /// - **Top**：若 row == 0 为平直外框（Flat）；否则取上一行对应的水平边 _h[row - 1][col] 的对偶（complementary）；
+  /// - **Bottom**：若 row == rows - 1 为平直外框（Flat）；否则取本行对应的水平边 _h[row][col]；
+  /// - **Left**：若 col == 0 为平直外框（Flat）；否则取左一列对应的垂直边 _v[row][col - 1] 的对偶（complementary）；
+  /// - **Right**：若 col == cols - 1 为平直外框（Flat）；否则取本列对应的垂直边 _v[row][col]。
+  PieceEdges edgesFor(int row, int col) {
+    final top = (row == 0)
+        ? EdgeCurveDescriptor.flat
+        : _h[row - 1][col].complementary();
 
-    // Top edge: border if r == 0, else complementary of upper piece's bottom edge
-    final top = r == 0 ? EdgeCurveDescriptor.flat : _h[r - 1][c].complementary();
+    final bottom = (row == rows - 1)
+        ? EdgeCurveDescriptor.flat
+        : _h[row][col];
 
-    // Bottom edge: border if r == rows - 1, else direct _h[r][c]
-    final bottom = r == rows - 1 ? EdgeCurveDescriptor.flat : _h[r][c];
+    final left = (col == 0)
+        ? EdgeCurveDescriptor.flat
+        : _v[row][col - 1].complementary();
 
-    // Left edge: border if c == 0, else complementary of left piece's right edge
-    final left = c == 0 ? EdgeCurveDescriptor.flat : _v[r][c - 1].complementary();
+    final right = (col == cols - 1)
+        ? EdgeCurveDescriptor.flat
+        : _v[row][col];
 
-    // Right edge: border if c == cols - 1, else direct _v[r][c]
-    final right = c == cols - 1 ? EdgeCurveDescriptor.flat : _v[r][c];
-
-    return PieceEdges(top: top, right: right, bottom: bottom, left: left);
+    return PieceEdges(
+      top: top,
+      right: right,
+      bottom: bottom,
+      left: left,
+    );
   }
 }
