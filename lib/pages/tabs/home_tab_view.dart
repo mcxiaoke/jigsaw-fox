@@ -37,6 +37,7 @@ class _HomeTabViewState extends State<HomeTabView> {
       context: context,
       imageBytes: imgBytes,
       initialDifficulty: level.difficulty,
+      completedPieceCounts: level.completedPieceCounts.toSet(),
       title: '第 ${level.index} 关 · 难度选择',
       onStart: (diff) async {
         await Navigator.of(context).push(

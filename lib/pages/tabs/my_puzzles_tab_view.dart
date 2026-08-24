@@ -67,6 +67,7 @@ class _MyPuzzlesTabViewState extends State<MyPuzzlesTabView> {
       context: context,
       imageBytes: bytes,
       initialDifficulty: item.difficulty,
+      completedPieceCounts: item.completedPieceCounts.toSet(),
       title: '${item.title} · 难度选择',
       onStart: (diff) async {
         await Navigator.of(context).push(

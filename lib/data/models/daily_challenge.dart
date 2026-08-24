@@ -14,6 +14,7 @@ class DailyChallengeItem {
     this.progressPercent = 0,
     this.bestTimeSeconds = 0,
     this.savedSnapshotJson,
+    this.completedPieceCounts = const [],
   });
 
   final String id;
@@ -27,6 +28,7 @@ class DailyChallengeItem {
   final int progressPercent;
   final int bestTimeSeconds;
   final String? savedSnapshotJson;
+  final List<int> completedPieceCounts;
 
   DailyChallengeItem copyWith({
     String? id,
@@ -40,6 +42,7 @@ class DailyChallengeItem {
     int? progressPercent,
     int? bestTimeSeconds,
     String? savedSnapshotJson,
+    List<int>? completedPieceCounts,
   }) {
     return DailyChallengeItem(
       id: id ?? this.id,
@@ -53,6 +56,7 @@ class DailyChallengeItem {
       progressPercent: progressPercent ?? this.progressPercent,
       bestTimeSeconds: bestTimeSeconds ?? this.bestTimeSeconds,
       savedSnapshotJson: savedSnapshotJson ?? this.savedSnapshotJson,
+      completedPieceCounts: completedPieceCounts ?? this.completedPieceCounts,
     );
   }
 
@@ -65,10 +69,11 @@ class DailyChallengeItem {
         'assetPath': assetPath,
         'rows': difficulty.rows,
         'cols': difficulty.cols,
-        'isCompleted': isCompleted,
+        'isCompleted': isCompleted || completedPieceCounts.isNotEmpty,
         'progressPercent': progressPercent,
         'bestTimeSeconds': bestTimeSeconds,
         'savedSnapshotJson': savedSnapshotJson,
+        'completedPieceCounts': completedPieceCounts,
       };
 
   factory DailyChallengeItem.fromJson(Map<String, dynamic> json) {
@@ -83,6 +88,13 @@ class DailyChallengeItem {
       ),
     );
 
+    final rawCompletedCounts = (json['completedPieceCounts'] as List<dynamic>?)
+        ?.map((e) => e as int)
+        .toList();
+    final isCompletedVal = json['isCompleted'] as bool? ?? false;
+    final completedCounts = rawCompletedCounts ??
+        (isCompletedVal ? [diff.pieceCount] : <int>[]);
+
     return DailyChallengeItem(
       id: json['id'] as String,
       date: json['date'] as String,
@@ -91,10 +103,11 @@ class DailyChallengeItem {
       author: json['author'] as String? ?? 'Artist',
       assetPath: json['assetPath'] as String,
       difficulty: diff,
-      isCompleted: json['isCompleted'] as bool? ?? false,
+      isCompleted: isCompletedVal || completedCounts.isNotEmpty,
       progressPercent: json['progressPercent'] as int? ?? 0,
       bestTimeSeconds: json['bestTimeSeconds'] as int? ?? 0,
       savedSnapshotJson: json['savedSnapshotJson'] as String?,
+      completedPieceCounts: completedCounts,
     );
   }
 }

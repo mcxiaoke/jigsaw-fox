@@ -13,6 +13,7 @@ class CustomPuzzleItem {
     this.progressPercent = 0,
     this.bestTimeSeconds = 0,
     this.savedSnapshotJson,
+    this.completedPieceCounts = const [],
   });
 
   final String id;
@@ -25,6 +26,7 @@ class CustomPuzzleItem {
   final int progressPercent;
   final int bestTimeSeconds;
   final String? savedSnapshotJson;
+  final List<int> completedPieceCounts;
 
   CustomPuzzleItem copyWith({
     String? id,
@@ -37,6 +39,7 @@ class CustomPuzzleItem {
     int? progressPercent,
     int? bestTimeSeconds,
     String? savedSnapshotJson,
+    List<int>? completedPieceCounts,
   }) {
     return CustomPuzzleItem(
       id: id ?? this.id,
@@ -49,6 +52,7 @@ class CustomPuzzleItem {
       progressPercent: progressPercent ?? this.progressPercent,
       bestTimeSeconds: bestTimeSeconds ?? this.bestTimeSeconds,
       savedSnapshotJson: savedSnapshotJson ?? this.savedSnapshotJson,
+      completedPieceCounts: completedPieceCounts ?? this.completedPieceCounts,
     );
   }
 
@@ -60,10 +64,11 @@ class CustomPuzzleItem {
         'rows': difficulty.rows,
         'cols': difficulty.cols,
         'createdAt': createdAt?.toIso8601String(),
-        'isCompleted': isCompleted,
+        'isCompleted': isCompleted || completedPieceCounts.isNotEmpty,
         'progressPercent': progressPercent,
         'bestTimeSeconds': bestTimeSeconds,
         'savedSnapshotJson': savedSnapshotJson,
+        'completedPieceCounts': completedPieceCounts,
       };
 
   factory CustomPuzzleItem.fromJson(Map<String, dynamic> json) {
@@ -78,6 +83,13 @@ class CustomPuzzleItem {
       ),
     );
 
+    final rawCompletedCounts = (json['completedPieceCounts'] as List<dynamic>?)
+        ?.map((e) => e as int)
+        .toList();
+    final isCompletedVal = json['isCompleted'] as bool? ?? false;
+    final completedCounts = rawCompletedCounts ??
+        (isCompletedVal ? [diff.pieceCount] : <int>[]);
+
     return CustomPuzzleItem(
       id: json['id'] as String,
       title: json['title'] as String,
@@ -87,10 +99,11 @@ class CustomPuzzleItem {
       createdAt: json['createdAt'] != null
           ? DateTime.tryParse(json['createdAt'] as String)
           : null,
-      isCompleted: json['isCompleted'] as bool? ?? false,
+      isCompleted: isCompletedVal || completedCounts.isNotEmpty,
       progressPercent: json['progressPercent'] as int? ?? 0,
       bestTimeSeconds: json['bestTimeSeconds'] as int? ?? 0,
       savedSnapshotJson: json['savedSnapshotJson'] as String?,
+      completedPieceCounts: completedCounts,
     );
   }
 }

@@ -33,6 +33,7 @@ class _DailyTabViewState extends State<DailyTabView> {
       context: context,
       imageBytes: imgBytes,
       initialDifficulty: item.difficulty,
+      completedPieceCounts: item.completedPieceCounts.toSet(),
       title: '${item.date} 挑战 · 难度选择',
       onStart: (diff) async {
         await Navigator.of(context).push(

@@ -31,11 +31,11 @@ class TrayBackgroundComponent extends PositionComponent
   }) : super(position: position, size: size, priority: 2);
 
   static final Paint _bgPaint = Paint()
-    ..color = const Color(0x33000000)
+    ..color = const Color(0x66000000)
     ..style = PaintingStyle.fill;
 
   static final Paint _borderPaint = Paint()
-    ..color = const Color(0x44FFFFFF)
+    ..color = const Color(0x33FFFFFF)
     ..style = PaintingStyle.stroke
     ..strokeWidth = 1.5;
 

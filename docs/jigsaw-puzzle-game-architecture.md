@@ -264,6 +264,31 @@ $$\text{trayScale} = \frac{S_{\text{trayBase}}}{\max(w, h)}$$
 
 ---
 
+### 3.10 关卡难度选择器 (`ChooseDifficultySheet`) 四态渲染管线
+
+难度选择器为各难度档位（9 ~ 400 块）提供状态机与差异化视觉管线：
+
+| 状态机条件 | 背景色 (`Color`) | 边框 (`Border`) | 图标与文字色 | 角标 (`Check Badge`) | 动作按钮语义 |
+|---|---|---|---|---|---|
+| **1. 未通过 + 未选中 (Default)** | `#F0F2F5` (浅灰) | `#E0E0E0` (1.0px) | `black54` / `black87` | 无 | — |
+| **2. 已通过 + 未选中 (Passed)** | `#E8F5E9` (浅翡翠绿) | `#81C784` (1.5px) | `#2E7D32` / `#1B5E20` | 绿色 `Icons.check_circle` (14px) | — |
+| **3. 未通过 + 选中 (Selected)** | `#2E7D32` (深绿) | `#1B5E20` (2.0px) | `white` / `white` | 无 | 「开始」 |
+| **4. 已通过 + 选中 (Passed & Selected)**| `#2E7D32` (深绿) | `#1B5E20` (2.0px) | `white` / `white` | 金色 `Icons.check_circle` (`#FFD54F`) | 「重玩此难度」 |
+
+---
+
+### 3.11 满屏壁纸背景与图层堆叠管线 (Wallpaper & Overlay Pipeline)
+
+游戏界面采用基于 Flutter `Stack` 的五层复合渲染管线：
+
+1. **底图层 (`Layer 0: Wallpaper`)**：`Positioned.fill` 渲染 `Image.asset(selectedBackground, fit: BoxFit.cover)`，自适应窗口与屏幕比例满屏裁剪覆盖。
+2. **游戏引擎层 (`Layer 1: Flame GameWidget`)**：`backgroundColor()` 保持 `Color(0x00000000)` 完全透明；棋盘区域绘制半透明暗色底槽。
+3. **托盘遮罩层 (`Layer 2: Tray Mask`)**：`TrayBackgroundComponent` 绘制 `Color(0x66000000)` 半透明纯色底板与 `Color(0x33FFFFFF)` 边框，消除壁纸纹理干扰。
+4. **原图全景覆盖层 (`Layer 3: Original Image Overlay`)**：点击 AppBar 眼睛图标（`Icons.visibility`）时激活，居中呈现高清原图，点击背景或原图即可切回拼图。
+5. **导航与工具栏层 (`Layer 4: AppBar Toolbar`)**：半透明白底悬浮顶栏，提供原图切换（右二）与背景更换（最右）按钮。
+
+---
+
 ## 4. 数据模型与持久化体系
 
 ### 4.1 存档快照格式 (Snapshot v2 权威规范)
@@ -312,6 +337,7 @@ class Levels extends Table {
   TextColumn get imagePath => text()();
   IntColumn get rows => integer()();
   IntColumn get cols => integer()();
+  TextColumn get completedPieceCounts => text().withDefault(const Constant('[]'))(); // JSON List<int>
   IntColumn get limitSeconds => integer().nullable()();
   IntColumn get bestTime => integer().nullable()();
   IntColumn get stars => integer().withDefault(const Constant(0))();
@@ -414,6 +440,37 @@ class PuzzleBoardState {
     required this.seed,
     required this.rotationEnabled,
     required this.pieces,
+  });
+}
+
+// lib/data/models/level_item.dart
+class LevelItem {
+  final String id;
+  final int index;
+  final String title;
+  final String assetPath;
+  final PuzzleDifficulty difficulty;
+  final bool isUnlocked;
+  final bool isCompleted;
+  final int progressPercent;
+  final int stars;
+  final int bestTimeSeconds;
+  final String? savedSnapshotJson;
+  final List<int> completedPieceCounts; // 各难度独立通关记录
+
+  const LevelItem({
+    required this.id,
+    required this.index,
+    required this.title,
+    required this.assetPath,
+    required this.difficulty,
+    this.isUnlocked = false,
+    this.isCompleted = false,
+    this.progressPercent = 0,
+    this.stars = 0,
+    this.bestTimeSeconds = 0,
+    this.savedSnapshotJson,
+    this.completedPieceCounts = const [],
   });
 }
 

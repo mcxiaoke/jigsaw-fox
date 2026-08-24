@@ -73,12 +73,14 @@ class ChooseDifficultySheet extends StatefulWidget {
     required this.initialDifficulty,
     required this.title,
     required this.onStart,
+    this.completedPieceCounts = const {},
   });
 
   final Uint8List imageBytes;
   final PuzzleDifficulty initialDifficulty;
   final String title;
   final ValueChanged<PuzzleDifficulty> onStart;
+  final Set<int> completedPieceCounts;
 
   static Future<void> show({
     required BuildContext context,
@@ -86,6 +88,7 @@ class ChooseDifficultySheet extends StatefulWidget {
     required PuzzleDifficulty initialDifficulty,
     required String title,
     required ValueChanged<PuzzleDifficulty> onStart,
+    Set<int> completedPieceCounts = const {},
   }) {
     return showModalBottomSheet<void>(
       context: context,
@@ -96,6 +99,7 @@ class ChooseDifficultySheet extends StatefulWidget {
         initialDifficulty: initialDifficulty,
         title: title,
         onStart: onStart,
+        completedPieceCounts: completedPieceCounts,
       ),
     );
   }
@@ -161,6 +165,7 @@ class _ChooseDifficultySheetState extends State<ChooseDifficultySheet> {
     final size = MediaQuery.sizeOf(context);
     final effectiveDiff = _effectiveDifficulty;
     final aspect = (_imageLoaded && _imageHeight > 0) ? (_imageWidth / _imageHeight) : 1.0;
+    final isEffectivePassed = widget.completedPieceCounts.contains(effectiveDiff.pieceCount);
 
     return Container(
       height: size.height * 0.88,
@@ -242,17 +247,48 @@ class _ChooseDifficultySheetState extends State<ChooseDifficultySheet> {
 
           const SizedBox(height: 14),
 
-          // Difficulty Selector Header with Adaptive spec indicator
-          Text(
-            '选择难度 · ${effectiveDiff.rows}×${effectiveDiff.cols} (${effectiveDiff.pieceCount} 块)',
-            style: theme.textTheme.titleMedium?.copyWith(
-              fontWeight: FontWeight.bold,
-              color: Colors.black87,
-            ),
+          // Difficulty Selector Header with Adaptive spec indicator & Passed badge
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Text(
+                '选择难度 · ${effectiveDiff.rows}×${effectiveDiff.cols} (${effectiveDiff.pieceCount} 块)',
+                style: theme.textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.bold,
+                  color: Colors.black87,
+                ),
+              ),
+              if (isEffectivePassed) ...[
+                const SizedBox(width: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFE8F5E9),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: const Color(0xFF81C784)),
+                  ),
+                  child: const Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.check_circle, size: 13, color: Color(0xFF2E7D32)),
+                      SizedBox(width: 2),
+                      Text(
+                        '已通关',
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                          color: Color(0xFF2E7D32),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ],
           ),
           const SizedBox(height: 12),
 
-          // Puzzle Piece shaped difficulty selectors (like choose.jpg)
+          // Puzzle Piece shaped difficulty selectors with passed indicators
           SingleChildScrollView(
             scrollDirection: Axis.horizontal,
             padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -287,9 +323,9 @@ class _ChooseDifficultySheetState extends State<ChooseDifficultySheet> {
                   ),
                   elevation: 2,
                 ),
-                child: const Text(
-                  '开始',
-                  style: TextStyle(
+                child: Text(
+                  isEffectivePassed ? '重玩此难度' : '开始',
+                  style: const TextStyle(
                     fontSize: 18,
                     fontWeight: FontWeight.bold,
                     letterSpacing: 2,
@@ -305,6 +341,45 @@ class _ChooseDifficultySheetState extends State<ChooseDifficultySheet> {
 
   Widget _buildPieceOption(PuzzleDifficulty opt) {
     final isSelected = opt.pieceCount == _selectedDifficulty.pieceCount;
+    final isPassed = widget.completedPieceCounts.contains(opt.pieceCount);
+
+    Color bgColor;
+    Border border;
+    List<BoxShadow>? shadows;
+    Color iconColor;
+    Color textColor;
+
+    if (isSelected) {
+      bgColor = const Color(0xFF2E7D32);
+      border = Border.all(color: const Color(0xFF1B5E20), width: 2);
+      shadows = [
+        BoxShadow(
+          color: const Color(0xFF2E7D32).withValues(alpha: 0.35),
+          blurRadius: 8,
+          offset: const Offset(0, 3),
+        ),
+      ];
+      iconColor = Colors.white;
+      textColor = Colors.white;
+    } else if (isPassed) {
+      bgColor = const Color(0xFFE8F5E9); // Light green background for passed difficulty
+      border = Border.all(color: const Color(0xFF81C784), width: 1.5);
+      shadows = [
+        BoxShadow(
+          color: const Color(0xFF4CAF50).withValues(alpha: 0.15),
+          blurRadius: 4,
+          offset: const Offset(0, 2),
+        ),
+      ];
+      iconColor = const Color(0xFF2E7D32);
+      textColor = const Color(0xFF1B5E20);
+    } else {
+      bgColor = const Color(0xFFF0F2F5);
+      border = Border.all(color: const Color(0xFFE0E0E0), width: 1);
+      shadows = null;
+      iconColor = Colors.black54;
+      textColor = Colors.black87;
+    }
 
     return InkWell(
       onTap: () => setState(() => _selectedDifficulty = opt),
@@ -314,39 +389,43 @@ class _ChooseDifficultySheetState extends State<ChooseDifficultySheet> {
         width: 70,
         height: 70,
         decoration: BoxDecoration(
-          color: isSelected ? const Color(0xFF2E7D32) : const Color(0xFFF0F2F5),
+          color: bgColor,
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(
-            color: isSelected ? const Color(0xFF1B5E20) : const Color(0xFFE0E0E0),
-            width: isSelected ? 2 : 1,
-          ),
-          boxShadow: isSelected
-              ? [
-                  BoxShadow(
-                    color: const Color(0xFF2E7D32).withValues(alpha: 0.35),
-                    blurRadius: 8,
-                    offset: const Offset(0, 3),
-                  ),
-                ]
-              : null,
+          border: border,
+          boxShadow: shadows,
         ),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
+        child: Stack(
+          alignment: Alignment.center,
           children: [
-            Icon(
-              Icons.extension,
-              size: 22,
-              color: isSelected ? Colors.white : Colors.black54,
+            Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  Icons.extension,
+                  size: 22,
+                  color: iconColor,
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  '${opt.pieceCount}',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.bold,
+                    color: textColor,
+                  ),
+                ),
+              ],
             ),
-            const SizedBox(height: 3),
-            Text(
-              '${opt.pieceCount}',
-              style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.bold,
-                color: isSelected ? Colors.white : Colors.black87,
+            if (isPassed)
+              Positioned(
+                top: 4,
+                right: 4,
+                child: Icon(
+                  Icons.check_circle,
+                  size: 14,
+                  color: isSelected ? const Color(0xFFFFD54F) : const Color(0xFF2E7D32),
+                ),
               ),
-            ),
           ],
         ),
       ),

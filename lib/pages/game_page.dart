@@ -8,6 +8,7 @@ import 'package:flutter/services.dart';
 import '../data/game_repository.dart';
 import '../game/jigsaw_puzzle_game.dart';
 import '../logic/puzzle_model.dart';
+import '../widgets/choose_background_sheet.dart';
 
 /// Full-screen in-game puzzle page matching commercial Jigsaw (`play.jpg`).
 class GamePage extends StatefulWidget {
@@ -40,8 +41,9 @@ class _GamePageState extends State<GamePage> {
   int _seconds = 0;
   Timer? _timer;
   int _solvedPieces = 0;
-  bool _showGhostPreview = false;
+  bool _showOriginalImage = false;
   bool _isBorderFiltered = false;
+  late String _selectedBackground;
 
   // Multi-touch tracking for pinch-to-zoom & two-finger pan
   final Map<int, Offset> _pointerPositions = {};
@@ -53,6 +55,7 @@ class _GamePageState extends State<GamePage> {
   @override
   void initState() {
     super.initState();
+    _selectedBackground = _repo.selectedBackground;
     _startTimer();
     _loadImage();
   }
@@ -128,12 +131,14 @@ class _GamePageState extends State<GamePage> {
     });
 
     _repo.recordSnapStats(durationSeconds: _seconds);
+    final completedCount = widget.difficulty.pieceCount;
 
     if (widget.levelIndex != null) {
       _repo.updateLevelProgress(
         levelIndex: widget.levelIndex!,
         progressPercent: 100,
         isCompleted: true,
+        completedPieceCount: completedCount,
         stars: 3,
         timeSeconds: _seconds,
       );
@@ -142,6 +147,7 @@ class _GamePageState extends State<GamePage> {
         dateStr: widget.dailyDateStr!,
         progressPercent: 100,
         isCompleted: true,
+        completedPieceCount: completedCount,
         timeSeconds: _seconds,
       );
     } else if (widget.customId != null) {
@@ -149,6 +155,7 @@ class _GamePageState extends State<GamePage> {
         id: widget.customId!,
         progressPercent: 100,
         isCompleted: true,
+        completedPieceCount: completedCount,
         timeSeconds: _seconds,
       );
     }
@@ -162,23 +169,14 @@ class _GamePageState extends State<GamePage> {
     return '$m:$s';
   }
 
-  void _showFullImagePreview() {
-    showDialog<void>(
+  void _openBackgroundSelector() {
+    ChooseBackgroundSheet.show(
       context: context,
-      builder: (ctx) => Dialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        clipBehavior: Clip.antiAlias,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Image.memory(widget.imageBytes, fit: BoxFit.contain),
-            TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: const Text('关闭预览'),
-            ),
-          ],
-        ),
-      ),
+      selectedBackground: _selectedBackground,
+      onBackgroundSelected: (newBg) {
+        setState(() => _selectedBackground = newBg);
+        _repo.selectedBackground = newBg;
+      },
     );
   }
 
@@ -318,7 +316,16 @@ class _GamePageState extends State<GamePage> {
       body: SafeArea(
         child: Stack(
           children: [
-            // 1. Core Flame Game Canvas with Multi-Modal Zoom & Pan Gesture Listener
+            // 1. Full-Screen Background Wallpaper (BoxFit.cover matching screen/window aspect ratio)
+            Positioned.fill(
+              child: Image.asset(
+                _selectedBackground,
+                fit: BoxFit.cover,
+                errorBuilder: (ctx, err, stack) => Container(color: const Color(0xFFE2E6EA)),
+              ),
+            ),
+
+            // 2. Core Flame Game Canvas with Multi-Modal Zoom & Pan Gesture Listener
             if (_game != null)
               Positioned.fill(
                 child: Listener(
@@ -334,25 +341,59 @@ class _GamePageState extends State<GamePage> {
             else
               const Center(child: CircularProgressIndicator()),
 
-            // 2. Ghost semi-transparent original image overlay (pixel-perfect with board)
-            if (_showGhostPreview && _game != null)
-              Positioned(
-                left: _game!.boardTopLeft.x + _game!.panOffset.x,
-                top: _game!.boardTopLeft.y + _game!.panOffset.y,
-                width: _game!.boardSize.x * _game!.zoom,
-                height: _game!.boardSize.y * _game!.zoom,
-                child: IgnorePointer(
-                  child: Opacity(
-                    opacity: 0.35,
-                    child: Image.memory(
-                      widget.imageBytes,
-                      fit: BoxFit.fill,
+            // 3. Original Image View Full-Screen Overlay (toggled via eye icon)
+            if (_showOriginalImage)
+              Positioned.fill(
+                child: GestureDetector(
+                  onTap: () => setState(() => _showOriginalImage = false),
+                  child: Container(
+                    color: Colors.black54,
+                    padding: const EdgeInsets.fromLTRB(20, 60, 20, 24),
+                    child: Center(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Container(
+                            constraints: BoxConstraints(
+                              maxHeight: MediaQuery.sizeOf(context).height * 0.70,
+                              maxWidth: MediaQuery.sizeOf(context).width * 0.90,
+                            ),
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(16),
+                              boxShadow: const [
+                                BoxShadow(
+                                  color: Colors.black45,
+                                  blurRadius: 18,
+                                  offset: Offset(0, 6),
+                                ),
+                              ],
+                            ),
+                            clipBehavior: Clip.antiAlias,
+                            child: Image.memory(
+                              widget.imageBytes,
+                              fit: BoxFit.contain,
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                            decoration: BoxDecoration(
+                              color: Colors.black54,
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                            child: const Text(
+                              '点击任意处或眼睛图标返回拼图',
+                              style: TextStyle(color: Colors.white70, fontSize: 13),
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 ),
               ),
 
-            // 3. Top 6-Button Toolbar matching play.jpg
+            // 4. Top Action Toolbar (matching play.jpg)
             Positioned(
               top: 0,
               left: 0,
@@ -399,21 +440,21 @@ class _GamePageState extends State<GamePage> {
                       onPressed: () => _game?.hint(),
                     ),
 
-                    // Ghost Transparency Eye
+                    // Eye Icon: View original image toggle (second from right)
                     IconButton(
                       icon: Icon(
-                        _showGhostPreview ? Icons.visibility : Icons.visibility_off_outlined,
-                        color: _showGhostPreview ? const Color(0xFF2E7D32) : Colors.black54,
+                        _showOriginalImage ? Icons.visibility : Icons.visibility_outlined,
+                        color: _showOriginalImage ? const Color(0xFF2E7D32) : Colors.black87,
                       ),
-                      tooltip: '半透明底图',
-                      onPressed: () => setState(() => _showGhostPreview = !_showGhostPreview),
+                      tooltip: _showOriginalImage ? '返回拼图' : '查看原图',
+                      onPressed: () => setState(() => _showOriginalImage = !_showOriginalImage),
                     ),
 
-                    // Full image thumbnail preview
+                    // Wallpaper Icon: Change background (first from right)
                     IconButton(
-                      icon: const Icon(Icons.image_outlined, color: Colors.black87),
-                      tooltip: '查看原图',
-                      onPressed: _showFullImagePreview,
+                      icon: const Icon(Icons.wallpaper, color: Colors.black87),
+                      tooltip: '更换背景',
+                      onPressed: _openBackgroundSelector,
                     ),
                   ],
                 ),

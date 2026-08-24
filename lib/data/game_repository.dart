@@ -15,12 +15,25 @@ class GameRepository {
   GameRepository._();
   static final GameRepository instance = GameRepository._();
 
+  static const List<String> kBackgroundAssets = [
+    'assets/images/bg_000.webp',
+    'assets/images/bg_001.webp',
+    'assets/images/bg_002.webp',
+    'assets/images/bg_003.webp',
+    'assets/images/bg_004.webp',
+    'assets/images/bg_005.webp',
+    'assets/images/bg_006.webp',
+    'assets/images/bg_007.webp',
+    'assets/images/bg_008.webp',
+  ];
+
   static const String _keyLevelsPrefix = 'jigsaw_level_';
   static const String _keyDailyPrefix = 'jigsaw_daily_';
   static const String _keyCustomList = 'jigsaw_custom_list';
   static const String _keySoundEnabled = 'jigsaw_setting_sound';
   static const String _keyHapticEnabled = 'jigsaw_setting_haptic';
   static const String _keyGridPreviewEnabled = 'jigsaw_setting_grid_preview';
+  static const String _keySelectedBackground = 'jigsaw_setting_selected_background';
   static const String _keyTotalCompleted = 'jigsaw_stat_total_completed';
   static const String _keyTotalPiecesSnapped = 'jigsaw_stat_total_pieces_snapped';
   static const String _keyTotalPlayTimeSeconds = 'jigsaw_stat_total_play_time';
@@ -42,6 +55,10 @@ class GameRepository {
 
   bool get gridPreviewEnabled => _prefs?.getBool(_keyGridPreviewEnabled) ?? true;
   set gridPreviewEnabled(bool v) => _prefs?.setBool(_keyGridPreviewEnabled, v);
+
+  String get selectedBackground =>
+      _prefs?.getString(_keySelectedBackground) ?? kBackgroundAssets[0];
+  set selectedBackground(String v) => _prefs?.setString(_keySelectedBackground, v);
 
   int get totalCompletedLevels => _prefs?.getInt(_keyTotalCompleted) ?? 0;
   int get totalPiecesSnapped => _prefs?.getInt(_keyTotalPiecesSnapped) ?? 0;
@@ -223,6 +240,7 @@ class GameRepository {
     required int progressPercent,
     String? snapshotJson,
     bool isCompleted = false,
+    int? completedPieceCount,
     int stars = 0,
     int timeSeconds = 0,
   }) async {
@@ -237,12 +255,18 @@ class GameRepository {
             : current.bestTimeSeconds)
         : current.bestTimeSeconds;
 
+    final updatedCompletedCounts = Set<int>.from(current.completedPieceCounts);
+    if (isCompleted && completedPieceCount != null) {
+      updatedCompletedCounts.add(completedPieceCount);
+    }
+
     _levels[idx] = current.copyWith(
       progressPercent: progressPercent,
-      isCompleted: isCompleted || current.isCompleted,
+      isCompleted: isCompleted || current.isCompleted || updatedCompletedCounts.isNotEmpty,
       stars: newStars,
       bestTimeSeconds: newBestTime,
       savedSnapshotJson: isCompleted ? null : snapshotJson,
+      completedPieceCounts: updatedCompletedCounts.toList(),
     );
 
     // Save current level
@@ -271,6 +295,7 @@ class GameRepository {
     required int progressPercent,
     String? snapshotJson,
     bool isCompleted = false,
+    int? completedPieceCount,
     int timeSeconds = 0,
   }) async {
     final idx = _dailyChallenges.indexWhere((d) => d.date == dateStr);
@@ -283,11 +308,17 @@ class GameRepository {
             : current.bestTimeSeconds)
         : current.bestTimeSeconds;
 
+    final updatedCompletedCounts = Set<int>.from(current.completedPieceCounts);
+    if (isCompleted && completedPieceCount != null) {
+      updatedCompletedCounts.add(completedPieceCount);
+    }
+
     _dailyChallenges[idx] = current.copyWith(
       progressPercent: progressPercent,
-      isCompleted: isCompleted || current.isCompleted,
+      isCompleted: isCompleted || current.isCompleted || updatedCompletedCounts.isNotEmpty,
       bestTimeSeconds: newBestTime,
       savedSnapshotJson: isCompleted ? null : snapshotJson,
+      completedPieceCounts: updatedCompletedCounts.toList(),
     );
 
     await _prefs?.setString('$_keyDailyPrefix$dateStr', jsonEncode(_dailyChallenges[idx].toJson()));
@@ -303,6 +334,7 @@ class GameRepository {
     required int progressPercent,
     String? snapshotJson,
     bool isCompleted = false,
+    int? completedPieceCount,
     int timeSeconds = 0,
   }) async {
     final idx = _customPuzzles.indexWhere((p) => p.id == id);
@@ -315,11 +347,17 @@ class GameRepository {
             : current.bestTimeSeconds)
         : current.bestTimeSeconds;
 
+    final updatedCompletedCounts = Set<int>.from(current.completedPieceCounts);
+    if (isCompleted && completedPieceCount != null) {
+      updatedCompletedCounts.add(completedPieceCount);
+    }
+
     _customPuzzles[idx] = current.copyWith(
       progressPercent: progressPercent,
-      isCompleted: isCompleted || current.isCompleted,
+      isCompleted: isCompleted || current.isCompleted || updatedCompletedCounts.isNotEmpty,
       bestTimeSeconds: newBestTime,
       savedSnapshotJson: isCompleted ? null : snapshotJson,
+      completedPieceCounts: updatedCompletedCounts.toList(),
     );
 
     await _saveCustomPuzzles();
