@@ -35,14 +35,16 @@ class AchievementsDialog extends StatelessWidget {
       _BadgeData(
         title: '初入拼界',
         desc: '完成首局拼图挑战',
-        icon: PhosphorIconsFill.trophy,
+        icon: PhosphorIconsFill.medal,
+        imageAsset: 'assets/icons/medal_3d.png',
         current: completed,
         max: 1,
       ),
       _BadgeData(
         title: '拼图学徒',
         desc: '累计完成 5 局拼图',
-        icon: PhosphorIconsFill.medal,
+        icon: PhosphorIconsFill.trophy,
+        imageAsset: 'assets/icons/trophy_3d.png',
         current: completed,
         max: 5,
       ),
@@ -50,6 +52,7 @@ class AchievementsDialog extends StatelessWidget {
         title: '拼图大师',
         desc: '累计完成 20 局拼图',
         icon: PhosphorIconsFill.crown,
+        imageAsset: 'assets/icons/crown_3d.png',
         current: completed,
         max: 20,
       ),
@@ -57,6 +60,7 @@ class AchievementsDialog extends StatelessWidget {
         title: '拼图传奇',
         desc: '累计完成 50 局拼图',
         icon: PhosphorIconsFill.diamond,
+        imageAsset: 'assets/icons/diamond_3d.png',
         current: completed,
         max: 50,
       ),
@@ -64,6 +68,7 @@ class AchievementsDialog extends StatelessWidget {
         title: '碎片收集者',
         desc: '累计拼合 50 块碎片',
         icon: PhosphorIconsRegular.puzzlePiece,
+        imageAsset: 'assets/icons/puzzle_piece_3d.png',
         current: snapped,
         max: 50,
       ),
@@ -71,6 +76,7 @@ class AchievementsDialog extends StatelessWidget {
         title: '拼图能手',
         desc: '累计拼合 200 块碎片',
         icon: PhosphorIconsFill.puzzlePiece,
+        imageAsset: 'assets/icons/puzzle_piece_3d.png',
         current: snapped,
         max: 200,
       ),
@@ -78,6 +84,7 @@ class AchievementsDialog extends StatelessWidget {
         title: '千锤百炼',
         desc: '累计拼合 1000 块碎片',
         icon: PhosphorIconsFill.sparkle,
+        imageAsset: 'assets/icons/sparkle_3d.png',
         current: snapped,
         max: 1000,
       ),
@@ -85,6 +92,7 @@ class AchievementsDialog extends StatelessWidget {
         title: '专注达人',
         desc: '累计游玩时间超过 30 分钟',
         icon: PhosphorIconsBold.timer,
+        imageAsset: 'assets/icons/hourglass_3d.png',
         current: timeSec,
         max: 1800,
         isTime: true,
@@ -93,6 +101,7 @@ class AchievementsDialog extends StatelessWidget {
         title: '沉浸探索',
         desc: '累计游玩时间超过 2 小时',
         icon: PhosphorIconsFill.hourglass,
+        imageAsset: 'assets/icons/hourglass_3d.png',
         current: timeSec,
         max: 7200,
         isTime: true,
@@ -101,6 +110,7 @@ class AchievementsDialog extends StatelessWidget {
         title: '每日不辍',
         desc: '通关至少 1 次每日拼图',
         icon: PhosphorIconsFill.calendarCheck,
+        imageAsset: 'assets/icons/calendar_3d.png',
         current: repo.dailyChallenges.where((d) => d.isCompleted).length,
         max: 1,
       ),
@@ -108,6 +118,7 @@ class AchievementsDialog extends StatelessWidget {
         title: '匠心自造',
         desc: '通关至少 1 次自制拼图',
         icon: PhosphorIconsBold.palette,
+        imageAsset: 'assets/icons/palette_3d.png',
         current: repo.customPuzzles.where((c) => c.isCompleted).length,
         max: 1,
       ),
@@ -115,6 +126,7 @@ class AchievementsDialog extends StatelessWidget {
         title: '高阶挑战者',
         desc: '完成 64 块以上高难度拼图',
         icon: PhosphorIconsFill.starFour,
+        imageAsset: 'assets/icons/star_3d.png',
         current: repo.levels.where((l) => l.completedPieceCounts.any((c) => c >= 64)).length,
         max: 1,
       ),
@@ -129,11 +141,11 @@ class AchievementsDialog extends StatelessWidget {
       title: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          const Row(
+          Row(
             children: [
-              Icon(PhosphorIconsFill.trophy, color: Colors.amber, size: 26),
-              SizedBox(width: 10),
-              Text('成就与统计', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 19)),
+              Image.asset('assets/icons/trophy_3d.png', width: 26, height: 26),
+              const SizedBox(width: 10),
+              const Text('成就与统计', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 19)),
             ],
           ),
           Container(
@@ -283,12 +295,12 @@ class AchievementsDialog extends StatelessWidget {
         children: [
           CircleAvatar(
             radius: 20,
-            backgroundColor: b.isUnlocked ? Colors.amber.shade400 : Colors.grey.shade300,
-            child: Icon(
-              b.isUnlocked ? b.icon : PhosphorIconsFill.lockKey,
-              color: b.isUnlocked ? Colors.white : Colors.grey.shade600,
-              size: 20,
-            ),
+            backgroundColor: b.isUnlocked ? Colors.amber.shade100 : Colors.grey.shade200,
+            child: b.isUnlocked
+                ? (b.imageAsset != null
+                    ? Image.asset(b.imageAsset!, width: 26, height: 26)
+                    : Icon(b.icon, color: Colors.amber.shade800, size: 20))
+                : Image.asset('assets/icons/lock_3d.png', width: 20, height: 20),
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -354,12 +366,14 @@ class _BadgeData {
     required this.icon,
     required this.current,
     required this.max,
+    this.imageAsset,
     this.isTime = false,
   });
 
   final String title;
   final String desc;
   final IconData icon;
+  final String? imageAsset;
   final int current;
   final int max;
   final bool isTime;

@@ -399,10 +399,11 @@ class _GamePageState extends State<GamePage> {
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: List.generate(
                   3,
-                  (i) => Icon(
-                    i < stars ? PhosphorIconsFill.star : PhosphorIconsRegular.star,
-                    color: Colors.amber,
-                    size: 32,
+                  (i) => Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 4),
+                    child: i < stars
+                        ? Image.asset('assets/icons/star_3d.png', width: 36, height: 36)
+                        : const Icon(PhosphorIconsRegular.star, color: Colors.amber, size: 36),
                   ),
                 ),
               ),

@@ -158,7 +158,7 @@ class _MyPuzzlesTabViewState extends State<MyPuzzlesTabView> {
                                 height: 22,
                                 child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
                               )
-                            : const Icon(PhosphorIconsBold.imageSquare, color: Colors.white, size: 26),
+                            : Image.asset('assets/icons/camera_3d.png', width: 28, height: 28),
                       ),
                       const SizedBox(width: 16),
                       const Expanded(

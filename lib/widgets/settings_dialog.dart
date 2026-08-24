@@ -26,11 +26,11 @@ class _SettingsDialogState extends State<SettingsDialog> {
   Widget build(BuildContext context) {
     return AlertDialog(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-      title: const Row(
+      title: Row(
         children: [
-          Icon(PhosphorIconsBold.gear, color: Color(0xFF2E7D32)),
-          SizedBox(width: 10),
-          Text('游戏设置', style: TextStyle(fontWeight: FontWeight.bold)),
+          Image.asset('assets/icons/control_knobs_3d.png', width: 24, height: 24),
+          const SizedBox(width: 10),
+          const Text('游戏设置', style: TextStyle(fontWeight: FontWeight.bold)),
         ],
       ),
       content: SizedBox(

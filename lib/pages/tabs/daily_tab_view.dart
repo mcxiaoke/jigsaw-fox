@@ -231,7 +231,7 @@ class _DailyTabViewState extends State<DailyTabView> {
                   children: [
                     Row(
                       children: [
-                        const Icon(PhosphorIconsFill.trophy, color: Colors.amber, size: 22),
+                        Image.asset('assets/icons/trophy_3d.png', width: 22, height: 22),
                         const SizedBox(width: 6),
                         Text(
                           '${now.year}年${now.month}月进度: $completedCount/${dailyList.length}',
@@ -248,8 +248,8 @@ class _DailyTabViewState extends State<DailyTabView> {
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          const Icon(PhosphorIconsFill.fire, color: Colors.orange, size: 16),
-                          const SizedBox(width: 3),
+                          Image.asset('assets/icons/fire_3d.png', width: 18, height: 18),
+                          const SizedBox(width: 4),
                           Text(
                             '连胜 $streak 天',
                             style: const TextStyle(

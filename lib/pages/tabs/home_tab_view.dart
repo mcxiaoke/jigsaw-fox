@@ -152,7 +152,7 @@ class _HomeTabViewState extends State<HomeTabView> {
                           children: [
                             Row(
                               children: [
-                                const Icon(PhosphorIconsFill.sparkle, color: Colors.amberAccent, size: 16),
+                                Image.asset('assets/icons/sparkle_3d.png', width: 16, height: 16),
                                 const SizedBox(width: 4),
                                 const Text(
                                   '今日推荐挑战',
@@ -404,10 +404,11 @@ class _HomeTabViewState extends State<HomeTabView> {
                 child: Row(
                   children: List.generate(
                     3,
-                    (i) => Icon(
-                      i < level.stars ? PhosphorIconsFill.star : PhosphorIconsRegular.star,
-                      color: Colors.amber,
-                      size: 16,
+                    (i) => Padding(
+                      padding: const EdgeInsets.only(right: 2),
+                      child: i < level.stars
+                          ? Image.asset('assets/icons/star_3d.png', width: 16, height: 16)
+                          : const Icon(PhosphorIconsRegular.star, color: Colors.amber, size: 16),
                     ),
                   ),
                 ),
@@ -470,15 +471,15 @@ class _HomeTabViewState extends State<HomeTabView> {
                 bottom: 8,
                 right: 8,
                 child: Container(
-                  padding: const EdgeInsets.all(6),
+                  padding: const EdgeInsets.all(5),
                   decoration: BoxDecoration(
                     color: Colors.black.withValues(alpha: 0.65),
                     shape: BoxShape.circle,
                   ),
-                  child: const Icon(
-                    PhosphorIconsFill.lockSimple,
-                    color: Colors.white70,
-                    size: 16,
+                  child: Image.asset(
+                    'assets/icons/lock_3d.png',
+                    width: 16,
+                    height: 16,
                   ),
                 ),
               ),

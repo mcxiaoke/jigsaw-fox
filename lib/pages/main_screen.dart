@@ -44,7 +44,7 @@ class _MainScreenState extends State<MainScreen> {
         title: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(PhosphorIconsFill.puzzlePiece, color: Color(0xFF2E7D32), size: 24),
+            Image.asset('assets/icons/puzzle_piece_3d.png', width: 24, height: 24),
             const SizedBox(width: 8),
             Text(
               _appBarTitle,
@@ -67,7 +67,7 @@ class _MainScreenState extends State<MainScreen> {
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Icon(PhosphorIconsFill.star, color: Colors.amber, size: 16),
+                Image.asset('assets/icons/star_3d.png', width: 18, height: 18),
                 const SizedBox(width: 4),
                 Text(
                   '$totalStars',
@@ -91,7 +91,7 @@ class _MainScreenState extends State<MainScreen> {
 
           // Achievements
           IconButton(
-            icon: const Icon(PhosphorIconsFill.trophy, color: Color(0xFF2E7D32)),
+            icon: Image.asset('assets/icons/trophy_3d.png', width: 22, height: 22),
             tooltip: '成就与统计',
             onPressed: () async {
               await AchievementsDialog.show(context);
@@ -101,7 +101,7 @@ class _MainScreenState extends State<MainScreen> {
 
           // Settings
           IconButton(
-            icon: const Icon(PhosphorIconsBold.gear, color: Colors.black87),
+            icon: Image.asset('assets/icons/control_knobs_3d.png', width: 22, height: 22),
             tooltip: '设置',
             onPressed: () async {
               await SettingsDialog.show(context);
