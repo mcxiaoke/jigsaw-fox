@@ -22,6 +22,37 @@ typedef PuzzleImage = ui.Image;
 Future<PuzzleImage> decodeFlameImage(Uint8List bytes) =>
     decodeImageFromList(bytes);
 
+/// Board ghost watermark component rendering semi-transparent reference image directly on the board.
+class BoardGhostComponent extends PositionComponent {
+  BoardGhostComponent({
+    required this.image,
+    required Vector2 position,
+    required Vector2 size,
+    this.opacity = 0.0,
+  }) : super(position: position, size: size, priority: 0);
+
+  final PuzzleImage image;
+  double opacity;
+
+  @override
+  void render(ui.Canvas canvas) {
+    if (opacity <= 0.001) return;
+    final paint = Paint()
+      ..color = Color.fromRGBO(255, 255, 255, opacity)
+      ..filterQuality = ui.FilterQuality.medium
+      ..isAntiAlias = true;
+
+    final srcRect = ui.Rect.fromLTWH(
+      0,
+      0,
+      image.width.toDouble(),
+      image.height.toDouble(),
+    );
+    final dstRect = size.toRect();
+    canvas.drawImageRect(image, srcRect, dstRect, paint);
+  }
+}
+
 /// Tray background component that renders a sleek container for unplaced pieces.
 class TrayBackgroundComponent extends PositionComponent
     with DragCallbacks, HasGameReference<JigsawPuzzleGame> {
@@ -66,10 +97,13 @@ class JigsawPuzzleGame extends FlameGame with ScrollDetector, PanDetector {
     int? seed,
     this.rotationEnabled = false,
     this.initialSnapshotJson,
+    this.initialGhostOpacity = 0.0,
     required this.onSolved,
     this.onPieceSnapped,
     this.onProgressChanged,
+    this.onStateUpdated,
   })  : seed = seed ?? (DateTime.now().millisecondsSinceEpoch % 1000000),
+        _boardGhostOpacity = initialGhostOpacity,
         undoManager = UndoManager();
 
   final PuzzleImage image;
@@ -78,9 +112,11 @@ class JigsawPuzzleGame extends FlameGame with ScrollDetector, PanDetector {
   final int seed;
   final bool rotationEnabled;
   final String? initialSnapshotJson;
+  final double initialGhostOpacity;
   final VoidCallback onSolved;
   final VoidCallback? onPieceSnapped;
   final ValueChanged<int>? onProgressChanged;
+  final VoidCallback? onStateUpdated;
 
   final UndoManager undoManager;
 
@@ -102,6 +138,7 @@ class JigsawPuzzleGame extends FlameGame with ScrollDetector, PanDetector {
   Vector2 get panOffset => _panOffset;
 
   late RectangleComponent _boardBgRect;
+  late BoardGhostComponent _boardGhostComp;
   late RectangleComponent _boardOutlineRect;
 
   Vector2 trayPosition = Vector2.zero();
@@ -117,6 +154,8 @@ class JigsawPuzzleGame extends FlameGame with ScrollDetector, PanDetector {
   bool _isSolved = false;
   bool get isSolved => _isSolved;
   bool _borderFilterActive = false;
+  double _boardGhostOpacity = 0.0;
+  double get boardGhostOpacity => _boardGhostOpacity;
 
   late EdgeLayout edgeLayout;
   late PuzzleBoardState _boardState;
@@ -125,6 +164,7 @@ class JigsawPuzzleGame extends FlameGame with ScrollDetector, PanDetector {
   int get totalPieces => rows * cols;
   int get solvedCount =>
       _boardState.pieces.where((p) => p.isSolved(rows, cols)).length;
+  int get remainingTrayPieces => _pieces.values.where((p) => p.isInTray).length;
 
   bool get canUndo => undoManager.canUndo;
   bool get canRedo => undoManager.canRedo;
@@ -145,6 +185,15 @@ class JigsawPuzzleGame extends FlameGame with ScrollDetector, PanDetector {
       priority: 0,
     );
     add(_boardBgRect);
+
+    // 1.5 Draw Ghost Reference Watermark Image
+    _boardGhostComp = BoardGhostComponent(
+      image: image,
+      position: boardTopLeft.clone(),
+      size: boardSize.clone(),
+      opacity: _boardGhostOpacity,
+    );
+    add(_boardGhostComp);
 
     _boardOutlineRect = RectangleComponent(
       position: boardTopLeft.clone(),
@@ -244,8 +293,6 @@ class JigsawPuzzleGame extends FlameGame with ScrollDetector, PanDetector {
         _applyBoardState(restored);
       } catch (_) {}
     }
-
-    undoManager.record(_boardState);
   }
 
   /// Computes smart board maximizing layout and normalized tray metrics.
@@ -428,6 +475,9 @@ class JigsawPuzzleGame extends FlameGame with ScrollDetector, PanDetector {
     _boardBgRect.position.setFrom(effectiveTopLeft);
     _boardBgRect.size.setFrom(effectiveBoardSize);
 
+    _boardGhostComp.position.setFrom(effectiveTopLeft);
+    _boardGhostComp.size.setFrom(effectiveBoardSize);
+
     _boardOutlineRect.position.setFrom(effectiveTopLeft);
     _boardOutlineRect.size.setFrom(effectiveBoardSize);
 
@@ -440,6 +490,81 @@ class JigsawPuzzleGame extends FlameGame with ScrollDetector, PanDetector {
       comp.position.setFrom(targetPos);
       comp.scale.setAll(_zoom);
     }
+  }
+
+  /// Sets board ghost opacity directly.
+  void setGhostOpacity(double opacity) {
+    _boardGhostOpacity = opacity.clamp(0.0, 1.0);
+    _boardGhostComp.opacity = _boardGhostOpacity;
+  }
+
+  /// Cycles ghost opacity between 0.0 -> 0.20 -> 0.45 -> 0.0.
+  void toggleGhostOpacity() {
+    if (_boardGhostOpacity <= 0.01) {
+      _boardGhostOpacity = 0.20;
+    } else if (_boardGhostOpacity < 0.30) {
+      _boardGhostOpacity = 0.45;
+    } else {
+      _boardGhostOpacity = 0.0;
+    }
+    _boardGhostComp.opacity = _boardGhostOpacity;
+  }
+
+  /// Resets current game state and moves all unsolved pieces back to tray.
+  void resetCurrentGame() {
+    _isSolved = false;
+    _zoom = 1.0;
+    _panOffset.setZero();
+    _trayScrollX = 0.0;
+    undoManager.clear();
+
+    _boardState = PuzzleEngine.createInitialState(
+      rows: rows,
+      cols: cols,
+      seed: seed,
+      rotationEnabled: rotationEnabled,
+    );
+
+    final normOut = [0.0, 0.0];
+    final initialPieces = <PieceState>[];
+    var trayIndex = 0;
+
+    for (var r = 0; r < rows; r++) {
+      for (var c = 0; c < cols; c++) {
+        final id = r * cols + c;
+        final pPos = _getTrayPositionForIndex(trayIndex);
+        _screenToNormalized(pPos, normOut);
+
+        final pState = PieceState(
+          id: id,
+          r: r,
+          c: c,
+          nx: normOut[0],
+          ny: normOut[1],
+          clusterId: id,
+          rot: 0,
+        );
+        initialPieces.add(pState);
+
+        final comp = _pieces[id];
+        if (comp != null) {
+          comp.isInTray = true;
+          comp.hideBorders = false;
+          comp.clusterId = id;
+          comp.rot = 0;
+          comp.scale.setAll(_trayPieceScale);
+          comp.position.setFrom(pPos);
+          comp.priority = _basePriority;
+        }
+        trayIndex++;
+      }
+    }
+
+    _boardState = _boardState.copyWith(pieces: initialPieces);
+    _realignTrayPieces(animate: true);
+    _updateBoardTransform();
+    onProgressChanged?.call(0);
+    onStateUpdated?.call();
   }
 
   /// Called when user begins dragging a piece.
@@ -507,10 +632,12 @@ class JigsawPuzzleGame extends FlameGame with ScrollDetector, PanDetector {
         final targetScreenPos =
             _normalizedToScreen(statePiece.nx, statePiece.ny);
         comp.animateTo(targetScreenPos);
+        comp.triggerSnapGlow();
       }
 
       onPieceSnapped?.call();
       onProgressChanged?.call(solvedCount);
+      onStateUpdated?.call();
 
       if (result.isCompleted && !_isSolved) {
         _isSolved = true;
@@ -524,6 +651,7 @@ class JigsawPuzzleGame extends FlameGame with ScrollDetector, PanDetector {
       piece.isInTray = true;
       piece.animateScaleTo(Vector2.all(_trayPieceScale), duration: 0.15);
       _realignTrayPieces(animate: true);
+      onStateUpdated?.call();
     } else {
       // Kept on board -> ensure _zoom scale
       for (final p in clusterPieces) {
@@ -531,6 +659,7 @@ class JigsawPuzzleGame extends FlameGame with ScrollDetector, PanDetector {
         p.animateScaleTo(Vector2.all(_zoom), duration: 0.15);
       }
       _realignTrayPieces(animate: true);
+      onStateUpdated?.call();
     }
   }
 
@@ -541,6 +670,7 @@ class JigsawPuzzleGame extends FlameGame with ScrollDetector, PanDetector {
       final isBorder = edgeLayout.edgesFor(p.r, p.c).isBorder;
       p.isHighlight = _borderFilterActive && isBorder;
     }
+    onStateUpdated?.call();
   }
 
   /// Organizes all unlinked/unplaced floating pieces cleanly back into the tray.
@@ -556,6 +686,7 @@ class JigsawPuzzleGame extends FlameGame with ScrollDetector, PanDetector {
     }
     _trayScrollX = 0.0;
     _realignTrayPieces(animate: true);
+    onStateUpdated?.call();
   }
 
   /// Serializes current board state into Snapshot JSON string.
@@ -577,6 +708,7 @@ class JigsawPuzzleGame extends FlameGame with ScrollDetector, PanDetector {
     final prev = undoManager.undo(_boardState);
     if (prev != null) {
       _applyBoardState(prev);
+      onStateUpdated?.call();
     }
   }
 
@@ -585,6 +717,7 @@ class JigsawPuzzleGame extends FlameGame with ScrollDetector, PanDetector {
     final next = undoManager.redo(_boardState);
     if (next != null) {
       _applyBoardState(next);
+      onStateUpdated?.call();
     }
   }
 
@@ -607,6 +740,7 @@ class JigsawPuzzleGame extends FlameGame with ScrollDetector, PanDetector {
       }
     }
     onProgressChanged?.call(solvedCount);
+    onStateUpdated?.call();
   }
 
   /// Automatically snaps one unsolved piece into place.
@@ -656,12 +790,14 @@ class JigsawPuzzleGame extends FlameGame with ScrollDetector, PanDetector {
       c.clusterId = statePiece.clusterId;
       c.rot = statePiece.rot;
       c.animateTo(_normalizedToScreen(statePiece.nx, statePiece.ny), duration: 0.25);
+      c.triggerSnapGlow();
     }
 
     _realignTrayPieces(animate: true);
 
     onPieceSnapped?.call();
     onProgressChanged?.call(solvedCount);
+    onStateUpdated?.call();
 
     if (result.isCompleted && !_isSolved) {
       _isSolved = true;

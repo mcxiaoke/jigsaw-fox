@@ -228,4 +228,14 @@ class PuzzlePieceComponent extends PositionComponent
       ),
     );
   }
+
+  /// Triggers a brief sparkle glow feedback when piece snaps into place.
+  void triggerSnapGlow() {
+    isHighlight = true;
+    Future.delayed(const Duration(milliseconds: 380), () {
+      if (isRemoved) return;
+      isHighlight = game.isBorderFilterActive &&
+          game.edgeLayout.edgesFor(r, c).isBorder;
+    });
+  }
 }

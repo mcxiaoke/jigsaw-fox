@@ -3,6 +3,7 @@ import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 
+import '../data/game_repository.dart';
 import '../logic/geometry/edge_layout.dart';
 import '../logic/geometry/piece_shape.dart';
 import '../logic/puzzle_model.dart';
@@ -65,7 +66,19 @@ class _JigsawOverlayPainter extends CustomPainter {
   }
 }
 
-/// A bottom sheet dialog matching the commercial jigsaw piece selection UI (`choose.jpg`).
+class DifficultyTier {
+  const DifficultyTier({
+    required this.difficulty,
+    required this.tag,
+    required this.estimatedMinutes,
+  });
+
+  final PuzzleDifficulty difficulty;
+  final String tag;
+  final String estimatedMinutes;
+}
+
+/// A bottom sheet dialog matching the commercial jigsaw piece selection UI.
 class ChooseDifficultySheet extends StatefulWidget {
   const ChooseDifficultySheet({
     super.key,
@@ -109,32 +122,76 @@ class ChooseDifficultySheet extends StatefulWidget {
 }
 
 class _ChooseDifficultySheetState extends State<ChooseDifficultySheet> {
+  final _repo = GameRepository.instance;
   late PuzzleDifficulty _selectedDifficulty;
   double _imageWidth = 1.0;
   double _imageHeight = 1.0;
   bool _imageLoaded = false;
+  late bool _showGridOverlay;
 
-  static const List<PuzzleDifficulty> _selectableOptions = [
-    PuzzleDifficulty(label: '3 × 3 (9 块)', rows: 3, cols: 3),
-    PuzzleDifficulty(label: '3 × 4 (12 块)', rows: 3, cols: 4),
-    PuzzleDifficulty(label: '4 × 4 (16 块)', rows: 4, cols: 4),
-    PuzzleDifficulty(label: '4 × 6 (24 块)', rows: 4, cols: 6),
-    PuzzleDifficulty(label: '6 × 6 (36 块)', rows: 6, cols: 6),
-    PuzzleDifficulty(label: '6 × 8 (48 块)', rows: 6, cols: 8),
-    PuzzleDifficulty(label: '8 × 8 (64 块)', rows: 8, cols: 8),
-    PuzzleDifficulty(label: '10 × 10 (100 块)', rows: 10, cols: 10),
-    PuzzleDifficulty(label: '12 × 16 (192 块)', rows: 12, cols: 16),
-    PuzzleDifficulty(label: '20 × 20 (400 块)', rows: 20, cols: 20),
+  static const List<DifficultyTier> _tiers = [
+    DifficultyTier(
+      difficulty: PuzzleDifficulty(label: '3 × 3 (9 块)', rows: 3, cols: 3),
+      tag: '新手入门',
+      estimatedMinutes: '1~2分钟',
+    ),
+    DifficultyTier(
+      difficulty: PuzzleDifficulty(label: '3 × 4 (12 块)', rows: 3, cols: 4),
+      tag: '轻松休闲',
+      estimatedMinutes: '2~3分钟',
+    ),
+    DifficultyTier(
+      difficulty: PuzzleDifficulty(label: '4 × 4 (16 块)', rows: 4, cols: 4),
+      tag: '经典标准',
+      estimatedMinutes: '3~5分钟',
+    ),
+    DifficultyTier(
+      difficulty: PuzzleDifficulty(label: '4 × 6 (24 块)', rows: 4, cols: 6),
+      tag: '趣味进阶',
+      estimatedMinutes: '5~8分钟',
+    ),
+    DifficultyTier(
+      difficulty: PuzzleDifficulty(label: '6 × 6 (36 块)', rows: 6, cols: 6),
+      tag: '探索挑战',
+      estimatedMinutes: '8~12分钟',
+    ),
+    DifficultyTier(
+      difficulty: PuzzleDifficulty(label: '6 × 8 (48 块)', rows: 6, cols: 8),
+      tag: '高阶进阶',
+      estimatedMinutes: '12~18分钟',
+    ),
+    DifficultyTier(
+      difficulty: PuzzleDifficulty(label: '8 × 8 (64 块)', rows: 8, cols: 8),
+      tag: '大师挑战',
+      estimatedMinutes: '18~25分钟',
+    ),
+    DifficultyTier(
+      difficulty: PuzzleDifficulty(label: '10 × 10 (100 块)', rows: 10, cols: 10),
+      tag: '专家试炼',
+      estimatedMinutes: '30+分钟',
+    ),
+    DifficultyTier(
+      difficulty: PuzzleDifficulty(label: '12 × 16 (192 块)', rows: 12, cols: 16),
+      tag: '宗师挑战',
+      estimatedMinutes: '50+分钟',
+    ),
+    DifficultyTier(
+      difficulty: PuzzleDifficulty(label: '20 × 20 (400 块)', rows: 20, cols: 20),
+      tag: '终极地狱',
+      estimatedMinutes: '1.5小时+',
+    ),
   ];
 
   @override
   void initState() {
     super.initState();
-    _selectedDifficulty = _selectableOptions.firstWhere(
-      (d) =>
-          d.pieceCount == widget.initialDifficulty.pieceCount,
-      orElse: () => _selectableOptions[0],
-    );
+    _showGridOverlay = _repo.gridPreviewEnabled;
+    _selectedDifficulty = _tiers
+        .firstWhere(
+          (t) => t.difficulty.pieceCount == widget.initialDifficulty.pieceCount,
+          orElse: () => _tiers[0],
+        )
+        .difficulty;
     _decodeImageSize();
   }
 
@@ -167,17 +224,22 @@ class _ChooseDifficultySheetState extends State<ChooseDifficultySheet> {
     final aspect = (_imageLoaded && _imageHeight > 0) ? (_imageWidth / _imageHeight) : 1.0;
     final isEffectivePassed = widget.completedPieceCounts.contains(effectiveDiff.pieceCount);
 
+    final selectedTier = _tiers.firstWhere(
+      (t) => t.difficulty.pieceCount == _selectedDifficulty.pieceCount,
+      orElse: () => _tiers[0],
+    );
+
     return Container(
-      height: size.height * 0.88,
+      height: size.height * 0.90,
       decoration: const BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
       ),
       child: Column(
         children: [
-          // Top bar with Cancel
+          // Top bar with Title & Grid Preview toggle & Close
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            padding: const EdgeInsets.fromLTRB(20, 16, 12, 8),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
@@ -186,10 +248,23 @@ class _ChooseDifficultySheetState extends State<ChooseDifficultySheet> {
                     widget.title,
                     style: theme.textTheme.titleMedium?.copyWith(
                       fontWeight: FontWeight.bold,
+                      fontSize: 18,
                     ),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
+                ),
+                IconButton(
+                  icon: Icon(
+                    _showGridOverlay ? Icons.grid_on : Icons.grid_off,
+                    color: _showGridOverlay ? const Color(0xFF2E7D32) : Colors.black45,
+                    size: 22,
+                  ),
+                  tooltip: _showGridOverlay ? '隐藏切片网格' : '显示切片网格',
+                  onPressed: () {
+                    setState(() => _showGridOverlay = !_showGridOverlay);
+                    _repo.gridPreviewEnabled = _showGridOverlay;
+                  },
                 ),
                 TextButton(
                   onPressed: () => Navigator.of(context).pop(),
@@ -198,7 +273,7 @@ class _ChooseDifficultySheetState extends State<ChooseDifficultySheet> {
                     style: TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.w600,
-                      color: Color(0xFF2E7D32),
+                      color: Colors.black54,
                     ),
                   ),
                 ),
@@ -206,10 +281,10 @@ class _ChooseDifficultySheetState extends State<ChooseDifficultySheet> {
             ),
           ),
 
-          // High-res Image Preview with Real-time Jigsaw Grid Overlay (matching exact image aspect ratio)
+          // High-res Image Preview with Real-time Jigsaw Grid Overlay
           Expanded(
             child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 6),
               child: Center(
                 child: AspectRatio(
                   aspectRatio: aspect,
@@ -220,7 +295,7 @@ class _ChooseDifficultySheetState extends State<ChooseDifficultySheet> {
                       boxShadow: const [
                         BoxShadow(
                           color: Colors.black12,
-                          blurRadius: 10,
+                          blurRadius: 12,
                           offset: Offset(0, 4),
                         ),
                       ],
@@ -229,14 +304,15 @@ class _ChooseDifficultySheetState extends State<ChooseDifficultySheet> {
                       fit: StackFit.expand,
                       children: [
                         Image.memory(widget.imageBytes, fit: BoxFit.cover),
-                        Positioned.fill(
-                          child: CustomPaint(
-                            painter: _JigsawOverlayPainter(
-                              rows: effectiveDiff.rows,
-                              cols: effectiveDiff.cols,
+                        if (_showGridOverlay)
+                          Positioned.fill(
+                            child: CustomPaint(
+                              painter: _JigsawOverlayPainter(
+                                rows: effectiveDiff.rows,
+                                cols: effectiveDiff.cols,
+                              ),
                             ),
                           ),
-                        ),
                       ],
                     ),
                   ),
@@ -245,72 +321,96 @@ class _ChooseDifficultySheetState extends State<ChooseDifficultySheet> {
             ),
           ),
 
-          const SizedBox(height: 14),
+          const SizedBox(height: 10),
 
-          // Difficulty Selector Header with Adaptive spec indicator & Passed badge
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Text(
-                '选择难度 · ${effectiveDiff.rows}×${effectiveDiff.cols} (${effectiveDiff.pieceCount} 块)',
-                style: theme.textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.bold,
-                  color: Colors.black87,
-                ),
-              ),
-              if (isEffectivePassed) ...[
-                const SizedBox(width: 8),
+          // Difficulty Info Header
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                   decoration: BoxDecoration(
                     color: const Color(0xFFE8F5E9),
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: const Color(0xFF81C784)),
+                    borderRadius: BorderRadius.circular(8),
                   ),
-                  child: const Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.check_circle, size: 13, color: Color(0xFF2E7D32)),
-                      SizedBox(width: 2),
-                      Text(
-                        '已通关',
-                        style: TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.bold,
-                          color: Color(0xFF2E7D32),
-                        ),
-                      ),
-                    ],
+                  child: Text(
+                    selectedTier.tag,
+                    style: const TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                      color: Color(0xFF1B5E20),
+                    ),
                   ),
                 ),
+                const SizedBox(width: 8),
+                Text(
+                  '${effectiveDiff.rows} × ${effectiveDiff.cols} (${effectiveDiff.pieceCount} 块)',
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.bold,
+                    color: Colors.black87,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  '⏱️ ${selectedTier.estimatedMinutes}',
+                  style: const TextStyle(fontSize: 12, color: Colors.black54),
+                ),
+                if (isEffectivePassed) ...[
+                  const SizedBox(width: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFE8F5E9),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: const Color(0xFF81C784)),
+                    ),
+                    child: const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.check_circle, size: 13, color: Color(0xFF2E7D32)),
+                        SizedBox(width: 2),
+                        Text(
+                          '已通关',
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xFF2E7D32),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
               ],
-            ],
+            ),
           ),
           const SizedBox(height: 12),
 
-          // Puzzle Piece shaped difficulty selectors with passed indicators
+          // Horizontal scroll of puzzle difficulty tiers
           SingleChildScrollView(
             scrollDirection: Axis.horizontal,
             padding: const EdgeInsets.symmetric(horizontal: 20),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                for (final opt in _selectableOptions) ...[
-                  _buildPieceOption(opt),
-                  const SizedBox(width: 12),
+                for (final tier in _tiers) ...[
+                  _buildPieceOption(tier),
+                  const SizedBox(width: 10),
                 ],
               ],
             ),
           ),
 
-          const SizedBox(height: 20),
+          const SizedBox(height: 18),
 
-          // Big Green Start Button
+          // Big Start CTA Button
           Padding(
-            padding: const EdgeInsets.fromLTRB(24, 0, 24, 28),
+            padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
             child: SizedBox(
               width: double.infinity,
-              height: 54,
+              height: 52,
               child: FilledButton(
                 onPressed: () {
                   Navigator.of(context).pop();
@@ -319,14 +419,14 @@ class _ChooseDifficultySheetState extends State<ChooseDifficultySheet> {
                 style: FilledButton.styleFrom(
                   backgroundColor: const Color(0xFF2E7D32),
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(28),
+                    borderRadius: BorderRadius.circular(26),
                   ),
                   elevation: 2,
                 ),
                 child: Text(
                   isEffectivePassed ? '重玩此难度' : '开始',
                   style: const TextStyle(
-                    fontSize: 18,
+                    fontSize: 17,
                     fontWeight: FontWeight.bold,
                     letterSpacing: 2,
                   ),
@@ -339,7 +439,8 @@ class _ChooseDifficultySheetState extends State<ChooseDifficultySheet> {
     );
   }
 
-  Widget _buildPieceOption(PuzzleDifficulty opt) {
+  Widget _buildPieceOption(DifficultyTier tier) {
+    final opt = tier.difficulty;
     final isSelected = opt.pieceCount == _selectedDifficulty.pieceCount;
     final isPassed = widget.completedPieceCounts.contains(opt.pieceCount);
 
@@ -362,19 +463,13 @@ class _ChooseDifficultySheetState extends State<ChooseDifficultySheet> {
       iconColor = Colors.white;
       textColor = Colors.white;
     } else if (isPassed) {
-      bgColor = const Color(0xFFE8F5E9); // Light green background for passed difficulty
+      bgColor = const Color(0xFFE8F5E9);
       border = Border.all(color: const Color(0xFF81C784), width: 1.5);
-      shadows = [
-        BoxShadow(
-          color: const Color(0xFF4CAF50).withValues(alpha: 0.15),
-          blurRadius: 4,
-          offset: const Offset(0, 2),
-        ),
-      ];
+      shadows = null;
       iconColor = const Color(0xFF2E7D32);
       textColor = const Color(0xFF1B5E20);
     } else {
-      bgColor = const Color(0xFFF0F2F5);
+      bgColor = const Color(0xFFF4F6F8);
       border = Border.all(color: const Color(0xFFE0E0E0), width: 1);
       shadows = null;
       iconColor = Colors.black54;
@@ -385,44 +480,49 @@ class _ChooseDifficultySheetState extends State<ChooseDifficultySheet> {
       onTap: () => setState(() => _selectedDifficulty = opt),
       borderRadius: BorderRadius.circular(16),
       child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        width: 70,
-        height: 70,
+        duration: const Duration(milliseconds: 180),
+        width: 72,
+        height: 76,
         decoration: BoxDecoration(
           color: bgColor,
           borderRadius: BorderRadius.circular(16),
           border: border,
           boxShadow: shadows,
         ),
+        padding: const EdgeInsets.symmetric(vertical: 6),
         child: Stack(
           alignment: Alignment.center,
           children: [
             Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Icon(
-                  Icons.extension,
-                  size: 22,
-                  color: iconColor,
-                ),
-                const SizedBox(height: 3),
+                Icon(Icons.extension, size: 20, color: iconColor),
+                const SizedBox(height: 2),
                 Text(
                   '${opt.pieceCount}',
                   style: TextStyle(
-                    fontSize: 14,
+                    fontSize: 15,
                     fontWeight: FontWeight.bold,
                     color: textColor,
+                  ),
+                ),
+                Text(
+                  tier.tag,
+                  style: TextStyle(
+                    fontSize: 9.5,
+                    color: isSelected ? Colors.white70 : Colors.black45,
+                    fontWeight: FontWeight.w500,
                   ),
                 ),
               ],
             ),
             if (isPassed)
               Positioned(
-                top: 4,
-                right: 4,
+                top: 0,
+                right: 2,
                 child: Icon(
                   Icons.check_circle,
-                  size: 14,
+                  size: 13,
                   color: isSelected ? const Color(0xFFFFD54F) : const Color(0xFF2E7D32),
                 ),
               ),

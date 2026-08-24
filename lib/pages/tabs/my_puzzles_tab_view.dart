@@ -10,7 +10,7 @@ import '../../widgets/choose_difficulty_sheet.dart';
 import '../crop_puzzle_page.dart';
 import '../game_page.dart';
 
-/// "My Puzzles" (我的自制关卡) tab view supporting UGC creation & management.
+/// "My Puzzles" (我的自制关卡) tab view supporting UGC creation, management, and play.
 class MyPuzzlesTabView extends StatefulWidget {
   const MyPuzzlesTabView({super.key});
 
@@ -90,8 +90,14 @@ class _MyPuzzlesTabViewState extends State<MyPuzzlesTabView> {
       context: context,
       builder: (ctx) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text('删除自制关卡'),
-        content: Text('确定要删除「${item.title}」及其本地图片吗？'),
+        title: const Row(
+          children: [
+            Icon(Icons.delete_outline, color: Colors.redAccent),
+            SizedBox(width: 8),
+            Text('删除自制关卡'),
+          ],
+        ),
+        content: Text('确定要删除「${item.title}」及其本地拼图资源吗？'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
@@ -112,6 +118,12 @@ class _MyPuzzlesTabViewState extends State<MyPuzzlesTabView> {
     }
   }
 
+  String _formatDuration(int seconds) {
+    final m = seconds ~/ 60;
+    final s = seconds % 60;
+    return '${m.toString().padLeft(2, '0')}:${s.toString().padLeft(2, '0')}';
+  }
+
   @override
   Widget build(BuildContext context) {
     final customList = _repo.customPuzzles;
@@ -124,27 +136,34 @@ class _MyPuzzlesTabViewState extends State<MyPuzzlesTabView> {
           // 1. New Creation Action Card
           InkWell(
             onTap: _loading ? null : _createFromGallery,
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: BorderRadius.circular(20),
             child: Container(
-              height: 84,
+              height: 92,
               decoration: BoxDecoration(
-                color: const Color(0xFFE8F5E9),
-                borderRadius: BorderRadius.circular(16),
+                gradient: const LinearGradient(
+                  colors: [Color(0xFFE8F5E9), Color(0xFFC8E6C9)],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                borderRadius: BorderRadius.circular(20),
                 border: Border.all(color: const Color(0xFF81C784), width: 1.5),
+                boxShadow: const [
+                  BoxShadow(color: Colors.black12, blurRadius: 6, offset: Offset(0, 2)),
+                ],
               ),
               padding: const EdgeInsets.symmetric(horizontal: 20),
               child: Row(
                 children: [
                   CircleAvatar(
                     backgroundColor: const Color(0xFF2E7D32),
-                    radius: 22,
+                    radius: 24,
                     child: _loading
                         ? const SizedBox(
-                            width: 20,
-                            height: 20,
+                            width: 22,
+                            height: 22,
                             child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
                           )
-                        : const Icon(Icons.add_photo_alternate, color: Colors.white),
+                        : const Icon(Icons.add_photo_alternate, color: Colors.white, size: 26),
                   ),
                   const SizedBox(width: 16),
                   const Expanded(
@@ -160,9 +179,9 @@ class _MyPuzzlesTabViewState extends State<MyPuzzlesTabView> {
                             color: Color(0xFF1B5E20),
                           ),
                         ),
-                        SizedBox(height: 2),
+                        SizedBox(height: 3),
                         Text(
-                          '从本地相册导入并支持自由缩放裁剪',
+                          '导入本地相册相片，支持自由缩放裁剪与规格选择',
                           style: TextStyle(fontSize: 12, color: Colors.black54),
                         ),
                       ],
@@ -174,17 +193,41 @@ class _MyPuzzlesTabViewState extends State<MyPuzzlesTabView> {
             ),
           ),
 
-          const SizedBox(height: 20),
-          const Text(
-            '自制与精选示例',
-            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+          const SizedBox(height: 22),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text(
+                '我的拼图合辑',
+                style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
+              ),
+              Text(
+                '共 ${customList.length} 个关卡',
+                style: const TextStyle(fontSize: 13, color: Colors.black54),
+              ),
+            ],
           ),
           const SizedBox(height: 12),
 
-          for (final item in customList) ...[
-            _buildCustomCard(item),
-            const SizedBox(height: 12),
-          ],
+          if (customList.isEmpty)
+            Container(
+              padding: const EdgeInsets.symmetric(vertical: 40),
+              alignment: Alignment.center,
+              child: const Column(
+                children: [
+                  Icon(Icons.photo_library_outlined, size: 48, color: Colors.grey),
+                  SizedBox(height: 8),
+                  Text('还没有自制拼图，点击上方按钮开始创建吧！', style: TextStyle(color: Colors.grey)),
+                ],
+              ),
+            )
+          else
+            for (final item in customList) ...[
+              _buildCustomCard(item),
+              const SizedBox(height: 12),
+            ],
+
+          const SizedBox(height: 24),
         ],
       ),
     );
@@ -193,7 +236,7 @@ class _MyPuzzlesTabViewState extends State<MyPuzzlesTabView> {
   Widget _buildCustomCard(CustomPuzzleItem item) {
     return Card(
       elevation: 2,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
       clipBehavior: Clip.antiAlias,
       child: InkWell(
         onTap: () => _playCustom(item),
@@ -202,10 +245,10 @@ class _MyPuzzlesTabViewState extends State<MyPuzzlesTabView> {
           child: Row(
             children: [
               ClipRRect(
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: BorderRadius.circular(14),
                 child: SizedBox(
-                  width: 80,
-                  height: 80,
+                  width: 84,
+                  height: 84,
                   child: _buildThumbnail(item),
                 ),
               ),
@@ -226,17 +269,19 @@ class _MyPuzzlesTabViewState extends State<MyPuzzlesTabView> {
                     const SizedBox(height: 4),
                     Text(
                       '规格：${item.difficulty.pieceCount} 块 (${item.difficulty.rows}×${item.difficulty.cols})',
-                      style: const TextStyle(fontSize: 13, color: Colors.black54),
+                      style: const TextStyle(fontSize: 12.5, color: Colors.black54),
                     ),
                     const SizedBox(height: 6),
                     if (item.isCompleted)
-                      const Row(
+                      Row(
                         children: [
-                          Icon(Icons.check_circle, color: Color(0xFF2E7D32), size: 16),
-                          SizedBox(width: 4),
+                          const Icon(Icons.check_circle, color: Color(0xFF2E7D32), size: 15),
+                          const SizedBox(width: 4),
                           Text(
-                            '已完成',
-                            style: TextStyle(
+                            item.bestTimeSeconds > 0
+                                ? '已完成 · 最快 ${_formatDuration(item.bestTimeSeconds)}'
+                                : '已完成',
+                            style: const TextStyle(
                               fontSize: 12,
                               color: Color(0xFF2E7D32),
                               fontWeight: FontWeight.bold,
@@ -249,7 +294,7 @@ class _MyPuzzlesTabViewState extends State<MyPuzzlesTabView> {
                         '当前进度：${item.progressPercent}%',
                         style: const TextStyle(
                           fontSize: 12,
-                          color: Colors.blue,
+                          color: Color(0xFF0288D1),
                           fontWeight: FontWeight.w600,
                         ),
                       )
