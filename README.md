@@ -1,17 +1,52 @@
-# jigsawpuzzle
+# Flutter Jigsaw Puzzle 🧩
 
-A new Flutter project.
+一款基于 Flutter 与 Flame 游戏引擎打造的高品质全平台异形（Jigsaw）拼图游戏。
 
-## Getting Started
+---
 
-This project is a starting point for a Flutter application.
+## ✨ 核心特性
 
-A few resources to get you started if this is your first Flutter project:
+- 🧩 **真实异形贝塞尔咬合**：经典凹凸咬合插口切割，支持单块与整组（Cluster）连带拖拽，近距离磁吸吸附。
+- 📱 **全端自适应响应式网格**：自适应手机、平板、折叠屏与桌面端窗口，窄屏 2 列、宽屏 3~6 列，比例完美恒定。
+- 🎨 **3D 浮雕与动态悬浮投影**：切片具备双色高光阴影与拖拽离地浮空投影，触感逼真。
+- 🖼️ **多图源与 UGC 自制拼图**：内置精选关卡图库、相册照片导入自由裁剪、每日挑战精选题库。
+- 🖼️ **满屏壁纸与托盘纯色遮罩**：内置 9 套高清壁纸即时切换，底部托盘具备独立纯色遮罩与尺寸归一化。
+- 👁️ **两层式顶部工具栏与辅助系统**：
+  - 标准顶部 AppBar（大号标题、壁纸切换、原图眼睛、暂停菜单）；
+  - 独立悬浮 Sub-Bar（实时用时、已拼碎片胶囊、撤销/重做、底图透视 0/20/45%、边缘筛选、一键理盘、智能提示）。
+- 🏆 **12 项成就体系与统计中心**：详尽记录通关总局数、碎片数、最快用时与勋章进度。
 
-- [Learn Flutter](https://docs.flutter.dev/get-started/learn-flutter)
-- [Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Flutter learning resources](https://docs.flutter.dev/reference/learning-resources)
+---
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+## 🛠️ 技术栈与依赖
+
+- **UI 表现框架**：Flutter 3.x (Dart 3)
+- **游戏引擎**：Flame Engine
+- **本地存储**：`shared_preferences` / 本地沙盒
+- **测试**：覆盖几何拓扑、Overhang 包围盒、吸附合并、快照还原及全套 Widget 测试
+
+---
+
+## 🚀 快速开始
+
+```bash
+# 获取依赖
+flutter pub get
+
+# 运行代码静态检查
+dart analyze
+
+# 执行自动化测试套件
+flutter test
+
+# 运行应用 (以 Windows 桌面或 Chrome 为例)
+flutter run -d windows
+```
+
+---
+
+## 📚 文档
+
+- [产品需求文档 (PRD)](docs/jigsaw-puzzle-game-prd.md)
+- [工程架构与算法文档](docs/jigsaw-puzzle-game-architecture.md)
+- [变更记录日志](docs/CHANGES-20260824.md)
