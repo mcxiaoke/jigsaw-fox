@@ -87,6 +87,9 @@ class ChooseDifficultySheet extends StatefulWidget {
     required this.title,
     required this.onStart,
     this.completedPieceCounts = const {},
+    this.isUnlocked = true,
+    this.lockedMessage,
+    this.onDelete,
   });
 
   final Uint8List imageBytes;
@@ -94,6 +97,9 @@ class ChooseDifficultySheet extends StatefulWidget {
   final String title;
   final ValueChanged<PuzzleDifficulty> onStart;
   final Set<int> completedPieceCounts;
+  final bool isUnlocked;
+  final String? lockedMessage;
+  final Future<void> Function()? onDelete;
 
   static Future<void> show({
     required BuildContext context,
@@ -102,6 +108,9 @@ class ChooseDifficultySheet extends StatefulWidget {
     required String title,
     required ValueChanged<PuzzleDifficulty> onStart,
     Set<int> completedPieceCounts = const {},
+    bool isUnlocked = true,
+    String? lockedMessage,
+    Future<void> Function()? onDelete,
   }) {
     return showModalBottomSheet<void>(
       context: context,
@@ -113,6 +122,9 @@ class ChooseDifficultySheet extends StatefulWidget {
         title: title,
         onStart: onStart,
         completedPieceCounts: completedPieceCounts,
+        isUnlocked: isUnlocked,
+        lockedMessage: lockedMessage,
+        onDelete: onDelete,
       ),
     );
   }
@@ -216,6 +228,39 @@ class _ChooseDifficultySheetState extends State<ChooseDifficultySheet> {
     return _selectedDifficulty.adaptiveForSize(_imageWidth, _imageHeight);
   }
 
+  Future<void> _confirmDelete() async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Row(
+          children: [
+            Icon(Icons.delete_outline, color: Colors.redAccent),
+            SizedBox(width: 8),
+            Text('删除自制拼图'),
+          ],
+        ),
+        content: Text('确定要删除「${widget.title}」吗？相关进度将被清除。'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: FilledButton.styleFrom(backgroundColor: Colors.red),
+            child: const Text('确定删除'),
+          ),
+        ],
+      ),
+    );
+
+    if (ok == true && mounted) {
+      Navigator.of(context).pop();
+      await widget.onDelete?.call();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -237,7 +282,7 @@ class _ChooseDifficultySheetState extends State<ChooseDifficultySheet> {
       ),
       child: Column(
         children: [
-          // Top bar with Title & Grid Preview toggle & Close
+          // Top bar with Title & Grid Preview toggle & Delete (if UGC) & Close
           Padding(
             padding: const EdgeInsets.fromLTRB(20, 16, 12, 8),
             child: Row(
@@ -266,10 +311,16 @@ class _ChooseDifficultySheetState extends State<ChooseDifficultySheet> {
                     _repo.gridPreviewEnabled = _showGridOverlay;
                   },
                 ),
+                if (widget.onDelete != null)
+                  IconButton(
+                    icon: const Icon(Icons.delete_outline, color: Colors.redAccent, size: 22),
+                    tooltip: '删除此自制拼图',
+                    onPressed: _confirmDelete,
+                  ),
                 TextButton(
                   onPressed: () => Navigator.of(context).pop(),
                   child: const Text(
-                    '取消',
+                    '关闭',
                     style: TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.w600,
@@ -321,7 +372,39 @@ class _ChooseDifficultySheetState extends State<ChooseDifficultySheet> {
             ),
           ),
 
-          const SizedBox(height: 10),
+          const SizedBox(height: 8),
+
+          // Locked Level Tip Banner if level is not yet unlocked
+          if (!widget.isUnlocked)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 2),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                decoration: BoxDecoration(
+                  color: Colors.amber.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.amber.shade400),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.lock, color: Colors.orange, size: 18),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        widget.lockedMessage ?? '此关卡尚未解锁，请先通关前序关卡',
+                        style: const TextStyle(
+                          color: Color(0xFFE65100),
+                          fontSize: 12.5,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+
+          const SizedBox(height: 6),
 
           // Difficulty Info Header
           Padding(
@@ -412,24 +495,37 @@ class _ChooseDifficultySheetState extends State<ChooseDifficultySheet> {
               width: double.infinity,
               height: 52,
               child: FilledButton(
-                onPressed: () {
-                  Navigator.of(context).pop();
-                  widget.onStart(effectiveDiff);
-                },
+                onPressed: widget.isUnlocked
+                    ? () {
+                        Navigator.of(context).pop();
+                        widget.onStart(effectiveDiff);
+                      }
+                    : null,
                 style: FilledButton.styleFrom(
-                  backgroundColor: const Color(0xFF2E7D32),
+                  backgroundColor: widget.isUnlocked ? const Color(0xFF2E7D32) : Colors.grey.shade400,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(26),
                   ),
-                  elevation: 2,
+                  elevation: widget.isUnlocked ? 2 : 0,
                 ),
-                child: Text(
-                  isEffectivePassed ? '重玩此难度' : '开始',
-                  style: const TextStyle(
-                    fontSize: 17,
-                    fontWeight: FontWeight.bold,
-                    letterSpacing: 2,
-                  ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    if (!widget.isUnlocked) ...[
+                      const Icon(Icons.lock, size: 18, color: Colors.white70),
+                      const SizedBox(width: 6),
+                    ],
+                    Text(
+                      !widget.isUnlocked
+                          ? '关卡未解锁 (请先通关前序关卡)'
+                          : (isEffectivePassed ? '重玩此难度' : '开始'),
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: 1.5,
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ),

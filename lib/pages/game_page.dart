@@ -644,25 +644,26 @@ class _GamePageState extends State<GamePage> {
                 ),
               ),
 
-            // 4. Premium Top Toolbar with Live Timer, Progress, and Action Tools
+            // 4. Two-Tier Top Navigation & In-Game Sub-Bar (Never Overflows)
             Positioned(
               top: 0,
               left: 0,
               right: 0,
-              child: Container(
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.94),
-                  boxShadow: const [
-                    BoxShadow(color: Colors.black12, blurRadius: 4, offset: Offset(0, 1)),
-                  ],
-                ),
-                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Row(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // Tier 1: Clean, Standard Top AppBar
+                  Container(
+                    height: 48,
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.95),
+                      boxShadow: const [
+                        BoxShadow(color: Colors.black12, blurRadius: 4, offset: Offset(0, 1)),
+                      ],
+                    ),
+                    padding: const EdgeInsets.symmetric(horizontal: 4),
+                    child: Row(
                       children: [
-                        // Back arrow
                         IconButton(
                           icon: const Icon(Icons.arrow_back, color: Colors.black87),
                           tooltip: '返回',
@@ -671,150 +672,203 @@ class _GamePageState extends State<GamePage> {
                             Navigator.of(context).pop();
                           },
                         ),
-
-                        // Title & Spec
+                        const SizedBox(width: 4),
                         Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Text(
-                                _pageTitle,
-                                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                              Row(
-                                children: [
-                                  Text(
-                                    '⏱️ $_timeString',
-                                    style: const TextStyle(fontSize: 11, color: Colors.black54, fontWeight: FontWeight.w500),
-                                  ),
-                                  const SizedBox(width: 8),
-                                  Text(
-                                    '🧩 $_solvedPieces/$total ($percent%)',
-                                    style: const TextStyle(
-                                      fontSize: 11,
-                                      color: Color(0xFF2E7D32),
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ],
+                          child: Text(
+                            _pageTitle,
+                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 17),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                           ),
                         ),
-
-                        // Undo
+                        // 1. Wallpaper background switcher
+                        IconButton(
+                          icon: const Icon(Icons.wallpaper, size: 21, color: Color(0xFF2E7D32)),
+                          tooltip: '更换壁纸背景',
+                          onPressed: _openBackgroundSelector,
+                        ),
+                        // 2. Fullscreen original image toggle
                         IconButton(
                           icon: Icon(
-                            Icons.undo,
-                            size: 20,
-                            color: (_game?.canUndo ?? false) ? Colors.black87 : Colors.black26,
+                            _showOriginalImage ? Icons.visibility : Icons.visibility_outlined,
+                            size: 21,
+                            color: _showOriginalImage ? const Color(0xFF0288D1) : Colors.black54,
                           ),
-                          tooltip: '撤销',
-                          onPressed: (_game?.canUndo ?? false) ? () => _game?.undo() : null,
+                          tooltip: '查看原图',
+                          onPressed: () => setState(() => _showOriginalImage = !_showOriginalImage),
                         ),
-
-                        // Redo
+                        // 3. Pause Menu / Options
                         IconButton(
-                          icon: Icon(
-                            Icons.redo,
-                            size: 20,
-                            color: (_game?.canRedo ?? false) ? Colors.black87 : Colors.black26,
-                          ),
-                          tooltip: '重做',
-                          onPressed: (_game?.canRedo ?? false) ? () => _game?.redo() : null,
-                        ),
-
-                        // Ghost Watermark Underlay Toggle
-                        IconButton(
-                          icon: Stack(
-                            alignment: Alignment.center,
-                            children: [
-                              Icon(
-                                ghostOpacity > 0.01 ? Icons.layers : Icons.layers_outlined,
-                                color: ghostOpacity > 0.01 ? const Color(0xFF2E7D32) : Colors.black54,
-                                size: 22,
-                              ),
-                              if (ghostOpacity > 0.01)
-                                Positioned(
-                                  bottom: 0,
-                                  right: 0,
-                                  child: Container(
-                                    padding: const EdgeInsets.all(1),
-                                    decoration: BoxDecoration(
-                                      color: const Color(0xFF2E7D32),
-                                      borderRadius: BorderRadius.circular(4),
-                                    ),
-                                    child: Text(
-                                      '${(ghostOpacity * 100).toInt()}',
-                                      style: const TextStyle(fontSize: 8, color: Colors.white, fontWeight: FontWeight.bold),
-                                    ),
-                                  ),
-                                ),
-                            ],
-                          ),
-                          tooltip: '底图透视参考 (0%/20%/45%)',
-                          onPressed: () {
-                            _game?.toggleGhostOpacity();
-                            setState(() {});
-                          },
-                        ),
-
-                        // Border Pieces Filter
-                        IconButton(
-                          icon: Icon(
-                            Icons.border_outer,
-                            size: 22,
-                            color: isBorderActive ? const Color(0xFF2E7D32) : Colors.black54,
-                          ),
-                          tooltip: '边缘碎片筛选',
-                          onPressed: () {
-                            _game?.toggleBorderFilter();
-                            setState(() {});
-                          },
-                        ),
-
-                        // Organize Tray (Broom)
-                        IconButton(
-                          icon: const Icon(Icons.cleaning_services_outlined, size: 22, color: Colors.black54),
-                          tooltip: '一键整理托盘',
-                          onPressed: () => _game?.organizeTray(),
-                        ),
-
-                        // Hint (Lightbulb)
-                        IconButton(
-                          icon: const Icon(Icons.lightbulb_outline, size: 22, color: Colors.amber),
-                          tooltip: '智能提示',
-                          onPressed: () => _game?.hint(),
-                        ),
-
-                        // Pause Menu / Options
-                        IconButton(
-                          icon: const Icon(Icons.pause_circle_outline, size: 22, color: Colors.black87),
+                          icon: const Icon(Icons.pause_circle_outline, size: 21, color: Colors.black87),
                           tooltip: '暂停与菜单',
                           onPressed: _showPauseMenu,
                         ),
                       ],
                     ),
+                  ),
 
-                    // Thin linear progress bar at bottom of toolbar
-                    LinearProgressIndicator(
+                  // Tier 2: Sub-Bar for Live Stats & In-Game Action Tools (appbar下方内容区域上方)
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(10, 6, 10, 0),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.94),
+                        borderRadius: BorderRadius.circular(16),
+                        boxShadow: const [
+                          BoxShadow(color: Colors.black12, blurRadius: 4, offset: Offset(0, 2)),
+                        ],
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          // Left: Live Timer & Piece Progress
+                          Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                '⏱️ $_timeString',
+                                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.black87),
+                              ),
+                              const SizedBox(width: 6),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFE8F5E9),
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: Text(
+                                  '🧩 $_solvedPieces/$total ($percent%)',
+                                  style: const TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.bold,
+                                    color: Color(0xFF2E7D32),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+
+                          // Right: Tools (Undo, Redo, Ghost, Border, Organize, Hint)
+                          Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              IconButton(
+                                visualDensity: VisualDensity.compact,
+                                padding: const EdgeInsets.symmetric(horizontal: 2),
+                                constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                                icon: Icon(
+                                  Icons.undo,
+                                  size: 18,
+                                  color: (_game?.canUndo ?? false) ? Colors.black87 : Colors.black26,
+                                ),
+                                tooltip: '撤销',
+                                onPressed: (_game?.canUndo ?? false) ? () => _game?.undo() : null,
+                              ),
+                              IconButton(
+                                visualDensity: VisualDensity.compact,
+                                padding: const EdgeInsets.symmetric(horizontal: 2),
+                                constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                                icon: Icon(
+                                  Icons.redo,
+                                  size: 18,
+                                  color: (_game?.canRedo ?? false) ? Colors.black87 : Colors.black26,
+                                ),
+                                tooltip: '重做',
+                                onPressed: (_game?.canRedo ?? false) ? () => _game?.redo() : null,
+                              ),
+                              IconButton(
+                                visualDensity: VisualDensity.compact,
+                                padding: const EdgeInsets.symmetric(horizontal: 2),
+                                constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                                icon: Stack(
+                                  alignment: Alignment.center,
+                                  children: [
+                                    Icon(
+                                      ghostOpacity > 0.01 ? Icons.layers : Icons.layers_outlined,
+                                      color: ghostOpacity > 0.01 ? const Color(0xFF2E7D32) : Colors.black54,
+                                      size: 19,
+                                    ),
+                                    if (ghostOpacity > 0.01)
+                                      Positioned(
+                                        bottom: 0,
+                                        right: 0,
+                                        child: Container(
+                                          padding: const EdgeInsets.all(1),
+                                          decoration: BoxDecoration(
+                                            color: const Color(0xFF2E7D32),
+                                            borderRadius: BorderRadius.circular(4),
+                                          ),
+                                          child: Text(
+                                            '${(ghostOpacity * 100).toInt()}',
+                                            style: const TextStyle(fontSize: 7, color: Colors.white, fontWeight: FontWeight.bold),
+                                          ),
+                                        ),
+                                      ),
+                                  ],
+                                ),
+                                tooltip: '底图透视参考 (0%/20%/45%)',
+                                onPressed: () {
+                                  _game?.toggleGhostOpacity();
+                                  setState(() {});
+                                },
+                              ),
+                              IconButton(
+                                visualDensity: VisualDensity.compact,
+                                padding: const EdgeInsets.symmetric(horizontal: 2),
+                                constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                                icon: Icon(
+                                  Icons.border_outer,
+                                  size: 19,
+                                  color: isBorderActive ? const Color(0xFF2E7D32) : Colors.black54,
+                                ),
+                                tooltip: '边缘碎片筛选',
+                                onPressed: () {
+                                  _game?.toggleBorderFilter();
+                                  setState(() {});
+                                },
+                              ),
+                              IconButton(
+                                visualDensity: VisualDensity.compact,
+                                padding: const EdgeInsets.symmetric(horizontal: 2),
+                                constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                                icon: const Icon(Icons.cleaning_services_outlined, size: 19, color: Colors.black54),
+                                tooltip: '一键整理托盘',
+                                onPressed: () => _game?.organizeTray(),
+                              ),
+                              IconButton(
+                                visualDensity: VisualDensity.compact,
+                                padding: const EdgeInsets.symmetric(horizontal: 2),
+                                constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                                icon: const Icon(Icons.lightbulb_outline, size: 19, color: Colors.amber),
+                                tooltip: '智能提示',
+                                onPressed: () => _game?.hint(),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+
+                  // Tier 3: Thin Linear Progress Indicator
+                  Padding(
+                    padding: const EdgeInsets.only(top: 4),
+                    child: LinearProgressIndicator(
                       value: total > 0 ? _solvedPieces / total : 0.0,
-                      minHeight: 2.5,
-                      backgroundColor: const Color(0xFFE0E0E0),
+                      minHeight: 2.0,
+                      backgroundColor: Colors.black12,
                       valueColor: const AlwaysStoppedAnimation<Color>(Color(0xFF2E7D32)),
                     ),
-                  ],
-                ),
+                  ),
+                ],
               ),
             ),
 
             // 5. Floating Zoom Level Badge and Reset Button when zoomed
             if (_game != null && _game!.zoom > 1.02)
               Positioned(
-                top: 60,
+                top: 104,
                 right: 12,
                 child: Material(
                   color: Colors.black.withValues(alpha: 0.68),

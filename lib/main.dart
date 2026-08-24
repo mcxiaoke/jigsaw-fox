@@ -1,3 +1,5 @@
+import 'dart:ui';
+
 import 'package:flutter/material.dart';
 
 import 'data/game_repository.dart';
@@ -9,6 +11,19 @@ void main() async {
   runApp(const JigsawPuzzleApp());
 }
 
+/// Custom scroll behavior enabling smooth mouse dragging and trackpad gestures across all platforms.
+class AppScrollBehavior extends MaterialScrollBehavior {
+  const AppScrollBehavior();
+
+  @override
+  Set<PointerDeviceKind> get dragDevices => {
+        PointerDeviceKind.touch,
+        PointerDeviceKind.mouse,
+        PointerDeviceKind.trackpad,
+        PointerDeviceKind.stylus,
+      };
+}
+
 class JigsawPuzzleApp extends StatelessWidget {
   const JigsawPuzzleApp({super.key});
 
@@ -17,6 +32,7 @@ class JigsawPuzzleApp extends StatelessWidget {
     return MaterialApp(
       title: '异形拼图 Jigsaw Puzzle',
       debugShowCheckedModeBanner: false,
+      scrollBehavior: const AppScrollBehavior(),
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(
           seedColor: const Color(0xFF2E7D32),

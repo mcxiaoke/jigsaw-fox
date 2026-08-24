@@ -282,10 +282,25 @@ $$\text{trayScale} = \frac{S_{\text{trayBase}}}{\max(w, h)}$$
 游戏界面采用基于 Flutter `Stack` 的五层复合渲染管线：
 
 1. **底图层 (`Layer 0: Wallpaper`)**：`Positioned.fill` 渲染 `Image.asset(selectedBackground, fit: BoxFit.cover)`，自适应窗口与屏幕比例满屏裁剪覆盖。
-2. **游戏引擎层 (`Layer 1: Flame GameWidget`)**：`backgroundColor()` 保持 `Color(0x00000000)` 完全透明；棋盘区域绘制半透明暗色底槽。
+2. **游戏引擎层 (`Layer 1: Flame GameWidget`)**：`backgroundColor()` 保持 `Color(0x00000000)` 完全透明；棋盘区域绘制半透明暗色底槽与底图透视水印（`BoardGhostComponent`）。
 3. **托盘遮罩层 (`Layer 2: Tray Mask`)**：`TrayBackgroundComponent` 绘制 `Color(0x66000000)` 半透明纯色底板与 `Color(0x33FFFFFF)` 边框，消除壁纸纹理干扰。
 4. **原图全景覆盖层 (`Layer 3: Original Image Overlay`)**：点击 AppBar 眼睛图标（`Icons.visibility`）时激活，居中呈现高清原图，点击背景或原图即可切回拼图。
-5. **导航与工具栏层 (`Layer 4: AppBar Toolbar`)**：半透明白底悬浮顶栏，提供原图切换（右二）与背景更换（最右）按钮。
+5. **两层式导航与悬浮工具栏层 (`Layer 4: Two-Tier Navigation & Sub-Bar`)**：上层为标准 AppBar（标题与壁纸/原图/暂停 3 图标），下层为悬浮圆角 Sub-Bar（实时用时、已拼胶囊及撤销/重做/透视/筛选/理盘/提示 6 大核心操作组，底接细线性进度条），彻底避免窄屏 RenderFlex 挤压溢出。
+
+---
+
+### 3.12 自适应响应式网格与跨平台拖拽滚动管线 (Adaptive Grid & Multi-Modal Scroll)
+
+为兼顾手机竖屏、平板大屏、折叠屏及桌面端自由拉伸窗口：
+
+1. **统一自适应网格委托 (`SliverGridDelegateWithMaxCrossAxisExtent`)**：
+   - 关卡画廊（Home）、每日挑战（Daily）与我的自制（MyPuzzles）三大 Tab 统一采用 `maxCrossAxisExtent: 220, childAspectRatio: 1.0, crossAxisSpacing: 14, mainAxisSpacing: 14`；
+   - 窄屏（$< 450\text{px}$）自动计算为标准 2 列，宽屏（$600 \sim 1400\text{px}$）自适应扩展为 3~6 列，保证卡片无拉伸变形且视觉排布自然。
+2. **跨平台多模态手势滚动 (`AppScrollBehavior`)**：
+   - 在应用根级注入 `AppScrollBehavior extends MaterialScrollBehavior`，将 `dragDevices` 扩展为包含 `{touch, mouse, trackpad, stylus}`；
+   - 保证横向分类筛选胶囊、托盘切片选择器在桌面端鼠标左键拖拽、触控板双指滑动与移动端触摸下均可顺畅水平滚动。
+3. **未解锁关卡与 UGC 自制拼图弹窗契约**：
+   - `ChooseDifficultySheet` 支持 `isUnlocked: bool`（未解锁时显示警示横幅且禁用开始按钮）与 `onDelete: Future<void> Function()?`（自制关卡在面板顶部注入删除确认入口）。
 
 ---
 

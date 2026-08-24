@@ -246,12 +246,12 @@ class _DailyTabViewState extends State<DailyTabView> {
 
           const SliverToBoxAdapter(child: SizedBox(height: 10)),
 
-          // 3. 30-Day Grid Stream
+          // 3. 30-Day Responsive Adaptive Grid Stream
           SliverPadding(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
             sliver: SliverGrid(
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 2,
+              gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+                maxCrossAxisExtent: 220,
                 crossAxisSpacing: 14,
                 mainAxisSpacing: 14,
                 childAspectRatio: 1.0,

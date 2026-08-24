@@ -10,7 +10,7 @@ import '../../widgets/choose_difficulty_sheet.dart';
 import '../crop_puzzle_page.dart';
 import '../game_page.dart';
 
-/// "My Puzzles" (我的自制关卡) tab view supporting UGC creation, management, and play.
+/// "My Puzzles" (我的自制关卡) tab view supporting UGC creation, adaptive responsive grid, and play.
 class MyPuzzlesTabView extends StatefulWidget {
   const MyPuzzlesTabView({super.key});
 
@@ -44,7 +44,7 @@ class _MyPuzzlesTabViewState extends State<MyPuzzlesTabView> {
     }
   }
 
-  Future<void> _playCustom(CustomPuzzleItem item) async {
+  Future<void> _openCustom(CustomPuzzleItem item) async {
     Uint8List bytes;
     if (item.isLocalFile && !item.imagePathOrUrl.startsWith('assets/')) {
       final file = File(item.imagePathOrUrl);
@@ -69,6 +69,15 @@ class _MyPuzzlesTabViewState extends State<MyPuzzlesTabView> {
       initialDifficulty: item.difficulty,
       completedPieceCounts: item.completedPieceCounts.toSet(),
       title: '${item.title} · 难度选择',
+      onDelete: () async {
+        await _repo.deleteCustomPuzzle(item.id);
+        if (mounted) {
+          setState(() {});
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('已删除「${item.title}」')),
+          );
+        }
+      },
       onStart: (diff) async {
         await Navigator.of(context).push(
           MaterialPageRoute<void>(
@@ -85,252 +94,293 @@ class _MyPuzzlesTabViewState extends State<MyPuzzlesTabView> {
     );
   }
 
-  Future<void> _confirmDelete(CustomPuzzleItem item) async {
-    final confirm = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Row(
-          children: [
-            Icon(Icons.delete_outline, color: Colors.redAccent),
-            SizedBox(width: 8),
-            Text('删除自制关卡'),
-          ],
-        ),
-        content: Text('确定要删除「${item.title}」及其本地拼图资源吗？'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('取消'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            style: FilledButton.styleFrom(backgroundColor: Colors.red),
-            child: const Text('确定删除'),
-          ),
-        ],
-      ),
-    );
-
-    if (confirm == true) {
-      await _repo.deleteCustomPuzzle(item.id);
-      if (mounted) setState(() {});
-    }
-  }
-
-  String _formatDuration(int seconds) {
-    final m = seconds ~/ 60;
-    final s = seconds % 60;
-    return '${m.toString().padLeft(2, '0')}:${s.toString().padLeft(2, '0')}';
-  }
-
   @override
   Widget build(BuildContext context) {
     final customList = _repo.customPuzzles;
 
     return RefreshIndicator(
       onRefresh: () async => setState(() {}),
-      child: ListView(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-        children: [
-          // 1. New Creation Action Card
-          InkWell(
-            onTap: _loading ? null : _createFromGallery,
-            borderRadius: BorderRadius.circular(20),
-            child: Container(
-              height: 92,
-              decoration: BoxDecoration(
-                gradient: const LinearGradient(
-                  colors: [Color(0xFFE8F5E9), Color(0xFFC8E6C9)],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
+      child: CustomScrollView(
+        slivers: [
+          // 1. Top UGC Creation Action Card
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+              child: InkWell(
+                onTap: _loading ? null : _createFromGallery,
                 borderRadius: BorderRadius.circular(20),
-                border: Border.all(color: const Color(0xFF81C784), width: 1.5),
-                boxShadow: const [
-                  BoxShadow(color: Colors.black12, blurRadius: 6, offset: Offset(0, 2)),
-                ],
-              ),
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              child: Row(
-                children: [
-                  CircleAvatar(
-                    backgroundColor: const Color(0xFF2E7D32),
-                    radius: 24,
-                    child: _loading
-                        ? const SizedBox(
-                            width: 22,
-                            height: 22,
-                            child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
-                          )
-                        : const Icon(Icons.add_photo_alternate, color: Colors.white, size: 26),
-                  ),
-                  const SizedBox(width: 16),
-                  const Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Text(
-                          '自制新拼图',
-                          style: TextStyle(
-                            fontSize: 17,
-                            fontWeight: FontWeight.bold,
-                            color: Color(0xFF1B5E20),
-                          ),
-                        ),
-                        SizedBox(height: 3),
-                        Text(
-                          '导入本地相册相片，支持自由缩放裁剪与规格选择',
-                          style: TextStyle(fontSize: 12, color: Colors.black54),
-                        ),
-                      ],
+                child: Container(
+                  height: 92,
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(
+                      colors: [Color(0xFFE8F5E9), Color(0xFFC8E6C9)],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
                     ),
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: const Color(0xFF81C784), width: 1.5),
+                    boxShadow: const [
+                      BoxShadow(color: Colors.black12, blurRadius: 6, offset: Offset(0, 2)),
+                    ],
                   ),
-                  const Icon(Icons.chevron_right, color: Color(0xFF2E7D32)),
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  child: Row(
+                    children: [
+                      CircleAvatar(
+                        backgroundColor: const Color(0xFF2E7D32),
+                        radius: 24,
+                        child: _loading
+                            ? const SizedBox(
+                                width: 22,
+                                height: 22,
+                                child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                              )
+                            : const Icon(Icons.add_photo_alternate, color: Colors.white, size: 26),
+                      ),
+                      const SizedBox(width: 16),
+                      const Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Text(
+                              '自制新拼图',
+                              style: TextStyle(
+                                fontSize: 17,
+                                fontWeight: FontWeight.bold,
+                                color: Color(0xFF1B5E20),
+                              ),
+                            ),
+                            SizedBox(height: 3),
+                            Text(
+                              '导入本地相册照片，支持自由缩放裁剪与多规格选择',
+                              style: TextStyle(fontSize: 12, color: Colors.black54),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const Icon(Icons.chevron_right, color: Color(0xFF2E7D32)),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+
+          // 2. Section Header
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 6, 16, 10),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text(
+                    '我的自制合辑',
+                    style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
+                  ),
+                  Text(
+                    '共 ${customList.length} 个关卡',
+                    style: const TextStyle(fontSize: 13, color: Colors.black54),
+                  ),
                 ],
               ),
             ),
           ),
 
-          const SizedBox(height: 22),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              const Text(
-                '我的拼图合辑',
-                style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
-              ),
-              Text(
-                '共 ${customList.length} 个关卡',
-                style: const TextStyle(fontSize: 13, color: Colors.black54),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-
+          // 3. Responsive Grid or Empty state
           if (customList.isEmpty)
-            Container(
-              padding: const EdgeInsets.symmetric(vertical: 40),
-              alignment: Alignment.center,
-              child: const Column(
-                children: [
-                  Icon(Icons.photo_library_outlined, size: 48, color: Colors.grey),
-                  SizedBox(height: 8),
-                  Text('还没有自制拼图，点击上方按钮开始创建吧！', style: TextStyle(color: Colors.grey)),
-                ],
+            const SliverToBoxAdapter(
+              child: Padding(
+                padding: EdgeInsets.symmetric(vertical: 48),
+                child: Center(
+                  child: Column(
+                    children: [
+                      Icon(Icons.photo_library_outlined, size: 48, color: Colors.grey),
+                      SizedBox(height: 10),
+                      Text('还没有自制拼图，点击上方卡片导入相册创建吧！', style: TextStyle(color: Colors.grey)),
+                    ],
+                  ),
+                ),
               ),
             )
           else
-            for (final item in customList) ...[
-              _buildCustomCard(item),
-              const SizedBox(height: 12),
-            ],
+            SliverPadding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+              sliver: SliverGrid(
+                gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+                  maxCrossAxisExtent: 220,
+                  crossAxisSpacing: 14,
+                  mainAxisSpacing: 14,
+                  childAspectRatio: 1.0,
+                ),
+                delegate: SliverChildBuilderDelegate(
+                  (context, index) {
+                    final item = customList[index];
+                    return _buildCustomGridCard(item);
+                  },
+                  childCount: customList.length,
+                ),
+              ),
+            ),
 
-          const SizedBox(height: 24),
+          const SliverToBoxAdapter(child: SizedBox(height: 28)),
         ],
       ),
     );
   }
 
-  Widget _buildCustomCard(CustomPuzzleItem item) {
-    return Card(
-      elevation: 2,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: () => _playCustom(item),
-        child: Padding(
-          padding: const EdgeInsets.all(12),
-          child: Row(
-            children: [
-              ClipRRect(
-                borderRadius: BorderRadius.circular(14),
-                child: SizedBox(
-                  width: 84,
-                  height: 84,
-                  child: _buildThumbnail(item),
+  Widget _buildCustomGridCard(CustomPuzzleItem item) {
+    return InkWell(
+      onTap: () => _openCustom(item),
+      borderRadius: BorderRadius.circular(18),
+      child: Container(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(18),
+          boxShadow: const [
+            BoxShadow(
+              color: Colors.black12,
+              blurRadius: 6,
+              offset: Offset(0, 2),
+            ),
+          ],
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            // Thumbnail Image
+            _buildThumbnail(item),
+
+            // Top and Bottom gradients
+            Container(
+              decoration: const BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [Colors.black45, Colors.transparent, Colors.black54],
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
                 ),
               ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+            ),
+
+            // Top-left Title
+            Positioned(
+              left: 10,
+              top: 10,
+              right: 50,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: Colors.black.withValues(alpha: 0.55),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Text(
+                  item.title,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ),
+
+            // Top-right piece count badge or progress
+            Positioned(
+              top: 10,
+              right: 10,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.92),
+                  borderRadius: BorderRadius.circular(12),
+                  boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 4)],
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
                   children: [
-                    Text(
-                      item.title,
-                      style: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      '规格：${item.difficulty.pieceCount} 块 (${item.difficulty.rows}×${item.difficulty.cols})',
-                      style: const TextStyle(fontSize: 12.5, color: Colors.black54),
-                    ),
-                    const SizedBox(height: 6),
-                    if (item.isCompleted)
-                      Row(
-                        children: [
-                          const Icon(Icons.check_circle, color: Color(0xFF2E7D32), size: 15),
-                          const SizedBox(width: 4),
-                          Text(
-                            item.bestTimeSeconds > 0
-                                ? '已完成 · 最快 ${_formatDuration(item.bestTimeSeconds)}'
-                                : '已完成',
-                            style: const TextStyle(
-                              fontSize: 12,
-                              color: Color(0xFF2E7D32),
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ],
-                      )
-                    else if (item.progressPercent > 0)
+                    if (item.progressPercent > 0 && !item.isCompleted) ...[
                       Text(
-                        '当前进度：${item.progressPercent}%',
+                        '${item.progressPercent}%',
                         style: const TextStyle(
-                          fontSize: 12,
-                          color: Color(0xFF0288D1),
-                          fontWeight: FontWeight.w600,
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                          color: Color(0xFF2E7D32),
                         ),
-                      )
-                    else
-                      const Text(
-                        '未开始',
-                        style: TextStyle(fontSize: 12, color: Colors.grey),
                       ),
+                    ] else ...[
+                      const Icon(Icons.extension, size: 12, color: Colors.black54),
+                      const SizedBox(width: 3),
+                      Text(
+                        '${item.difficulty.pieceCount}',
+                        style: const TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.black87,
+                        ),
+                      ),
+                    ],
                   ],
                 ),
               ),
+            ),
 
-              // Action Buttons: Play + Delete
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  FilledButton(
-                    onPressed: () => _playCustom(item),
-                    style: FilledButton.styleFrom(
-                      backgroundColor: const Color(0xFF2E7D32),
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(16),
+            // Center Play or Checkmark
+            if (item.isCompleted)
+              const Center(
+                child: CircleAvatar(
+                  backgroundColor: Color(0xCC2E7D32),
+                  radius: 20,
+                  child: Icon(Icons.check, color: Colors.white, size: 24),
+                ),
+              )
+            else if (item.progressPercent == 0)
+              Center(
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF2E7D32),
+                    borderRadius: BorderRadius.circular(20),
+                    boxShadow: const [
+                      BoxShadow(color: Colors.black38, blurRadius: 6),
+                    ],
+                  ),
+                  child: const Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.play_arrow, color: Colors.white, size: 16),
+                      SizedBox(width: 2),
+                      Text(
+                        '开始',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 13,
+                        ),
                       ),
-                    ),
-                    child: Text(item.progressPercent > 0 ? '继续' : '开始'),
+                    ],
                   ),
-                  IconButton(
-                    icon: const Icon(Icons.delete_outline, color: Colors.grey, size: 20),
-                    tooltip: '删除关卡',
-                    onPressed: () => _confirmDelete(item),
-                  ),
-                ],
+                ),
               ),
-            ],
-          ),
+
+            // Bottom Progress Bar if in progress
+            if (item.progressPercent > 0 && !item.isCompleted)
+              Positioned(
+                left: 10,
+                right: 10,
+                bottom: 10,
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(4),
+                  child: LinearProgressIndicator(
+                    value: item.progressPercent / 100.0,
+                    minHeight: 4,
+                    backgroundColor: Colors.white38,
+                    valueColor: const AlwaysStoppedAnimation<Color>(Color(0xFF81C784)),
+                  ),
+                ),
+              ),
+          ],
         ),
       ),
     );

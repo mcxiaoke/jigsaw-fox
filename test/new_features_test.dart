@@ -1,3 +1,5 @@
+import 'dart:convert';
+import 'dart:typed_data';
 import 'dart:ui' as ui;
 
 import 'package:flame/components.dart';
@@ -5,12 +7,19 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:jigsawpuzzle/data/game_repository.dart';
 import 'package:jigsawpuzzle/game/jigsaw_puzzle_game.dart';
+import 'package:jigsawpuzzle/logic/puzzle_model.dart';
 import 'package:jigsawpuzzle/pages/tabs/daily_tab_view.dart';
 import 'package:jigsawpuzzle/pages/tabs/home_tab_view.dart';
+import 'package:jigsawpuzzle/pages/tabs/my_puzzles_tab_view.dart';
 import 'package:jigsawpuzzle/widgets/achievements_dialog.dart';
+import 'package:jigsawpuzzle/widgets/choose_difficulty_sheet.dart';
 import 'package:jigsawpuzzle/widgets/how_to_play_dialog.dart';
 import 'package:jigsawpuzzle/widgets/settings_dialog.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+
+final Uint8List kTestTransparentImage = base64Decode(
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
+);
 
 Future<ui.Image> createTestImage(int width, int height) async {
   final recorder = ui.PictureRecorder();
@@ -175,6 +184,102 @@ void main() {
 
       expect(find.text('TODAY'), findsOneWidget);
       expect(find.textContaining('连胜'), findsOneWidget);
+    });
+
+    testWidgets('ChooseDifficultySheet renders locked state and disables start button', (tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: Builder(
+              builder: (context) => ElevatedButton(
+                onPressed: () {
+                  ChooseDifficultySheet.show(
+                    context: context,
+                    imageBytes: kTestTransparentImage,
+                    initialDifficulty: const PuzzleDifficulty(label: '3 × 3 (9 块)', rows: 3, cols: 3),
+                    title: '第 5 关 · 关卡预览(未解锁)',
+                    isUnlocked: false,
+                    lockedMessage: '请先通关第 4 关解锁此关卡',
+                    onStart: (_) {},
+                  );
+                },
+                child: const Text('Open Locked Sheet'),
+              ),
+            ),
+          ),
+        ),
+      );
+
+      await tester.tap(find.text('Open Locked Sheet'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('第 5 关 · 关卡预览(未解锁)'), findsOneWidget);
+      expect(find.text('请先通关第 4 关解锁此关卡'), findsOneWidget);
+      expect(find.text('关卡未解锁 (请先通关前序关卡)'), findsOneWidget);
+
+      // Button should be disabled
+      final button = tester.widget<FilledButton>(find.byType(FilledButton));
+      expect(button.onPressed, isNull);
+    });
+
+    testWidgets('ChooseDifficultySheet supports custom puzzle deletion', (tester) async {
+      var deleteCalled = false;
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: Builder(
+              builder: (context) => ElevatedButton(
+                onPressed: () {
+                  ChooseDifficultySheet.show(
+                    context: context,
+                    imageBytes: kTestTransparentImage,
+                    initialDifficulty: const PuzzleDifficulty(label: '3 × 3 (9 块)', rows: 3, cols: 3),
+                    title: '我的爱犬照片',
+                    onDelete: () async {
+                      deleteCalled = true;
+                    },
+                    onStart: (_) {},
+                  );
+                },
+                child: const Text('Open UGC Sheet'),
+              ),
+            ),
+          ),
+        ),
+      );
+
+      await tester.tap(find.text('Open UGC Sheet'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('我的爱犬照片'), findsOneWidget);
+      expect(find.byIcon(Icons.delete_outline), findsOneWidget);
+
+      // Tap delete icon
+      await tester.tap(find.byIcon(Icons.delete_outline));
+      await tester.pumpAndSettle();
+
+      expect(find.text('删除自制拼图'), findsOneWidget);
+      expect(find.text('确定删除'), findsOneWidget);
+
+      // Confirm delete
+      await tester.tap(find.text('确定删除'));
+      await tester.pumpAndSettle();
+
+      expect(deleteCalled, isTrue);
+    });
+
+    testWidgets('MyPuzzlesTabView renders UGC header and empty state', (tester) async {
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: Scaffold(
+            body: MyPuzzlesTabView(),
+          ),
+        ),
+      );
+
+      expect(find.text('自制新拼图'), findsOneWidget);
+      expect(find.text('我的自制合辑'), findsOneWidget);
     });
   });
 }

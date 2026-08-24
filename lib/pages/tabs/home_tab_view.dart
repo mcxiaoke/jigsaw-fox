@@ -18,7 +18,7 @@ enum LevelFilter {
   final String label;
 }
 
-/// Home tab view showcasing the 100-level main gallery with category filters and rich level cards.
+/// Home tab view showcasing the 100-level main gallery with responsive adaptive grid and previewable locked levels.
 class HomeTabView extends StatefulWidget {
   const HomeTabView({super.key, required this.onSwitchToDaily});
 
@@ -50,13 +50,6 @@ class _HomeTabViewState extends State<HomeTabView> {
   }
 
   Future<void> _openLevel(LevelItem level) async {
-    if (!level.isUnlocked) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('请先通关第 ${level.index - 1} 关解锁此关卡！')),
-      );
-      return;
-    }
-
     final bytes = await rootBundle.load(level.assetPath);
     final imgBytes = bytes.buffer.asUint8List();
 
@@ -67,7 +60,9 @@ class _HomeTabViewState extends State<HomeTabView> {
       imageBytes: imgBytes,
       initialDifficulty: level.difficulty,
       completedPieceCounts: level.completedPieceCounts.toSet(),
-      title: '第 ${level.index} 关 · 难度选择',
+      isUnlocked: level.isUnlocked,
+      lockedMessage: '请先通关第 ${level.index - 1} 关解锁此关卡',
+      title: '第 ${level.index} 关 · ${level.isUnlocked ? "难度选择" : "关卡预览(未解锁)"}',
       onStart: (diff) async {
         await Navigator.of(context).push(
           MaterialPageRoute<void>(
@@ -191,10 +186,11 @@ class _HomeTabViewState extends State<HomeTabView> {
             ),
           ),
 
-          // 2. Category Filter Pills
+          // 2. Smoothly Scrollable Category Filter Pills
           SliverToBoxAdapter(
             child: SingleChildScrollView(
               scrollDirection: Axis.horizontal,
+              physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
               child: Row(
                 children: [
@@ -222,7 +218,7 @@ class _HomeTabViewState extends State<HomeTabView> {
 
           const SliverToBoxAdapter(child: SizedBox(height: 8)),
 
-          // 3. 100-Level 2-Column Grid
+          // 3. 100-Level Responsive Adaptive Grid (2 columns on narrow, 3-6 on wide)
           if (filteredLevels.isEmpty)
             const SliverToBoxAdapter(
               child: Padding(
@@ -236,8 +232,8 @@ class _HomeTabViewState extends State<HomeTabView> {
             SliverPadding(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
               sliver: SliverGrid(
-                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: 2,
+                gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+                  maxCrossAxisExtent: 220,
                   crossAxisSpacing: 14,
                   mainAxisSpacing: 14,
                   childAspectRatio: 1.0,
