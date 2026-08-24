@@ -86,21 +86,36 @@ class JigsawPuzzleGame extends FlameGame with ScrollDetector, PanDetector {
 
   static const int _basePriority = 10;
   static const double targetTrayPieceBaseSize = 64.0; // Standard touch-friendly base size
+  static const double _topToolbarHeight = 52.0;
+  static const double _sideMargin = 8.0;
+  static const double _bottomTrayMargin = 8.0;
 
   late Vector2 boardTopLeft;
   late Vector2 boardSize;
   late Vector2 pieceSize;
 
-  late Vector2 trayPosition;
-  late Vector2 traySize;
+  double _zoom = 1.0;
+  double get zoom => _zoom;
+  double _maxZoom = 3.0;
+  double get maxZoom => _maxZoom;
+  final Vector2 _panOffset = Vector2.zero();
+  Vector2 get panOffset => _panOffset;
+
+  late RectangleComponent _boardBgRect;
+  late RectangleComponent _boardOutlineRect;
+
+  Vector2 trayPosition = Vector2.zero();
+  Vector2 traySize = Vector2.zero();
   double _trayScrollX = 0.0;
   double _trayPieceScale = 1.0;
+  double get trayPieceScale => _trayPieceScale;
   double _trayPieceWidth = 64.0;
   double _trayPieceHeight = 64.0;
   double _traySpacing = 16.0;
 
   int _topPriority = _basePriority;
   bool _isSolved = false;
+  bool get isSolved => _isSolved;
   bool _borderFilterActive = false;
 
   late EdgeLayout edgeLayout;
@@ -123,26 +138,24 @@ class JigsawPuzzleGame extends FlameGame with ScrollDetector, PanDetector {
     _computeLayout();
 
     // 1. Draw Board Background Frame
-    add(
-      RectangleComponent(
-        position: boardTopLeft.clone(),
-        size: boardSize.clone(),
-        paint: Paint()..color = const Color(0x1A000000),
-        priority: 0,
-      ),
+    _boardBgRect = RectangleComponent(
+      position: boardTopLeft.clone(),
+      size: boardSize.clone(),
+      paint: Paint()..color = const Color(0x1A000000),
+      priority: 0,
     );
+    add(_boardBgRect);
 
-    add(
-      RectangleComponent(
-        position: boardTopLeft.clone(),
-        size: boardSize.clone(),
-        paint: Paint()
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = 2.0
-          ..color = const Color(0x66FFFFFF),
-        priority: 1,
-      ),
+    _boardOutlineRect = RectangleComponent(
+      position: boardTopLeft.clone(),
+      size: boardSize.clone(),
+      paint: Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 2.0
+        ..color = const Color(0x66FFFFFF),
+      priority: 1,
     );
+    add(_boardOutlineRect);
 
     // 2. Draw Scrollable Bottom Tray Component
     add(
@@ -239,32 +252,37 @@ class JigsawPuzzleGame extends FlameGame with ScrollDetector, PanDetector {
   void _computeLayout() {
     // 1. Bottom Tray Height (comfortably houses ~64px touch piece)
     final targetTrayH = min(size.y * 0.28, max(size.y * 0.20, 100.0));
-    traySize = Vector2(size.x - 24.0, targetTrayH);
-    trayPosition = Vector2(12.0, size.y - targetTrayH - 12.0);
+    traySize = Vector2(size.x - _sideMargin * 2, targetTrayH);
+    trayPosition =
+        Vector2(_sideMargin, size.y - targetTrayH - _bottomTrayMargin);
 
-    // 2. Smart Board Layout in remaining upper workspace
-    final boardAreaW = size.x - 32.0;
-    final boardAreaH = trayPosition.y - 20.0;
+    // 2. Smart Board Layout in remaining upper workspace (maximize available area, minimize side margins)
+    final availableBoardW = max(100.0, size.x - _sideMargin * 2);
+    final availableBoardH =
+        max(100.0, trayPosition.y - _topToolbarHeight - 8.0);
     final imageAspect = image.width / image.height;
-    final areaAspect = boardAreaW / boardAreaH;
+    final areaAspect = availableBoardW / availableBoardH;
 
     double bW, bH;
     if (imageAspect >= areaAspect) {
-      // Image is wider than available space: width is constrained
-      bW = boardAreaW * 0.92;
+      // Image is wider than available space: width is 100% of available width
+      bW = availableBoardW;
       bH = bW / imageAspect;
     } else {
-      // Image is taller / squarish: height is constrained
-      bH = boardAreaH * 0.92;
+      // Image is taller / squarish: height is 100% of available height
+      bH = availableBoardH;
       bW = bH * imageAspect;
     }
 
     boardSize = Vector2(bW, bH);
     boardTopLeft = Vector2(
-      (size.x - bW) / 2,
-      max(8.0, (boardAreaH - bH) / 2 + 8.0),
+      _sideMargin + (availableBoardW - bW) / 2,
+      _topToolbarHeight + (availableBoardH - bH) / 2,
     );
     pieceSize = Vector2(bW / cols, bH / rows);
+
+    // Max zoom allows up to 1:1 original image resolution
+    _maxZoom = max(3.0, (image.width / bW).toDouble());
 
     // 3. Normalized Tray Scaling (Target max side = 64px, preserving piece aspect ratio)
     final maxPieceSide = max(pieceSize.x, pieceSize.y);
@@ -337,12 +355,91 @@ class JigsawPuzzleGame extends FlameGame with ScrollDetector, PanDetector {
   }
 
   Vector2 _normalizedToScreen(double nx, double ny) {
-    return boardTopLeft + Vector2(nx * boardSize.x, ny * boardSize.y);
+    final effectiveTopLeft = boardTopLeft + _panOffset;
+    final effectiveBoardSize = boardSize * _zoom;
+    return effectiveTopLeft +
+        Vector2(nx * effectiveBoardSize.x, ny * effectiveBoardSize.y);
   }
 
   void _screenToNormalized(Vector2 screenPos, List<double> out) {
-    out[0] = (screenPos.x - boardTopLeft.x) / boardSize.x;
-    out[1] = (screenPos.y - boardTopLeft.y) / boardSize.y;
+    final effectiveTopLeft = boardTopLeft + _panOffset;
+    final effectiveBoardSize = boardSize * _zoom;
+    out[0] = (screenPos.x - effectiveTopLeft.x) / effectiveBoardSize.x;
+    out[1] = (screenPos.y - effectiveTopLeft.y) / effectiveBoardSize.y;
+  }
+
+  /// Clamps panOffset so that the board cannot be panned too far out of view.
+  void _clampPanOffset() {
+    if (_zoom <= 1.0) {
+      _panOffset.setZero();
+      return;
+    }
+    final maxExcessW = (boardSize.x * (_zoom - 1.0)) / 2 + 80.0;
+    final maxExcessH = (boardSize.y * (_zoom - 1.0)) / 2 + 80.0;
+    _panOffset.x = _panOffset.x.clamp(-maxExcessW, maxExcessW);
+    _panOffset.y = _panOffset.y.clamp(-maxExcessH, maxExcessH);
+  }
+
+  /// Zooms in or out centered at the specified screen [focalPoint].
+  void zoomAt(Vector2 focalPoint, double deltaScale) {
+    final oldZoom = _zoom;
+    final newZoom = (oldZoom + deltaScale).clamp(1.0, _maxZoom);
+    if ((newZoom - oldZoom).abs() < 0.0001) return;
+
+    final scaleRatio = newZoom / oldZoom;
+    final curTopLeft = boardTopLeft + _panOffset;
+    final newTopLeft = focalPoint - (focalPoint - curTopLeft) * scaleRatio;
+
+    _zoom = newZoom;
+    _panOffset.setFrom(newTopLeft - boardTopLeft);
+    _clampPanOffset();
+
+    _updateBoardTransform();
+  }
+
+  /// Sets zoom and pan directly (e.g. from pinch-to-zoom).
+  void setZoomAndPan(double newZoom, Vector2 newPan) {
+    _zoom = newZoom.clamp(1.0, _maxZoom);
+    _panOffset.setFrom(newPan);
+    _clampPanOffset();
+    _updateBoardTransform();
+  }
+
+  /// Pans the board by [delta].
+  void panBy(Vector2 delta) {
+    if (_zoom <= 1.0) return;
+    _panOffset.add(delta);
+    _clampPanOffset();
+    _updateBoardTransform();
+  }
+
+  /// Resets zoom to 1.0 and centers the board.
+  void resetZoom() {
+    _zoom = 1.0;
+    _panOffset.setZero();
+    _updateBoardTransform();
+  }
+
+  /// Updates board background rects and pieces on board after zoom / pan.
+  void _updateBoardTransform() {
+    final effectiveTopLeft = boardTopLeft + _panOffset;
+    final effectiveBoardSize = boardSize * _zoom;
+
+    _boardBgRect.position.setFrom(effectiveTopLeft);
+    _boardBgRect.size.setFrom(effectiveBoardSize);
+
+    _boardOutlineRect.position.setFrom(effectiveTopLeft);
+    _boardOutlineRect.size.setFrom(effectiveBoardSize);
+
+    // Update positions and scale of all pieces currently on the board
+    for (final pState in _boardState.pieces) {
+      final comp = _pieces[pState.id];
+      if (comp == null || comp.isInTray || comp.isDragging) continue;
+
+      final targetPos = _normalizedToScreen(pState.nx, pState.ny);
+      comp.position.setFrom(targetPos);
+      comp.scale.setAll(_zoom);
+    }
   }
 
   /// Called when user begins dragging a piece.
@@ -354,7 +451,6 @@ class JigsawPuzzleGame extends FlameGame with ScrollDetector, PanDetector {
         p.priority = _topPriority;
         if (p.isInTray) {
           p.isInTray = false;
-          p.animateScaleTo(Vector2.all(1.0), duration: 0.15);
         }
       }
     }
@@ -374,11 +470,13 @@ class JigsawPuzzleGame extends FlameGame with ScrollDetector, PanDetector {
   /// Called when user releases drag. Executes snap resolution & cluster merge.
   void handlePieceDragEnd(PuzzlePieceComponent piece) {
     final inTrayArea = piece.position.y >= trayPosition.y - pieceSize.y * 0.25;
-    final clusterPieces = _pieces.values.where((p) => p.clusterId == piece.clusterId).toList();
+    final clusterPieces =
+        _pieces.values.where((p) => p.clusterId == piece.clusterId).toList();
 
     final out = [0.0, 0.0];
     final updatedPieces = _boardState.pieces.map((p) {
-      final comp = _pieces[p.id]!;
+      final comp = _pieces[p.id];
+      if (comp == null) return p; // 防御：跳过 _pieces 中不存在的碎片
       _screenToNormalized(comp.position, out);
       return p.copyWith(
         nx: out[0],
@@ -403,7 +501,7 @@ class JigsawPuzzleGame extends FlameGame with ScrollDetector, PanDetector {
         final statePiece = _boardState.pieceById(affectedId);
         final comp = _pieces[affectedId]!;
         comp.isInTray = false;
-        comp.scale.setFrom(Vector2.all(1.0));
+        comp.scale.setFrom(Vector2.all(_zoom));
         comp.clusterId = statePiece.clusterId;
         comp.rot = statePiece.rot;
         final targetScreenPos =
@@ -422,8 +520,16 @@ class JigsawPuzzleGame extends FlameGame with ScrollDetector, PanDetector {
         onSolved();
       }
     } else if (inTrayArea && clusterPieces.length == 1) {
+      // Returned back into tray -> dock smoothly
       piece.isInTray = true;
       piece.animateScaleTo(Vector2.all(_trayPieceScale), duration: 0.15);
+      _realignTrayPieces(animate: true);
+    } else {
+      // Kept on board -> ensure _zoom scale
+      for (final p in clusterPieces) {
+        p.isInTray = false;
+        p.animateScaleTo(Vector2.all(_zoom), duration: 0.15);
+      }
       _realignTrayPieces(animate: true);
     }
   }
@@ -483,6 +589,12 @@ class JigsawPuzzleGame extends FlameGame with ScrollDetector, PanDetector {
   }
 
   void _applyBoardState(PuzzleBoardState newState) {
+    // 快照尺寸与当前拼图不一致时忽略，避免 _boardState 与 _pieces 失步导致拖拽崩溃
+    if (newState.rows != rows ||
+        newState.cols != cols ||
+        newState.pieces.length != _pieces.length) {
+      return;
+    }
     _boardState = newState;
     for (final p in newState.pieces) {
       final comp = _pieces[p.id]!;
@@ -490,6 +602,9 @@ class JigsawPuzzleGame extends FlameGame with ScrollDetector, PanDetector {
       comp.rot = p.rot;
       final targetScreenPos = _normalizedToScreen(p.nx, p.ny);
       comp.animateTo(targetScreenPos);
+      if (!comp.isInTray) {
+        comp.scale.setAll(_zoom);
+      }
     }
     onProgressChanged?.call(solvedCount);
   }
@@ -497,9 +612,12 @@ class JigsawPuzzleGame extends FlameGame with ScrollDetector, PanDetector {
   /// Automatically snaps one unsolved piece into place.
   void hint() {
     final hint = PuzzleEngine.hintFor(_boardState);
+    final targetPieceId = hint.pieceId;
+    final targetComp = _pieces[targetPieceId];
+    if (targetComp == null) return;
 
     final updated = _boardState.pieces.map((p) {
-      if (p.id == hint.pieceId) {
+      if (p.id == targetPieceId) {
         return p.copyWith(
           nx: hint.targetNx,
           ny: hint.targetNy,
@@ -516,19 +634,28 @@ class JigsawPuzzleGame extends FlameGame with ScrollDetector, PanDetector {
 
     final result = PuzzleEngine.resolveSnap(
       state: _boardState,
-      draggedPieceId: hint.pieceId,
+      draggedPieceId: targetPieceId,
     );
 
     _boardState = result.state;
     undoManager.record(_boardState);
 
-    for (final p in _boardState.pieces) {
-      final c = _pieces[p.id]!;
+    // ONLY animate the hinted piece and its directly affected cluster members
+    final affectedIds = result.affectedPieceIds.isNotEmpty
+        ? result.affectedPieceIds
+        : [targetPieceId];
+
+    _topPriority += 2;
+    for (final id in affectedIds) {
+      final statePiece = _boardState.pieceById(id);
+      final c = _pieces[id];
+      if (c == null) continue; // 防御：跳过 _pieces 中不存在的碎片
+      c.priority = _topPriority;
       c.isInTray = false;
-      c.scale.setFrom(Vector2.all(1.0));
-      c.clusterId = p.clusterId;
-      c.rot = p.rot;
-      c.animateTo(_normalizedToScreen(p.nx, p.ny), duration: 0.25);
+      c.scale.setFrom(Vector2.all(_zoom));
+      c.clusterId = statePiece.clusterId;
+      c.rot = statePiece.rot;
+      c.animateTo(_normalizedToScreen(statePiece.nx, statePiece.ny), duration: 0.25);
     }
 
     _realignTrayPieces(animate: true);

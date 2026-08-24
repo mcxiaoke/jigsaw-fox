@@ -1,8 +1,9 @@
 import 'dart:async';
-import 'dart:typed_data';
 
 import 'package:flame/game.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../data/game_repository.dart';
 import '../game/jigsaw_puzzle_game.dart';
@@ -42,6 +43,13 @@ class _GamePageState extends State<GamePage> {
   bool _showGhostPreview = false;
   bool _isBorderFiltered = false;
 
+  // Multi-touch tracking for pinch-to-zoom & two-finger pan
+  final Map<int, Offset> _pointerPositions = {};
+  double _baseDistance = 0.0;
+  double _baseZoom = 1.0;
+  Offset _baseFocalPoint = Offset.zero;
+  Vector2 _basePan = Vector2.zero();
+
   @override
   void initState() {
     super.initState();
@@ -59,10 +67,13 @@ class _GamePageState extends State<GamePage> {
 
   Future<void> _loadImage() async {
     final img = await decodeFlameImage(widget.imageBytes);
+    final effectiveDiff = widget.difficulty
+        .adaptiveForSize(img.width.toDouble(), img.height.toDouble());
+
     final game = JigsawPuzzleGame(
       image: img,
-      rows: widget.difficulty.rows,
-      cols: widget.difficulty.cols,
+      rows: effectiveDiff.rows,
+      cols: effectiveDiff.cols,
       initialSnapshotJson: widget.initialSnapshotJson,
       onSolved: _handleSolved,
       onPieceSnapped: () {
@@ -183,25 +194,32 @@ class _GamePageState extends State<GamePage> {
             Text('恭喜通关！', style: TextStyle(fontWeight: FontWeight.bold)),
           ],
         ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            ClipRRect(
-              borderRadius: BorderRadius.circular(12),
-              child: Image.memory(
-                widget.imageBytes,
-                height: 160,
-                width: double.infinity,
-                fit: BoxFit.cover,
+        content: SizedBox(
+          width: 300,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ClipRRect(
+                borderRadius: BorderRadius.circular(12),
+                child: Image.memory(
+                  widget.imageBytes,
+                  height: 160,
+                  width: 300,
+                  fit: BoxFit.cover,
+                ),
               ),
-            ),
-            const SizedBox(height: 16),
-            Text('总用时：$_timeString', style: const TextStyle(fontSize: 16)),
-            Text(
-              '规格：${widget.difficulty.label}',
-              style: const TextStyle(fontSize: 14, color: Colors.black54),
-            ),
-          ],
+              const SizedBox(height: 16),
+              Text(
+                '总用时：$_timeString',
+                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                '规格：${widget.difficulty.label}',
+                style: const TextStyle(fontSize: 14, color: Colors.black54),
+              ),
+            ],
+          ),
         ),
         actions: [
           TextButton(
@@ -223,6 +241,70 @@ class _GamePageState extends State<GamePage> {
     );
   }
 
+  void _onPointerDown(PointerDownEvent event) {
+    _pointerPositions[event.pointer] = event.localPosition;
+    if (_pointerPositions.length == 2) {
+      final p1 = _pointerPositions.values.first;
+      final p2 = _pointerPositions.values.last;
+      _baseDistance = (p1 - p2).distance;
+      _baseZoom = _game?.zoom ?? 1.0;
+      _baseFocalPoint = (p1 + p2) / 2;
+      _basePan = _game?.panOffset.clone() ?? Vector2.zero();
+    }
+  }
+
+  void _onPointerMove(PointerMoveEvent event) {
+    _pointerPositions[event.pointer] = event.localPosition;
+    if (_pointerPositions.length == 2 && _game != null) {
+      final p1 = _pointerPositions.values.first;
+      final p2 = _pointerPositions.values.last;
+      final curDist = (p1 - p2).distance;
+      final curFocal = (p1 + p2) / 2;
+      if (_baseDistance > 10.0) {
+        final scaleFactor = curDist / _baseDistance;
+        final newZoom = (_baseZoom * scaleFactor).clamp(1.0, _game!.maxZoom);
+        final panDelta = curFocal - _baseFocalPoint;
+        final newPan = _basePan + Vector2(panDelta.dx, panDelta.dy);
+        _game!.setZoomAndPan(newZoom, newPan);
+        if (mounted) setState(() {});
+      }
+    } else if ((event.buttons & kMiddleMouseButton) != 0 && _game != null) {
+      _game!.panBy(Vector2(event.delta.dx, event.delta.dy));
+      if (mounted) setState(() {});
+    }
+  }
+
+  void _onPointerUp(PointerUpEvent event) {
+    _pointerPositions.remove(event.pointer);
+    if (_pointerPositions.length < 2) {
+      _baseDistance = 0.0;
+    }
+    if (mounted) setState(() {});
+  }
+
+  void _onPointerCancel(PointerCancelEvent event) {
+    _pointerPositions.remove(event.pointer);
+    if (_pointerPositions.length < 2) {
+      _baseDistance = 0.0;
+    }
+    if (mounted) setState(() {});
+  }
+
+  void _onPointerSignal(PointerSignalEvent event) {
+    if (event is PointerScrollEvent && _game != null) {
+      final isCtrl = HardwareKeyboard.instance.isControlPressed ||
+          HardwareKeyboard.instance.isMetaPressed;
+      final mousePos = event.localPosition;
+      final inTray = mousePos.dy >= _game!.trayPosition.y;
+
+      if (isCtrl || (!inTray && event.scrollDelta.dy.abs() > 0)) {
+        final zoomDelta = -event.scrollDelta.dy * 0.003;
+        _game!.zoomAt(Vector2(mousePos.dx, mousePos.dy), zoomDelta);
+        if (mounted) setState(() {});
+      }
+    }
+  }
+
   @override
   void dispose() {
     _timer?.cancel();
@@ -236,23 +318,35 @@ class _GamePageState extends State<GamePage> {
       body: SafeArea(
         child: Stack(
           children: [
-            // 1. Core Flame Game Canvas
+            // 1. Core Flame Game Canvas with Multi-Modal Zoom & Pan Gesture Listener
             if (_game != null)
-              Positioned.fill(child: GameWidget(game: _game!))
+              Positioned.fill(
+                child: Listener(
+                  onPointerDown: _onPointerDown,
+                  onPointerMove: _onPointerMove,
+                  onPointerUp: _onPointerUp,
+                  onPointerCancel: _onPointerCancel,
+                  onPointerSignal: _onPointerSignal,
+                  behavior: HitTestBehavior.translucent,
+                  child: GameWidget(game: _game!),
+                ),
+              )
             else
               const Center(child: CircularProgressIndicator()),
 
-            // 2. Ghost semi-transparent original image overlay
-            if (_showGhostPreview)
-              Positioned.fill(
+            // 2. Ghost semi-transparent original image overlay (pixel-perfect with board)
+            if (_showGhostPreview && _game != null)
+              Positioned(
+                left: _game!.boardTopLeft.x + _game!.panOffset.x,
+                top: _game!.boardTopLeft.y + _game!.panOffset.y,
+                width: _game!.boardSize.x * _game!.zoom,
+                height: _game!.boardSize.y * _game!.zoom,
                 child: IgnorePointer(
                   child: Opacity(
                     opacity: 0.35,
-                    child: Center(
-                      child: Padding(
-                        padding: const EdgeInsets.only(bottom: 120),
-                        child: Image.memory(widget.imageBytes, fit: BoxFit.contain),
-                      ),
+                    child: Image.memory(
+                      widget.imageBytes,
+                      fit: BoxFit.fill,
                     ),
                   ),
                 ),
@@ -326,7 +420,51 @@ class _GamePageState extends State<GamePage> {
               ),
             ),
 
-            // 4. Floating Victory Banner when solved and dialog closed
+            // 4. Floating Zoom Level Badge and Reset Button when zoomed
+            if (_game != null && _game!.zoom > 1.02)
+              Positioned(
+                top: 54,
+                right: 12,
+                child: Material(
+                  color: Colors.black.withValues(alpha: 0.65),
+                  borderRadius: BorderRadius.circular(16),
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(16),
+                    onTap: () {
+                      _game?.resetZoom();
+                      setState(() {});
+                    },
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(Icons.zoom_in, color: Colors.white, size: 16),
+                          const SizedBox(width: 4),
+                          Text(
+                            '${(_game!.zoom * 100).toInt()}%',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                          const Text(
+                            '重置',
+                            style: TextStyle(
+                              color: Colors.amberAccent,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+
+            // 5. Floating Victory Banner when solved and dialog closed
             if (_isSolved)
               Positioned(
                 bottom: 16,

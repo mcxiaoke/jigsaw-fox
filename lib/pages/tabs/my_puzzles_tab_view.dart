@@ -1,14 +1,16 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../data/game_repository.dart';
 import '../../data/models/custom_puzzle_item.dart';
 import '../../logic/image_source.dart';
-import '../../logic/puzzle_model.dart';
 import '../../widgets/choose_difficulty_sheet.dart';
+import '../crop_puzzle_page.dart';
 import '../game_page.dart';
 
-/// "My Puzzles" (我的自制关卡) tab view supporting UGC creation & preset samples.
+/// "My Puzzles" (我的自制关卡) tab view supporting UGC creation & management.
 class MyPuzzlesTabView extends StatefulWidget {
   const MyPuzzlesTabView({super.key});
 
@@ -27,39 +29,14 @@ class _MyPuzzlesTabViewState extends State<MyPuzzlesTabView> {
       final bytes = await source.loadBytes();
       if (!mounted) return;
 
-      await ChooseDifficultySheet.show(
-        context: context,
-        imageBytes: bytes,
-        initialDifficulty: PuzzleDifficulty.presets[2],
-        title: '新建自制拼图 · 难度选择',
-        onStart: (diff) async {
-          final newCustom = CustomPuzzleItem(
-            id: 'custom_${DateTime.now().millisecondsSinceEpoch}',
-            title: '我的相册拼图',
-            imagePathOrUrl: 'custom_memory',
-            isLocalFile: true,
-            difficulty: diff,
-            createdAt: DateTime.now(),
-          );
-          await _repo.addCustomPuzzle(newCustom);
-
-          if (!mounted) return;
-          await Navigator.of(context).push(
-            MaterialPageRoute<void>(
-              builder: (_) => GamePage(
-                imageBytes: bytes,
-                difficulty: diff,
-                customId: newCustom.id,
-              ),
-            ),
-          );
-          setState(() {});
-        },
-      );
+      final result = await CropPuzzlePage.push(context, bytes);
+      if (result != null && mounted) {
+        setState(() {}); // refresh created puzzle
+      }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('导入图片失败: $e')),
+          SnackBar(content: Text('选择图片失败: $e')),
         );
       }
     } finally {
@@ -69,7 +46,15 @@ class _MyPuzzlesTabViewState extends State<MyPuzzlesTabView> {
 
   Future<void> _playCustom(CustomPuzzleItem item) async {
     Uint8List bytes;
-    if (item.imagePathOrUrl.startsWith('assets/')) {
+    if (item.isLocalFile && !item.imagePathOrUrl.startsWith('assets/')) {
+      final file = File(item.imagePathOrUrl);
+      if (await file.exists()) {
+        bytes = await file.readAsBytes();
+      } else {
+        final data = await rootBundle.load(assetSamples[0]);
+        bytes = data.buffer.asUint8List();
+      }
+    } else if (item.imagePathOrUrl.startsWith('assets/')) {
       final data = await rootBundle.load(item.imagePathOrUrl);
       bytes = data.buffer.asUint8List();
     } else {
@@ -99,6 +84,33 @@ class _MyPuzzlesTabViewState extends State<MyPuzzlesTabView> {
     );
   }
 
+  Future<void> _confirmDelete(CustomPuzzleItem item) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text('删除自制关卡'),
+        content: Text('确定要删除「${item.title}」及其本地图片吗？'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: FilledButton.styleFrom(backgroundColor: Colors.red),
+            child: const Text('确定删除'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true) {
+      await _repo.deleteCustomPuzzle(item.id);
+      if (mounted) setState(() {});
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final customList = _repo.customPuzzles;
@@ -108,12 +120,12 @@ class _MyPuzzlesTabViewState extends State<MyPuzzlesTabView> {
       child: ListView(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         children: [
-          // New Creation Action Card
+          // 1. New Creation Action Card
           InkWell(
             onTap: _loading ? null : _createFromGallery,
             borderRadius: BorderRadius.circular(16),
             child: Container(
-              height: 80,
+              height: 84,
               decoration: BoxDecoration(
                 color: const Color(0xFFE8F5E9),
                 borderRadius: BorderRadius.circular(16),
@@ -124,8 +136,13 @@ class _MyPuzzlesTabViewState extends State<MyPuzzlesTabView> {
                 children: [
                   CircleAvatar(
                     backgroundColor: const Color(0xFF2E7D32),
+                    radius: 22,
                     child: _loading
-                        ? const CircularProgressIndicator(color: Colors.white)
+                        ? const SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                          )
                         : const Icon(Icons.add_photo_alternate, color: Colors.white),
                   ),
                   const SizedBox(width: 16),
@@ -142,8 +159,9 @@ class _MyPuzzlesTabViewState extends State<MyPuzzlesTabView> {
                             color: Color(0xFF1B5E20),
                           ),
                         ),
+                        SizedBox(height: 2),
                         Text(
-                          '从本地相册导入任意照片一键生成异形拼图',
+                          '从本地相册导入并支持自由缩放裁剪',
                           style: TextStyle(fontSize: 12, color: Colors.black54),
                         ),
                       ],
@@ -187,16 +205,7 @@ class _MyPuzzlesTabViewState extends State<MyPuzzlesTabView> {
                 child: SizedBox(
                   width: 80,
                   height: 80,
-                  child: item.imagePathOrUrl.startsWith('assets/')
-                      ? Image.asset(
-                          item.imagePathOrUrl,
-                          fit: BoxFit.cover,
-                          errorBuilder: (ctx, err, stack) => Image.asset(
-                            assetSamples[0],
-                            fit: BoxFit.cover,
-                          ),
-                        )
-                      : Image.asset(assetSamples[0], fit: BoxFit.cover),
+                  child: _buildThumbnail(item),
                 ),
               ),
               const SizedBox(width: 14),
@@ -210,6 +219,8 @@ class _MyPuzzlesTabViewState extends State<MyPuzzlesTabView> {
                         fontSize: 16,
                         fontWeight: FontWeight.bold,
                       ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
                     const SizedBox(height: 4),
                     Text(
@@ -249,21 +260,58 @@ class _MyPuzzlesTabViewState extends State<MyPuzzlesTabView> {
                   ],
                 ),
               ),
-              FilledButton(
-                onPressed: () => _playCustom(item),
-                style: FilledButton.styleFrom(
-                  backgroundColor: const Color(0xFF2E7D32),
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(16),
+
+              // Action Buttons: Play + Delete
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  FilledButton(
+                    onPressed: () => _playCustom(item),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: const Color(0xFF2E7D32),
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                    ),
+                    child: Text(item.progressPercent > 0 ? '继续' : '开始'),
                   ),
-                ),
-                child: Text(item.progressPercent > 0 ? '继续' : '开始'),
+                  IconButton(
+                    icon: const Icon(Icons.delete_outline, color: Colors.grey, size: 20),
+                    tooltip: '删除关卡',
+                    onPressed: () => _confirmDelete(item),
+                  ),
+                ],
               ),
             ],
           ),
         ),
       ),
     );
+  }
+
+  Widget _buildThumbnail(CustomPuzzleItem item) {
+    if (item.isLocalFile && !item.imagePathOrUrl.startsWith('assets/')) {
+      final file = File(item.imagePathOrUrl);
+      return Image.file(
+        file,
+        fit: BoxFit.cover,
+        errorBuilder: (ctx, err, stack) => Image.asset(
+          assetSamples[0],
+          fit: BoxFit.cover,
+        ),
+      );
+    } else if (item.imagePathOrUrl.startsWith('assets/')) {
+      return Image.asset(
+        item.imagePathOrUrl,
+        fit: BoxFit.cover,
+        errorBuilder: (ctx, err, stack) => Image.asset(
+          assetSamples[0],
+          fit: BoxFit.cover,
+        ),
+      );
+    } else {
+      return Image.asset(assetSamples[0], fit: BoxFit.cover);
+    }
   }
 }

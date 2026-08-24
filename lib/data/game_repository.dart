@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -198,10 +199,22 @@ class GameRepository {
     await _saveCustomPuzzles();
   }
 
-  /// Deletes a custom puzzle.
+  /// Deletes a custom puzzle and cleans up local image file if present.
   Future<void> deleteCustomPuzzle(String id) async {
-    _customPuzzles.removeWhere((p) => p.id == id);
-    await _saveCustomPuzzles();
+    final idx = _customPuzzles.indexWhere((p) => p.id == id);
+    if (idx != -1) {
+      final item = _customPuzzles[idx];
+      if (item.isLocalFile && !item.imagePathOrUrl.startsWith('assets/')) {
+        try {
+          final file = File(item.imagePathOrUrl);
+          if (await file.exists()) {
+            await file.delete();
+          }
+        } catch (_) {}
+      }
+      _customPuzzles.removeAt(idx);
+      await _saveCustomPuzzles();
+    }
   }
 
   /// Updates progress or completion state of a main level.

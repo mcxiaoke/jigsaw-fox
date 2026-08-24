@@ -1,3 +1,5 @@
+import 'dart:math';
+
 /// Puzzle grid difficulty level.
 class PuzzleDifficulty {
   const PuzzleDifficulty({
@@ -13,6 +15,38 @@ class PuzzleDifficulty {
   final bool recommended;
 
   int get pieceCount => rows * cols;
+
+  /// Returns an orientation-adaptive difficulty that matches the image's aspect ratio,
+  /// ensuring cut puzzle pieces are always square.
+  PuzzleDifficulty adaptiveForSize(double width, double height) {
+    if (width <= 0 || height <= 0) return this;
+    final isPortrait = width < height;
+    final maxDim = max(rows, cols);
+    final minDim = min(rows, cols);
+
+    if (isPortrait) {
+      // Portrait (W < H): height gets maxDim rows, width gets minDim cols
+      if (rows != maxDim || cols != minDim) {
+        return PuzzleDifficulty(
+          label: label,
+          rows: maxDim,
+          cols: minDim,
+          recommended: recommended,
+        );
+      }
+    } else {
+      // Landscape or Square (W >= H): width gets maxDim cols, height gets minDim rows
+      if (cols != maxDim || rows != minDim) {
+        return PuzzleDifficulty(
+          label: label,
+          rows: minDim,
+          cols: maxDim,
+          recommended: recommended,
+        );
+      }
+    }
+    return this;
+  }
 
   static const List<PuzzleDifficulty> presets = [
     PuzzleDifficulty(label: '3 × 3 (9 块)', rows: 3, cols: 3),

@@ -87,18 +87,20 @@ class PuzzlePieceComponent extends PositionComponent
 
   @override
   bool containsLocalPoint(Vector2 point) {
-    // If component is dynamically scaled, convert point to base unscaled coordinates
-    final effectiveX = scale.x != 0 ? point.x / scale.x : point.x;
-    final effectiveY = scale.y != 0 ? point.y / scale.y : point.y;
-    return shape.containsLocalPoint(ui.Offset(effectiveX, effectiveY), rot);
+    final offset = ui.Offset(point.x, point.y);
+    // 1. Precise bezier path check under rotation
+    if (shape.containsLocalPoint(offset, rot)) {
+      return true;
+    }
+    // 2. Safe bounding rectangle check for 100% reliable touch/mouse interaction
+    return shape.fillRect.contains(offset);
   }
 
   @override
   void render(ui.Canvas canvas) {
-    // 1. Draw 3D Drop Shadow (omitted if game is solved and borders hidden)
     if (!hideBorders) {
       canvas.save();
-      if (isDragging) {
+      if (isDragging && !isInTray) {
         canvas.translate(0, 6.0);
         canvas.drawPath(shape.path, _dragShadowPaint);
       } else {
@@ -110,10 +112,10 @@ class PuzzlePieceComponent extends PositionComponent
 
     canvas.save();
 
-    // 2. Clip exact jigsaw shape
+    // 1. Clip exact jigsaw shape
     canvas.clipPath(shape.path);
 
-    // 3. Draw texture slice from original image
+    // 2. Draw texture slice from original image
     canvas.drawImageRect(
       image,
       srcRect,
@@ -121,24 +123,21 @@ class PuzzlePieceComponent extends PositionComponent
       _imagePaint,
     );
 
-    // 4. Draw 3D Bevel & Emboss edges (unless solved and seamless mode enabled)
+    // 3. Draw 3D Bevel & Emboss edges
     if (!hideBorders) {
       if (isHighlight) {
         canvas.drawPath(shape.path, _snapHighlightPaint);
       } else {
-        // Shadow bevel edge (offset bottom-right)
         canvas.save();
         canvas.translate(0.6, 0.6);
         canvas.drawPath(shape.path, _shadowBevelPaint);
         canvas.restore();
 
-        // Highlight bevel edge (offset top-left)
         canvas.save();
         canvas.translate(-0.6, -0.6);
         canvas.drawPath(shape.path, _highlightBevelPaint);
         canvas.restore();
 
-        // Main outline
         canvas.drawPath(shape.path, _mainOutlinePaint);
       }
     }
@@ -148,6 +147,7 @@ class PuzzlePieceComponent extends PositionComponent
 
   @override
   void onDragStart(DragStartEvent event) {
+    if (game.isSolved) return;
     super.onDragStart(event);
     isDragging = true;
     game.handlePieceDragStart(this);
@@ -157,12 +157,26 @@ class PuzzlePieceComponent extends PositionComponent
   void onDragUpdate(DragUpdateEvent event) {
     super.onDragUpdate(event);
     if (!isDragging) return;
-    // Scale local delta to screen space displacement
-    final delta = Vector2(
-      event.localDelta.x * scale.x,
-      event.localDelta.y * scale.y,
-    );
+
+    // Use absolute canvasDelta for immediate, direct manipulation without lag or threshold blocking
+    final delta = event.canvasDelta;
     game.handlePieceDragUpdate(this, delta);
+
+    // Smooth continuous scaling based on vertical distance between tray and board
+    final trayTop = game.trayPosition.y;
+    const transitionBand = 60.0;
+    final boardScale = game.zoom;
+
+    if (position.y >= trayTop) {
+      scale.setAll(game.trayPieceScale);
+    } else if (position.y <= trayTop - transitionBand) {
+      scale.setAll(boardScale);
+    } else {
+      final t = (trayTop - position.y) / transitionBand;
+      final currentScale =
+          game.trayPieceScale + (boardScale - game.trayPieceScale) * t;
+      scale.setAll(currentScale);
+    }
   }
 
   @override

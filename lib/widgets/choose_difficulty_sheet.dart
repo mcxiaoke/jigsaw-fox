@@ -1,4 +1,5 @@
 import 'dart:typed_data';
+import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 
@@ -105,13 +106,21 @@ class ChooseDifficultySheet extends StatefulWidget {
 
 class _ChooseDifficultySheetState extends State<ChooseDifficultySheet> {
   late PuzzleDifficulty _selectedDifficulty;
+  double _imageWidth = 1.0;
+  double _imageHeight = 1.0;
+  bool _imageLoaded = false;
 
   static const List<PuzzleDifficulty> _selectableOptions = [
-    PuzzleDifficulty(label: '36 块', rows: 6, cols: 6),
-    PuzzleDifficulty(label: '64 块', rows: 8, cols: 8),
-    PuzzleDifficulty(label: '100 块', rows: 10, cols: 10),
-    PuzzleDifficulty(label: '144 块', rows: 12, cols: 12),
-    PuzzleDifficulty(label: '400 块', rows: 20, cols: 20),
+    PuzzleDifficulty(label: '3 × 3 (9 块)', rows: 3, cols: 3),
+    PuzzleDifficulty(label: '3 × 4 (12 块)', rows: 3, cols: 4),
+    PuzzleDifficulty(label: '4 × 4 (16 块)', rows: 4, cols: 4),
+    PuzzleDifficulty(label: '4 × 6 (24 块)', rows: 4, cols: 6),
+    PuzzleDifficulty(label: '6 × 6 (36 块)', rows: 6, cols: 6),
+    PuzzleDifficulty(label: '6 × 8 (48 块)', rows: 6, cols: 8),
+    PuzzleDifficulty(label: '8 × 8 (64 块)', rows: 8, cols: 8),
+    PuzzleDifficulty(label: '10 × 10 (100 块)', rows: 10, cols: 10),
+    PuzzleDifficulty(label: '12 × 16 (192 块)', rows: 12, cols: 16),
+    PuzzleDifficulty(label: '20 × 20 (400 块)', rows: 20, cols: 20),
   ];
 
   @override
@@ -119,16 +128,39 @@ class _ChooseDifficultySheetState extends State<ChooseDifficultySheet> {
     super.initState();
     _selectedDifficulty = _selectableOptions.firstWhere(
       (d) =>
-          d.rows == widget.initialDifficulty.rows &&
-          d.cols == widget.initialDifficulty.cols,
-      orElse: () => _selectableOptions[1], // default 64 pieces
+          d.pieceCount == widget.initialDifficulty.pieceCount,
+      orElse: () => _selectableOptions[0],
     );
+    _decodeImageSize();
+  }
+
+  Future<void> _decodeImageSize() async {
+    try {
+      final codec = await ui.instantiateImageCodec(widget.imageBytes);
+      final frame = await codec.getNextFrame();
+      if (mounted) {
+        setState(() {
+          _imageWidth = frame.image.width.toDouble();
+          _imageHeight = frame.image.height.toDouble();
+          _imageLoaded = true;
+        });
+      }
+    } catch (_) {}
+  }
+
+  PuzzleDifficulty get _effectiveDifficulty {
+    if (!_imageLoaded || _imageWidth <= 0 || _imageHeight <= 0) {
+      return _selectedDifficulty;
+    }
+    return _selectedDifficulty.adaptiveForSize(_imageWidth, _imageHeight);
   }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final size = MediaQuery.sizeOf(context);
+    final effectiveDiff = _effectiveDifficulty;
+    final aspect = (_imageLoaded && _imageHeight > 0) ? (_imageWidth / _imageHeight) : 1.0;
 
     return Container(
       height: size.height * 0.88,
@@ -144,10 +176,14 @@ class _ChooseDifficultySheetState extends State<ChooseDifficultySheet> {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text(
-                  widget.title,
-                  style: theme.textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.bold,
+                Expanded(
+                  child: Text(
+                    widget.title,
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ),
                 TextButton(
@@ -165,48 +201,50 @@ class _ChooseDifficultySheetState extends State<ChooseDifficultySheet> {
             ),
           ),
 
-          // High-res Image Preview with Real-time Jigsaw Grid Overlay
+          // High-res Image Preview with Real-time Jigsaw Grid Overlay (matching exact image aspect ratio)
           Expanded(
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 20),
-              child: AspectRatio(
-                aspectRatio: 1.0,
-                child: Container(
-                  clipBehavior: Clip.antiAlias,
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(16),
-                    boxShadow: const [
-                      BoxShadow(
-                        color: Colors.black12,
-                        blurRadius: 10,
-                        offset: Offset(0, 4),
-                      ),
-                    ],
-                  ),
-                  child: Stack(
-                    fit: StackFit.expand,
-                    children: [
-                      Image.memory(widget.imageBytes, fit: BoxFit.cover),
-                      Positioned.fill(
-                        child: CustomPaint(
-                          painter: _JigsawOverlayPainter(
-                            rows: _selectedDifficulty.rows,
-                            cols: _selectedDifficulty.cols,
+              child: Center(
+                child: AspectRatio(
+                  aspectRatio: aspect,
+                  child: Container(
+                    clipBehavior: Clip.antiAlias,
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(16),
+                      boxShadow: const [
+                        BoxShadow(
+                          color: Colors.black12,
+                          blurRadius: 10,
+                          offset: Offset(0, 4),
+                        ),
+                      ],
+                    ),
+                    child: Stack(
+                      fit: StackFit.expand,
+                      children: [
+                        Image.memory(widget.imageBytes, fit: BoxFit.cover),
+                        Positioned.fill(
+                          child: CustomPaint(
+                            painter: _JigsawOverlayPainter(
+                              rows: effectiveDiff.rows,
+                              cols: effectiveDiff.cols,
+                            ),
                           ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
               ),
             ),
           ),
 
-          const SizedBox(height: 16),
+          const SizedBox(height: 14),
 
-          // Difficulty Selector Header
+          // Difficulty Selector Header with Adaptive spec indicator
           Text(
-            '选择难度',
+            '选择难度 · ${effectiveDiff.rows}×${effectiveDiff.cols} (${effectiveDiff.pieceCount} 块)',
             style: theme.textTheme.titleMedium?.copyWith(
               fontWeight: FontWeight.bold,
               color: Colors.black87,
@@ -223,13 +261,13 @@ class _ChooseDifficultySheetState extends State<ChooseDifficultySheet> {
               children: [
                 for (final opt in _selectableOptions) ...[
                   _buildPieceOption(opt),
-                  const SizedBox(width: 14),
+                  const SizedBox(width: 12),
                 ],
               ],
             ),
           ),
 
-          const SizedBox(height: 24),
+          const SizedBox(height: 20),
 
           // Big Green Start Button
           Padding(
@@ -240,7 +278,7 @@ class _ChooseDifficultySheetState extends State<ChooseDifficultySheet> {
               child: FilledButton(
                 onPressed: () {
                   Navigator.of(context).pop();
-                  widget.onStart(_selectedDifficulty);
+                  widget.onStart(effectiveDiff);
                 },
                 style: FilledButton.styleFrom(
                   backgroundColor: const Color(0xFF2E7D32),
@@ -266,16 +304,15 @@ class _ChooseDifficultySheetState extends State<ChooseDifficultySheet> {
   }
 
   Widget _buildPieceOption(PuzzleDifficulty opt) {
-    final isSelected = opt.rows == _selectedDifficulty.rows &&
-        opt.cols == _selectedDifficulty.cols;
+    final isSelected = opt.pieceCount == _selectedDifficulty.pieceCount;
 
     return InkWell(
       onTap: () => setState(() => _selectedDifficulty = opt),
       borderRadius: BorderRadius.circular(16),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
-        width: 72,
-        height: 72,
+        width: 70,
+        height: 70,
         decoration: BoxDecoration(
           color: isSelected ? const Color(0xFF2E7D32) : const Color(0xFFF0F2F5),
           borderRadius: BorderRadius.circular(16),
@@ -298,14 +335,14 @@ class _ChooseDifficultySheetState extends State<ChooseDifficultySheet> {
           children: [
             Icon(
               Icons.extension,
-              size: 24,
+              size: 22,
               color: isSelected ? Colors.white : Colors.black54,
             ),
-            const SizedBox(height: 4),
+            const SizedBox(height: 3),
             Text(
               '${opt.pieceCount}',
               style: TextStyle(
-                fontSize: 15,
+                fontSize: 14,
                 fontWeight: FontWeight.bold,
                 color: isSelected ? Colors.white : Colors.black87,
               ),
