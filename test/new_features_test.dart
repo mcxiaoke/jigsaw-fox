@@ -15,6 +15,7 @@ import 'package:jigsawpuzzle/widgets/achievements_dialog.dart';
 import 'package:jigsawpuzzle/widgets/choose_difficulty_sheet.dart';
 import 'package:jigsawpuzzle/widgets/how_to_play_dialog.dart';
 import 'package:jigsawpuzzle/widgets/settings_dialog.dart';
+import 'package:phosphoricons_flutter/phosphoricons_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 final Uint8List kTestTransparentImage = base64Decode(
@@ -253,10 +254,10 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('我的爱犬照片'), findsOneWidget);
-      expect(find.byIcon(Icons.delete_outline), findsOneWidget);
+      expect(find.byIcon(PhosphorIconsBold.trash), findsOneWidget);
 
       // Tap delete icon
-      await tester.tap(find.byIcon(Icons.delete_outline));
+      await tester.tap(find.byIcon(PhosphorIconsBold.trash));
       await tester.pumpAndSettle();
 
       expect(find.text('删除自制拼图'), findsOneWidget);

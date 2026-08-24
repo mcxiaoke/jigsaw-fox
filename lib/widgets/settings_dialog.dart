@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:phosphoricons_flutter/phosphoricons_flutter.dart';
 
 import '../data/game_repository.dart';
 import 'choose_background_sheet.dart';
@@ -27,7 +28,7 @@ class _SettingsDialogState extends State<SettingsDialog> {
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
       title: const Row(
         children: [
-          Icon(Icons.settings, color: Color(0xFF2E7D32)),
+          Icon(PhosphorIconsBold.gear, color: Color(0xFF2E7D32)),
           SizedBox(width: 10),
           Text('游戏设置', style: TextStyle(fontWeight: FontWeight.bold)),
         ],
@@ -64,10 +65,10 @@ class _SettingsDialogState extends State<SettingsDialog> {
               ),
               const Divider(),
               ListTile(
-                leading: const Icon(Icons.wallpaper, color: Color(0xFF2E7D32)),
+                leading: const Icon(PhosphorIconsBold.image, color: Color(0xFF2E7D32)),
                 title: const Text('默认壁纸背景'),
                 subtitle: const Text('选择拼图对局时的全屏桌面背景'),
-                trailing: const Icon(Icons.chevron_right),
+                trailing: const Icon(PhosphorIconsBold.caretRight),
                 onTap: () {
                   ChooseBackgroundSheet.show(
                     context: context,
@@ -79,15 +80,15 @@ class _SettingsDialogState extends State<SettingsDialog> {
                 },
               ),
               ListTile(
-                leading: const Icon(Icons.help_outline, color: Color(0xFF0288D1)),
+                leading: const Icon(PhosphorIconsBold.question, color: Color(0xFF0288D1)),
                 title: const Text('玩法技巧与操作指引'),
                 subtitle: const Text('手势操作、组队拖拽、底图透视说明'),
-                trailing: const Icon(Icons.chevron_right),
+                trailing: const Icon(PhosphorIconsBold.caretRight),
                 onTap: () => HowToPlayDialog.show(context),
               ),
               const Divider(),
               ListTile(
-                leading: const Icon(Icons.delete_forever, color: Colors.redAccent),
+                leading: const Icon(PhosphorIconsBold.trashSimple, color: Colors.redAccent),
                 title: const Text('重置所有游戏数据', style: TextStyle(color: Colors.redAccent)),
                 subtitle: const Text('清除所有关卡记录、每日挑战与自制拼图'),
                 onTap: () async {

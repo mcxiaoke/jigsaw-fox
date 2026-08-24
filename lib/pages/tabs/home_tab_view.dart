@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:phosphoricons_flutter/phosphoricons_flutter.dart';
 
 import '../../data/game_repository.dart';
 import '../../data/models/level_item.dart';
@@ -151,7 +152,7 @@ class _HomeTabViewState extends State<HomeTabView> {
                           children: [
                             Row(
                               children: [
-                                const Icon(Icons.auto_awesome, color: Colors.amberAccent, size: 16),
+                                const Icon(PhosphorIconsFill.sparkle, color: Colors.amberAccent, size: 16),
                                 const SizedBox(width: 4),
                                 const Text(
                                   '今日推荐挑战',
@@ -197,7 +198,7 @@ class _HomeTabViewState extends State<HomeTabView> {
                           child: Image.asset(
                             todayDaily.assetPath,
                             fit: BoxFit.cover,
-                            errorBuilder: (ctx, err, stack) => const Icon(Icons.calendar_month, color: Colors.white),
+                            errorBuilder: (ctx, err, stack) => const Icon(PhosphorIconsFill.calendarCheck, color: Colors.white),
                           ),
                         ),
                       ),
@@ -379,7 +380,7 @@ class _HomeTabViewState extends State<HomeTabView> {
                         ),
                       ),
                     ] else ...[
-                      const Icon(Icons.extension, size: 12, color: Colors.black54),
+                      const Icon(PhosphorIconsFill.puzzlePiece, size: 12, color: Colors.black54),
                       const SizedBox(width: 3),
                       Text(
                         '${level.difficulty.pieceCount}',
@@ -404,7 +405,7 @@ class _HomeTabViewState extends State<HomeTabView> {
                   children: List.generate(
                     3,
                     (i) => Icon(
-                      i < level.stars ? Icons.star : Icons.star_border,
+                      i < level.stars ? PhosphorIconsFill.star : PhosphorIconsRegular.star,
                       color: Colors.amber,
                       size: 16,
                     ),
@@ -442,8 +443,8 @@ class _HomeTabViewState extends State<HomeTabView> {
                   child: const Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(Icons.play_arrow, color: Colors.white, size: 16),
-                      SizedBox(width: 2),
+                      Icon(PhosphorIconsFill.play, color: Colors.white, size: 14),
+                      SizedBox(width: 4),
                       Text(
                         '开始',
                         style: TextStyle(
@@ -461,7 +462,7 @@ class _HomeTabViewState extends State<HomeTabView> {
                 child: CircleAvatar(
                   backgroundColor: Color(0xCC2E7D32),
                   radius: 20,
-                  child: Icon(Icons.check, color: Colors.white, size: 24),
+                  child: Icon(PhosphorIconsBold.check, color: Colors.white, size: 24),
                 ),
               )
             else if (!level.isUnlocked)
@@ -475,7 +476,7 @@ class _HomeTabViewState extends State<HomeTabView> {
                     shape: BoxShape.circle,
                   ),
                   child: const Icon(
-                    Icons.lock,
+                    PhosphorIconsFill.lockSimple,
                     color: Colors.white70,
                     size: 16,
                   ),

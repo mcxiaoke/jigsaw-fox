@@ -5,17 +5,18 @@ import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:phosphoricons_flutter/phosphoricons_flutter.dart';
 
 import '../data/game_repository.dart';
 import '../data/models/custom_puzzle_item.dart';
 import '../logic/puzzle_model.dart';
 
 enum CropRatio {
-  square('1:1 正方形', 1.0, 1080, 1080, PuzzleAspectRatio.square1x1, Icons.crop_square),
-  portrait2x3('2:3 竖屏', 2 / 3, 960, 1440, PuzzleAspectRatio.portrait2x3, Icons.crop_portrait),
-  landscape3x2('3:2 横屏', 3 / 2, 1440, 960, PuzzleAspectRatio.landscape3x2, Icons.crop_landscape),
-  portrait3x4('3:4 竖屏', 3 / 4, 1080, 1440, PuzzleAspectRatio.portrait3x4, Icons.crop_portrait),
-  landscape4x3('4:3 横屏', 4 / 3, 1440, 1080, PuzzleAspectRatio.landscape4x3, Icons.crop_landscape);
+  square('1:1 正方形', 1.0, 1080, 1080, PuzzleAspectRatio.square1x1, PhosphorIconsBold.square),
+  portrait2x3('2:3 竖屏', 2 / 3, 960, 1440, PuzzleAspectRatio.portrait2x3, PhosphorIconsBold.rectangle),
+  landscape3x2('3:2 横屏', 3 / 2, 1440, 960, PuzzleAspectRatio.landscape3x2, PhosphorIconsBold.rectangle),
+  portrait3x4('3:4 竖屏', 3 / 4, 1080, 1440, PuzzleAspectRatio.portrait3x4, PhosphorIconsBold.rectangle),
+  landscape4x3('4:3 横屏', 4 / 3, 1440, 1080, PuzzleAspectRatio.landscape4x3, PhosphorIconsBold.rectangle);
 
   const CropRatio(this.label, this.ratio, this.targetWidth, this.targetHeight, this.aspectRatio, this.icon);
   final String label;
@@ -332,7 +333,7 @@ class _CropPuzzlePageState extends State<CropPuzzlePage> {
                   controller: _titleController,
                   decoration: const InputDecoration(
                     labelText: '自制关卡名称',
-                    prefixIcon: Icon(Icons.edit_outlined),
+                    prefixIcon: Icon(PhosphorIconsBold.pencilSimple),
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.all(Radius.circular(12)),
                     ),
@@ -397,7 +398,7 @@ class _CropPuzzlePageState extends State<CropPuzzlePage> {
                         borderRadius: BorderRadius.circular(14),
                       ),
                     ),
-                    icon: const Icon(Icons.check_circle_outline),
+                    icon: const Icon(PhosphorIconsBold.checkCircle),
                     label: Text(
                       _isSaving ? '正在保存...' : '保存自制关卡',
                       style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),

@@ -2,6 +2,7 @@ import 'dart:typed_data';
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
+import 'package:phosphoricons_flutter/phosphoricons_flutter.dart';
 
 import '../data/game_repository.dart';
 import '../logic/geometry/edge_layout.dart';
@@ -206,7 +207,7 @@ class _ChooseDifficultySheetState extends State<ChooseDifficultySheet> {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: const Row(
           children: [
-            Icon(Icons.delete_outline, color: Colors.redAccent),
+            Icon(PhosphorIconsBold.trash, color: Colors.redAccent),
             SizedBox(width: 8),
             Text('删除自制拼图'),
           ],
@@ -276,7 +277,7 @@ class _ChooseDifficultySheetState extends State<ChooseDifficultySheet> {
                 padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
             child: Row(
               children: [
-                const Icon(Icons.grid_view_rounded, color: Color(0xFF2E7D32), size: 22),
+                const Icon(PhosphorIconsBold.squaresFour, color: Color(0xFF2E7D32), size: 22),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
@@ -293,7 +294,7 @@ class _ChooseDifficultySheetState extends State<ChooseDifficultySheet> {
                 // UGC Delete Button if available
                 if (widget.onDelete != null)
                   IconButton(
-                    icon: const Icon(Icons.delete_outline, color: Colors.redAccent, size: 22),
+                    icon: const Icon(PhosphorIconsBold.trash, color: Colors.redAccent, size: 22),
                     tooltip: '删除此拼图',
                     onPressed: _confirmDelete,
                   ),
@@ -301,7 +302,7 @@ class _ChooseDifficultySheetState extends State<ChooseDifficultySheet> {
                 // Grid preview lines toggle button
                 IconButton(
                   icon: Icon(
-                    _showGridOverlay ? Icons.grid_on : Icons.grid_off,
+                    _showGridOverlay ? PhosphorIconsBold.gridFour : PhosphorIconsRegular.gridFour,
                     color: _showGridOverlay ? const Color(0xFF2E7D32) : Colors.grey,
                     size: 22,
                   ),
@@ -315,7 +316,7 @@ class _ChooseDifficultySheetState extends State<ChooseDifficultySheet> {
                 ),
 
                 IconButton(
-                  icon: const Icon(Icons.close, color: Colors.black54, size: 22),
+                  icon: const Icon(PhosphorIconsBold.x, color: Colors.black54, size: 22),
                   onPressed: () => Navigator.of(context).pop(),
                 ),
               ],
@@ -389,7 +390,7 @@ class _ChooseDifficultySheetState extends State<ChooseDifficultySheet> {
                 ),
                 child: Row(
                   children: [
-                    const Icon(Icons.lock, color: Colors.orange, size: 18),
+                    const Icon(PhosphorIconsFill.lockSimple, color: Colors.orange, size: 18),
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
@@ -477,7 +478,7 @@ class _ChooseDifficultySheetState extends State<ChooseDifficultySheet> {
                     child: const Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Icon(Icons.check_circle, size: 12, color: Color(0xFF2E7D32)),
+                        Icon(PhosphorIconsFill.checkCircle, size: 12, color: Color(0xFF2E7D32)),
                         SizedBox(width: 2),
                         Text(
                           '已通关',
@@ -536,7 +537,7 @@ class _ChooseDifficultySheetState extends State<ChooseDifficultySheet> {
                           child: Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              const Icon(Icons.history, size: 16, color: Color(0xFF2E7D32)),
+                              const Icon(PhosphorIconsBold.clockCounterClockwise, size: 16, color: Color(0xFF2E7D32)),
                               const SizedBox(width: 6),
                               Text(
                                 '⚡ 检测到未完成存档 (已拼 ${widget.savedProgressPercent}%)',
@@ -572,12 +573,12 @@ class _ChooseDifficultySheetState extends State<ChooseDifficultySheet> {
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
                             if (!widget.isUnlocked) ...[
-                              const Icon(Icons.lock, size: 18, color: Colors.white70),
+                              const Icon(PhosphorIconsFill.lockSimple, size: 18, color: Colors.white70),
                               const SizedBox(width: 6),
                             ],
                             Text(
                               !widget.isUnlocked
-                                  ? '关卡未解锁 (请先通关前序关卡)'
+                                   ? '关卡未解锁 (请先通关前序关卡)'
                                   : (hasSavedProgress && isMatchingSavedDiff
                                       ? '继续游玩 (进度 ${widget.savedProgressPercent}%)'
                                       : (isEffectivePassed ? '重玩此难度' : '开始')),
@@ -598,7 +599,7 @@ class _ChooseDifficultySheetState extends State<ChooseDifficultySheet> {
                           Navigator.of(context).pop();
                           widget.onResetProgress?.call();
                         },
-                        icon: const Icon(Icons.refresh, size: 16, color: Colors.black54),
+                        icon: const Icon(PhosphorIconsBold.arrowsClockwise, size: 16, color: Colors.black54),
                         label: const Text('放弃进度并重新开始', style: TextStyle(color: Colors.black54, fontSize: 13)),
                       ),
                     ],
@@ -670,7 +671,7 @@ class _ChooseDifficultySheetState extends State<ChooseDifficultySheet> {
             Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Icon(Icons.extension, size: 20, color: iconColor),
+                Icon(PhosphorIconsFill.puzzlePiece, size: 20, color: iconColor),
                 const SizedBox(height: 2),
                 Text(
                   '${opt.pieceCount}',
@@ -695,7 +696,7 @@ class _ChooseDifficultySheetState extends State<ChooseDifficultySheet> {
                 top: 0,
                 right: 2,
                 child: Icon(
-                  Icons.check_circle,
+                  PhosphorIconsFill.checkCircle,
                   size: 13,
                   color: isSelected ? const Color(0xFFFFD54F) : const Color(0xFF2E7D32),
                 ),

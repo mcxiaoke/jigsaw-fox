@@ -7,6 +7,7 @@ import 'package:jigsawpuzzle/data/models/level_item.dart';
 import 'package:jigsawpuzzle/logic/puzzle_model.dart';
 import 'package:jigsawpuzzle/widgets/choose_background_sheet.dart';
 import 'package:jigsawpuzzle/widgets/choose_difficulty_sheet.dart';
+import 'package:phosphoricons_flutter/phosphoricons_flutter.dart';
 
 void main() {
   test('difficulty preset configuration', () {
@@ -207,7 +208,7 @@ void main() {
     expect(find.text('重玩此难度'), findsOneWidget);
 
     // 2. Check check_circle icons rendered for passed difficulties (16 and 36 + 1 header badge = at least 3 check_circle icons)
-    expect(find.byIcon(Icons.check_circle), findsNWidgets(3));
+    expect(find.byIcon(PhosphorIconsFill.checkCircle), findsNWidgets(3));
 
     // 3. Tap on unpassed difficulty 25 (5x5)
     await tester.tap(find.text('25'));

@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:phosphoricons_flutter/phosphoricons_flutter.dart';
 
 import '../../data/game_repository.dart';
 import '../../data/models/custom_puzzle_item.dart';
@@ -157,7 +158,7 @@ class _MyPuzzlesTabViewState extends State<MyPuzzlesTabView> {
                                 height: 22,
                                 child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
                               )
-                            : const Icon(Icons.add_photo_alternate, color: Colors.white, size: 26),
+                            : const Icon(PhosphorIconsBold.imageSquare, color: Colors.white, size: 26),
                       ),
                       const SizedBox(width: 16),
                       const Expanded(
@@ -181,7 +182,7 @@ class _MyPuzzlesTabViewState extends State<MyPuzzlesTabView> {
                           ],
                         ),
                       ),
-                      const Icon(Icons.chevron_right, color: Color(0xFF2E7D32)),
+                      const Icon(PhosphorIconsBold.caretRight, color: Color(0xFF2E7D32)),
                     ],
                   ),
                 ),
@@ -217,7 +218,7 @@ class _MyPuzzlesTabViewState extends State<MyPuzzlesTabView> {
                 child: Center(
                   child: Column(
                     children: [
-                      Icon(Icons.photo_library_outlined, size: 48, color: Colors.grey),
+                      Icon(PhosphorIconsRegular.images, size: 48, color: Colors.grey),
                       SizedBox(height: 10),
                       Text('还没有自制拼图，点击上方卡片导入相册创建吧！', style: TextStyle(color: Colors.grey)),
                     ],
@@ -332,7 +333,7 @@ class _MyPuzzlesTabViewState extends State<MyPuzzlesTabView> {
                         ),
                       ),
                     ] else ...[
-                      const Icon(Icons.extension, size: 12, color: Colors.black54),
+                      const Icon(PhosphorIconsFill.puzzlePiece, size: 12, color: Colors.black54),
                       const SizedBox(width: 3),
                       Text(
                         '${item.difficulty.pieceCount}',
@@ -354,7 +355,7 @@ class _MyPuzzlesTabViewState extends State<MyPuzzlesTabView> {
                 child: CircleAvatar(
                   backgroundColor: Color(0xCC2E7D32),
                   radius: 20,
-                  child: Icon(Icons.check, color: Colors.white, size: 24),
+                  child: Icon(PhosphorIconsBold.check, color: Colors.white, size: 24),
                 ),
               )
             else if (item.progressPercent == 0)
@@ -371,8 +372,8 @@ class _MyPuzzlesTabViewState extends State<MyPuzzlesTabView> {
                   child: const Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(Icons.play_arrow, color: Colors.white, size: 16),
-                      SizedBox(width: 2),
+                      Icon(PhosphorIconsFill.play, color: Colors.white, size: 14),
+                      SizedBox(width: 4),
                       Text(
                         '开始',
                         style: TextStyle(

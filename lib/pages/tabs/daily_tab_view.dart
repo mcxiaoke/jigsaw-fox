@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:phosphoricons_flutter/phosphoricons_flutter.dart';
 
 import '../../data/game_repository.dart';
 import '../../data/models/daily_challenge.dart';
@@ -168,7 +169,7 @@ class _DailyTabViewState extends State<DailyTabView> {
                             FilledButton.icon(
                               onPressed: () => _openDaily(todayItem),
                               icon: Icon(
-                                todayItem.isCompleted ? Icons.replay : Icons.play_arrow,
+                                todayItem.isCompleted ? PhosphorIconsBold.arrowsClockwise : PhosphorIconsFill.play,
                                 size: 18,
                               ),
                               label: Text(
@@ -230,7 +231,7 @@ class _DailyTabViewState extends State<DailyTabView> {
                   children: [
                     Row(
                       children: [
-                        const Icon(Icons.emoji_events, color: Colors.amber, size: 22),
+                        const Icon(PhosphorIconsFill.trophy, color: Colors.amber, size: 22),
                         const SizedBox(width: 6),
                         Text(
                           '${now.year}年${now.month}月进度: $completedCount/${dailyList.length}',
@@ -247,7 +248,7 @@ class _DailyTabViewState extends State<DailyTabView> {
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          const Icon(Icons.local_fire_department, color: Colors.orange, size: 16),
+                          const Icon(PhosphorIconsFill.fire, color: Colors.orange, size: 16),
                           const SizedBox(width: 3),
                           Text(
                             '连胜 $streak 天',
@@ -388,7 +389,7 @@ class _DailyTabViewState extends State<DailyTabView> {
                     color: Color(0xFF2E7D32),
                     shape: BoxShape.circle,
                   ),
-                  child: const Icon(Icons.check, color: Colors.white, size: 14),
+                  child: const Icon(PhosphorIconsBold.check, color: Colors.white, size: 14),
                 ),
               )
             else if (item.progressPercent > 0)

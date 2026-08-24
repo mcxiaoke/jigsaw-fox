@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:phosphoricons_flutter/phosphoricons_flutter.dart';
 
 import '../data/game_repository.dart';
 import '../widgets/achievements_dialog.dart';
@@ -43,7 +44,7 @@ class _MainScreenState extends State<MainScreen> {
         title: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.extension, color: Color(0xFF2E7D32), size: 24),
+            const Icon(PhosphorIconsFill.puzzlePiece, color: Color(0xFF2E7D32), size: 24),
             const SizedBox(width: 8),
             Text(
               _appBarTitle,
@@ -66,7 +67,7 @@ class _MainScreenState extends State<MainScreen> {
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Icon(Icons.star, color: Colors.amber, size: 16),
+                const Icon(PhosphorIconsFill.star, color: Colors.amber, size: 16),
                 const SizedBox(width: 4),
                 Text(
                   '$totalStars',
@@ -83,14 +84,14 @@ class _MainScreenState extends State<MainScreen> {
 
           // Help / How to Play
           IconButton(
-            icon: const Icon(Icons.help_outline, color: Color(0xFF0288D1)),
+            icon: const Icon(PhosphorIconsBold.question, color: Color(0xFF0288D1)),
             tooltip: '玩法指引',
             onPressed: () => HowToPlayDialog.show(context),
           ),
 
           // Achievements
           IconButton(
-            icon: const Icon(Icons.emoji_events_outlined, color: Color(0xFF2E7D32)),
+            icon: const Icon(PhosphorIconsFill.trophy, color: Color(0xFF2E7D32)),
             tooltip: '成就与统计',
             onPressed: () async {
               await AchievementsDialog.show(context);
@@ -100,7 +101,7 @@ class _MainScreenState extends State<MainScreen> {
 
           // Settings
           IconButton(
-            icon: const Icon(Icons.settings_outlined, color: Colors.black87),
+            icon: const Icon(PhosphorIconsBold.gear, color: Colors.black87),
             tooltip: '设置',
             onPressed: () async {
               await SettingsDialog.show(context);
@@ -132,18 +133,18 @@ class _MainScreenState extends State<MainScreen> {
           indicatorColor: const Color(0xFFE8F5E9),
           destinations: const [
             NavigationDestination(
-              icon: Icon(Icons.home_outlined),
-              selectedIcon: Icon(Icons.home, color: Color(0xFF2E7D32)),
+              icon: Icon(PhosphorIconsRegular.house),
+              selectedIcon: Icon(PhosphorIconsFill.house, color: Color(0xFF2E7D32)),
               label: '主页',
             ),
             NavigationDestination(
-              icon: Icon(Icons.collections_outlined),
-              selectedIcon: Icon(Icons.collections, color: Color(0xFF2E7D32)),
+              icon: Icon(PhosphorIconsRegular.images),
+              selectedIcon: Icon(PhosphorIconsFill.images, color: Color(0xFF2E7D32)),
               label: '我的自制',
             ),
             NavigationDestination(
-              icon: Icon(Icons.calendar_month_outlined),
-              selectedIcon: Icon(Icons.calendar_month, color: Color(0xFF2E7D32)),
+              icon: Icon(PhosphorIconsRegular.calendarCheck),
+              selectedIcon: Icon(PhosphorIconsFill.calendarCheck, color: Color(0xFF2E7D32)),
               label: '每日拼图',
             ),
           ],

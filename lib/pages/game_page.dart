@@ -4,6 +4,7 @@ import 'package:flame/game.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:phosphoricons_flutter/phosphoricons_flutter.dart';
 
 import '../data/game_repository.dart';
 import '../game/jigsaw_puzzle_game.dart';
@@ -248,7 +249,7 @@ class _GamePageState extends State<GamePage> {
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
           title: Row(
             children: [
-              const Icon(Icons.pause_circle, color: Color(0xFF2E7D32)),
+              const Icon(PhosphorIconsFill.pauseCircle, color: Color(0xFF2E7D32)),
               const SizedBox(width: 8),
               Text(_pageTitle, style: const TextStyle(fontWeight: FontWeight.bold)),
             ],
@@ -304,7 +305,7 @@ class _GamePageState extends State<GamePage> {
               ),
               const Divider(),
               ListTile(
-                leading: const Icon(Icons.wallpaper, color: Color(0xFF2E7D32)),
+                leading: const Icon(PhosphorIconsBold.image, color: Color(0xFF2E7D32)),
                 title: const Text('更换壁纸背景'),
                 onTap: () {
                   Navigator.pop(ctx);
@@ -312,7 +313,7 @@ class _GamePageState extends State<GamePage> {
                 },
               ),
               ListTile(
-                leading: const Icon(Icons.help_outline, color: Color(0xFF0288D1)),
+                leading: const Icon(PhosphorIconsBold.question, color: Color(0xFF0288D1)),
                 title: const Text('玩法技巧与说明'),
                 onTap: () {
                   Navigator.pop(ctx);
@@ -320,7 +321,7 @@ class _GamePageState extends State<GamePage> {
                 },
               ),
               ListTile(
-                leading: const Icon(Icons.restart_alt, color: Colors.orange),
+                leading: const Icon(PhosphorIconsBold.arrowsClockwise, color: Colors.orange),
                 title: const Text('重新开始本局'),
                 onTap: () async {
                   final confirm = await showDialog<bool>(
@@ -399,7 +400,7 @@ class _GamePageState extends State<GamePage> {
                 children: List.generate(
                   3,
                   (i) => Icon(
-                    i < stars ? Icons.star : Icons.star_border,
+                    i < stars ? PhosphorIconsFill.star : PhosphorIconsRegular.star,
                     color: Colors.amber,
                     size: 32,
                   ),
@@ -461,7 +462,7 @@ class _GamePageState extends State<GamePage> {
                 Navigator.pop(ctx);
                 _playNextLevel();
               },
-              icon: const Icon(Icons.skip_next),
+              icon: const Icon(PhosphorIconsBold.fastForward),
               label: const Text('下一关'),
               style: FilledButton.styleFrom(
                 backgroundColor: const Color(0xFF2E7D32),
@@ -665,7 +666,7 @@ class _GamePageState extends State<GamePage> {
                     child: Row(
                       children: [
                         IconButton(
-                          icon: const Icon(Icons.arrow_back, color: Colors.black87),
+                          icon: const Icon(PhosphorIconsBold.arrowLeft, color: Colors.black87),
                           tooltip: '返回',
                           onPressed: () {
                             _autoSaveProgress();
@@ -683,14 +684,14 @@ class _GamePageState extends State<GamePage> {
                         ),
                         // 1. Wallpaper background switcher
                         IconButton(
-                          icon: const Icon(Icons.wallpaper, size: 21, color: Color(0xFF2E7D32)),
+                          icon: const Icon(PhosphorIconsBold.image, size: 21, color: Color(0xFF2E7D32)),
                           tooltip: '更换壁纸背景',
                           onPressed: _openBackgroundSelector,
                         ),
                         // 2. Fullscreen original image toggle
                         IconButton(
                           icon: Icon(
-                            _showOriginalImage ? Icons.visibility : Icons.visibility_outlined,
+                            _showOriginalImage ? PhosphorIconsFill.eye : PhosphorIconsBold.eyeSlash,
                             size: 21,
                             color: _showOriginalImage ? const Color(0xFF0288D1) : Colors.black54,
                           ),
@@ -699,7 +700,7 @@ class _GamePageState extends State<GamePage> {
                         ),
                         // 3. Pause Menu / Options
                         IconButton(
-                          icon: const Icon(Icons.pause_circle_outline, size: 21, color: Colors.black87),
+                          icon: const Icon(PhosphorIconsBold.pauseCircle, size: 21, color: Colors.black87),
                           tooltip: '暂停与菜单',
                           onPressed: _showPauseMenu,
                         ),
@@ -758,7 +759,7 @@ class _GamePageState extends State<GamePage> {
                                 padding: const EdgeInsets.symmetric(horizontal: 2),
                                 constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
                                 icon: Icon(
-                                  Icons.undo,
+                                  PhosphorIconsBold.arrowUUpLeft,
                                   size: 18,
                                   color: (_game?.canUndo ?? false) ? Colors.black87 : Colors.black26,
                                 ),
@@ -770,7 +771,7 @@ class _GamePageState extends State<GamePage> {
                                 padding: const EdgeInsets.symmetric(horizontal: 2),
                                 constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
                                 icon: Icon(
-                                  Icons.redo,
+                                  PhosphorIconsBold.arrowUUpRight,
                                   size: 18,
                                   color: (_game?.canRedo ?? false) ? Colors.black87 : Colors.black26,
                                 ),
@@ -785,7 +786,7 @@ class _GamePageState extends State<GamePage> {
                                   alignment: Alignment.center,
                                   children: [
                                     Icon(
-                                      ghostOpacity > 0.01 ? Icons.layers : Icons.layers_outlined,
+                                      ghostOpacity > 0.01 ? PhosphorIconsFill.stack : PhosphorIconsBold.stack,
                                       color: ghostOpacity > 0.01 ? const Color(0xFF2E7D32) : Colors.black54,
                                       size: 19,
                                     ),
@@ -818,7 +819,7 @@ class _GamePageState extends State<GamePage> {
                                 padding: const EdgeInsets.symmetric(horizontal: 2),
                                 constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
                                 icon: Icon(
-                                  Icons.border_outer,
+                                  PhosphorIconsBold.cornersOut,
                                   size: 19,
                                   color: isBorderActive ? const Color(0xFF2E7D32) : Colors.black54,
                                 ),
@@ -832,7 +833,7 @@ class _GamePageState extends State<GamePage> {
                                 visualDensity: VisualDensity.compact,
                                 padding: const EdgeInsets.symmetric(horizontal: 2),
                                 constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
-                                icon: const Icon(Icons.cleaning_services_outlined, size: 19, color: Colors.black54),
+                                icon: const Icon(PhosphorIconsBold.broom, size: 19, color: Colors.black54),
                                 tooltip: '一键整理托盘',
                                 onPressed: () => _game?.organizeTray(),
                               ),
@@ -840,7 +841,7 @@ class _GamePageState extends State<GamePage> {
                                 visualDensity: VisualDensity.compact,
                                 padding: const EdgeInsets.symmetric(horizontal: 2),
                                 constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
-                                icon: const Icon(Icons.lightbulb_outline, size: 19, color: Colors.amber),
+                                icon: const Icon(PhosphorIconsFill.lightbulb, size: 19, color: Colors.amber),
                                 tooltip: '智能提示',
                                 onPressed: () => _game?.hint(),
                               ),
@@ -884,7 +885,7 @@ class _GamePageState extends State<GamePage> {
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          const Icon(Icons.zoom_in, color: Colors.white, size: 16),
+                          const Icon(PhosphorIconsBold.magnifyingGlassPlus, color: Colors.white, size: 16),
                           const SizedBox(width: 4),
                           Text(
                             '${(_game!.zoom * 100).toInt()}%',

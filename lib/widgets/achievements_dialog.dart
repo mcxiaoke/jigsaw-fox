@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:phosphoricons_flutter/phosphoricons_flutter.dart';
 
 import '../data/game_repository.dart';
 
@@ -34,56 +35,56 @@ class AchievementsDialog extends StatelessWidget {
       _BadgeData(
         title: '初入拼界',
         desc: '完成首局拼图挑战',
-        icon: Icons.emoji_events_outlined,
+        icon: PhosphorIconsFill.trophy,
         current: completed,
         max: 1,
       ),
       _BadgeData(
         title: '拼图学徒',
         desc: '累计完成 5 局拼图',
-        icon: Icons.military_tech_outlined,
+        icon: PhosphorIconsFill.medal,
         current: completed,
         max: 5,
       ),
       _BadgeData(
         title: '拼图大师',
         desc: '累计完成 20 局拼图',
-        icon: Icons.workspace_premium_outlined,
+        icon: PhosphorIconsFill.crown,
         current: completed,
         max: 20,
       ),
       _BadgeData(
         title: '拼图传奇',
         desc: '累计完成 50 局拼图',
-        icon: Icons.diamond_outlined,
+        icon: PhosphorIconsFill.diamond,
         current: completed,
         max: 50,
       ),
       _BadgeData(
         title: '碎片收集者',
         desc: '累计拼合 50 块碎片',
-        icon: Icons.extension_outlined,
+        icon: PhosphorIconsRegular.puzzlePiece,
         current: snapped,
         max: 50,
       ),
       _BadgeData(
         title: '拼图能手',
         desc: '累计拼合 200 块碎片',
-        icon: Icons.extension,
+        icon: PhosphorIconsFill.puzzlePiece,
         current: snapped,
         max: 200,
       ),
       _BadgeData(
         title: '千锤百炼',
         desc: '累计拼合 1000 块碎片',
-        icon: Icons.auto_awesome,
+        icon: PhosphorIconsFill.sparkle,
         current: snapped,
         max: 1000,
       ),
       _BadgeData(
         title: '专注达人',
         desc: '累计游玩时间超过 30 分钟',
-        icon: Icons.timer_outlined,
+        icon: PhosphorIconsBold.timer,
         current: timeSec,
         max: 1800,
         isTime: true,
@@ -91,7 +92,7 @@ class AchievementsDialog extends StatelessWidget {
       _BadgeData(
         title: '沉浸探索',
         desc: '累计游玩时间超过 2 小时',
-        icon: Icons.hourglass_top,
+        icon: PhosphorIconsFill.hourglass,
         current: timeSec,
         max: 7200,
         isTime: true,
@@ -99,21 +100,21 @@ class AchievementsDialog extends StatelessWidget {
       _BadgeData(
         title: '每日不辍',
         desc: '通关至少 1 次每日拼图',
-        icon: Icons.calendar_month,
+        icon: PhosphorIconsFill.calendarCheck,
         current: repo.dailyChallenges.where((d) => d.isCompleted).length,
         max: 1,
       ),
       _BadgeData(
         title: '匠心自造',
         desc: '通关至少 1 次自制拼图',
-        icon: Icons.palette_outlined,
+        icon: PhosphorIconsBold.palette,
         current: repo.customPuzzles.where((c) => c.isCompleted).length,
         max: 1,
       ),
       _BadgeData(
         title: '高阶挑战者',
         desc: '完成 64 块以上高难度拼图',
-        icon: Icons.stars,
+        icon: PhosphorIconsFill.starFour,
         current: repo.levels.where((l) => l.completedPieceCounts.any((c) => c >= 64)).length,
         max: 1,
       ),
@@ -130,7 +131,7 @@ class AchievementsDialog extends StatelessWidget {
         children: [
           const Row(
             children: [
-              Icon(Icons.emoji_events, color: Colors.amber, size: 26),
+              Icon(PhosphorIconsFill.trophy, color: Colors.amber, size: 26),
               SizedBox(width: 10),
               Text('成就与统计', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 19)),
             ],
@@ -163,7 +164,7 @@ class AchievementsDialog extends StatelessWidget {
                     child: _buildStatCard(
                       '完成局数',
                       '$completed',
-                      Icons.check_circle_outline,
+                      PhosphorIconsBold.checkCircle,
                       const Color(0xFF2E7D32),
                     ),
                   ),
@@ -172,7 +173,7 @@ class AchievementsDialog extends StatelessWidget {
                     child: _buildStatCard(
                       '已拼碎片',
                       '$snapped',
-                      Icons.extension,
+                      PhosphorIconsFill.puzzlePiece,
                       const Color(0xFF0288D1),
                     ),
                   ),
@@ -185,7 +186,7 @@ class AchievementsDialog extends StatelessWidget {
                     child: _buildStatCard(
                       '总游玩时长',
                       _formatDuration(timeSec),
-                      Icons.timer_outlined,
+                      PhosphorIconsBold.timer,
                       const Color(0xFFE65100),
                     ),
                   ),
@@ -194,7 +195,7 @@ class AchievementsDialog extends StatelessWidget {
                     child: _buildStatCard(
                       '平均局时',
                       completed > 0 ? _formatDuration(avgTime) : '--',
-                      Icons.speed,
+                      PhosphorIconsBold.gauge,
                       const Color(0xFF7B1FA2),
                     ),
                   ),
@@ -284,7 +285,7 @@ class AchievementsDialog extends StatelessWidget {
             radius: 20,
             backgroundColor: b.isUnlocked ? Colors.amber.shade400 : Colors.grey.shade300,
             child: Icon(
-              b.isUnlocked ? b.icon : Icons.lock_outline,
+              b.isUnlocked ? b.icon : PhosphorIconsFill.lockKey,
               color: b.isUnlocked ? Colors.white : Colors.grey.shade600,
               size: 20,
             ),
@@ -308,7 +309,7 @@ class AchievementsDialog extends StatelessWidget {
                     if (b.isUnlocked)
                       const Row(
                         children: [
-                          Icon(Icons.check_circle, color: Color(0xFF2E7D32), size: 14),
+                          Icon(PhosphorIconsFill.checkCircle, color: Color(0xFF2E7D32), size: 14),
                           SizedBox(width: 2),
                           Text('已达成', style: TextStyle(fontSize: 11, color: Color(0xFF2E7D32), fontWeight: FontWeight.bold)),
                         ],

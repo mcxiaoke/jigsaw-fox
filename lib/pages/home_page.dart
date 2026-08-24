@@ -1,6 +1,7 @@
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import 'package:phosphoricons_flutter/phosphoricons_flutter.dart';
 
 import '../logic/geometry/edge_layout.dart';
 import '../logic/geometry/piece_shape.dart';
@@ -171,7 +172,7 @@ class _HomePageState extends State<HomePage> {
       appBar: AppBar(
         title: const Row(
           children: [
-            Icon(Icons.extension, color: Colors.indigoAccent),
+            Icon(PhosphorIconsFill.puzzlePiece, color: Colors.indigoAccent),
             SizedBox(width: 8),
             Text('异形拼图 Jigsaw Puzzle'),
           ],
@@ -235,7 +236,7 @@ class _HomePageState extends State<HomePage> {
                   ),
                   FilterChip(
                     avatar: Icon(
-                      _showGridPreview ? Icons.grid_on : Icons.grid_off,
+                      _showGridPreview ? PhosphorIconsBold.gridFour : PhosphorIconsRegular.gridFour,
                       size: 16,
                     ),
                     label: const Text('切图预览', style: TextStyle(fontSize: 12)),
@@ -274,7 +275,7 @@ class _HomePageState extends State<HomePage> {
                   OutlinedButton.icon(
                     onPressed:
                         _loading ? null : () async => await _pickRandomSample(),
-                    icon: const Icon(Icons.shuffle),
+                    icon: const Icon(PhosphorIconsBold.shuffle),
                     label: const Text('随机精选'),
                   ),
                   OutlinedButton.icon(
@@ -282,12 +283,12 @@ class _HomePageState extends State<HomePage> {
                         ? null
                         : () =>
                             _loadFrom(GallerySource(), errorHint: '选择图片失败'),
-                    icon: const Icon(Icons.photo_library),
+                    icon: const Icon(PhosphorIconsBold.images),
                     label: const Text('相册导入'),
                   ),
                   OutlinedButton.icon(
                     onPressed: _loading ? null : _showUrlDialog,
-                    icon: const Icon(Icons.cloud_download),
+                    icon: const Icon(PhosphorIconsBold.cloudArrowDown),
                     label: const Text('网络链接'),
                   ),
                 ],
@@ -295,7 +296,7 @@ class _HomePageState extends State<HomePage> {
               const SizedBox(height: 28),
               FilledButton.icon(
                 onPressed: _imageBytes == null ? null : _startGame,
-                icon: const Icon(Icons.play_arrow),
+                icon: const Icon(PhosphorIconsFill.play),
                 label: Text(
                   '开始拼图（${_difficulty.label}）',
                   style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),

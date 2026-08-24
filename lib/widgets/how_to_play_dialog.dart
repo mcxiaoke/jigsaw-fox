@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:phosphoricons_flutter/phosphoricons_flutter.dart';
 
 /// Interactive tutorial & tips dialog explaining gameplay mechanics and controls.
 class HowToPlayDialog extends StatelessWidget {
@@ -17,7 +18,7 @@ class HowToPlayDialog extends StatelessWidget {
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
       title: const Row(
         children: [
-          Icon(Icons.help_outline, color: Color(0xFF2E7D32)),
+          Icon(PhosphorIconsBold.question, color: Color(0xFF2E7D32)),
           SizedBox(width: 10),
           Text('玩法与操作技巧', style: TextStyle(fontWeight: FontWeight.bold)),
         ],
@@ -29,42 +30,42 @@ class HowToPlayDialog extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             children: [
               _buildTipItem(
-                icon: Icons.touch_app,
+                icon: PhosphorIconsBold.handTap,
                 color: const Color(0xFF2E7D32),
                 title: '拖拽与磁吸',
                 desc: '单指拖拽碎片到棋盘正确位置附近，会自动发出清脆吸附声并精准归位。',
               ),
               const SizedBox(height: 12),
               _buildTipItem(
-                icon: Icons.layers_outlined,
+                icon: PhosphorIconsBold.stack,
                 color: const Color(0xFF0288D1),
                 title: '碎片组队合并 (Cluster)',
                 desc: '相连的碎片即使未放在正确格子也可以互相拼合，合并后可整体拖动。',
               ),
               const SizedBox(height: 12),
               _buildTipItem(
-                icon: Icons.zoom_in,
+                icon: PhosphorIconsBold.magnifyingGlassPlus,
                 color: const Color(0xFFE65100),
                 title: '双指缩放与平移',
                 desc: '双指捏合可放大/缩小棋盘，双指滑动或鼠标中键拖拽可平移画布，方便专注局部。',
               ),
               const SizedBox(height: 12),
               _buildTipItem(
-                icon: Icons.layers,
+                icon: PhosphorIconsFill.stack,
                 color: const Color(0xFF7B1FA2),
                 title: '底图透视参考 (Ghost)',
                 desc: '点击顶部透视图标可在棋盘开启 20%/45% 半透明底图，辅助快速定位。',
               ),
               const SizedBox(height: 12),
               _buildTipItem(
-                icon: Icons.border_outer,
+                icon: PhosphorIconsBold.cornersOut,
                 color: const Color(0xFF00897B),
                 title: '边缘碎片筛选',
                 desc: '点击边框筛选图标，可高亮所有外围平边碎片，助你先拼好框架。',
               ),
               const SizedBox(height: 12),
               _buildTipItem(
-                icon: Icons.cleaning_services_outlined,
+                icon: PhosphorIconsBold.broom,
                 color: const Color(0xFF5D4037),
                 title: '一键整理托盘',
                 desc: '散落在棋盘上的单块碎片，点击扫把图标即可瞬间整齐归纳至下方托盘。',

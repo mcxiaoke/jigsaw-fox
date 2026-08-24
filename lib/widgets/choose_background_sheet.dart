@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:phosphoricons_flutter/phosphoricons_flutter.dart';
 
 import '../data/game_repository.dart';
 
@@ -51,7 +52,7 @@ class ChooseBackgroundSheet extends StatelessWidget {
               children: [
                 Row(
                   children: [
-                    const Icon(Icons.wallpaper, color: Color(0xFF2E7D32), size: 22),
+                    const Icon(PhosphorIconsBold.image, color: Color(0xFF2E7D32), size: 22),
                     const SizedBox(width: 8),
                     Text(
                       '更换拼图背景',
@@ -62,7 +63,7 @@ class ChooseBackgroundSheet extends StatelessWidget {
                   ],
                 ),
                 IconButton(
-                  icon: const Icon(Icons.close, color: Colors.black54),
+                  icon: const Icon(PhosphorIconsBold.x, color: Colors.black54),
                   onPressed: () => Navigator.of(context).pop(),
                 ),
               ],
@@ -120,7 +121,7 @@ class ChooseBackgroundSheet extends StatelessWidget {
                           errorBuilder: (ctx, err, stack) => Container(
                             color: const Color(0xFFE2E6EA),
                             child: const Center(
-                              child: Icon(Icons.broken_image, color: Colors.black26),
+                              child: Icon(PhosphorIconsBold.imageBroken, color: Colors.black26),
                             ),
                           ),
                         ),
@@ -137,7 +138,7 @@ class ChooseBackgroundSheet extends StatelessWidget {
                                 shape: BoxShape.circle,
                               ),
                               child: const Icon(
-                                Icons.check,
+                                PhosphorIconsBold.check,
                                 color: Colors.white,
                                 size: 14,
                               ),
