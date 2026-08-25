@@ -809,11 +809,11 @@ class _GamePageState extends State<GamePage> {
       body: SafeArea(
         child: Stack(
           children: [
-            // 1. Full-Screen Background Wallpaper
+            // 1. Full-Screen Seamless Tiled Background
             Positioned.fill(
               child: Image.asset(
                 _selectedBackground,
-                fit: BoxFit.cover,
+                repeat: ImageRepeat.repeat,
                 errorBuilder: (ctx, err, stack) => Container(color: const Color(0xFFE2E6EA)),
               ),
             ),

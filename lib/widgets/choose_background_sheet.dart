@@ -80,7 +80,7 @@ class ChooseBackgroundSheet extends StatelessWidget {
                 crossAxisCount: 3,
                 crossAxisSpacing: 12,
                 mainAxisSpacing: 12,
-                childAspectRatio: 0.75, // Wallpaper aspect ratio
+                childAspectRatio: 1.0, // Square tile aspect ratio
               ),
               itemCount: bgList.length,
               itemBuilder: (context, index) {
@@ -117,7 +117,7 @@ class ChooseBackgroundSheet extends StatelessWidget {
                       children: [
                         Image.asset(
                           bgPath,
-                          fit: BoxFit.cover,
+                          repeat: ImageRepeat.repeat,
                           errorBuilder: (ctx, err, stack) => Container(
                             color: const Color(0xFFE2E6EA),
                             child: const Center(
@@ -154,7 +154,7 @@ class ChooseBackgroundSheet extends StatelessWidget {
                             padding: const EdgeInsets.symmetric(vertical: 4),
                             color: Colors.black45,
                             child: Text(
-                              '背景 ${index + 1}',
+                              '桌板 ${index + 1}',
                               textAlign: TextAlign.center,
                               style: const TextStyle(
                                 color: Colors.white,

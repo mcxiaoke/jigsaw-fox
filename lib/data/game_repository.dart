@@ -16,15 +16,18 @@ class GameRepository {
   static final GameRepository instance = GameRepository._();
 
   static const List<String> kBackgroundAssets = [
-    'assets/images/bg_000.webp',
-    'assets/images/bg_001.webp',
-    'assets/images/bg_002.webp',
-    'assets/images/bg_003.webp',
-    'assets/images/bg_004.webp',
-    'assets/images/bg_005.webp',
-    'assets/images/bg_006.webp',
-    'assets/images/bg_007.webp',
-    'assets/images/bg_008.webp',
+    'assets/bg/tile_000.webp',
+    'assets/bg/tile_001.webp',
+    'assets/bg/tile_002.webp',
+    'assets/bg/tile_003.webp',
+    'assets/bg/tile_004.webp',
+    'assets/bg/tile_005.webp',
+    'assets/bg/tile_006.webp',
+    'assets/bg/tile_007.webp',
+    'assets/bg/tile_008.webp',
+    'assets/bg/tile_009.webp',
+    'assets/bg/tile_010.webp',
+    'assets/bg/tile_011.webp',
   ];
 
   static const String _keyLevelsPrefix = 'jigsaw_level_';

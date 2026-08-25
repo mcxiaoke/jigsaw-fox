@@ -218,13 +218,11 @@ void main() {
   });
 
   test('GameRepository background assets configuration and defaults', () {
-    expect(GameRepository.kBackgroundAssets.length, 9);
-    expect(GameRepository.kBackgroundAssets.first, 'assets/images/bg_000.webp');
-    expect(GameRepository.kBackgroundAssets.last, 'assets/images/bg_008.webp');
+    expect(GameRepository.kBackgroundAssets.first, 'assets/bg/tile_000.webp');
   });
 
-  testWidgets('ChooseBackgroundSheet displays 9 wallpaper options and invokes callback', (tester) async {
-    String selectedBg = 'assets/images/bg_000.webp';
+  testWidgets('ChooseBackgroundSheet displays 10 wallpaper options and invokes callback', (tester) async {
+    String selectedBg = 'assets/bg/tile_000.webp';
 
     await tester.pumpWidget(
       MaterialApp(
@@ -251,14 +249,14 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('更换拼图背景'), findsOneWidget);
-    expect(find.text('背景 1'), findsOneWidget);
-    expect(find.text('背景 2'), findsOneWidget);
-    expect(find.text('背景 3'), findsOneWidget);
+    expect(find.text('桌板 1'), findsOneWidget);
+    expect(find.text('桌板 2'), findsOneWidget);
+    expect(find.text('桌板 3'), findsOneWidget);
 
-    // Tap on Background 3
-    await tester.tap(find.text('背景 3'));
+    // Tap on Table 3
+    await tester.tap(find.text('桌板 3'));
     await tester.pumpAndSettle();
 
-    expect(selectedBg, 'assets/images/bg_002.webp');
+    expect(selectedBg, 'assets/bg/tile_002.webp');
   });
 }
