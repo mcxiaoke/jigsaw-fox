@@ -122,7 +122,7 @@ class JigsawPuzzleGame extends FlameGame with ScrollDetector, PanDetector {
 
   static const int _basePriority = 10;
   static const double targetTrayPieceBaseSize = 64.0; // Standard touch-friendly base size
-  static const double _topToolbarHeight = 52.0;
+  static const double _topToolbarHeight = 8.0;
   static const double _sideMargin = 8.0;
   static const double _bottomTrayMargin = 8.0;
 
@@ -161,6 +161,9 @@ class JigsawPuzzleGame extends FlameGame with ScrollDetector, PanDetector {
   late EdgeLayout edgeLayout;
   late PuzzleBoardState _boardState;
   final Map<int, PuzzlePieceComponent> _pieces = {};
+
+  /// Shuffled sequence of piece ids defining their left-to-right order in the tray.
+  List<int> _trayOrder = [];
 
   int get totalPieces => rows * cols;
   int get solvedCount =>
@@ -228,11 +231,13 @@ class JigsawPuzzleGame extends FlameGame with ScrollDetector, PanDetector {
     final srcPieceH = image.height / rows;
     final initialPieces = <PieceState>[];
 
-    // 4. Generate Piece Shapes and arrange inside Bottom Tray with Normalized Size
+    // 4. Generate Piece Shapes and arrange inside Bottom Tray with Normalized Size.
+    //    Pieces are SHUFFLED so the tray order never matches the original image order.
+    _trayOrder = List<int>.generate(totalPieces, (i) => i)..shuffle(Random(seed));
     var trayIndex = 0;
-    for (var r = 0; r < rows; r++) {
-      for (var c = 0; c < cols; c++) {
-        final id = r * cols + c;
+    for (final id in _trayOrder) {
+      final r = id ~/ cols;
+      final c = id % cols;
         final edges = edgeLayout.edgesFor(r, c);
         final shape = PieceShape(
           edges: edges,
@@ -281,7 +286,6 @@ class JigsawPuzzleGame extends FlameGame with ScrollDetector, PanDetector {
         _pieces[id] = component;
         add(component);
         trayIndex++;
-      }
     }
 
     _boardState = _boardState.copyWith(pieces: initialPieces);
@@ -385,20 +389,20 @@ class JigsawPuzzleGame extends FlameGame with ScrollDetector, PanDetector {
     _realignTrayPieces(animate: false);
   }
 
-  /// Re-arranges all pieces currently parked in the tray.
+  /// Re-arranges all pieces currently parked in the tray (following shuffled order).
   void _realignTrayPieces({bool animate = true}) {
     var idx = 0;
-    for (final p in _pieces.values) {
-      if (p.isInTray) {
-        final targetPos = _getTrayPositionForIndex(idx);
-        p.animateScaleTo(Vector2.all(_trayPieceScale));
-        if (animate) {
-          p.animateTo(targetPos, duration: 0.2);
-        } else {
-          p.position.setFrom(targetPos);
-        }
-        idx++;
+    for (final id in _trayOrder) {
+      final p = _pieces[id];
+      if (p == null || !p.isInTray) continue;
+      final targetPos = _getTrayPositionForIndex(idx);
+      p.animateScaleTo(Vector2.all(_trayPieceScale));
+      if (animate) {
+        p.animateTo(targetPos, duration: 0.2);
+      } else {
+        p.position.setFrom(targetPos);
       }
+      idx++;
     }
   }
 
@@ -530,39 +534,40 @@ class JigsawPuzzleGame extends FlameGame with ScrollDetector, PanDetector {
       rotationEnabled: rotationEnabled,
     );
 
+    // 重新打散托盘顺序，避免每次重置都出现相同的排列
+    _trayOrder = List<int>.generate(totalPieces, (i) => i)..shuffle(Random());
     final normOut = [0.0, 0.0];
     final initialPieces = <PieceState>[];
     var trayIndex = 0;
 
-    for (var r = 0; r < rows; r++) {
-      for (var c = 0; c < cols; c++) {
-        final id = r * cols + c;
-        final pPos = _getTrayPositionForIndex(trayIndex);
-        _screenToNormalized(pPos, normOut);
+    for (final id in _trayOrder) {
+      final r = id ~/ cols;
+      final c = id % cols;
+      final pPos = _getTrayPositionForIndex(trayIndex);
+      _screenToNormalized(pPos, normOut);
 
-        final pState = PieceState(
-          id: id,
-          r: r,
-          c: c,
-          nx: normOut[0],
-          ny: normOut[1],
-          clusterId: id,
-          rot: 0,
-        );
-        initialPieces.add(pState);
+      final pState = PieceState(
+        id: id,
+        r: r,
+        c: c,
+        nx: normOut[0],
+        ny: normOut[1],
+        clusterId: id,
+        rot: 0,
+      );
+      initialPieces.add(pState);
 
-        final comp = _pieces[id];
-        if (comp != null) {
-          comp.isInTray = true;
-          comp.hideBorders = false;
-          comp.clusterId = id;
-          comp.rot = 0;
-          comp.scale.setAll(_trayPieceScale);
-          comp.position.setFrom(pPos);
-          comp.priority = _basePriority;
-        }
-        trayIndex++;
+      final comp = _pieces[id];
+      if (comp != null) {
+        comp.isInTray = true;
+        comp.hideBorders = false;
+        comp.clusterId = id;
+        comp.rot = 0;
+        comp.scale.setAll(_trayPieceScale);
+        comp.position.setFrom(pPos);
+        comp.priority = _basePriority;
       }
+      trayIndex++;
     }
 
     _boardState = _boardState.copyWith(pieces: initialPieces);
