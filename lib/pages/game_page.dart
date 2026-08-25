@@ -541,6 +541,14 @@ class _GamePageState extends State<GamePage> {
     } else if ((event.buttons & kMiddleMouseButton) != 0 && _game != null) {
       _game!.panBy(Vector2(event.delta.dx, event.delta.dy));
       if (mounted) setState(() {});
+    } else if (_game != null &&
+        _game!.zoom > 1.0 &&
+        _pointerPositions.length == 1 &&
+        !_game!.isDraggingAnyPiece &&
+        (_game!.isTabletop || event.localPosition.dy < _game!.trayPosition.y)) {
+      // 放大状态下，鼠标左键或单指按住空白区域拖动 -> 实时平移棋盘画布
+      _game!.panBy(Vector2(event.delta.dx, event.delta.dy));
+      if (mounted) setState(() {});
     }
   }
 
@@ -864,7 +872,9 @@ class _GamePageState extends State<GamePage> {
                             onPointerCancel: _onPointerCancel,
                             onPointerSignal: _onPointerSignal,
                             behavior: HitTestBehavior.translucent,
-                            child: GameWidget(game: _game!),
+                            child: ClipRect(
+                              child: GameWidget(game: _game!),
+                            ),
                           ),
                         )
                       : const Center(

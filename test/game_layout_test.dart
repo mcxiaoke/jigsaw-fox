@@ -682,7 +682,256 @@ void main() {
     expect(p0.isInTray, equals(p1.isInTray), reason: '集群所有碎片必须原子性处于相同容器');
     expect(p1.isInTray, equals(p2.isInTray), reason: '集群所有碎片必须原子性处于相同容器');
   });
+
+  test('Windows 窗口由大变小时，游离碎片与自由集群自动安全收拢到当前可视视口内', () async {
+    final img = await _decodePng();
+    final game = JigsawPuzzleGame(
+      image: img,
+      rows: 3,
+      cols: 3,
+      onSolved: () {},
+    );
+    // 初始在大窗口 1920 x 1080
+    game.onGameResize(Vector2(1920, 1080));
+    await game.onLoad();
+
+    final p0 = game.children.whereType<PuzzlePieceComponent>().firstWhere((p) => p.id == 0);
+    final p1 = game.children.whereType<PuzzlePieceComponent>().firstWhere((p) => p.id == 1);
+    final p2 = game.children.whereType<PuzzlePieceComponent>().firstWhere((p) => p.id == 2);
+
+    // 1. 将 p0（单块）放置在大窗口右侧边缘 (X=1800, Y=900)
+    p0.isInTray = false;
+    p0.isLocked = false;
+    p0.position.setValues(1800, 900);
+    final out0 = [0.0, 0.0];
+    game.screenToNormalized(p0.position, out0);
+    game.boardState = game.boardState.copyWith(
+      pieces: game.boardState.pieces.map((p) => p.id == 0 ? p.copyWith(nx: out0[0], ny: out0[1]) : p).toList(),
+    );
+
+    // 2. 将 p1, p2 组成自由拼合集群放置在右下方 (X=1700, Y=850)
+    p1.isInTray = false;
+    p1.isLocked = false;
+    p1.clusterId = 888;
+    p1.position.setValues(1700, 850);
+    final out1 = [0.0, 0.0];
+    game.screenToNormalized(p1.position, out1);
+
+    p2.isInTray = false;
+    p2.isLocked = false;
+    p2.clusterId = 888;
+    p2.position.setValues(1700 + game.pieceSize.x, 850);
+    final out2 = [0.0, 0.0];
+    game.screenToNormalized(p2.position, out2);
+
+    game.boardState = game.boardState.copyWith(
+      pieces: game.boardState.pieces.map((p) {
+        if (p.id == 1) return p.copyWith(nx: out1[0], ny: out1[1], clusterId: 888);
+        if (p.id == 2) return p.copyWith(nx: out2[0], ny: out2[1], clusterId: 888);
+        return p;
+      }).toList(),
+    );
+
+    // 3. 模拟用户将窗口急剧缩小为 800 x 600
+    game.onGameResize(Vector2(800, 600));
+
+    // 验证单块 p0 已被安全 Clamp 收拢在 800 x 600 的安全可视区域内
+    expect(p0.position.x, lessThanOrEqualTo(800.0 - p0.size.x - 8.0));
+    expect(p0.position.x, greaterThanOrEqualTo(8.0));
+    expect(p0.position.y, lessThanOrEqualTo(game.trayPosition.y - p0.size.y - 8.0));
+    expect(p0.position.y, greaterThanOrEqualTo(44.0));
+
+    // 验证集群 p1, p2 已被整体原子平移收拢在可视区域内
+    expect(p1.position.x, greaterThanOrEqualTo(8.0));
+    expect(p2.position.x + p2.size.x, lessThanOrEqualTo(800.0 - 8.0 + 0.1));
+    expect(p1.position.y, greaterThanOrEqualTo(44.0));
+    expect(p1.position.y + p1.size.y, lessThanOrEqualTo(game.trayPosition.y - 8.0 + 0.1));
+
+    // 验证集群两块碎片的相对几何距离绝对保持不变
+    expect(p2.position.x - p1.position.x, closeTo(game.pieceSize.x, 0.01));
+    expect(p2.position.y - p1.position.y, closeTo(0.0, 0.01));
+  });
+
+  test('托盘模式下按住或点击托盘碎片未拖出时，其他碎片不提前占位；拖出托盘后才平滑闭合空隙', () async {
+    final img = await _decodePng();
+    final game = JigsawPuzzleGame(
+      image: img,
+      rows: 3,
+      cols: 3,
+      onSolved: () {},
+    );
+    game.onGameResize(Vector2(600, 800));
+    await game.onLoad();
+
+    // 获取托盘中的第一块和第二块碎片
+    final trayPieces = game.children.whereType<PuzzlePieceComponent>().where((p) => p.isInTray).toList();
+    expect(trayPieces.length, equals(9));
+    final firstPiece = trayPieces[0];
+    final secondPiece = trayPieces[1];
+    final originalSecondPos = secondPiece.position.clone();
+
+    // 1. 模拟玩家点击或按住第一块碎片（在托盘内）
+    game.startHoldingPiece(firstPiece, 0.5, 0.5);
+    expect(game.holdingPiece, equals(firstPiece));
+
+    // 此时第一块碎片仍被认为是托盘成员，第二块碎片的坐标绝对不变（没有提前跑过来占位）
+    expect(secondPiece.position.x, equals(originalSecondPos.x));
+    expect(secondPiece.position.y, equals(originalSecondPos.y));
+
+    // 2. 模拟玩家在托盘区域内轻微移动鼠标 (Y 仍在托盘内)
+    game.updateHoldingPiecePosition(Vector2(100, game.trayPosition.y + 20));
+    expect(firstPiece.isInTray, isTrue, reason: '未拖出托盘前碎片依然保留托盘槽位');
+    expect(secondPiece.position.x, equals(originalSecondPos.x));
+
+    // 3. 模拟玩家将碎片向上拖出托盘，进入棋盘工作区 (Y < trayPosition.y - 20)
+    game.updateHoldingPiecePosition(Vector2(100, game.trayPosition.y - 40));
+    expect(firstPiece.isInTray, isFalse, reason: '真正拖出托盘后碎片脱离托盘');
+  });
+
+  test('从棋盘拖回碎片到托盘时，就近插入玩家松手位置的槽位，而不是跳跃回初始老索引', () async {
+    final img = await _decodePng();
+    final game = JigsawPuzzleGame(
+      image: img,
+      rows: 3,
+      cols: 3,
+      onSolved: () {},
+    );
+    game.onGameResize(Vector2(800, 600));
+    await game.onLoad();
+
+    final trayPieces = game.children.whereType<PuzzlePieceComponent>().where((p) => p.isInTray).toList();
+    final piece0 = trayPieces[0];
+
+    // 1. 将 piece0 从托盘拖出到棋盘上放开
+    game.startHoldingPiece(piece0, 0.5, 0.5);
+    game.updateHoldingPiecePosition(Vector2(200, 200));
+    game.dropHoldingPiece();
+    expect(piece0.isInTray, isFalse);
+
+    // 2. 将 piece0 从棋盘拖回托盘右侧位置（比如 X = 450，靠近后半部分槽位）放开
+    game.startHoldingPiece(piece0, 0.5, 0.5);
+    final dropX = 450.0;
+    final dropY = game.trayPosition.y + 20.0;
+    game.updateHoldingPiecePosition(Vector2(dropX, dropY));
+    game.dropHoldingPiece();
+
+    expect(piece0.isInTray, isTrue);
+    // 验证 piece0 就近插入在 X = 450 附近，绝非跳回 X = 18 附近的最左侧槽位
+    expect(piece0.position.x, closeTo(dropX, 50.0));
+  });
+
+  test('缩放最大倍数严格限制在 300% (3.0x)，且放大状态下支持在空白区域平移棋盘', () async {
+    final img = await _decodePng();
+    final game = JigsawPuzzleGame(
+      image: img,
+      rows: 3,
+      cols: 3,
+      onSolved: () {},
+    );
+    game.onGameResize(Vector2(800, 600));
+    await game.onLoad();
+
+    // 1. 验证 maxZoom 严格等于 3.0
+    expect(game.maxZoom, equals(3.0));
+
+    // 2. 尝试过度放大至 500%
+    game.zoomAt(Vector2(400, 300), 4.0);
+    expect(game.zoom, equals(3.0), reason: '放大倍数必须被严格 clamp 在 3.0 (300%)');
+
+    // 3. 验证放大状态下在空白区域平移有效
+    final initialPanX = game.panOffset.x;
+    game.panBy(Vector2(20, 15));
+    expect(game.panOffset.x, isNot(equals(initialPanX)));
+
+    // 4. 重置缩放
+    game.resetZoom();
+    expect(game.zoom, equals(1.0));
+    expect(game.panOffset.x, equals(0.0));
+    expect(game.panOffset.y, equals(0.0));
+  });
+
+  test('缩放和平移棋盘时碎片严格与棋盘同步移动（归一化世界坐标绝对不被破坏或压扁）', () async {
+    final img = await _decodePng();
+    final game = JigsawPuzzleGame(
+      image: img,
+      rows: 3,
+      cols: 3,
+      scatterMode: 'tabletop',
+      onSolved: () {},
+    );
+    game.onGameResize(Vector2(1000, 800));
+    await game.onLoad();
+
+    // 取任意一块游离碎片
+    final p0 = game.children.whereType<PuzzlePieceComponent>().first;
+    final originalNx = game.boardState.pieceById(p0.id).nx;
+    final originalNy = game.boardState.pieceById(p0.id).ny;
+
+    // 1. 放大棋盘至 2.0x
+    game.zoomAt(Vector2(500, 400), 1.0);
+    expect(game.zoom, equals(2.0));
+
+    // 2. 模拟多次连续平移拖动画布
+    for (int i = 0; i < 5; i++) {
+      game.panBy(Vector2(15, 20));
+      // 模拟 Flutter 构建触发 onGameResize（窗口尺寸未改变）
+      game.onGameResize(Vector2(1000, 800));
+    }
+
+    // 验证碎片的归一化世界坐标绝对保持不变（绝未被任何视口 clamp 篡改）
+    expect(game.boardState.pieceById(p0.id).nx, equals(originalNx));
+    expect(game.boardState.pieceById(p0.id).ny, equals(originalNy));
+
+    // 验证碎片的屏幕坐标严格等于棋盘仿射变换后的投影坐标
+    final expectedPos = game.normalizedToScreen(originalNx, originalNy);
+    expect(p0.position.x, closeTo(expectedPos.x, 0.01));
+    expect(p0.position.y, closeTo(expectedPos.y, 0.01));
+
+    // 3. 在放大状态下点击一键整理 (organizeTray)，验证碎片展开且归一化坐标正确
+    game.organizeTray();
+    final newNx = game.boardState.pieceById(p0.id).nx;
+    final newNy = game.boardState.pieceById(p0.id).ny;
+    final expectedOrganizedPos = game.normalizedToScreen(newNx, newNy);
+    expect(p0.position.x, closeTo(expectedOrganizedPos.x, 0.01));
+    expect(p0.position.y, closeTo(expectedOrganizedPos.y, 0.01));
+  });
+
+  test('放大后可自由平移漫游至棋盘右下角与边缘（右侧与底部绝不被提前阻挡截断）', () async {
+    final img = await _decodePng();
+    final game = JigsawPuzzleGame(
+      image: img,
+      rows: 3,
+      cols: 3,
+      onSolved: () {},
+    );
+    game.onGameResize(Vector2(1000, 700));
+    await game.onLoad();
+
+    // 1. 放大至 2.5x
+    game.zoomAt(Vector2(500, 300), 1.5);
+    expect(game.zoom, equals(2.5));
+
+    // 2. 向左上方深度拖动，查看棋盘右下角
+    game.panBy(Vector2(-1000, -1000));
+
+    // 验证棋盘右下角（nx=1.0, ny=1.0）成功进入屏幕视口内部（X < 1000, Y < trayPosition.y）
+    final bottomRightScreenPos = game.normalizedToScreen(1.0, 1.0);
+    expect(bottomRightScreenPos.x, lessThanOrEqualTo(1000.0));
+    expect(bottomRightScreenPos.y, lessThanOrEqualTo(game.trayPosition.y));
+
+    // 3. 向右下方深度拖动，查看棋盘左上角
+    game.panBy(Vector2(2000, 2000));
+    final topLeftScreenPos = game.normalizedToScreen(0.0, 0.0);
+    expect(topLeftScreenPos.x, greaterThanOrEqualTo(0.0));
+    expect(topLeftScreenPos.y, greaterThanOrEqualTo(0.0));
+  });
 }
+
+
+
+
+
+
 
 
 
