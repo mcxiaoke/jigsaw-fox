@@ -189,25 +189,52 @@ class PuzzleEngine {
           final alignDx = actualDx - expectedDx;
           final alignDy = actualDy - expectedDy;
 
-          currentPieces = _translateCluster(
-            currentPieces,
-            clusterId,
-            alignDx,
-            alignDy,
-          );
+          // 主装配体保护判定：小集群平移对齐向大集群（定海神针机制）
+          final countA = activeClusterPieces.length;
+          final countB = currentPieces.where((p) => p.clusterId == pB.clusterId).length;
 
-          // 并查集合并：将当前集群所有成员并入目标集群 targetClusterId
-          final targetClusterId = pB.clusterId;
-          currentPieces = currentPieces.map((p) {
-            if (p.clusterId == clusterId) {
-              return p.copyWith(clusterId: targetClusterId);
-            }
-            return p;
-          }).toList();
+          if (countB >= countA) {
+            // 集群 B 规模更大（为主装配体），平移集群 A 向集群 B 对齐
+            currentPieces = _translateCluster(
+              currentPieces,
+              clusterId,
+              alignDx,
+              alignDy,
+            );
+
+            // 将集群 A 并入集群 B
+            final targetClusterId = pB.clusterId;
+            currentPieces = currentPieces.map((p) {
+              if (p.clusterId == clusterId) {
+                return p.copyWith(clusterId: targetClusterId);
+              }
+              return p;
+            }).toList();
+
+            affectedIds.addAll(currentPieces.where((p) => p.clusterId == targetClusterId).map((p) => p.id));
+          } else {
+            // 集群 A 规模更大（为主装配体），平移小集群 B 向集群 A 对齐，集群 A 纹丝不动
+            currentPieces = _translateCluster(
+              currentPieces,
+              pB.clusterId,
+              -alignDx,
+              -alignDy,
+            );
+
+            // 将小集群 B 并入集群 A
+            final sourceClusterId = pB.clusterId;
+            currentPieces = currentPieces.map((p) {
+              if (p.clusterId == sourceClusterId) {
+                return p.copyWith(clusterId: clusterId);
+              }
+              return p;
+            }).toList();
+
+            affectedIds.addAll(currentPieces.where((p) => p.clusterId == clusterId).map((p) => p.id));
+          }
 
           didSnap = true;
           didMerge = true;
-          affectedIds.addAll(currentPieces.where((p) => p.clusterId == targetClusterId).map((p) => p.id));
           break;
         }
       }
@@ -288,9 +315,11 @@ class PuzzleEngine {
 
           if ((actualDx - expectedDx).abs() <= epsilon &&
               (actualDy - expectedDy).abs() <= epsilon) {
-            final oldId = pB.clusterId;
-            final newId = pA.clusterId;
-            result = result.map((p) => p.clusterId == oldId ? p.copyWith(clusterId: newId) : p).toList();
+            final countA = result.where((p) => p.clusterId == pA.clusterId).length;
+            final countB = result.where((p) => p.clusterId == pB.clusterId).length;
+            final sourceId = countB >= countA ? pA.clusterId : pB.clusterId;
+            final targetId = countB >= countA ? pB.clusterId : pA.clusterId;
+            result = result.map((p) => p.clusterId == sourceId ? p.copyWith(clusterId: targetId) : p).toList();
             changed = true;
             break;
           }

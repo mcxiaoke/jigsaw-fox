@@ -427,5 +427,161 @@ void main() {
     expect(piece0.isDragging, isFalse);
     expect(piece0.isInTray, isTrue);
   });
+
+  test('主装配体保护 (isInMainAssembly)：小碎片拼向大集群时大集群绝对静止', () async {
+    final img = await _decodePng();
+    final game = JigsawPuzzleGame(
+      image: img,
+      rows: 3,
+      cols: 3,
+      onSolved: () {},
+    );
+    game.onGameResize(Vector2(400, 800));
+    await game.onLoad();
+
+    // 拼出 3 块的大集群
+    game.hint();
+    game.hint();
+    game.hint();
+
+    final boardPieces = game.children.whereType<PuzzlePieceComponent>().where((p) => !p.isInTray).toList();
+    expect(boardPieces.length, 3);
+
+    // 记录大集群中第一块的位置
+    final mainPiece = boardPieces.first;
+    final posBefore = mainPiece.position.clone();
+
+    // 再拼入第 4 块
+    game.hint();
+
+    // 验证大集群中的碎片位置纹丝不动
+    expect(mainPiece.position.x, closeTo(posBefore.x, 0.001));
+    expect(mainPiece.position.y, closeTo(posBefore.y, 0.001));
+  });
+
+  test('边缘闭环自动感知 (isEdgeComplete) 自动解除边缘筛选', () async {
+    final img = await _decodePng();
+    final game = JigsawPuzzleGame(
+      image: img,
+      rows: 3,
+      cols: 3,
+      onSolved: () {},
+    );
+    game.onGameResize(Vector2(400, 800));
+    await game.onLoad();
+
+    // 开启边缘筛选
+    game.toggleBorderFilter();
+    expect(game.isBorderFilterActive, isTrue);
+
+    // 连续提示直到 3x3 外围 8 块边缘全部归位（3x3 共有 8 块外框）
+    for (var i = 0; i < 8; i++) {
+      game.hint();
+    }
+
+    // 验证边缘全部归位后，自动感知并解除筛选模式
+    expect(game.boardState.isEdgeComplete, isTrue);
+    expect(game.isBorderFilterActive, isFalse);
+  });
+
+  test('桌面打散模式 (scatterMode=tabletop) 上下左右全域环形散落且中心绝对留白', () async {
+    final img = await _decodePng();
+    final game = JigsawPuzzleGame(
+      image: img,
+      rows: 4,
+      cols: 4,
+      scatterMode: 'tabletop',
+      onSolved: () {},
+    );
+    // 模拟桌面端/宽屏分辨率 (1280x800)
+    game.onGameResize(Vector2(1280, 800));
+    await game.onLoad();
+
+    final pieces = game.children.whereType<PuzzlePieceComponent>().toList();
+    expect(pieces.length, 16);
+
+    final centerX = game.boardTopLeft.x + game.boardSize.x / 2;
+    final centerY = game.boardTopLeft.y + game.boardSize.y / 2;
+
+    var countLeft = 0;
+    var countRight = 0;
+    var countTop = 0;
+    var countBottom = 0;
+
+    final xPositions = <double>{};
+    final yPositions = <double>{};
+
+    for (final p in pieces) {
+      final pCenterX = p.position.x + p.size.x * p.scale.x / 2;
+      final pCenterY = p.position.y + p.size.y * p.scale.y / 2;
+
+      xPositions.add(p.position.x.roundToDouble());
+      yPositions.add(p.position.y.roundToDouble());
+
+      // 1. 验证绝对没有侵入棋盘中心区域
+      final isOverlapBoard = !(p.position.x + p.size.x * p.scale.x <= game.boardTopLeft.x ||
+          p.position.x >= game.boardTopLeft.x + game.boardSize.x ||
+          p.position.y + p.size.y * p.scale.y <= game.boardTopLeft.y ||
+          p.position.y >= game.boardTopLeft.y + game.boardSize.y);
+      expect(isOverlapBoard, isFalse, reason: '碎片 #${p.id} 绝对不能遮挡中央棋盘区域');
+
+      // 2. 统计围绕中心的 4 个方位分布
+      final dx = pCenterX - centerX;
+      final dy = pCenterY - centerY;
+      if (dx.abs() > dy.abs()) {
+        if (dx < 0) {
+          countLeft++;
+        } else {
+          countRight++;
+        }
+      } else {
+        if (dy < 0) {
+          countTop++;
+        } else {
+          countBottom++;
+        }
+      }
+    }
+
+    // 验证上下左右均有散落碎片，绝非单一列或仅在左右
+    expect(countLeft + countRight, greaterThan(0));
+    expect(countTop + countBottom, greaterThan(0));
+    // 验证呈现多列多行，并非所有碎片堆在同一 X 或同一 Y
+    expect(xPositions.length, greaterThanOrEqualTo(4));
+    expect(yPositions.length, greaterThanOrEqualTo(4));
+  });
+
+  test('失踪碎片防丢自检 (missingPieceCheck) 自动将离屏不可见碎片弹回可视区域', () async {
+    final img = await _decodePng();
+    final game = JigsawPuzzleGame(
+      image: img,
+      rows: 3,
+      cols: 3,
+      onSolved: () {},
+    );
+    game.onGameResize(Vector2(400, 800));
+    await game.onLoad();
+
+    // 拼至仅剩最后 1 块未归位
+    for (var i = 0; i < 8; i++) {
+      game.hint();
+    }
+    expect(game.solvedCount, 8);
+
+    // 找到最后 1 块未归位碎片，人为将其坐标甩出屏幕外
+    final lastPiece = game.children.whereType<PuzzlePieceComponent>().firstWhere((p) => p.isInTray || !game.boardState.pieceById(p.id).isSolved(3, 3));
+    lastPiece.isInTray = false;
+    lastPiece.position.setValues(-500, -500); // 严重出界
+
+    // 触发自检
+    game.missingPieceCheck();
+
+    // 验证坐标已被安全弹回屏幕可视区域内
+    expect(lastPiece.position.x, greaterThanOrEqualTo(0.0));
+    expect(lastPiece.position.y, greaterThanOrEqualTo(0.0));
+    expect(lastPiece.position.x, lessThan(400.0));
+    expect(lastPiece.position.y, lessThan(800.0));
+  });
 }
+
 

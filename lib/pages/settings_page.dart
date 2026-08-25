@@ -80,6 +80,30 @@ class _SettingsPageState extends State<SettingsPage> {
                   activeThumbColor: const Color(0xFF2E7D32),
                   onChanged: (v) => setState(() => _repo.gridPreviewEnabled = v),
                 ),
+                const Divider(height: 1, indent: 56),
+                ListTile(
+                  leading: const Icon(PhosphorIconsBold.squaresFour, color: Color(0xFF2E7D32)),
+                  title: const Text('碎片初始排布模式', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14.5)),
+                  subtitle: Text(_repo.pieceScatterMode == 'tabletop'
+                      ? '桌面环形散落（推荐宽屏/平板）'
+                      : '底部托盘收纳（默认/推荐手机）'),
+                  trailing: SegmentedButton<String>(
+                    showSelectedIcon: false,
+                    style: SegmentedButton.styleFrom(
+                      selectedBackgroundColor: const Color(0xFF2E7D32),
+                      selectedForegroundColor: Colors.white,
+                      visualDensity: VisualDensity.compact,
+                    ),
+                    segments: const [
+                      ButtonSegment(value: 'tray', label: Text('托盘')),
+                      ButtonSegment(value: 'tabletop', label: Text('桌面')),
+                    ],
+                    selected: {_repo.pieceScatterMode},
+                    onSelectionChanged: (set) {
+                      setState(() => _repo.pieceScatterMode = set.first);
+                    },
+                  ),
+                ),
               ]),
 
               const SizedBox(height: 18),

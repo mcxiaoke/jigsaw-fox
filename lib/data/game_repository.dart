@@ -36,6 +36,7 @@ class GameRepository {
   static const String _keySoundEnabled = 'jigsaw_setting_sound';
   static const String _keyHapticEnabled = 'jigsaw_setting_haptic';
   static const String _keyGridPreviewEnabled = 'jigsaw_setting_grid_preview';
+  static const String _keyPieceScatterMode = 'jigsaw_setting_piece_scatter_mode';
   static const String _keySelectedBackground = 'jigsaw_setting_selected_background';
   static const String _keyTotalCompleted = 'jigsaw_stat_total_completed';
   static const String _keyTotalPiecesSnapped = 'jigsaw_stat_total_pieces_snapped';
@@ -58,6 +59,12 @@ class GameRepository {
 
   bool get gridPreviewEnabled => _prefs?.getBool(_keyGridPreviewEnabled) ?? true;
   set gridPreviewEnabled(bool v) => _prefs?.setBool(_keyGridPreviewEnabled, v);
+
+  /// 碎片初始排布模式：'tray'（底部托盘收纳，默认/移动端友好）或 'tabletop'（桌面环形发散散落，适合宽屏/平板）
+  String get pieceScatterMode =>
+      _prefs?.getString(_keyPieceScatterMode) ?? 'tray';
+  set pieceScatterMode(String v) =>
+      _prefs?.setString(_keyPieceScatterMode, v);
 
   String get selectedBackground =>
       _prefs?.getString(_keySelectedBackground) ?? kBackgroundAssets[0];

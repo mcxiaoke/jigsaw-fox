@@ -153,6 +153,17 @@ class PuzzleBoardState {
     return true;
   }
 
+  /// Returns true if all outer border (edge) pieces are correctly aligned and oriented.
+  bool get isEdgeComplete {
+    for (final p in pieces) {
+      final isEdge = (p.r == 0 || p.r == rows - 1 || p.c == 0 || p.c == cols - 1);
+      if (isEdge && !p.isSolved(rows, cols)) {
+        return false;
+      }
+    }
+    return true;
+  }
+
   PuzzleBoardState copyWith({
     int? rows,
     int? cols,

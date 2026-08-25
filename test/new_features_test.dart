@@ -155,10 +155,13 @@ void main() {
       expect(find.text('拼图吸附音效'), findsOneWidget);
       expect(find.text('触感震动反馈'), findsOneWidget);
       expect(find.text('选关切图网格预览'), findsOneWidget);
+      expect(find.text('碎片初始排布模式'), findsOneWidget);
+      
+      await tester.scrollUntilVisible(find.text('玩法技巧与操作指引'), 200);
       expect(find.text('玩法与帮助'), findsOneWidget);
       expect(find.text('玩法技巧与操作指引'), findsOneWidget);
       
-      await tester.scrollUntilVisible(find.text('重置所有游戏数据'), 100);
+      await tester.scrollUntilVisible(find.text('重置所有游戏数据'), 200);
       expect(find.text('重置所有游戏数据'), findsOneWidget);
     });
 

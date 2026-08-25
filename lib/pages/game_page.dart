@@ -79,6 +79,7 @@ class _GamePageState extends State<GamePage> {
       image: img,
       rows: effectiveDiff.rows,
       cols: effectiveDiff.cols,
+      scatterMode: _repo.pieceScatterMode,
       initialSnapshotJson: widget.initialSnapshotJson,
       initialGhostOpacity: 0.0,
       onSolved: _handleSolved,
