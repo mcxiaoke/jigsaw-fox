@@ -596,7 +596,6 @@ void main() {
 
     final initialTrayY = game.trayPosition.y;
     final initialBoardW = game.boardSize.x;
-    final initialPieceW = game.pieceSize.x;
     expect(initialTrayY, equals(800.0 - game.traySize.y - 8.0));
 
     // 拼入一块碎片到棋盘上
@@ -629,7 +628,62 @@ void main() {
     expect(solvedComp.position.x, closeTo(game.boardTopLeft.x + solvedComp.c * game.pieceSize.x, 0.5));
     expect(solvedComp.position.y, closeTo(game.boardTopLeft.y + solvedComp.r * game.pieceSize.y, 0.5));
   });
+
+  test('多块已吸附集群拖拽靠近边缘移动时，同集群碎片不发生冲突或被意外拆散', () async {
+    final img = await _decodePng();
+    final game = JigsawPuzzleGame(
+      image: img,
+      rows: 3,
+      cols: 3,
+      onSolved: () {},
+    );
+    game.onGameResize(Vector2(600, 800));
+    await game.onLoad();
+
+    // 连续 hint 3 块碎片，形成 3 块碎片在棋盘上的状态
+    game.hint();
+    game.hint();
+    game.hint();
+    expect(game.solvedCount, 3);
+
+    // 人为模拟一个由 3 块碎片组成的自定义未锁定自由集群
+    final p0 = game.children.whereType<PuzzlePieceComponent>().firstWhere((p) => p.id == 0);
+    final p1 = game.children.whereType<PuzzlePieceComponent>().firstWhere((p) => p.id == 1);
+    final p2 = game.children.whereType<PuzzlePieceComponent>().firstWhere((p) => p.id == 2);
+
+    p0.isLocked = false;
+    p1.isLocked = false;
+    p2.isLocked = false;
+    p0.clusterId = 999;
+    p1.clusterId = 999;
+    p2.clusterId = 999;
+
+    // 1. 抓取 p0
+    game.startHoldingPiece(p0, 0.5, 0.5);
+    expect(game.holdingPiece, equals(p0));
+
+    // 2. 模拟鼠标移动到靠近托盘边缘线 (例如 y = game.trayPosition.y - 10)
+    final nearEdgePos = Vector2(200, game.trayPosition.y - 10);
+    game.updateHoldingPiecePosition(nearEdgePos);
+
+    // 验证集群 3 块碎片的相对位置保持完全一致且紧密相连（按当前过渡缩放 p0.scale.x 严格锁定）
+    final expectedRelX1 = (p1.c - p0.c) * game.pieceSize.x * p0.scale.x;
+    final expectedRelY1 = (p1.r - p0.r) * game.pieceSize.y * p0.scale.y;
+    expect(p1.position.x - p0.position.x, closeTo(expectedRelX1, 0.001));
+    expect(p1.position.y - p0.position.y, closeTo(expectedRelY1, 0.001));
+
+    // 3. 模拟此时 Flame 手势引擎触发同集群成员 p1 的 onDragStart（在鼠标移动过程中光标经过 p1）
+    // 不应触发 dropHoldingPiece，应保持当前集群抓取
+    expect(game.holdingPiece, equals(p0));
+
+    // 4. 模拟触发边缘 Cancel 事件
+    // 由于正在 holding 该集群，cancelPieceDrag 不应将集群拆散
+    game.cancelPieceDrag(p0);
+    expect(p0.isInTray, equals(p1.isInTray), reason: '集群所有碎片必须原子性处于相同容器');
+    expect(p1.isInTray, equals(p2.isInTray), reason: '集群所有碎片必须原子性处于相同容器');
+  });
 }
+
 
 
 

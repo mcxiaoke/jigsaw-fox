@@ -541,11 +541,6 @@ class _GamePageState extends State<GamePage> {
     } else if ((event.buttons & kMiddleMouseButton) != 0 && _game != null) {
       _game!.panBy(Vector2(event.delta.dx, event.delta.dy));
       if (mounted) setState(() {});
-    } else if (_game?.holdingPiece != null && _pointerPositions.length <= 1) {
-      // 鼠标按住移动时实时驱动碎片跟手移动与缩放
-      _game!.updateHoldingPiecePosition(
-        Vector2(event.localPosition.dx, event.localPosition.dy),
-      );
     }
   }
 

@@ -82,9 +82,7 @@ class PuzzlePieceComponent extends PositionComponent
   /// 是否已被吸附归位锁定（锁定后禁止拖拽移动，置于最底层渲染）
   bool isLocked = false;
 
-  /// 拖拽手势累计位移量、归一化抓取锚点与时间戳（用于区分短按单击吸附与长按拖拽）
-  double _dragTotalDistance = 0.0;
-  DateTime? _dragStartTime;
+  /// 归一化抓取锚点（用于保持光标在缩放过程中与拾取点锁定）
   double grabAnchorX = 0.5;
   double grabAnchorY = 0.5;
 
@@ -199,6 +197,7 @@ class PuzzlePieceComponent extends PositionComponent
 
     // 如果当前游戏已有吸附抓取的碎片，任意点击都触发放下
     if (game.holdingPiece != null) {
+      event.handled = true;
       game.dropHoldingPiece();
       return;
     }
@@ -206,6 +205,7 @@ class PuzzlePieceComponent extends PositionComponent
     if (isLocked) return;
 
     super.onTapDown(event);
+    event.handled = true;
     computeGrabAnchor(event.canvasPosition);
     game.startHoldingPiece(this, grabAnchorX, grabAnchorY);
   }
@@ -214,16 +214,16 @@ class PuzzlePieceComponent extends PositionComponent
   void onDragStart(DragStartEvent event) {
     if (isLocked || game.isSolved || game.isPinching) return;
 
-    // 如果当前游戏已有其他正在吸附抓取的碎片，先将其释放放下
-    if (game.holdingPiece != null && game.holdingPiece != this) {
+    // 若已有正在拖拽的碎片，同集群保持跟随，不打断不重入
+    if (game.holdingPiece != null) {
+      if (game.holdingPiece == this || game.holdingPiece!.clusterId == clusterId) {
+        return;
+      }
       game.dropHoldingPiece();
-      return;
     }
 
     super.onDragStart(event);
     isDragging = true;
-    _dragTotalDistance = 0.0;
-    _dragStartTime = DateTime.now();
     computeGrabAnchor(event.canvasPosition);
     game.startHoldingPiece(this, grabAnchorX, grabAnchorY);
   }
@@ -240,9 +240,7 @@ class PuzzlePieceComponent extends PositionComponent
     if (!isDragging && game.holdingPiece != this) return;
 
     super.onDragUpdate(event);
-    final delta = event.canvasDelta;
-    _dragTotalDistance += delta.length;
-    // 驱动引擎以光标当前绝对位置精准更新碎片及集群的位置与缩放
+    // 驱动引擎以光标当前绝对位置精准更新碎片及集群的位置与缩放（拖拽过程全程平滑跟随，绝不中途 drop）
     game.updateHoldingPiecePosition(event.canvasEndPosition);
   }
 
@@ -251,28 +249,29 @@ class PuzzlePieceComponent extends PositionComponent
     super.onDragEnd(event);
     if (!isDragging && game.holdingPiece != this) return;
 
-    final elapsed = _dragStartTime != null
-        ? DateTime.now().difference(_dragStartTime!).inMilliseconds
-        : 999;
-
-    // 如果总位移明显 (> 12px) 或长按持续较久 (> 400ms)，属于传统长按拖拽释放，松手即放下
-    if (_dragTotalDistance > 12.0 || elapsed > 400) {
-      isDragging = false;
-      game.dropHoldingPiece();
-    }
-    // 否则（短按单击），保持光标吸附跟随模式，等待玩家移动后下一次单击放置
+    isDragging = false;
+    // 鼠标抬起松手，平稳释放放下并结算吸附
+    game.dropHoldingPiece();
   }
 
   @override
   void onDragCancel(DragCancelEvent event) {
     super.onDragCancel(event);
-    if (!isDragging) return;
+    if (!isDragging && game.holdingPiece != this) return;
+
     isDragging = false;
-    game.cancelPieceDrag(this);
+    game.dropHoldingPiece();
+  }
+
+  /// 立即清除所有正在运行的补间动画（如 MoveToEffect / ScaleEffect）
+  void clearActiveEffects() {
+    removeAll(children.whereType<Effect>());
   }
 
   /// 带有平滑曲线的缓动平移位移动画
   void animateTo(Vector2 targetPos, {double duration = 0.15}) {
+    // 启动新平移动画前立即清除已有 MoveEffect，杜绝多重动画叠加争抢坐标
+    removeAll(children.whereType<MoveEffect>());
     if ((position - targetPos).length < 0.5) {
       position.setFrom(targetPos);
       return;
@@ -290,6 +289,8 @@ class PuzzlePieceComponent extends PositionComponent
 
   /// 带有平滑曲线的缓动缩放动画
   void animateScaleTo(Vector2 targetScale, {double duration = 0.15}) {
+    // 启动新缩放动画前立即清除已有 ScaleEffect，杜绝动画叠加冲突
+    removeAll(children.whereType<ScaleEffect>());
     if ((scale - targetScale).length < 0.01) {
       scale.setFrom(targetScale);
       return;

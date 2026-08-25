@@ -83,7 +83,9 @@ class TrayBackgroundComponent extends PositionComponent
   @override
   void onDragUpdate(DragUpdateEvent event) {
     super.onDragUpdate(event);
-    game.scrollTray(event.localDelta.x);
+    if (game.holdingPiece == null) {
+      game.scrollTray(event.localDelta.x);
+    }
   }
 }
 
@@ -608,6 +610,7 @@ class JigsawPuzzleGame extends FlameGame
   @override
   void onTapDown(TapDownEvent event) {
     super.onTapDown(event);
+    if (event.handled) return;
     if (_holdingPiece != null && !_isSolved) {
       dropHoldingPiece();
     }
@@ -659,6 +662,7 @@ class JigsawPuzzleGame extends FlameGame
     final targetY =
         cursorCanvasPos.y - _holdingAnchorY * primary.size.y * currentScale;
 
+    primary.clearActiveEffects();
     primary.scale.setAll(currentScale);
     primary.position.setValues(targetX, targetY);
 
@@ -667,6 +671,7 @@ class JigsawPuzzleGame extends FlameGame
         .where((p) => p.clusterId == primary.clusterId && p != primary);
 
     for (final p in clusterPieces) {
+      p.clearActiveEffects();
       p.scale.setAll(currentScale);
       final relCol = p.c - primary.c;
       final relRow = p.r - primary.r;
@@ -957,6 +962,7 @@ class JigsawPuzzleGame extends FlameGame
     for (final p in _pieces.values) {
       if (p.clusterId == piece.clusterId) {
         p.priority = _topPriority;
+        p.clearActiveEffects();
         if (p.isInTray) {
           p.isInTray = false;
         }
@@ -992,27 +998,28 @@ class JigsawPuzzleGame extends FlameGame
     final clusterPieces =
         _pieces.values.where((p) => p.clusterId == piece.clusterId).toList();
 
+    // 检查集群在被拖拽前的状态：若集群包含多块碎片或任一碎片在棋盘上，则集群整体归位于棋盘（严禁拆解集群）
+    final isMultiCluster = clusterPieces.length > 1;
+    final primaryState = _boardState.pieceById(piece.id);
+    final isPrimaryOnBoard = (primaryState.nx >= -0.10 &&
+        primaryState.nx <= 1.10 &&
+        primaryState.ny >= -0.10 &&
+        primaryState.ny <= 1.10);
+    final shouldStayOnBoard = isTabletop || isMultiCluster || isPrimaryOnBoard;
+
     for (final p in clusterPieces) {
       p.isDragging = false;
+      p.clearActiveEffects();
       final statePiece = _boardState.pieceById(p.id);
-      if (isTabletop) {
+
+      if (shouldStayOnBoard) {
         p.isInTray = false;
         p.scale.setAll(_zoom);
         final targetPos = _normalizedToScreen(statePiece.nx, statePiece.ny);
         p.animateTo(targetPos, duration: 0.15);
       } else {
-        final isOnBoard = (statePiece.nx >= -0.10 &&
-            statePiece.nx <= 1.10 &&
-            statePiece.ny >= -0.10 &&
-            statePiece.ny <= 1.10);
-        p.isInTray = !isOnBoard;
-        if (p.isInTray) {
-          p.scale.setAll(_trayPieceScale);
-        } else {
-          p.scale.setAll(_zoom);
-          final targetPos = _normalizedToScreen(statePiece.nx, statePiece.ny);
-          p.animateTo(targetPos, duration: 0.15);
-        }
+        p.isInTray = true;
+        p.scale.setAll(_trayPieceScale);
       }
     }
     if (!isTabletop) {
@@ -1343,9 +1350,12 @@ class JigsawPuzzleGame extends FlameGame
     final unsolved = _boardState.pieces.where((p) => !p.isSolved(rows, cols)).toList();
     if (unsolved.isEmpty || unsolved.length > 2) return;
 
+    final holdingClusterId = _holdingPiece?.clusterId;
+
     for (final pState in unsolved) {
       final comp = _pieces[pState.id];
       if (comp == null || comp.isDragging || comp == _holdingPiece || comp.isInTray) continue;
+      if (holdingClusterId != null && comp.clusterId == holdingClusterId) continue;
 
       final isOutOfBounds = comp.position.x < -comp.size.x * 0.5 ||
           comp.position.x > size.x - comp.size.x * 0.5 ||
