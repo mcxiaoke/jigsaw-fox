@@ -75,6 +75,8 @@ class PieceShape {
     double? tipRatio,
   }) : overhang = Overhang.fromEdges(edges, tip: tipRatio) {
     path = _buildPath();
+    highlightPath = _buildHighlightPath();
+    shadowPath = _buildShadowPath();
   }
 
   /// 碎片的四条边缘描述子（上、右、下、左）
@@ -89,8 +91,14 @@ class PieceShape {
   /// 四周向外延展比例包围盒
   final Overhang overhang;
 
-  /// 预计算并缓存的顺时针封闭贝塞尔曲线路径
+  /// 预计算并缓存的顺时针封闭贝塞尔曲线路径（完整外轮廓，用于 clipPath、厚度层填充与碰撞判定）
   late final Path path;
+
+  /// 预计算并缓存的迎光面贝塞尔路径（Top 边与 Left 边，在 (0, 0) 处平滑相接）
+  late final Path highlightPath;
+
+  /// 预计算并缓存的背光面贝塞尔路径（Right 边与 Bottom 边，在 (width, height) 处平滑相接）
+  late final Path shadowPath;
 
   /// 局部坐标系下的完整渲染绘制外包矩形。
   /// 原点 (0, 0) 对应碎片基础矩形单元格的左上角。
@@ -171,6 +179,52 @@ class PieceShape {
     );
 
     p.close();
+    return p;
+  }
+
+  /// 构建左上方迎光面路径 (Left 边逆向 + Top 边正向)
+  Path _buildHighlightPath() {
+    final p = Path();
+    p.moveTo(0, height);
+    // 1. Left 边：(0, height) -> (0, 0)
+    edges.left.appendToPath(
+      p,
+      start: const Offset(0, 0),
+      end: Offset(0, height),
+      normal: const Offset(-1, 0),
+      reverse: true,
+    );
+    // 2. Top 边：(0, 0) -> (width, 0)
+    edges.top.appendToPath(
+      p,
+      start: const Offset(0, 0),
+      end: Offset(width, 0),
+      normal: const Offset(0, -1),
+      reverse: false,
+    );
+    return p;
+  }
+
+  /// 构建右下方背光面冲压暗线路径 (Right 边正向 + Bottom 边逆向)
+  Path _buildShadowPath() {
+    final p = Path();
+    p.moveTo(width, 0);
+    // 1. Right 边：(width, 0) -> (width, height)
+    edges.right.appendToPath(
+      p,
+      start: Offset(width, 0),
+      end: Offset(width, height),
+      normal: const Offset(1, 0),
+      reverse: false,
+    );
+    // 2. Bottom 边：(width, height) -> (0, height)
+    edges.bottom.appendToPath(
+      p,
+      start: Offset(0, height),
+      end: Offset(width, height),
+      normal: const Offset(0, 1),
+      reverse: true,
+    );
     return p;
   }
 

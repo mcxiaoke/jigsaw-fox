@@ -14,6 +14,7 @@ import '../logic/engine/undo_manager.dart';
 import '../logic/geometry/edge_layout.dart';
 import '../logic/geometry/piece_shape.dart';
 import '../logic/models/puzzle_state.dart';
+import '../logic/rendering/linen_texture_manager.dart';
 import 'puzzle_piece_component.dart';
 
 typedef PuzzleImage = ui.Image;
@@ -203,6 +204,7 @@ class JigsawPuzzleGame extends FlameGame
 
   @override
   Future<void> onLoad() async {
+    await LinenTextureManager.ensureInitialized();
     _computeLayout();
 
     // 1. Draw Board Background Frame

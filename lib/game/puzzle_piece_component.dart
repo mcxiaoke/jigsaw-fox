@@ -8,6 +8,7 @@ import 'package:flutter/painting.dart'
     show BlurStyle, Color, MaskFilter, Paint, PaintingStyle;
 
 import '../logic/geometry/piece_shape.dart';
+import '../logic/rendering/linen_texture_manager.dart';
 import 'jigsaw_puzzle_game.dart';
 
 /// 拼图碎片渲染与交互组件（基于 Flame 游戏引擎）。
@@ -106,29 +107,53 @@ class PuzzlePieceComponent extends PositionComponent
     ..filterQuality = ui.FilterQuality.medium
     ..isAntiAlias = true;
 
-  /// 静止/托盘贴地阴影画笔：
-  /// - 模糊半径 1.5px，垂直位移 1.2px，透明度 0x28 (约 16%)
-  /// - 模拟硬纸板紧贴底托时的环境光遮挡（Ambient Occlusion），形成微弱但真实的实体感。
-  static final Paint _restShadowPaint = Paint()
-    ..color = const Color(0x28000000)
-    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 1.5)
+  /// 静止/贴地接触微阴影画笔（Contact AO）：
+  /// - 模糊半径 1.0px，垂直位移 0.8px，透明度 0x30 (约 19%)
+  /// - 模拟硬纸板受重力紧压在底托/桌面时的环境光遮挡（Ambient Occlusion），形成逼真贴地感。
+  static final Paint _contactShadowPaint = Paint()
+    ..color = const Color(0x30000000)
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 1.0)
     ..isAntiAlias = true;
 
-  /// 拖拽拾起悬浮软阴影画笔：
-  /// - 模糊半径 5.5px，垂直位移 5.0px，透明度 0x45 (约 27%)
-  /// - 模拟碎片被玩家手指拾起并悬浮在棋盘上方时的真实光学扩散投影。
+  /// 拖拽拾起悬浮扩散软阴影画笔：
+  /// - 模糊半径 7.0px，偏移 (2.0, 6.0px)，透明度 0x40 (约 25%)
+  /// - 模拟碎片被玩家手指拾起并悬浮在棋盘上方时的真实光学向右下方扩散的深层软投影。
   static final Paint _dragShadowPaint = Paint()
-    ..color = const Color(0x45000000)
-    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 5.5)
+    ..color = const Color(0x40000000)
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 7.0)
     ..isAntiAlias = true;
 
-  /// 物理冲压切线与拼图咬合缝隙画笔：
-  /// - 线宽 1.2px，颜色为 41% 透明度的深黑色（Color(0x68000000)）
-  /// - 使吸附和拼接后的边缘轮廓更加明显清晰，还原实体拼图刀模冲压卡扣质感。
-  static final Paint _mainOutlinePaint = Paint()
+  /// 纸板物理厚度截面填充画笔（方案 2）：
+  /// - 填充荷兰天然白卡/灰卡纸的夹芯浅米灰截面色（Color(0xFFD6D0C4)）
+  static final Paint _cardboardSidePaint = Paint()
+    ..color = const Color(0xFFD6D0C4)
+    ..style = PaintingStyle.fill
+    ..isAntiAlias = true;
+
+  /// 纸板厚度背光侧底边切线画笔（方案 2）：
+  /// - 线宽 0.8px，半透明深黑，增强 1.8mm 纸板厚度侧边的分界清晰度
+  static final Paint _cardboardBottomEdgePaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 0.8
+    ..color = const Color(0x55000000)
+    ..isAntiAlias = true;
+
+  /// 迎光面冲压倒角高光微边画笔（方案 1）：
+  /// - Top 边与 Left 边（迎光面）：线宽 0.8px，约 27% 半透明纯白（Color(0x45FFFFFF)）
+  /// - 模拟来自左上方 135° 光源照射在金属刀模挤压 V 形倒角上的柔和反光。
+  static final Paint _highlightOutlinePaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 0.8
+    ..color = const Color(0x45FFFFFF)
+    ..isAntiAlias = true;
+
+  /// 背光面冲压切缝暗线画笔（方案 1）：
+  /// - Bottom 边与 Right 边（背光面）：线宽 1.2px，约 44% 半透明深黑（Color(0x70000000)）
+  /// - 模拟金属冲压刀模深陷切口与拼合咬合时的清晰立体阴影线。
+  static final Paint _shadowOutlinePaint = Paint()
     ..style = PaintingStyle.stroke
     ..strokeWidth = 1.2
-    ..color = const Color(0x68000000)
+    ..color = const Color(0x70000000)
     ..isAntiAlias = true;
 
   /// 吸附成功高亮画笔（鲜艳绿色光晕）
@@ -153,38 +178,53 @@ class PuzzlePieceComponent extends PositionComponent
   void render(ui.Canvas canvas) {
     if (hideBorders) return; // 通关后整图渲染，跳过单片绘制
 
+    final isElevated = isDragging && !isInTray;
+
     // 1. 第一层：根据当前物理状态绘制 3D 软阴影（在剪裁外部）
     canvas.save();
-    if (isDragging && !isInTray) {
-      canvas.translate(0, 5.0);
+    if (isElevated) {
+      canvas.translate(2.0, 6.0);
       canvas.drawPath(shape.path, _dragShadowPaint);
-    } else if (isInTray) {
-      canvas.translate(0, 1.2);
-      canvas.drawPath(shape.path, _restShadowPaint);
+    } else {
+      canvas.translate(0.0, 0.8);
+      canvas.drawPath(shape.path, _contactShadowPaint);
     }
     canvas.restore();
 
+    // 2. 第二层：在拾起/悬浮状态下，绘制 1.8mm 硬纸板物理厚度截面（3D Extrusion Side）
+    if (isElevated) {
+      canvas.save();
+      canvas.translate(0.8, 1.6);
+      canvas.drawPath(shape.path, _cardboardSidePaint);
+      canvas.drawPath(shape.shadowPath, _cardboardBottomEdgePaint);
+      canvas.restore();
+    }
+
+    // 3. 第三层：正面图案纹理层与亚麻漫反射层（使用精确二次贝塞尔曲线 Path 剪裁画布）
     canvas.save();
-
-    // 2. 第二层：使用精确二次贝塞尔曲线 Path 剪裁画布
     canvas.clipPath(shape.path);
-
-    // 3. 第三层：将原图对应像素块绘制到剪裁区域内
     canvas.drawImageRect(
       image,
       srcRect,
       shape.fillRect,
       _imagePaint,
     );
+    // 方案 4：亚麻布纹压花 / 纸质漫反射微纹理（消除数码塑料反光）
+    final linenPaint = LinenTextureManager.paint;
+    if (LinenTextureManager.enabled && linenPaint != null) {
+      canvas.drawRect(shape.fillRect, linenPaint);
+    }
+    canvas.restore();
 
-    // 4. 第四层：绘制冲压微切线或吸附高亮光效
+    // 4. 第四层：绘制表面定向冲压光影切线或吸附高亮光效
     if (isHighlight) {
       canvas.drawPath(shape.path, _snapHighlightPaint);
     } else {
-      canvas.drawPath(shape.path, _mainOutlinePaint);
+      // 迎光面（Top & Left）柔白高光微边
+      canvas.drawPath(shape.highlightPath, _highlightOutlinePaint);
+      // 背光面（Bottom & Right）深黑冲压暗线
+      canvas.drawPath(shape.shadowPath, _shadowOutlinePaint);
     }
-
-    canvas.restore();
   }
 
   // ---------------------------------------------------------------------------

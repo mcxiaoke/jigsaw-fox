@@ -7,6 +7,7 @@ import 'package:flutter/painting.dart'
 import 'package:flutter_test/flutter_test.dart';
 import 'package:jigsawpuzzle/logic/geometry/edge_layout.dart';
 import 'package:jigsawpuzzle/logic/geometry/piece_shape.dart';
+import 'package:jigsawpuzzle/logic/rendering/linen_texture_manager.dart';
 
 Future<ui.Image> _loadImage(String path) async {
   final file = File(path);
@@ -28,25 +29,44 @@ Future<void> _savePictureToPng(ui.Picture picture, int width, int height, String
 
 void main() {
   test('Generate sample jigsaw cut images to temp directory', () async {
+    await LinenTextureManager.ensureInitialized();
     final image1 = await _loadImage('assets/images/sample_01.jpg');
     final image2 = await _loadImage('assets/images/sample_02.jpg');
 
     final bgPaint = Paint()..color = const Color(0xFF5A728A); // Classic Jigsaw Explorer blue desk background
-    final shadowPaint = Paint()
-      ..color = const Color(0x45000000)
-      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 5.0)
+    final contactShadowPaint = Paint()
+      ..color = const Color(0x30000000)
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 1.0)
       ..isAntiAlias = true;
-    final outlinePaint = Paint()
+    final floatShadowPaint = Paint()
+      ..color = const Color(0x40000000)
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 7.0)
+      ..isAntiAlias = true;
+    final cardboardSidePaint = Paint()
+      ..color = const Color(0xFFD6D0C4)
+      ..style = PaintingStyle.fill
+      ..isAntiAlias = true;
+    final cardboardBottomEdgePaint = Paint()
       ..style = PaintingStyle.stroke
       ..strokeWidth = 0.8
-      ..color = const Color(0x35000000)
+      ..color = const Color(0x55000000)
+      ..isAntiAlias = true;
+    final highlightOutlinePaint = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 0.8
+      ..color = const Color(0x45FFFFFF)
+      ..isAntiAlias = true;
+    final shadowOutlinePaint = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.2
+      ..color = const Color(0x70000000)
       ..isAntiAlias = true;
     final imagePaint = Paint()
       ..filterQuality = ui.FilterQuality.medium
       ..isAntiAlias = true;
 
     // -------------------------------------------------------------
-    // Demo 1: Real-life Scattered Pieces on Desk (Jigsaw Explorer tabletop style)
+    // Demo 1: Real-life Scattered Physical Pieces on Desk
     // -------------------------------------------------------------
     {
       const rows = 4;
@@ -78,6 +98,8 @@ void main() {
             srcHeightPerRow: pieceH,
           );
 
+          final isElevated = (r == 1 && c == 2) || (r == 2 && c == 1); // Simulate picked-up/floating pieces
+
           // Grid placement with scattered organic jitter
           final colX = 100.0 + c * (pieceW * 0.7 + 90.0) + (rng.nextDouble() - 0.5) * 40.0;
           final rowY = 80.0 + r * (pieceH * 0.7 + 80.0) + (rng.nextDouble() - 0.5) * 30.0;
@@ -85,18 +107,38 @@ void main() {
           canvas.save();
           canvas.translate(colX, rowY);
 
-          // 1. Drop shadow
+          // 1. Drop shadow (Contact AO vs. Float Spread Shadow)
           canvas.save();
-          canvas.translate(0, 5.0);
-          canvas.drawPath(shape.path, shadowPaint);
+          if (isElevated) {
+            canvas.translate(2.0, 6.0);
+            canvas.drawPath(shape.path, floatShadowPaint);
+          } else {
+            canvas.translate(0.0, 0.8);
+            canvas.drawPath(shape.path, contactShadowPaint);
+          }
           canvas.restore();
 
-          // 2. Texture & Cutline
+          // 2. Cardboard 3D Extrusion Side (When elevated)
+          if (isElevated) {
+            canvas.save();
+            canvas.translate(0.8, 1.6);
+            canvas.drawPath(shape.path, cardboardSidePaint);
+            canvas.drawPath(shape.shadowPath, cardboardBottomEdgePaint);
+            canvas.restore();
+          }
+
+          // 3. Front Texture & Linen Finish
           canvas.save();
           canvas.clipPath(shape.path);
           canvas.drawImageRect(image1, srcRect, shape.fillRect, imagePaint);
-          canvas.drawPath(shape.path, outlinePaint);
+          if (LinenTextureManager.paint != null) {
+            canvas.drawRect(shape.fillRect, LinenTextureManager.paint!);
+          }
           canvas.restore();
+
+          // 4. Directional Lighting Cutlines (Top/Left highlight + Bottom/Right dark shadow)
+          canvas.drawPath(shape.highlightPath, highlightOutlinePaint);
+          canvas.drawPath(shape.shadowPath, shadowOutlinePaint);
 
           canvas.restore();
         }
@@ -133,7 +175,7 @@ void main() {
       // Draw shadow for whole board
       canvas.save();
       canvas.translate(0, 6.0);
-      canvas.drawRect(Rect.fromLTWH(0, 0, imgW, imgH), shadowPaint);
+      canvas.drawRect(Rect.fromLTWH(0, 0, imgW, imgH), floatShadowPaint);
       canvas.restore();
 
       for (var r = 0; r < rows; r++) {
@@ -150,11 +192,18 @@ void main() {
           canvas.save();
           canvas.translate(c * pieceW, r * pieceH);
 
+          // Texture & Linen Finish
           canvas.save();
           canvas.clipPath(shape.path);
           canvas.drawImageRect(image2, srcRect, shape.fillRect, imagePaint);
-          canvas.drawPath(shape.path, outlinePaint);
+          if (LinenTextureManager.paint != null) {
+            canvas.drawRect(shape.fillRect, LinenTextureManager.paint!);
+          }
           canvas.restore();
+
+          // Cutlines with directional lighting
+          canvas.drawPath(shape.highlightPath, highlightOutlinePaint);
+          canvas.drawPath(shape.shadowPath, shadowOutlinePaint);
 
           canvas.restore();
         }
@@ -182,7 +231,7 @@ void main() {
       final pieceW = image1.width / cols;
       final pieceH = image1.height / rows;
 
-      // Draw 4 distinct pieces
+      // Draw 4 distinct pieces with physical cardboard extrusion and shadow
       for (var i = 0; i < 4; i++) {
         final r = 1;
         final c = i;
@@ -201,18 +250,31 @@ void main() {
         canvas.save();
         canvas.translate(posX, posY);
 
-        // Shadow
+        // 1. Shadow
         canvas.save();
-        canvas.translate(0, 6.0);
-        canvas.drawPath(shape.path, shadowPaint);
+        canvas.translate(2.0, 6.0);
+        canvas.drawPath(shape.path, floatShadowPaint);
         canvas.restore();
 
-        // Piece
+        // 2. Cardboard 3D Side
+        canvas.save();
+        canvas.translate(0.8, 1.6);
+        canvas.drawPath(shape.path, cardboardSidePaint);
+        canvas.drawPath(shape.shadowPath, cardboardBottomEdgePaint);
+        canvas.restore();
+
+        // 3. Piece Front Texture & Linen Finish
         canvas.save();
         canvas.clipPath(shape.path);
         canvas.drawImageRect(image1, srcRect, shape.fillRect, imagePaint);
-        canvas.drawPath(shape.path, outlinePaint);
+        if (LinenTextureManager.paint != null) {
+          canvas.drawRect(shape.fillRect, LinenTextureManager.paint!);
+        }
         canvas.restore();
+
+        // 4. Directional Cutlines
+        canvas.drawPath(shape.highlightPath, highlightOutlinePaint);
+        canvas.drawPath(shape.shadowPath, shadowOutlinePaint);
 
         canvas.restore();
       }
