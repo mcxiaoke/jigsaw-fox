@@ -44,6 +44,9 @@ dependencies:
   vector_math: ^2.2.0
   phosphoricons_flutter: ^1.0.0
   flutter_launcher_icons: ^0.14.4
+  webview_flutter: ^4.10.0
+  desktop_webview_window: ^0.2.3
+  flutter_inappwebview: ^6.1.5
 
 dev_dependencies:
   flutter_test:

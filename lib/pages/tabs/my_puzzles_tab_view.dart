@@ -8,8 +8,10 @@ import '../../data/game_repository.dart';
 import '../../data/models/custom_puzzle_item.dart';
 import '../../logic/image_source.dart';
 import '../../widgets/choose_difficulty_sheet.dart';
+import '../../widgets/downloaded_drawer_sheet.dart';
 import '../crop_puzzle_page.dart';
 import '../game_page.dart';
+import '../online_image_picker_page.dart';
 
 /// "My Puzzles" (我的自制关卡) tab view supporting UGC creation, adaptive responsive grid, and play.
 class MyPuzzlesTabView extends StatefulWidget {
@@ -71,6 +73,8 @@ class _MyPuzzlesTabViewState extends State<MyPuzzlesTabView> {
       completedPieceCounts: item.completedPieceCounts.toSet(),
       title: '${item.title} · 难度选择',
       savedProgressPercent: item.isCompleted ? null : item.progressPercent,
+      sourcePlatform: item.sourcePlatform,
+      sourceUrl: item.sourceUrl,
       onDelete: () async {
         await _repo.deleteCustomPuzzle(item.id);
         if (mounted) {
@@ -125,67 +129,133 @@ class _MyPuzzlesTabViewState extends State<MyPuzzlesTabView> {
       onRefresh: () async => setState(() {}),
       child: CustomScrollView(
         slivers: [
-          // 1. Top UGC Creation Action Card
+          // 1. Top UGC Creation Action Cards (Dual side-by-side cards)
           SliverToBoxAdapter(
             child: Padding(
               padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
-              child: InkWell(
-                onTap: _loading ? null : _createFromGallery,
-                borderRadius: BorderRadius.circular(20),
-                child: Container(
-                  height: 92,
-                  decoration: BoxDecoration(
-                    gradient: const LinearGradient(
-                      colors: [Color(0xFFE8F5E9), Color(0xFFC8E6C9)],
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                    ),
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(color: const Color(0xFF81C784), width: 1.5),
-                    boxShadow: const [
-                      BoxShadow(color: Colors.black12, blurRadius: 6, offset: Offset(0, 2)),
-                    ],
-                  ),
-                  padding: const EdgeInsets.symmetric(horizontal: 20),
-                  child: Row(
-                    children: [
-                      CircleAvatar(
-                        backgroundColor: const Color(0xFF2E7D32),
-                        radius: 24,
-                        child: _loading
-                            ? const SizedBox(
-                                width: 22,
-                                height: 22,
-                                child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
-                              )
-                            : Image.asset('assets/icons/camera_3d.png', width: 28, height: 28),
-                      ),
-                      const SizedBox(width: 16),
-                      const Expanded(
+              child: Row(
+                children: [
+                  // 1.1 Left Card: Local Gallery
+                  Expanded(
+                    child: InkWell(
+                      onTap: _loading ? null : _createFromGallery,
+                      borderRadius: BorderRadius.circular(20),
+                      child: Container(
+                        height: 98,
+                        decoration: BoxDecoration(
+                          gradient: const LinearGradient(
+                            colors: [Color(0xFFE8F5E9), Color(0xFFC8E6C9)],
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                          ),
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(color: const Color(0xFF81C784), width: 1.5),
+                          boxShadow: const [
+                            BoxShadow(color: Colors.black12, blurRadius: 6, offset: Offset(0, 2)),
+                          ],
+                        ),
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
-                          mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            Text(
-                              '自制新拼图',
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                CircleAvatar(
+                                  backgroundColor: const Color(0xFF2E7D32),
+                                  radius: 17,
+                                  child: _loading
+                                      ? const SizedBox(
+                                          width: 16,
+                                          height: 16,
+                                          child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                                        )
+                                      : Image.asset('assets/icons/camera_3d.png', width: 20, height: 20),
+                                ),
+                                const Icon(PhosphorIconsBold.arrowRight, size: 15, color: Color(0xFF2E7D32)),
+                              ],
+                            ),
+                            const Spacer(),
+                            const Text(
+                              '相册选图',
                               style: TextStyle(
-                                fontSize: 17,
+                                fontSize: 14.5,
                                 fontWeight: FontWeight.bold,
                                 color: Color(0xFF1B5E20),
                               ),
                             ),
-                            SizedBox(height: 3),
-                            Text(
-                              '导入本地相册照片，支持自由缩放裁剪与多规格选择',
-                              style: TextStyle(fontSize: 12, color: Colors.black54),
+                            const SizedBox(height: 1),
+                            const Text(
+                              '导入手机本地照片',
+                              style: TextStyle(fontSize: 10.5, color: Colors.black54),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
                             ),
                           ],
                         ),
                       ),
-                      const Icon(PhosphorIconsBold.caretRight, color: Color(0xFF2E7D32)),
-                    ],
+                    ),
                   ),
-                ),
+                  const SizedBox(width: 10),
+                  // 1.2 Right Card: Online Gallery
+                  Expanded(
+                    child: InkWell(
+                      onTap: () async {
+                        await OnlineImagePickerPage.push(context);
+                        if (mounted) setState(() {});
+                      },
+                      borderRadius: BorderRadius.circular(20),
+                      child: Container(
+                        height: 98,
+                        decoration: BoxDecoration(
+                          gradient: const LinearGradient(
+                            colors: [Color(0xFFE1F5FE), Color(0xFFB3E5FC)],
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                          ),
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(color: const Color(0xFF4FC3F7), width: 1.5),
+                          boxShadow: const [
+                            BoxShadow(color: Colors.black12, blurRadius: 6, offset: Offset(0, 2)),
+                          ],
+                        ),
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                        child: const Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                CircleAvatar(
+                                  backgroundColor: Color(0xFF0277BD),
+                                  radius: 17,
+                                  child: Icon(PhosphorIconsFill.globeHemisphereWest, color: Colors.white, size: 18),
+                                ),
+                                Icon(PhosphorIconsBold.arrowRight, size: 15, color: Color(0xFF0277BD)),
+                              ],
+                            ),
+                            Spacer(),
+                            Text(
+                              '在线选图',
+                              style: TextStyle(
+                                fontSize: 14.5,
+                                fontWeight: FontWeight.bold,
+                                color: Color(0xFF01579B),
+                              ),
+                            ),
+                            SizedBox(height: 1),
+                            Text(
+                              'Pixabay/Unsplash图库',
+                              style: TextStyle(fontSize: 10.5, color: Colors.black54),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
           ),
@@ -201,9 +271,24 @@ class _MyPuzzlesTabViewState extends State<MyPuzzlesTabView> {
                     '我的自制合辑',
                     style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
                   ),
-                  Text(
-                    '共 ${customList.length} 个关卡',
-                    style: const TextStyle(fontSize: 13, color: Colors.black54),
+                  Row(
+                    children: [
+                      // Download Drawer Button
+                      TextButton.icon(
+                        onPressed: () => DownloadedDrawerSheet.show(context),
+                        icon: const Icon(PhosphorIconsBold.tray, size: 16, color: Color(0xFF2E7D32)),
+                        label: const Text('已下载图片', style: TextStyle(color: Color(0xFF2E7D32), fontSize: 13)),
+                        style: TextButton.styleFrom(
+                          visualDensity: VisualDensity.compact,
+                          padding: const EdgeInsets.symmetric(horizontal: 6),
+                        ),
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        '共 ${customList.length} 个关卡',
+                        style: const TextStyle(fontSize: 13, color: Colors.black54),
+                      ),
+                    ],
                   ),
                 ],
               ),
@@ -285,27 +370,69 @@ class _MyPuzzlesTabViewState extends State<MyPuzzlesTabView> {
               ),
             ),
 
-            // Top-left Title
+            // Top-left Title & Source Tag
             Positioned(
               left: 10,
               top: 10,
-              right: 50,
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                decoration: BoxDecoration(
-                  color: Colors.black.withValues(alpha: 0.55),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Text(
-                  item.title,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 12,
-                    fontWeight: FontWeight.bold,
+              right: 60,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: Colors.black.withValues(alpha: 0.65),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Text(
+                      item.title,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
                   ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
+                  const SizedBox(height: 4),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: (item.sourceType == 'online'
+                              ? const Color(0xFF0277BD)
+                              : (item.sourceType == 'preset'
+                                  ? const Color(0xFFE65100)
+                                  : const Color(0xFF2E7D32)))
+                          .withValues(alpha: 0.85),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          item.sourceType == 'online'
+                              ? PhosphorIconsRegular.globe
+                              : (item.sourceType == 'preset'
+                                  ? PhosphorIconsRegular.puzzlePiece
+                                  : PhosphorIconsRegular.image),
+                          color: Colors.white,
+                          size: 10,
+                        ),
+                        const SizedBox(width: 3),
+                        Text(
+                          item.sourcePlatform,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 9.5,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
               ),
             ),
 

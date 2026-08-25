@@ -1,12 +1,39 @@
+import 'dart:io';
 import 'dart:ui';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_inappwebview/flutter_inappwebview.dart';
+import 'package:path_provider/path_provider.dart';
 
 import 'data/game_repository.dart';
 import 'pages/main_screen.dart';
 
+/// Global Windows WebViewEnvironment instance for InAppWebView
+WebViewEnvironment? globalWebViewEnvironment;
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Initialize WebViewEnvironment on Windows desktop to prevent blank screen and crash
+  if (!kIsWeb && defaultTargetPlatform == TargetPlatform.windows) {
+    try {
+      final appSupportDir = await getApplicationSupportDirectory();
+      final envDir = Directory('${appSupportDir.path}/inappwebview_env');
+      if (!await envDir.exists()) {
+        await envDir.create(recursive: true);
+      }
+      globalWebViewEnvironment = await WebViewEnvironment.create(
+        settings: WebViewEnvironmentSettings(
+          userDataFolder: envDir.path,
+        ),
+      );
+      debugPrint('[WebView:Windows:Init] Global WebViewEnvironment initialized successfully.');
+    } catch (e, stack) {
+      debugPrint('[WebView:Windows:Error] Failed to initialize WebViewEnvironment: $e\n$stack');
+    }
+  }
+
   await GameRepository.instance.init();
   runApp(const JigsawPuzzleApp());
 }

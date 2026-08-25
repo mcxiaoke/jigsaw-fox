@@ -81,6 +81,8 @@ class ChooseDifficultySheet extends StatefulWidget {
     this.onDelete,
     this.savedProgressPercent,
     this.onResetProgress,
+    this.sourcePlatform,
+    this.sourceUrl,
   });
 
   final Uint8List imageBytes;
@@ -93,6 +95,8 @@ class ChooseDifficultySheet extends StatefulWidget {
   final Future<void> Function()? onDelete;
   final int? savedProgressPercent;
   final VoidCallback? onResetProgress;
+  final String? sourcePlatform;
+  final String? sourceUrl;
 
   static Future<void> show({
     required BuildContext context,
@@ -106,6 +110,8 @@ class ChooseDifficultySheet extends StatefulWidget {
     Future<void> Function()? onDelete,
     int? savedProgressPercent,
     VoidCallback? onResetProgress,
+    String? sourcePlatform,
+    String? sourceUrl,
   }) {
     return showModalBottomSheet<void>(
       context: context,
@@ -122,6 +128,8 @@ class ChooseDifficultySheet extends StatefulWidget {
         onDelete: onDelete,
         savedProgressPercent: savedProgressPercent,
         onResetProgress: onResetProgress,
+        sourcePlatform: sourcePlatform,
+        sourceUrl: sourceUrl,
       ),
     );
   }
@@ -280,14 +288,42 @@ class _ChooseDifficultySheetState extends State<ChooseDifficultySheet> {
                 const Icon(PhosphorIconsBold.squaresFour, color: Color(0xFF2E7D32), size: 22),
                 const SizedBox(width: 8),
                 Expanded(
-                  child: Text(
-                    widget.title,
-                    style: theme.textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 17,
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        widget.title,
+                        style: theme.textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 17,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      if (widget.sourcePlatform != null && widget.sourcePlatform!.isNotEmpty) ...[
+                        const SizedBox(height: 2),
+                        Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFE8F5E9),
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                              child: Text(
+                                '来源: ${widget.sourcePlatform}',
+                                style: const TextStyle(
+                                  fontSize: 10.5,
+                                  color: Color(0xFF2E7D32),
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ],
                   ),
                 ),
 

@@ -14,6 +14,9 @@ class CustomPuzzleItem {
     this.bestTimeSeconds = 0,
     this.savedSnapshotJson,
     this.completedPieceCounts = const [],
+    this.sourceType = 'gallery',
+    this.sourcePlatform = '本地相册',
+    this.sourceUrl,
   });
 
   final String id;
@@ -28,6 +31,15 @@ class CustomPuzzleItem {
   final String? savedSnapshotJson;
   final List<int> completedPieceCounts;
 
+  /// Source type: 'gallery' (相册导入), 'online' (网络图库), 'preset' (官方预置)
+  final String sourceType;
+
+  /// Specific platform name: '本地相册', 'Unsplash', 'Pixabay', 'Pexels', etc.
+  final String sourcePlatform;
+
+  /// Original image URL or local source path
+  final String? sourceUrl;
+
   CustomPuzzleItem copyWith({
     String? id,
     String? title,
@@ -40,6 +52,9 @@ class CustomPuzzleItem {
     int? bestTimeSeconds,
     String? savedSnapshotJson,
     List<int>? completedPieceCounts,
+    String? sourceType,
+    String? sourcePlatform,
+    String? sourceUrl,
   }) {
     return CustomPuzzleItem(
       id: id ?? this.id,
@@ -53,6 +68,9 @@ class CustomPuzzleItem {
       bestTimeSeconds: bestTimeSeconds ?? this.bestTimeSeconds,
       savedSnapshotJson: savedSnapshotJson ?? this.savedSnapshotJson,
       completedPieceCounts: completedPieceCounts ?? this.completedPieceCounts,
+      sourceType: sourceType ?? this.sourceType,
+      sourcePlatform: sourcePlatform ?? this.sourcePlatform,
+      sourceUrl: sourceUrl ?? this.sourceUrl,
     );
   }
 
@@ -69,6 +87,9 @@ class CustomPuzzleItem {
         'bestTimeSeconds': bestTimeSeconds,
         'savedSnapshotJson': savedSnapshotJson,
         'completedPieceCounts': completedPieceCounts,
+        'sourceType': sourceType,
+        'sourcePlatform': sourcePlatform,
+        'sourceUrl': sourceUrl,
       };
 
   factory CustomPuzzleItem.fromJson(Map<String, dynamic> json) {
@@ -90,11 +111,32 @@ class CustomPuzzleItem {
     final completedCounts = rawCompletedCounts ??
         (isCompletedVal ? [diff.pieceCount] : <int>[]);
 
+    final imagePathOrUrl = json['imagePathOrUrl'] as String? ?? '';
+    final isLocal = json['isLocalFile'] as bool? ?? false;
+
+    // Backward-compatible source fallback
+    String derivedSourceType = json['sourceType'] as String? ?? '';
+    String derivedSourcePlatform = json['sourcePlatform'] as String? ?? '';
+    if (derivedSourceType.isEmpty) {
+      if (imagePathOrUrl.startsWith('assets/')) {
+        derivedSourceType = 'preset';
+        derivedSourcePlatform = '官方预置';
+      } else {
+        derivedSourceType = 'gallery';
+        derivedSourcePlatform = '本地相册';
+      }
+    }
+    if (derivedSourcePlatform.isEmpty) {
+      derivedSourcePlatform = derivedSourceType == 'preset'
+          ? '官方预置'
+          : (derivedSourceType == 'online' ? '网络图库' : '本地相册');
+    }
+
     return CustomPuzzleItem(
       id: json['id'] as String,
       title: json['title'] as String,
-      imagePathOrUrl: json['imagePathOrUrl'] as String,
-      isLocalFile: json['isLocalFile'] as bool? ?? false,
+      imagePathOrUrl: imagePathOrUrl,
+      isLocalFile: isLocal,
       difficulty: diff,
       createdAt: json['createdAt'] != null
           ? DateTime.tryParse(json['createdAt'] as String)
@@ -104,6 +146,9 @@ class CustomPuzzleItem {
       bestTimeSeconds: json['bestTimeSeconds'] as int? ?? 0,
       savedSnapshotJson: json['savedSnapshotJson'] as String?,
       completedPieceCounts: completedCounts,
+      sourceType: derivedSourceType,
+      sourcePlatform: derivedSourcePlatform,
+      sourceUrl: json['sourceUrl'] as String?,
     );
   }
 }

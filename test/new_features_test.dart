@@ -279,7 +279,8 @@ void main() {
         ),
       );
 
-      expect(find.text('自制新拼图'), findsOneWidget);
+      expect(find.text('相册选图'), findsOneWidget);
+      expect(find.text('在线选图'), findsOneWidget);
       expect(find.text('我的自制合辑'), findsOneWidget);
     });
 

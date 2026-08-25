@@ -3,6 +3,7 @@ import 'dart:math';
 import 'dart:typed_data';
 import 'dart:ui' as ui;
 
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:phosphoricons_flutter/phosphoricons_flutter.dart';
@@ -29,13 +30,35 @@ enum CropRatio {
 
 /// Interactive photo cropping & puzzle creation page with large adaptive viewport and 5 standard aspect ratios.
 class CropPuzzlePage extends StatefulWidget {
-  const CropPuzzlePage({super.key, required this.rawBytes});
+  const CropPuzzlePage({
+    super.key,
+    required this.rawBytes,
+    this.sourceType = 'gallery',
+    this.sourcePlatform = '本地相册',
+    this.sourceUrl,
+  });
 
   final Uint8List rawBytes;
+  final String sourceType;
+  final String sourcePlatform;
+  final String? sourceUrl;
 
-  static Future<CustomPuzzleItem?> push(BuildContext context, Uint8List bytes) {
+  static Future<CustomPuzzleItem?> push(
+    BuildContext context,
+    Uint8List bytes, {
+    String sourceType = 'gallery',
+    String sourcePlatform = '本地相册',
+    String? sourceUrl,
+  }) {
     return Navigator.of(context).push<CustomPuzzleItem>(
-      MaterialPageRoute(builder: (_) => CropPuzzlePage(rawBytes: bytes)),
+      MaterialPageRoute(
+        builder: (_) => CropPuzzlePage(
+          rawBytes: bytes,
+          sourceType: sourceType,
+          sourcePlatform: sourcePlatform,
+          sourceUrl: sourceUrl,
+        ),
+      ),
     );
   }
 
@@ -107,15 +130,53 @@ class _CropPuzzlePageState extends State<CropPuzzlePage> {
     });
   }
 
+  void _resetZoom() {
+    _transformController.value = Matrix4.identity();
+  }
+
+  void _handlePointerScroll(PointerScrollEvent event, Size viewportSize) {
+    final matrix = _transformController.value;
+    final currentScale = matrix.getMaxScaleOnAxis();
+
+    // Smooth stepless 4% delta zoom factor per scroll notch
+    final factor = event.scrollDelta.dy < 0 ? 1.04 : 0.96;
+    final targetScale = (currentScale * factor).clamp(1.0, 5.0);
+    if ((targetScale - currentScale).abs() < 0.0001) return;
+
+    final actualFactor = targetScale / currentScale;
+    final localPos = event.localPosition;
+
+    final currentTx = matrix.storage[12];
+    final currentTy = matrix.storage[13];
+
+    final newTx = localPos.dx - (localPos.dx - currentTx) * actualFactor;
+    final newTy = localPos.dy - (localPos.dy - currentTy) * actualFactor;
+
+    final boxW = viewportSize.width;
+    final boxH = viewportSize.height;
+    final scaledW = boxW * targetScale;
+    final scaledH = boxH * targetScale;
+
+    final minTx = boxW - scaledW;
+    const maxTx = 0.0;
+    final minTy = boxH - scaledH;
+    const maxTy = 0.0;
+
+    final clampedTx = newTx.clamp(minTx, maxTx);
+    final clampedTy = newTy.clamp(minTy, maxTy);
+
+    final newMatrix = Matrix4.diagonal3Values(targetScale, targetScale, 1.0)
+      ..setTranslationRaw(clampedTx, clampedTy, 0.0);
+
+    _transformController.value = newMatrix;
+  }
+
   Future<void> _saveAndCreate(Size viewportSize) async {
     if (_decodedImage == null || _isSaving) return;
     setState(() => _isSaving = true);
 
     try {
       final matrix = _transformController.value;
-      final scale = matrix.getMaxScaleOnAxis();
-      final translation = matrix.getTranslation();
-
       final targetW = _selectedRatio.targetWidth;
       final targetH = _selectedRatio.targetHeight;
 
@@ -132,30 +193,31 @@ class _CropPuzzlePageState extends State<CropPuzzlePage> {
       final boxW = viewportSize.width;
       final boxH = viewportSize.height;
 
-      // Base scale fitted into viewport box
-      final scaleX = boxW / imgW;
-      final scaleY = boxH / imgH;
-      final baseScale = max(scaleX, scaleY);
-      final currentTotalScale = baseScale * scale;
+      // Scaling factor from on-screen interactive viewport to target high-res image
+      final exportFactor = targetW / boxW;
+      canvas.scale(exportFactor, exportFactor);
 
-      final srcLeft = (-translation.x) / currentTotalScale;
-      final srcTop = (-translation.y) / currentTotalScale;
-      final srcW = boxW / currentTotalScale;
-      final srcH = boxH / currentTotalScale;
+      // Apply the user's interactive pan & zoom transform
+      canvas.transform(matrix.storage);
 
-      final srcRect = ui.Rect.fromLTWH(
-        srcLeft.clamp(0.0, max(0.0, imgW - 1.0)),
-        srcTop.clamp(0.0, max(0.0, imgH - 1.0)),
-        srcW.clamp(1.0, imgW),
-        srcH.clamp(1.0, imgH),
-      );
-      final dstRect = ui.Rect.fromLTWH(0, 0, targetW, targetH);
+      // Base layout math exactly matching FittedBox(fit: BoxFit.cover) inside boxW x boxH
+      final scaleCover = max(boxW / imgW, boxH / imgH);
+      final drawW = imgW * scaleCover;
+      final drawH = imgH * scaleCover;
+      final drawX = (boxW - drawW) / 2.0;
+      final drawY = (boxH - drawH) / 2.0;
 
       final paint = Paint()
         ..filterQuality = ui.FilterQuality.high
         ..isAntiAlias = true;
 
-      canvas.drawImageRect(_decodedImage!, srcRect, dstRect, paint);
+      canvas.drawImageRect(
+        _decodedImage!,
+        ui.Rect.fromLTWH(0, 0, imgW, imgH),
+        ui.Rect.fromLTWH(drawX, drawY, drawW, drawH),
+        paint,
+      );
+
       final croppedImage = await recorder.endRecording().toImage(
         targetW.toInt(),
         targetH.toInt(),
@@ -165,7 +227,7 @@ class _CropPuzzlePageState extends State<CropPuzzlePage> {
       if (byteData == null) throw Exception('图片导出失败');
       final pngBytes = byteData.buffer.asUint8List();
 
-      final dir = await getApplicationDocumentsDirectory();
+      final dir = await getApplicationSupportDirectory();
       final customDir = Directory('${dir.path}/custom_puzzles');
       if (!await customDir.exists()) {
         await customDir.create(recursive: true);
@@ -182,6 +244,9 @@ class _CropPuzzlePageState extends State<CropPuzzlePage> {
         isLocalFile: true,
         difficulty: _selectedDifficulty,
         createdAt: DateTime.now(),
+        sourceType: widget.sourceType,
+        sourcePlatform: widget.sourcePlatform,
+        sourceUrl: widget.sourceUrl,
       );
 
       await GameRepository.instance.addCustomPuzzle(customItem);
@@ -302,16 +367,87 @@ class _CropPuzzlePageState extends State<CropPuzzlePage> {
                   ],
                 ),
                 child: _decodedImage != null
-                    ? InteractiveViewer(
-                        key: ValueKey(_selectedRatio),
-                        transformationController: _transformController,
-                        minScale: 0.8,
-                        maxScale: 5.0,
-                        boundaryMargin: const EdgeInsets.all(double.infinity),
-                        child: RawImage(
-                          image: _decodedImage,
-                          fit: BoxFit.cover,
-                        ),
+                    ? Stack(
+                        children: [
+                          Positioned.fill(
+                            child: Listener(
+                              onPointerSignal: (event) {
+                                if (event is PointerScrollEvent) {
+                                  _handlePointerScroll(event, viewportSize);
+                                }
+                              },
+                              child: InteractiveViewer(
+                                key: ValueKey(_selectedRatio),
+                                transformationController: _transformController,
+                                minScale: 1.0,
+                                maxScale: 5.0,
+                                boundaryMargin: EdgeInsets.zero,
+                                clipBehavior: Clip.none,
+                                child: SizedBox(
+                                  width: boxW,
+                                  height: boxH,
+                                  child: RawImage(
+                                    image: _decodedImage,
+                                    fit: BoxFit.cover,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                          // Compact Top-Right Scale Percentage Pill (Click to reset 100%)
+                          Positioned(
+                            top: 10,
+                            right: 10,
+                            child: ValueListenableBuilder<Matrix4>(
+                              valueListenable: _transformController,
+                              builder: (context, matrix, _) {
+                                final scalePercent = (matrix.getMaxScaleOnAxis() * 100).round();
+                                final isZoomed = scalePercent > 100;
+                                return Material(
+                                  color: Colors.transparent,
+                                  child: InkWell(
+                                    onTap: isZoomed ? _resetZoom : null,
+                                    borderRadius: BorderRadius.circular(16),
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+                                      decoration: BoxDecoration(
+                                        color: Colors.black.withValues(alpha: 0.65),
+                                        borderRadius: BorderRadius.circular(16),
+                                        border: Border.all(
+                                          color: isZoomed ? const Color(0xFF81C784) : Colors.white24,
+                                          width: 1.2,
+                                        ),
+                                      ),
+                                      child: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Icon(
+                                            isZoomed ? PhosphorIconsBold.magnifyingGlassPlus : PhosphorIconsRegular.magnifyingGlass,
+                                            size: 13,
+                                            color: isZoomed ? const Color(0xFF81C784) : Colors.white70,
+                                          ),
+                                          const SizedBox(width: 4),
+                                          Text(
+                                            '$scalePercent%',
+                                            style: TextStyle(
+                                              color: isZoomed ? const Color(0xFF81C784) : Colors.white,
+                                              fontSize: 11.5,
+                                              fontWeight: FontWeight.bold,
+                                            ),
+                                          ),
+                                          if (isZoomed) ...[
+                                            const SizedBox(width: 4),
+                                            const Icon(PhosphorIconsBold.arrowCounterClockwise, size: 11, color: Colors.white70),
+                                          ],
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                );
+                              },
+                            ),
+                          ),
+                        ],
                       )
                     : const Center(child: CircularProgressIndicator(color: Colors.white)),
               ),
