@@ -57,7 +57,8 @@ _local_temp/
 
 #Sync reference servers (not committed, for local testing only)
 
-
+# temp disable assets
+assets/
 .tmp/
 .temp/
 temp/

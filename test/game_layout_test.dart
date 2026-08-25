@@ -301,5 +301,131 @@ void main() {
       expect(p.clusterId, equals(p.id), reason: '碎片 #${p.id} 不应被误合并');
     }
   });
+
+  test('已吸附归位的碎片锁定不可移动，且层级 Priority 为底层 (5)', () async {
+    final img = await _decodePng();
+    final game = JigsawPuzzleGame(
+      image: img,
+      rows: 3,
+      cols: 3,
+      onSolved: () {},
+    );
+    game.onGameResize(Vector2(400, 800));
+    await game.onLoad();
+
+    // 初始状态下所有托盘碎片未锁定，Priority 为 10
+    final piece0 = game.children.whereType<PuzzlePieceComponent>().first;
+    expect(piece0.isLocked, isFalse);
+    expect(piece0.priority, equals(10));
+
+    // 使用 hint 提示并归位一块碎片
+    game.hint();
+    final solvedPieces = game.children
+        .whereType<PuzzlePieceComponent>()
+        .where((p) => p.isLocked)
+        .toList();
+    expect(solvedPieces.length, equals(1));
+    expect(solvedPieces.first.priority, equals(5), reason: '已归位碎片应置于底层 Priority=5');
+
+    // 测试已锁定的碎片在拖动时被拦截
+    final solvedPiece = solvedPieces.first;
+    game.handlePieceDragStart(solvedPiece);
+    // 验证 priority 没有被提升为拖拽层级
+    expect(solvedPiece.priority, equals(5));
+  });
+
+  test('散落在棋盘上的未归位碎片 Priority 为 20，高于已归位碎片(5)和托盘碎片(10)', () async {
+    final img = await _decodePng();
+    final game = JigsawPuzzleGame(
+      image: img,
+      rows: 3,
+      cols: 3,
+      onSolved: () {},
+    );
+    game.onGameResize(Vector2(400, 800));
+    await game.onLoad();
+
+    // 拾取一块碎片并放置在棋盘未吸附位置
+    final piece0 = game.children.whereType<PuzzlePieceComponent>().first;
+    game.handlePieceDragStart(piece0);
+    // 移动到棋盘非槽位区域
+    piece0.position.setFrom(Vector2(50, 50));
+    game.handlePieceDragEnd(piece0);
+
+    expect(piece0.isInTray, isFalse);
+    expect(piece0.isLocked, isFalse);
+    expect(piece0.priority, equals(20), reason: '棋盘上的未归位碎片 Priority 应为 20');
+  });
+
+  test('鼠标单击吸附抓取状态机与动态缩放跟手锁定 (Click-to-Pick, Scale-Independent Tracking, Drop)', () async {
+    final img = await _decodePng();
+    final game = JigsawPuzzleGame(
+      image: img,
+      rows: 3,
+      cols: 3,
+      onSolved: () {},
+    );
+    game.onGameResize(Vector2(400, 800));
+    await game.onLoad();
+
+    final piece0 = game.children.whereType<PuzzlePieceComponent>().first;
+
+    // 1. 开启抓取（点击碎片正中心，anchorX=0.5, anchorY=0.5）
+    game.startHoldingPiece(piece0, 0.5, 0.5);
+    expect(game.holdingPiece, equals(piece0));
+    expect(piece0.isDragging, isTrue);
+    expect(piece0.priority, greaterThanOrEqualTo(1000), reason: '抓取中碎片应置于最高层 Priority 1000+');
+
+    // 2. 模拟鼠标移动到托盘内某个坐标
+    final trayCursorPos = Vector2(100, 700);
+    game.updateHoldingPiecePosition(trayCursorPos);
+    // 验证在托盘内 scale 为 trayPieceScale
+    expect(piece0.scale.x, closeTo(game.trayPieceScale, 0.001));
+    // 验证碎片中心与光标重合（由于 anchor 为 0.5, 0.5）
+    final visualCenterX = piece0.position.x + 0.5 * piece0.size.x * piece0.scale.x;
+    final visualCenterY = piece0.position.y + 0.5 * piece0.size.y * piece0.scale.y;
+    expect(visualCenterX, closeTo(trayCursorPos.x, 0.01));
+    expect(visualCenterY, closeTo(trayCursorPos.y, 0.01));
+
+    // 3. 模拟鼠标拖动到上方棋盘区域（触发放大到 1.0）
+    final boardCursorPos = Vector2(200, 300);
+    game.updateHoldingPiecePosition(boardCursorPos);
+    // 验证在棋盘区域 scale 变为 zoom (1.0)
+    expect(piece0.scale.x, closeTo(game.zoom, 0.001));
+    // 关键验证：放大后，碎片中心依然 100% 精确与光标重合，绝无距离拉大！
+    final boardVisualCenterX = piece0.position.x + 0.5 * piece0.size.x * piece0.scale.x;
+    final boardVisualCenterY = piece0.position.y + 0.5 * piece0.size.y * piece0.scale.y;
+    expect(boardVisualCenterX, closeTo(boardCursorPos.x, 0.01));
+    expect(boardVisualCenterY, closeTo(boardCursorPos.y, 0.01));
+
+    // 4. 再次点击放下
+    game.dropHoldingPiece();
+    expect(game.holdingPiece, isNull);
+    expect(piece0.isDragging, isFalse);
+  });
+
+  test('吸附抓取状态下取消抓取 (cancelHoldingPiece) 平滑复位', () async {
+    final img = await _decodePng();
+    final game = JigsawPuzzleGame(
+      image: img,
+      rows: 3,
+      cols: 3,
+      onSolved: () {},
+    );
+    game.onGameResize(Vector2(400, 800));
+    await game.onLoad();
+
+    final piece0 = game.children.whereType<PuzzlePieceComponent>().first;
+
+    // 开启抓取并移动
+    game.startHoldingPiece(piece0, 0.5, 0.5);
+    game.updateHoldingPiecePosition(Vector2(200, 300));
+
+    // 取消抓取（例如右键或 ESC）
+    game.cancelHoldingPiece();
+    expect(game.holdingPiece, isNull);
+    expect(piece0.isDragging, isFalse);
+    expect(piece0.isInTray, isTrue);
+  });
 }
 

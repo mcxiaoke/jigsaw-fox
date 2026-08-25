@@ -24,7 +24,7 @@ import 'jigsaw_puzzle_game.dart';
 /// 3. **吸附反馈与光效**：
 ///    - 吸附成功时触发短暂高亮流光特效（Glow Feedback）。
 class PuzzlePieceComponent extends PositionComponent
-    with DragCallbacks, HasGameReference<JigsawPuzzleGame> {
+    with DragCallbacks, TapCallbacks, HasGameReference<JigsawPuzzleGame> {
   PuzzlePieceComponent({
     required this.id,
     required this.r,
@@ -72,6 +72,26 @@ class PuzzlePieceComponent extends PositionComponent
 
   /// 是否隐藏碎片边界（拼图通关后整体由底板渲染整图，碎片停止绘制以节省 GPU 算力）
   bool hideBorders = false;
+
+  /// 是否已被吸附归位锁定（锁定后禁止拖拽移动，置于最底层渲染）
+  bool isLocked = false;
+
+  /// 拖拽手势累计位移量、归一化抓取锚点与时间戳（用于区分短按单击吸附与长按拖拽）
+  double _dragTotalDistance = 0.0;
+  DateTime? _dragStartTime;
+  double grabAnchorX = 0.5;
+  double grabAnchorY = 0.5;
+
+  /// 计算玩家光标相对碎片逻辑包围盒的归一化锚点坐标 ([0.0, 1.0])
+  void computeGrabAnchor(Vector2 canvasPos) {
+    final curScaleX = scale.x > 0.001 ? scale.x : 1.0;
+    final curScaleY = scale.y > 0.001 ? scale.y : 1.0;
+    final visualW = size.x * curScaleX;
+    final visualH = size.y * curScaleY;
+
+    grabAnchorX = ((canvasPos.x - position.x) / visualW).clamp(0.0, 1.0);
+    grabAnchorY = ((canvasPos.y - position.y) / visualH).clamp(0.0, 1.0);
+  }
 
   // ---------------------------------------------------------------------------
   // 视觉画笔常量配置与选值理由
@@ -165,15 +185,42 @@ class PuzzlePieceComponent extends PositionComponent
   }
 
   // ---------------------------------------------------------------------------
-  // 拖拽手势生命周期与协同处理
+  // 拖拽与轻点手势生命周期
   // ---------------------------------------------------------------------------
 
   @override
-  void onDragStart(DragStartEvent event) {
+  void onTapDown(TapDownEvent event) {
     if (game.isSolved || game.isPinching) return;
+
+    // 如果当前游戏已有吸附抓取的碎片，任意点击都触发放下
+    if (game.holdingPiece != null) {
+      game.dropHoldingPiece();
+      return;
+    }
+
+    if (isLocked) return;
+
+    super.onTapDown(event);
+    computeGrabAnchor(event.canvasPosition);
+    game.startHoldingPiece(this, grabAnchorX, grabAnchorY);
+  }
+
+  @override
+  void onDragStart(DragStartEvent event) {
+    if (isLocked || game.isSolved || game.isPinching) return;
+
+    // 如果当前游戏已有其他正在吸附抓取的碎片，先将其释放放下
+    if (game.holdingPiece != null && game.holdingPiece != this) {
+      game.dropHoldingPiece();
+      return;
+    }
+
     super.onDragStart(event);
     isDragging = true;
-    game.handlePieceDragStart(this);
+    _dragTotalDistance = 0.0;
+    _dragStartTime = DateTime.now();
+    computeGrabAnchor(event.canvasPosition);
+    game.startHoldingPiece(this, grabAnchorX, grabAnchorY);
   }
 
   @override
@@ -185,35 +232,30 @@ class PuzzlePieceComponent extends PositionComponent
       }
       return;
     }
-    if (!isDragging) return;
+    if (!isDragging && game.holdingPiece != this) return;
 
     super.onDragUpdate(event);
     final delta = event.canvasDelta;
-    game.handlePieceDragUpdate(this, delta);
-
-    // 托盘与棋盘之间的平滑无级尺寸缩放插值过渡
-    final trayTop = game.trayPosition.y;
-    const transitionBand = 60.0; // 60px 缓冲区间
-    final boardScale = game.zoom;
-
-    if (position.y >= trayTop) {
-      scale.setAll(game.trayPieceScale);
-    } else if (position.y <= trayTop - transitionBand) {
-      scale.setAll(boardScale);
-    } else {
-      final t = (trayTop - position.y) / transitionBand;
-      final currentScale =
-          game.trayPieceScale + (boardScale - game.trayPieceScale) * t;
-      scale.setAll(currentScale);
-    }
+    _dragTotalDistance += delta.length;
+    // 驱动引擎以光标当前绝对位置精准更新碎片及集群的位置与缩放
+    game.updateHoldingPiecePosition(event.canvasEndPosition);
   }
 
   @override
   void onDragEnd(DragEndEvent event) {
     super.onDragEnd(event);
-    if (!isDragging) return;
-    isDragging = false;
-    game.handlePieceDragEnd(this);
+    if (!isDragging && game.holdingPiece != this) return;
+
+    final elapsed = _dragStartTime != null
+        ? DateTime.now().difference(_dragStartTime!).inMilliseconds
+        : 999;
+
+    // 如果总位移明显 (> 12px) 或长按持续较久 (> 400ms)，属于传统长按拖拽释放，松手即放下
+    if (_dragTotalDistance > 12.0 || elapsed > 400) {
+      isDragging = false;
+      game.dropHoldingPiece();
+    }
+    // 否则（短按单击），保持光标吸附跟随模式，等待玩家移动后下一次单击放置
   }
 
   @override

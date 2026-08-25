@@ -211,7 +211,18 @@ class PuzzleBoardState {
 - **不可变设计（Immutability）**：所有状态变更均通过 `copyWith` 生成全新对象，确保快照栈与历史回溯安全无副作用；
 - **通关容差（$\epsilon = 0.05$）**：吸附后坐标会被锁定为标准 $targetNx$，浮点容差用于防御极端微小计算误差。
 
-### 4.2 撤销与重做机制 (`UndoManager`)
+### 4.2 碎片归位锁定与四阶 Priority 映射机制
+
+为保证已就位碎片的物理稳定性与层级正确性，状态机与表现层协同维护统一规则：
+1. **就位判定 (`isPieceSolved`)**：`statePiece.isSolved(rows, cols)` 为 `true` 时，组件标记 `isLocked = true`；
+2. **锁定交互拦截**：`isLocked == true` 的碎片忽略一切拖拽与光标拾取，防止误触；
+3. **渲染层级映射 (Priority Mapping)**：
+   - 拖拽/光标抓取中：`Priority >= 1000`（绝对顶层）；
+   - 棋盘散落未归位碎片：`Priority = 20`（高于底板与托盘）；
+   - 托盘待选碎片：`Priority = 10`；
+   - 吸附且已归位碎片：`Priority = 5`（贴底渲染，绝不遮挡上层任何浮动碎片）。
+
+### 4.3 撤销与重做机制 (`UndoManager`)
 
 - **数据结构**：基于 `List<PuzzleBoardState>` 的双向游标栈；
 - **容量上限**：`maxHistory = 50` 步，防止长时间游玩导致内存无限制增长；

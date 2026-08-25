@@ -89,7 +89,8 @@ class TrayBackgroundComponent extends PositionComponent
 
 /// Flame game engine handling jigsaw puzzle canvas, multi-modal scrollable tray,
 /// smart aspect ratio adaptation, 3D piece rendering, cluster drag-and-drop, and undo/redo.
-class JigsawPuzzleGame extends FlameGame with ScrollDetector, PanDetector {
+class JigsawPuzzleGame extends FlameGame
+    with ScrollDetector, PanDetector, MouseMovementDetector, TapCallbacks {
   JigsawPuzzleGame({
     required this.image,
     required this.rows,
@@ -120,7 +121,14 @@ class JigsawPuzzleGame extends FlameGame with ScrollDetector, PanDetector {
 
   final UndoManager undoManager;
 
-  static const int _basePriority = 10;
+  // ---------------------------------------------------------------------------
+  // 渲染与交互层级优先级 (Priority Hierarchy)
+  // ---------------------------------------------------------------------------
+  static const int _solvedPiecePriority = 5;       // 已归位正确碎片（锁定底层，不遮挡任何浮动碎片）
+  static const int _trayPiecePriority = 10;        // 托盘中的待拼碎片
+  static const int _boardUnsolvedPriority = 20;    // 散落在棋盘上的未归位碎片
+  static const int _activeDragBasePriority = 1000; // 正在拖拽或光标吸附抓取的碎片集群（绝对顶层）
+
   static const double targetTrayPieceBaseSize = 64.0; // Standard touch-friendly base size
   static const double _topToolbarHeight = 8.0;
   static const double _sideMargin = 8.0;
@@ -150,7 +158,7 @@ class JigsawPuzzleGame extends FlameGame with ScrollDetector, PanDetector {
   double _trayPieceHeight = 64.0;
   double _traySpacing = 16.0;
 
-  int _topPriority = _basePriority;
+  int _topPriority = _activeDragBasePriority;
   bool _isSolved = false;
   bool get isSolved => _isSolved;
   bool _borderFilterActive = false;
@@ -281,7 +289,7 @@ class JigsawPuzzleGame extends FlameGame with ScrollDetector, PanDetector {
           ..scale = Vector2.all(_trayPieceScale)
           ..clusterId = pState.clusterId
           ..rot = pState.rot
-          ..priority = _basePriority;
+          ..priority = _trayPiecePriority;
 
         _pieces[id] = component;
         add(component);
@@ -298,6 +306,8 @@ class JigsawPuzzleGame extends FlameGame with ScrollDetector, PanDetector {
         _applyBoardState(restored);
       } catch (_) {}
     }
+
+    updatePiecesStateAndPriorities();
   }
 
   /// Computes smart board maximizing layout and normalized tray metrics.
@@ -364,13 +374,113 @@ class JigsawPuzzleGame extends FlameGame with ScrollDetector, PanDetector {
     }
   }
 
+  /// 单击吸附抓取状态机（Click-to-Pick & Move-to-Drop）
+  PuzzlePieceComponent? _holdingPiece;
+  PuzzlePieceComponent? get holdingPiece => _holdingPiece;
+  double _holdingAnchorX = 0.5;
+  double _holdingAnchorY = 0.5;
+
+  @override
+  void onMouseMove(PointerHoverInfo info) {
+    super.onMouseMove(info);
+    if (_holdingPiece != null && !_isSolved) {
+      final mousePos = info.eventPosition.widget;
+      updateHoldingPiecePosition(mousePos);
+    }
+  }
+
+  @override
+  void onTapDown(TapDownEvent event) {
+    super.onTapDown(event);
+    if (_holdingPiece != null && !_isSolved) {
+      dropHoldingPiece();
+    }
+  }
+
+  /// 开启单击吸附抓取模式（鼠标光标跟随）
+  void startHoldingPiece(
+    PuzzlePieceComponent piece,
+    double anchorX,
+    double anchorY,
+  ) {
+    if (piece.isLocked || _isSolved) return;
+
+    _holdingPiece = piece;
+    _holdingAnchorX = anchorX;
+    _holdingAnchorY = anchorY;
+    piece.isDragging = true;
+    handlePieceDragStart(piece);
+    onStateUpdated?.call();
+  }
+
+  /// 根据鼠标光标位置 [cursorCanvasPos]，精确更新被吸附碎片（及其集群）的位置与平滑缩放
+  void updateHoldingPiecePosition(Vector2 cursorCanvasPos) {
+    final primary = _holdingPiece;
+    if (primary == null || _isSolved) return;
+
+    // 1. 计算碎片在当前 Y 坐标下的平滑过渡缩放
+    final trayTop = trayPosition.y;
+    const transitionBand = 60.0; // 60px 缓冲区间
+    final boardScale = _zoom;
+
+    double currentScale;
+    if (cursorCanvasPos.y >= trayTop) {
+      currentScale = _trayPieceScale;
+    } else if (cursorCanvasPos.y <= trayTop - transitionBand) {
+      currentScale = boardScale;
+    } else {
+      final t = (trayTop - cursorCanvasPos.y) / transitionBand;
+      currentScale = _trayPieceScale + (boardScale - _trayPieceScale) * t;
+    }
+
+    // 2. 根据归一化锚点精确计算主碎片的新左上角坐标（无论缩放多少，光标永远对准抓取点）
+    final targetX =
+        cursorCanvasPos.x - _holdingAnchorX * primary.size.x * currentScale;
+    final targetY =
+        cursorCanvasPos.y - _holdingAnchorY * primary.size.y * currentScale;
+
+    primary.scale.setAll(currentScale);
+    primary.position.setValues(targetX, targetY);
+
+    // 3. 同步更新同集群内其他碎片的相对位置与缩放
+    final clusterPieces = _pieces.values
+        .where((p) => p.clusterId == primary.clusterId && p != primary);
+
+    for (final p in clusterPieces) {
+      p.scale.setAll(currentScale);
+      final relCol = p.c - primary.c;
+      final relRow = p.r - primary.r;
+      final px = targetX + relCol * primary.size.x * currentScale;
+      final py = targetY + relRow * primary.size.y * currentScale;
+      p.position.setValues(px, py);
+    }
+  }
+
+  /// 放下当前吸附抓取的碎片并触发吸附判定
+  void dropHoldingPiece() {
+    final piece = _holdingPiece;
+    if (piece == null) return;
+    _holdingPiece = null;
+    piece.isDragging = false;
+    handlePieceDragEnd(piece);
+  }
+
+  /// 取消当前吸附抓取的碎片并平滑恢复原位
+  void cancelHoldingPiece() {
+    final piece = _holdingPiece;
+    if (piece == null) return;
+    _holdingPiece = null;
+    piece.isDragging = false;
+    cancelPieceDrag(piece);
+  }
+
   @override
   void onPanUpdate(DragUpdateInfo info) {
     super.onPanUpdate(info);
     final pos = info.eventPosition.global;
     if (pos.y >= trayPosition.y && pos.y <= trayPosition.y + traySize.y) {
       final isPieceDragging = _pieces.values.any((p) => p.isDragging);
-      if (!isPieceDragging) {
+      if (!isPieceDragging && _holdingPiece == null) {
         scrollTray(info.delta.global.x);
       }
     }
@@ -565,7 +675,8 @@ class JigsawPuzzleGame extends FlameGame with ScrollDetector, PanDetector {
         comp.rot = 0;
         comp.scale.setAll(_trayPieceScale);
         comp.position.setFrom(pPos);
-        comp.priority = _basePriority;
+        comp.priority = _trayPiecePriority;
+        comp.isLocked = false;
       }
       trayIndex++;
     }
@@ -573,12 +684,49 @@ class JigsawPuzzleGame extends FlameGame with ScrollDetector, PanDetector {
     _boardState = _boardState.copyWith(pieces: initialPieces);
     _realignTrayPieces(animate: true);
     _updateBoardTransform();
+    updatePiecesStateAndPriorities();
     onProgressChanged?.call(0);
     onStateUpdated?.call();
   }
 
+  /// 统一刷新所有碎片的归位锁定状态 (isLocked) 与渲染交互层级 (Priority)
+  ///
+  /// 【层级与响应规则】：
+  /// 1. 正在被拖拽或光标吸附抓取的碎片 -> `_topPriority`（绝对顶层 1000+）
+  /// 2. 棋盘上未归位/自由合并的碎片 -> `_boardUnsolvedPriority`（20，浮于已归位底板碎片上方）
+  /// 3. 托盘中的待拼碎片 -> `_trayPiecePriority`（10）
+  /// 4. 吸附且已归位的正确碎片 -> `_solvedPiecePriority`（5，贴底渲染且锁定禁止移动）
+  void updatePiecesStateAndPriorities() {
+    for (final pState in _boardState.pieces) {
+      final comp = _pieces[pState.id];
+      if (comp == null) continue;
+
+      if (comp.isDragging || comp == _holdingPiece) {
+        comp.priority = _topPriority;
+        comp.isLocked = false;
+        continue;
+      }
+
+      final isPieceSolved = pState.isSolved(rows, cols);
+      if (isPieceSolved) {
+        comp.isLocked = true;
+        comp.priority = _solvedPiecePriority;
+        comp.isInTray = false;
+      } else {
+        comp.isLocked = false;
+        if (comp.isInTray) {
+          comp.priority = _trayPiecePriority;
+        } else {
+          comp.priority = _boardUnsolvedPriority;
+        }
+      }
+    }
+  }
+
   /// Called when user begins dragging a piece.
   void handlePieceDragStart(PuzzlePieceComponent piece) {
+    if (piece.isLocked || _isSolved) return;
+
     _topPriority += 2;
 
     for (final p in _pieces.values) {
@@ -619,16 +767,22 @@ class JigsawPuzzleGame extends FlameGame with ScrollDetector, PanDetector {
 
     for (final p in clusterPieces) {
       p.isDragging = false;
+      final statePiece = _boardState.pieceById(p.id);
+      final isOnBoard = (statePiece.nx >= -0.10 &&
+          statePiece.nx <= 1.10 &&
+          statePiece.ny >= -0.10 &&
+          statePiece.ny <= 1.10);
+      p.isInTray = !isOnBoard;
       if (p.isInTray) {
         p.scale.setAll(_trayPieceScale);
       } else {
         p.scale.setAll(_zoom);
-        final statePiece = _boardState.pieceById(p.id);
         final targetPos = _normalizedToScreen(statePiece.nx, statePiece.ny);
         p.animateTo(targetPos, duration: 0.15);
       }
     }
     _realignTrayPieces(animate: true);
+    updatePiecesStateAndPriorities();
   }
 
   /// Called when user releases drag. Executes snap resolution & cluster merge.
@@ -642,6 +796,7 @@ class JigsawPuzzleGame extends FlameGame with ScrollDetector, PanDetector {
       piece.isInTray = true;
       piece.animateScaleTo(Vector2.all(_trayPieceScale), duration: 0.15);
       _realignTrayPieces(animate: true);
+      updatePiecesStateAndPriorities();
       onStateUpdated?.call();
       return;
     }
@@ -701,6 +856,7 @@ class JigsawPuzzleGame extends FlameGame with ScrollDetector, PanDetector {
         comp.triggerSnapGlow();
       }
 
+      updatePiecesStateAndPriorities();
       onPieceSnapped?.call();
       onProgressChanged?.call(solvedCount);
       onStateUpdated?.call();
@@ -722,6 +878,7 @@ class JigsawPuzzleGame extends FlameGame with ScrollDetector, PanDetector {
         p.animateScaleTo(Vector2.all(_zoom), duration: 0.15);
       }
       _realignTrayPieces(animate: true);
+      updatePiecesStateAndPriorities();
       onStateUpdated?.call();
     }
   }
@@ -749,6 +906,7 @@ class JigsawPuzzleGame extends FlameGame with ScrollDetector, PanDetector {
     }
     _trayScrollX = 0.0;
     _realignTrayPieces(animate: true);
+    updatePiecesStateAndPriorities();
     onStateUpdated?.call();
   }
 
@@ -810,6 +968,7 @@ class JigsawPuzzleGame extends FlameGame with ScrollDetector, PanDetector {
       }
     }
     _realignTrayPieces(animate: false);
+    updatePiecesStateAndPriorities();
     onProgressChanged?.call(solvedCount);
     onStateUpdated?.call();
 
@@ -876,6 +1035,7 @@ class JigsawPuzzleGame extends FlameGame with ScrollDetector, PanDetector {
     }
 
     _realignTrayPieces(animate: true);
+    updatePiecesStateAndPriorities();
 
     onPieceSnapped?.call();
     onProgressChanged?.call(solvedCount);

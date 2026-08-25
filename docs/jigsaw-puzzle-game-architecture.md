@@ -153,11 +153,24 @@ $$\frac{\text{cols}}{\text{rows}} = \frac{W_{\text{image}}}{H_{\text{image}}}$$
 
 ---
 
-### 3.5 吸附、粘连簇 (Cluster) 与通关判定
+### 3.5 吸附、归位锁定 (Locking) 与四阶 Priority 层级体系
 
-- **吸附阈值**：$\text{snapDistance} = \min(w, h) \times 0.42$。
-- **粘连语义 (Adhere)**：吸附后的碎片形成「碎片组（Cluster）」，支持整组协同拖拽，保持灵活移动与重排能力。
-- **通关判定**：所有碎片归位到目标槽位且旋转朝向均为 $0^\circ$ 时判定通关。
+- **吸附阈值**：$\text{snapDistance} = \min(w, h) \times 0.48$（黄金手感吸附比例）。
+- **粘连语义 (Adhere & Cluster Merging)**：未归位碎片在空中相互触碰对齐时形成「自由碎片组（Cluster）」，支持整组协同拖拽与重排。
+- **归位锁定 (Solved Piece Locking)**：
+  - 当碎片或集群吸附到目标棋盘网格槽位（`isSolved == true`）时，系统立即将其标记为 `isLocked = true`；
+  - **锁定拦截**：锁定后的碎片禁止再次被鼠标/触摸拾起或拖拽，彻底杜绝误触移位；
+  - **层级降至底层**：已归位碎片的渲染层级（Priority）强制降至底层（Priority = 5），贴底渲染，绝不遮挡上层任何浮动碎片。
+- **四阶 Priority 渲染与交互层级规范**：
+  $$\begin{cases}
+  \text{Layer Top (Priority } \ge 1000\text{)}: & \text{当前正在拖拽或被光标抓取跟随的活动碎片集群（最高层级与交互优先级）} \\
+  \text{Layer Board Floating (Priority } = 20\text{)}: & \text{棋盘上漂浮/散落的未归位碎片与自由集群（浮于已归位底板碎片上方）} \\
+  \text{Layer Tray (Priority } = 10\text{)}: & \text{底部托盘中的待拼碎片} \\
+  \text{Layer Solved (Priority } = 5\text{)}: & \text{已吸附归位的正确碎片（锁定禁止移动，贴底渲染）} \\
+  \text{Layer Board (Priority } = 0 \sim 2\text{)}: & \text{底板边框、底图透视水印与托盘背景}
+  \end{cases}$$
+- **命中测试天然上层优先**：Flame 的 Hit-testing 遵循 Priority 倒序遍历。当未归位碎片与底层已归位碎片重叠时，鼠标/触控点击 100% 优先拾取上层的未归位碎片。
+- **通关判定**：所有碎片归位到目标槽位且旋转朝向均为 $0^\circ$ 时判定通关，底板转为完整大图无缝呈现。
 
 ---
 
@@ -211,6 +224,64 @@ $$\frac{\text{cols}}{\text{rows}} = \frac{W_{\text{image}}}{H_{\text{image}}}$$
 2. **跨平台多模态手势滚动 (`AppScrollBehavior`)**：
    - 扩展 `dragDevices` 包含 `{touch, mouse, trackpad, stylus}`；
    - 保证分类筛选胶囊与托盘在桌面端鼠标左键拖拽、触控板双指滑动与移动端触摸下均可流畅水平滚动。
+
+---
+
+### 3.11 Windows 鼠标单击吸附抓取 (Click-to-Pick & Move-to-Drop) 与双模手势架构
+
+为彻底消除桌面端/Windows 玩家长时间按住鼠标拖动导致的食指疲劳，系统内置**智能双模手势状态机**：
+
+```
+                    ┌────────────────────────┐
+                    │ 用户在未归位碎片上按下   │
+                    └───────────┬────────────┘
+                                │ onDragStart
+                                ▼
+                    ┌────────────────────────┐
+                    │ 记录起始位置与时间戳     │
+                    │ _dragStartTime / Pos   │
+                    └───────────┬────────────┘
+                                │ onDragEnd (松开)
+                ┌───────────────┴───────────────┐
+                │                               │
+    [位移 < 8px 且 时间 < 350ms]      [位移 ≥ 8px 或 长按拖动]
+    (典型鼠标单击 / 点选)             (传统按住拖拽 / 移动端触控)
+                │                               │
+                ▼                               ▼
+    ┌────────────────────────┐      ┌────────────────────────┐
+    │ 开启光标吸附跟随模式    │      │ 直接释放放置           │
+    │ startHoldingPiece      │      │ handlePieceDragEnd     │
+    └───────────┬────────────┘      └────────────────────────┘
+                │
+                │ onMouseMove (光标任意移动，无需长按)
+                ▼
+    ┌────────────────────────┐
+    │ 碎片及其集群跟随光标平滑 │
+    │ 移动并实时计算缩放插值   │
+    └───────────┬────────────┘
+                │
+        ┌───────┴───────────────────────┐
+        │                               │
+    [再次单击鼠标左键]             [右键单击 或 按 ESC 键]
+        │                               │
+        ▼                               ▼
+┌────────────────────────┐      ┌────────────────────────┐
+│ 释放放置并执行吸附判定  │      │ 取消抓取并平滑飞回原位 │
+│ dropHoldingPiece       │      │ cancelHoldingPiece     │
+└────────────────────────┘      └────────────────────────┘
+```
+
+1. **全链路轻点响应与零漏触**：`PuzzlePieceComponent` 同时混入 `DragCallbacks` 与 `TapCallbacks`，并在 `onTapDown` 与 `onDragStart` 中双向拦截响应，无论是轻点还是按住拖动均 100% 灵敏秒响应。
+2. **归一化抓取锚点模型 (Normalized Grab Anchor Model)**：
+   - 拾起碎片时，计算光标在碎片逻辑尺寸中的相对比例锚点：
+     $$anchorX = \frac{x_{\text{cursor}} - pos.x}{size.x \cdot scale.x}, \quad anchorY = \frac{y_{\text{cursor}} - pos.y}{size.y \cdot scale.y}$$
+   - 碎片在托盘与棋盘之间平滑连续缩放（例如从托盘 $0.35$ 放大至棋盘 $1.0$ 或 $3.0$ Zoom）时，碎片的左上角位置实时由下列公式严格推导：
+     $$pos.x = x_{\text{cursor}} - anchorX \cdot size.x \cdot scale_{\text{current}}$$
+     $$pos.y = y_{\text{cursor}} - anchorY \cdot size.y \cdot scale_{\text{current}}$$
+   - **数学保证**：光标永远 100% 牢牢对准碎片上玩家最初抓取的那一个相对纹理点，无论变大变小多少倍，光标与抓握点零位移发散、零距离拉大，实现绝对跟手！
+3. **再次单击放置**：光标移动到目标区域（棋盘或托盘）后，再次单击左键即可放置并触发精准吸附或托盘收纳。
+4. **传统拖动与触屏 100% 兼容**：若玩家采用“按住拖动到位置后松开”的传统操作，位移超过阈值时直接在松手时放置，两套习惯无缝共存。
+5. **防误触与快捷取消**：在吸附状态下，点击鼠标右键或按键盘 `ESC` 键，碎片将平滑缓动飞回原位。
 
 ---
 

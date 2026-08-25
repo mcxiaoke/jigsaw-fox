@@ -52,6 +52,7 @@ class _GamePageState extends State<GamePage> {
   double _baseZoom = 1.0;
   Offset _baseFocalPoint = Offset.zero;
   Vector2 _basePan = Vector2.zero();
+  final FocusNode _focusNode = FocusNode();
 
   @override
   void initState() {
@@ -488,6 +489,15 @@ class _GamePageState extends State<GamePage> {
   }
 
   void _onPointerDown(PointerDownEvent event) {
+    // 鼠标右键点击：若当前有吸附抓取的碎片，立即取消抓取并复位
+    if ((event.buttons & kSecondaryMouseButton) != 0 && _game != null) {
+      if (_game!.holdingPiece != null) {
+        _game!.cancelHoldingPiece();
+        if (mounted) setState(() {});
+        return;
+      }
+    }
+
     _pointerPositions[event.pointer] = event.localPosition;
     if (_pointerPositions.length >= 2) {
       _game?.isPinching = true;
@@ -531,6 +541,20 @@ class _GamePageState extends State<GamePage> {
     } else if ((event.buttons & kMiddleMouseButton) != 0 && _game != null) {
       _game!.panBy(Vector2(event.delta.dx, event.delta.dy));
       if (mounted) setState(() {});
+    } else if (_game?.holdingPiece != null && _pointerPositions.length <= 1) {
+      // 鼠标按住移动时实时驱动碎片跟手移动与缩放
+      _game!.updateHoldingPiecePosition(
+        Vector2(event.localPosition.dx, event.localPosition.dy),
+      );
+    }
+  }
+
+  void _onPointerHover(PointerHoverEvent event) {
+    // 鼠标松开后光标吸附移动：高频实时更新位置与缩放，保证绝对跟手
+    if (_game?.holdingPiece != null) {
+      _game!.updateHoldingPiecePosition(
+        Vector2(event.localPosition.dx, event.localPosition.dy),
+      );
     }
   }
 
@@ -578,6 +602,7 @@ class _GamePageState extends State<GamePage> {
   @override
   void dispose() {
     _timer?.cancel();
+    _focusNode.dispose();
     super.dispose();
   }
 
@@ -825,14 +850,27 @@ class _GamePageState extends State<GamePage> {
                 _buildHeader(),
                 Expanded(
                   child: _game != null
-                      ? Listener(
-                          onPointerDown: _onPointerDown,
-                          onPointerMove: _onPointerMove,
-                          onPointerUp: _onPointerUp,
-                          onPointerCancel: _onPointerCancel,
-                          onPointerSignal: _onPointerSignal,
-                          behavior: HitTestBehavior.translucent,
-                          child: GameWidget(game: _game!),
+                      ? KeyboardListener(
+                          focusNode: _focusNode,
+                          autofocus: true,
+                          onKeyEvent: (keyEvent) {
+                            if (keyEvent is KeyDownEvent &&
+                                keyEvent.logicalKey == LogicalKeyboardKey.escape &&
+                                _game?.holdingPiece != null) {
+                              _game?.cancelHoldingPiece();
+                              if (mounted) setState(() {});
+                            }
+                          },
+                          child: Listener(
+                            onPointerDown: _onPointerDown,
+                            onPointerMove: _onPointerMove,
+                            onPointerHover: _onPointerHover,
+                            onPointerUp: _onPointerUp,
+                            onPointerCancel: _onPointerCancel,
+                            onPointerSignal: _onPointerSignal,
+                            behavior: HitTestBehavior.translucent,
+                            child: GameWidget(game: _game!),
+                          ),
                         )
                       : const Center(
                           child: CircularProgressIndicator(color: Color(0xFF2E7D32)),
