@@ -455,9 +455,8 @@ class _GamePageState extends State<GamePage> {
           TextButton(
             onPressed: () {
               Navigator.pop(ctx);
-              setState(() => _showOriginalImage = true);
             },
-            child: const Text('查看高清原图'),
+            child: const Text('查看已完成拼图'),
           ),
           if (hasNext)
             FilledButton.icon(

@@ -150,6 +150,7 @@ class JigsawPuzzleGame extends FlameGame
   late RectangleComponent _boardBgRect;
   late BoardGhostComponent _boardGhostComp;
   late RectangleComponent _boardOutlineRect;
+  TrayBackgroundComponent? _trayBgComp;
 
   Vector2 trayPosition = Vector2.zero();
   Vector2 traySize = Vector2.zero();
@@ -161,6 +162,8 @@ class JigsawPuzzleGame extends FlameGame
   double _traySpacing = 16.0;
 
   int _topPriority = _activeDragBasePriority;
+  bool _isInitialized = false;
+  bool get isInitialized => _isInitialized;
   bool _isSolved = false;
   bool get isSolved => _isSolved;
   bool _borderFilterActive = false;
@@ -227,12 +230,11 @@ class JigsawPuzzleGame extends FlameGame
 
     // 2. Draw Scrollable Bottom Tray Component (桌面散落模式下彻底隐藏托盘背景)
     if (!isTabletop) {
-      add(
-        TrayBackgroundComponent(
-          position: trayPosition.clone(),
-          size: traySize.clone(),
-        ),
+      _trayBgComp = TrayBackgroundComponent(
+        position: trayPosition.clone(),
+        size: traySize.clone(),
       );
+      add(_trayBgComp!);
     }
 
     // 3. Initialize Edge Layout & Domain State
@@ -319,14 +321,78 @@ class JigsawPuzzleGame extends FlameGame
       } catch (_) {}
     }
 
+    _isInitialized = true;
     updatePiecesStateAndPriorities();
   }
 
   @override
   void onGameResize(Vector2 size) {
     super.onGameResize(size);
+    if (!_isInitialized) return;
     _computeLayout();
     _tabletopScatterSlots = null;
+    _syncResizeTransform();
+  }
+
+  /// 当游戏视口大小变化（如 Windows 窗口拉伸/缩放）时，全量同步更新底板、托盘及所有碎片的物理尺寸与坐标
+  void _syncResizeTransform() {
+    // 1. 同步托盘背景组件
+    if (!isTabletop) {
+      if (_trayBgComp == null || _trayBgComp!.parent == null) {
+        _trayBgComp = TrayBackgroundComponent(
+          position: trayPosition.clone(),
+          size: traySize.clone(),
+        );
+        add(_trayBgComp!);
+      } else {
+        _trayBgComp!.position.setFrom(trayPosition);
+        _trayBgComp!.size.setFrom(traySize);
+      }
+    } else {
+      _trayBgComp?.removeFromParent();
+      _trayBgComp = null;
+    }
+
+    // 2. 同步棋盘底板、底图水印及外框
+    _updateBoardTransform();
+
+    // 3. 动态刷新所有碎片的几何贝塞尔轮廓与基础尺寸
+    for (final comp in _pieces.values) {
+      final edges = edgeLayout.edgesFor(comp.r, comp.c);
+      comp.updateShapeAndSize(
+        PieceShape(
+          edges: edges,
+          width: pieceSize.x,
+          height: pieceSize.y,
+        ),
+        pieceSize,
+      );
+
+      if (comp.isDragging || comp == _holdingPiece) {
+        // 若当前正在被鼠标吸附或拖拽，由 updateHoldingPiecePosition 在下一帧自动对准
+        continue;
+      }
+
+      if (comp.isInTray) {
+        comp.scale.setAll(_trayPieceScale);
+      } else {
+        comp.scale.setAll(_zoom);
+        final pState = _boardState.pieceById(comp.id);
+        comp.position.setFrom(_normalizedToScreen(pState.nx, pState.ny));
+      }
+    }
+
+    // 4. 重排托盘碎片
+    if (!isTabletop) {
+      final trayPieces = _pieces.values.where((p) => p.isInTray).toList();
+      final contentWidth =
+          trayPieces.length * (_trayPieceWidth + _traySpacing) + 36.0;
+      final minScroll = min(0.0, traySize.x - contentWidth);
+      _trayScrollX = _trayScrollX.clamp(minScroll, 0.0);
+      _realignTrayPieces(animate: false);
+    }
+
+    updatePiecesStateAndPriorities();
   }
 
   /// Computes smart board maximizing layout and normalized tray metrics.

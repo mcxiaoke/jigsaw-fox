@@ -582,6 +582,54 @@ void main() {
     expect(lastPiece.position.x, lessThan(400.0));
     expect(lastPiece.position.y, lessThan(800.0));
   });
+
+  test('窗口尺寸变化 (onGameResize) 时，托盘始终紧贴底部且棋盘与碎片同步按比例缩放', () async {
+    final img = await _decodePng();
+    final game = JigsawPuzzleGame(
+      image: img,
+      rows: 3,
+      cols: 3,
+      onSolved: () {},
+    );
+    game.onGameResize(Vector2(400, 800));
+    await game.onLoad();
+
+    final initialTrayY = game.trayPosition.y;
+    final initialBoardW = game.boardSize.x;
+    final initialPieceW = game.pieceSize.x;
+    expect(initialTrayY, equals(800.0 - game.traySize.y - 8.0));
+
+    // 拼入一块碎片到棋盘上
+    game.hint();
+    expect(game.solvedCount, 1);
+
+    // 模拟 Windows 桌面端拉伸窗口至 1280 x 720
+    game.onGameResize(Vector2(1280, 720));
+
+    // 1. 验证托盘依然紧贴新视口底部
+    expect(game.trayPosition.y, equals(720.0 - game.traySize.y - 8.0));
+    expect(game.traySize.x, equals(1280.0 - 16.0));
+
+    // 2. 验证棋盘与碎片尺寸同步等比重算
+    expect(game.boardSize.x, isNot(equals(initialBoardW)));
+    expect(game.pieceSize.x, equals(game.boardSize.x / 3));
+    expect(game.pieceSize.y, equals(game.boardSize.y / 3));
+
+    // 3. 验证已归位棋盘碎片的新屏幕坐标与新棋盘对齐
+    final solvedComp = game.children.whereType<PuzzlePieceComponent>().firstWhere((p) => p.isLocked);
+    expect(solvedComp.size.x, equals(game.pieceSize.x));
+    expect(solvedComp.size.y, equals(game.pieceSize.y));
+    expect(solvedComp.position.x, closeTo(game.boardTopLeft.x + solvedComp.c * game.pieceSize.x, 0.5));
+    expect(solvedComp.position.y, closeTo(game.boardTopLeft.y + solvedComp.r * game.pieceSize.y, 0.5));
+
+    // 4. 模拟缩小窗口至 320 x 480
+    game.onGameResize(Vector2(320, 480));
+    expect(game.trayPosition.y, equals(480.0 - game.traySize.y - 8.0));
+    expect(game.traySize.x, equals(320.0 - 16.0));
+    expect(solvedComp.position.x, closeTo(game.boardTopLeft.x + solvedComp.c * game.pieceSize.x, 0.5));
+    expect(solvedComp.position.y, closeTo(game.boardTopLeft.y + solvedComp.r * game.pieceSize.y, 0.5));
+  });
 }
+
 
 

@@ -50,7 +50,13 @@ class PuzzlePieceComponent extends PositionComponent
   final int c;
 
   /// 预计算的几何贝塞尔轮廓与包围盒
-  final PieceShape shape;
+  PieceShape shape;
+
+  /// 在窗口 resize 或尺寸改变时动态刷新几何贝塞尔轮廓与逻辑尺寸
+  void updateShapeAndSize(PieceShape newShape, Vector2 newBaseSize) {
+    shape = newShape;
+    size.setFrom(newBaseSize);
+  }
 
   /// 拼图原图纹理对象
   final ui.Image image;
@@ -118,14 +124,13 @@ class PuzzlePieceComponent extends PositionComponent
     ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 5.5)
     ..isAntiAlias = true;
 
-  /// 物理冲压切线画笔：
-  /// - 线宽 0.75px，颜色为 21% 透明度的深黑色（Color(0x35000000)）
-  /// - 【设计理由】：摒弃了生硬的粗白高光与粗黑阴影，采用极细半透明微线，
-  ///   完美还原实体拼图刀模冲压在纸板/木板表面留下的物理微凹切口。
+  /// 物理冲压切线与拼图咬合缝隙画笔：
+  /// - 线宽 1.2px，颜色为 41% 透明度的深黑色（Color(0x68000000)）
+  /// - 使吸附和拼接后的边缘轮廓更加明显清晰，还原实体拼图刀模冲压卡扣质感。
   static final Paint _mainOutlinePaint = Paint()
     ..style = PaintingStyle.stroke
-    ..strokeWidth = 0.75
-    ..color = const Color(0x35000000)
+    ..strokeWidth = 1.2
+    ..color = const Color(0x68000000)
     ..isAntiAlias = true;
 
   /// 吸附成功高亮画笔（鲜艳绿色光晕）
