@@ -1,15 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:phosphoricons_flutter/phosphoricons_flutter.dart';
 
-import '../data/game_repository.dart';
-import '../widgets/achievements_dialog.dart';
-import '../widgets/how_to_play_dialog.dart';
-import '../widgets/settings_dialog.dart';
+import 'achievements_page.dart';
+import 'settings_page.dart';
 import 'tabs/daily_tab_view.dart';
 import 'tabs/home_tab_view.dart';
 import 'tabs/my_puzzles_tab_view.dart';
 
-/// Main screen featuring the 3-tab bottom navigation (Home / My / Daily) with header stats.
+/// Main screen featuring the 3-tab bottom navigation (Home / My / Daily) with streamlined header.
 class MainScreen extends StatefulWidget {
   const MainScreen({super.key});
 
@@ -18,7 +16,6 @@ class MainScreen extends StatefulWidget {
 }
 
 class _MainScreenState extends State<MainScreen> {
-  final _repo = GameRepository.instance;
   int _currentIndex = 0;
 
   String get _appBarTitle {
@@ -36,8 +33,6 @@ class _MainScreenState extends State<MainScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final totalStars = _repo.levels.fold<int>(0, (sum, l) => sum + l.stars);
-
     return Scaffold(
       backgroundColor: const Color(0xFFF7F8FA),
       appBar: AppBar(
@@ -56,59 +51,26 @@ class _MainScreenState extends State<MainScreen> {
         backgroundColor: Colors.white,
         elevation: 0.5,
         actions: [
-          // Total Stars Counter
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-            decoration: BoxDecoration(
-              color: Colors.amber.withValues(alpha: 0.15),
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: Colors.amber.shade300),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Image.asset('assets/icons/star_3d.png', width: 18, height: 18),
-                const SizedBox(width: 4),
-                Text(
-                  '$totalStars',
-                  style: const TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 13,
-                    color: Colors.orange,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 4),
-
-          // Help / How to Play
-          IconButton(
-            icon: const Icon(PhosphorIconsBold.question, color: Color(0xFF0288D1)),
-            tooltip: '玩法指引',
-            onPressed: () => HowToPlayDialog.show(context),
-          ),
-
-          // Achievements
+          // Achievements Page
           IconButton(
             icon: Image.asset('assets/icons/trophy_3d.png', width: 22, height: 22),
             tooltip: '成就与统计',
             onPressed: () async {
-              await AchievementsDialog.show(context);
+              await AchievementsPage.open(context);
               setState(() {});
             },
           ),
 
-          // Settings
+          // Settings Page
           IconButton(
             icon: Image.asset('assets/icons/control_knobs_3d.png', width: 22, height: 22),
             tooltip: '设置',
             onPressed: () async {
-              await SettingsDialog.show(context);
+              await SettingsPage.open(context);
               setState(() {});
             },
           ),
-          const SizedBox(width: 6),
+          const SizedBox(width: 8),
         ],
       ),
       body: IndexedStack(

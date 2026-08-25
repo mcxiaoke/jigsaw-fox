@@ -8,13 +8,14 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:jigsawpuzzle/data/game_repository.dart';
 import 'package:jigsawpuzzle/game/jigsaw_puzzle_game.dart';
 import 'package:jigsawpuzzle/logic/puzzle_model.dart';
+import 'package:jigsawpuzzle/pages/achievements_page.dart';
+import 'package:jigsawpuzzle/pages/how_to_play_page.dart';
+import 'package:jigsawpuzzle/pages/main_screen.dart';
+import 'package:jigsawpuzzle/pages/settings_page.dart';
 import 'package:jigsawpuzzle/pages/tabs/daily_tab_view.dart';
 import 'package:jigsawpuzzle/pages/tabs/home_tab_view.dart';
 import 'package:jigsawpuzzle/pages/tabs/my_puzzles_tab_view.dart';
-import 'package:jigsawpuzzle/widgets/achievements_dialog.dart';
 import 'package:jigsawpuzzle/widgets/choose_difficulty_sheet.dart';
-import 'package:jigsawpuzzle/widgets/how_to_play_dialog.dart';
-import 'package:jigsawpuzzle/widgets/settings_dialog.dart';
 import 'package:phosphoricons_flutter/phosphoricons_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -103,54 +104,77 @@ void main() {
       expect(game.canUndo, isFalse);
     });
 
-    testWidgets('HowToPlayDialog renders instructions properly', (tester) async {
+    testWidgets('HowToPlayPage renders instructions properly', (tester) async {
       await tester.pumpWidget(
         const MaterialApp(
-          home: Scaffold(
-            body: HowToPlayDialog(),
-          ),
+          home: HowToPlayPage(),
         ),
       );
 
       expect(find.text('玩法与操作技巧'), findsOneWidget);
+      expect(find.text('轻松上手异形拼图'), findsOneWidget);
       expect(find.text('拖拽与磁吸'), findsOneWidget);
       expect(find.text('双指缩放与平移'), findsOneWidget);
       expect(find.text('底图透视参考 (Ghost)'), findsOneWidget);
+      
+      await tester.scrollUntilVisible(find.text('一键整理托盘'), 100);
       expect(find.text('一键整理托盘'), findsOneWidget);
     });
 
-    testWidgets('AchievementsDialog renders statistics and 12 badges', (tester) async {
+    testWidgets('AchievementsPage renders statistics with total stars and 12 badges', (tester) async {
       await tester.pumpWidget(
         const MaterialApp(
-          home: Scaffold(
-            body: AchievementsDialog(),
-          ),
+          home: AchievementsPage(),
         ),
       );
 
       expect(find.text('成就与统计'), findsOneWidget);
+      expect(find.text('数据统计看板'), findsOneWidget);
+      expect(find.text('关卡累积星星'), findsOneWidget);
       expect(find.text('完成局数'), findsOneWidget);
       expect(find.text('已拼碎片'), findsOneWidget);
       expect(find.text('总游玩时长'), findsOneWidget);
+      expect(find.text('成就勋章墙'), findsOneWidget);
       expect(find.text('初入拼界'), findsOneWidget);
       expect(find.text('拼图学徒'), findsOneWidget);
       expect(find.text('拼图大师'), findsOneWidget);
     });
 
-    testWidgets('SettingsDialog renders switches and options', (tester) async {
+    testWidgets('SettingsPage renders switches, options, and HowToPlay entry', (tester) async {
+      tester.view.physicalSize = const Size(1000, 1600);
+      addTearDown(tester.view.resetPhysicalSize);
+
       await tester.pumpWidget(
         const MaterialApp(
-          home: Scaffold(
-            body: SettingsDialog(),
-          ),
+          home: SettingsPage(),
         ),
       );
 
       expect(find.text('游戏设置'), findsOneWidget);
+      expect(find.text('音效与交互'), findsOneWidget);
       expect(find.text('拼图吸附音效'), findsOneWidget);
       expect(find.text('触感震动反馈'), findsOneWidget);
       expect(find.text('选关切图网格预览'), findsOneWidget);
+      expect(find.text('玩法与帮助'), findsOneWidget);
       expect(find.text('玩法技巧与操作指引'), findsOneWidget);
+      
+      await tester.scrollUntilVisible(find.text('重置所有游戏数据'), 100);
+      expect(find.text('重置所有游戏数据'), findsOneWidget);
+    });
+
+    testWidgets('MainScreen renders streamlined AppBar with Achievements and Settings actions only', (tester) async {
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: MainScreen(),
+        ),
+      );
+
+      expect(find.text('关卡画廊'), findsOneWidget);
+      // Verify help icon is no longer directly in AppBar
+      expect(find.byTooltip('玩法指引'), findsNothing);
+      // Verify achievements & settings exist in AppBar
+      expect(find.byTooltip('成就与统计'), findsOneWidget);
+      expect(find.byTooltip('设置'), findsOneWidget);
     });
 
     testWidgets('HomeTabView renders category filters and reacts to taps', (tester) async {
@@ -280,7 +304,9 @@ void main() {
       );
 
       expect(find.text('相册选图'), findsOneWidget);
-      expect(find.text('在线选图'), findsOneWidget);
+      expect(find.text('已下载'), findsOneWidget);
+      expect(find.text('在线搜图'), findsOneWidget);
+      expect(find.text('已下载图片'), findsNothing);
       expect(find.text('我的自制合辑'), findsOneWidget);
     });
 

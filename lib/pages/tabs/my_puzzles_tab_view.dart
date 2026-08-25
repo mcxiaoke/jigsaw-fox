@@ -6,6 +6,7 @@ import 'package:phosphoricons_flutter/phosphoricons_flutter.dart';
 
 import '../../data/game_repository.dart';
 import '../../data/models/custom_puzzle_item.dart';
+import '../../logic/download_manager.dart';
 import '../../logic/image_source.dart';
 import '../../widgets/choose_difficulty_sheet.dart';
 import '../../widgets/downloaded_drawer_sheet.dart';
@@ -129,130 +130,67 @@ class _MyPuzzlesTabViewState extends State<MyPuzzlesTabView> {
       onRefresh: () async => setState(() {}),
       child: CustomScrollView(
         slivers: [
-          // 1. Top UGC Creation Action Cards (Dual side-by-side cards)
+          // 1. Top UGC Creation Action Cards (3 compact side-by-side cards)
           SliverToBoxAdapter(
             child: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+              padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
               child: Row(
                 children: [
                   // 1.1 Left Card: Local Gallery
                   Expanded(
-                    child: InkWell(
+                    child: _buildTopActionCard(
+                      title: '相册选图',
+                      subtitle: '本地导入',
+                      iconWidget: _loading
+                          ? const SizedBox(
+                              width: 14,
+                              height: 14,
+                              child: CircularProgressIndicator(color: Color(0xFF2E7D32), strokeWidth: 2),
+                            )
+                          : Image.asset('assets/icons/camera_3d.png', width: 20, height: 20),
+                      gradientColors: const [Color(0xFFE8F5E9), Color(0xFFC8E6C9)],
+                      borderColor: const Color(0xFF81C784),
+                      textColor: const Color(0xFF1B5E20),
                       onTap: _loading ? null : _createFromGallery,
-                      borderRadius: BorderRadius.circular(20),
-                      child: Container(
-                        height: 98,
-                        decoration: BoxDecoration(
-                          gradient: const LinearGradient(
-                            colors: [Color(0xFFE8F5E9), Color(0xFFC8E6C9)],
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
-                          ),
-                          borderRadius: BorderRadius.circular(20),
-                          border: Border.all(color: const Color(0xFF81C784), width: 1.5),
-                          boxShadow: const [
-                            BoxShadow(color: Colors.black12, blurRadius: 6, offset: Offset(0, 2)),
-                          ],
-                        ),
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                CircleAvatar(
-                                  backgroundColor: const Color(0xFF2E7D32),
-                                  radius: 17,
-                                  child: _loading
-                                      ? const SizedBox(
-                                          width: 16,
-                                          height: 16,
-                                          child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
-                                        )
-                                      : Image.asset('assets/icons/camera_3d.png', width: 20, height: 20),
-                                ),
-                                const Icon(PhosphorIconsBold.arrowRight, size: 15, color: Color(0xFF2E7D32)),
-                              ],
-                            ),
-                            const Spacer(),
-                            const Text(
-                              '相册选图',
-                              style: TextStyle(
-                                fontSize: 14.5,
-                                fontWeight: FontWeight.bold,
-                                color: Color(0xFF1B5E20),
-                              ),
-                            ),
-                            const SizedBox(height: 1),
-                            const Text(
-                              '导入手机本地照片',
-                              style: TextStyle(fontSize: 10.5, color: Colors.black54),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ],
-                        ),
-                      ),
                     ),
                   ),
-                  const SizedBox(width: 10),
-                  // 1.2 Right Card: Online Gallery
+                  const SizedBox(width: 8),
+
+                  // 1.2 Middle Card: Downloaded Box
                   Expanded(
-                    child: InkWell(
+                    child: ValueListenableBuilder(
+                      valueListenable: DownloadManager.instance.itemsNotifier,
+                      builder: (context, downloadedItems, _) {
+                        return _buildTopActionCard(
+                          title: '已下载',
+                          subtitle: '${downloadedItems.length} 张图片',
+                          iconWidget: const Icon(PhosphorIconsFill.tray, color: Color(0xFFE65100), size: 18),
+                          gradientColors: const [Color(0xFFFFF3E0), Color(0xFFFFE0B2)],
+                          borderColor: const Color(0xFFFFB74D),
+                          textColor: const Color(0xFFE65100),
+                          onTap: () async {
+                            await DownloadedDrawerSheet.show(context);
+                            if (mounted) setState(() {});
+                          },
+                        );
+                      },
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+
+                  // 1.3 Right Card: Online Search
+                  Expanded(
+                    child: _buildTopActionCard(
+                      title: '在线搜图',
+                      subtitle: '海量图库',
+                      iconWidget: const Icon(PhosphorIconsFill.globeHemisphereWest, color: Color(0xFF0277BD), size: 18),
+                      gradientColors: const [Color(0xFFE1F5FE), Color(0xFFB3E5FC)],
+                      borderColor: const Color(0xFF4FC3F7),
+                      textColor: const Color(0xFF01579B),
                       onTap: () async {
                         await OnlineImagePickerPage.push(context);
                         if (mounted) setState(() {});
                       },
-                      borderRadius: BorderRadius.circular(20),
-                      child: Container(
-                        height: 98,
-                        decoration: BoxDecoration(
-                          gradient: const LinearGradient(
-                            colors: [Color(0xFFE1F5FE), Color(0xFFB3E5FC)],
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
-                          ),
-                          borderRadius: BorderRadius.circular(20),
-                          border: Border.all(color: const Color(0xFF4FC3F7), width: 1.5),
-                          boxShadow: const [
-                            BoxShadow(color: Colors.black12, blurRadius: 6, offset: Offset(0, 2)),
-                          ],
-                        ),
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                        child: const Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                CircleAvatar(
-                                  backgroundColor: Color(0xFF0277BD),
-                                  radius: 17,
-                                  child: Icon(PhosphorIconsFill.globeHemisphereWest, color: Colors.white, size: 18),
-                                ),
-                                Icon(PhosphorIconsBold.arrowRight, size: 15, color: Color(0xFF0277BD)),
-                              ],
-                            ),
-                            Spacer(),
-                            Text(
-                              '在线选图',
-                              style: TextStyle(
-                                fontSize: 14.5,
-                                fontWeight: FontWeight.bold,
-                                color: Color(0xFF01579B),
-                              ),
-                            ),
-                            SizedBox(height: 1),
-                            Text(
-                              'Pixabay/Unsplash图库',
-                              style: TextStyle(fontSize: 10.5, color: Colors.black54),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ],
-                        ),
-                      ),
                     ),
                   ),
                 ],
@@ -271,24 +209,9 @@ class _MyPuzzlesTabViewState extends State<MyPuzzlesTabView> {
                     '我的自制合辑',
                     style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
                   ),
-                  Row(
-                    children: [
-                      // Download Drawer Button
-                      TextButton.icon(
-                        onPressed: () => DownloadedDrawerSheet.show(context),
-                        icon: const Icon(PhosphorIconsBold.tray, size: 16, color: Color(0xFF2E7D32)),
-                        label: const Text('已下载图片', style: TextStyle(color: Color(0xFF2E7D32), fontSize: 13)),
-                        style: TextButton.styleFrom(
-                          visualDensity: VisualDensity.compact,
-                          padding: const EdgeInsets.symmetric(horizontal: 6),
-                        ),
-                      ),
-                      const SizedBox(width: 4),
-                      Text(
-                        '共 ${customList.length} 个关卡',
-                        style: const TextStyle(fontSize: 13, color: Colors.black54),
-                      ),
-                    ],
+                  Text(
+                    '共 ${customList.length} 个关卡',
+                    style: const TextStyle(fontSize: 13, color: Colors.black54),
                   ),
                 ],
               ),
@@ -559,5 +482,81 @@ class _MyPuzzlesTabViewState extends State<MyPuzzlesTabView> {
     } else {
       return Image.asset(assetSamples[0], fit: BoxFit.cover);
     }
+  }
+
+  Widget _buildTopActionCard({
+    required String title,
+    required String subtitle,
+    required Widget iconWidget,
+    required List<Color> gradientColors,
+    required Color borderColor,
+    required Color textColor,
+    required VoidCallback? onTap,
+  }) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(16),
+        child: Container(
+          height: 66,
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: gradientColors,
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: borderColor, width: 1.2),
+            boxShadow: const [
+              BoxShadow(
+                color: Colors.black12,
+                blurRadius: 4,
+                offset: Offset(0, 1.5),
+              ),
+            ],
+          ),
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+          child: Row(
+            children: [
+              CircleAvatar(
+                radius: 17,
+                backgroundColor: Colors.white.withValues(alpha: 0.85),
+                child: iconWidget,
+              ),
+              const SizedBox(width: 7),
+              Expanded(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.bold,
+                        color: textColor,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 1),
+                    Text(
+                      subtitle,
+                      style: const TextStyle(
+                        fontSize: 10,
+                        color: Colors.black54,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 }

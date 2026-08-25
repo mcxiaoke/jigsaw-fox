@@ -3,6 +3,7 @@
 ## 环境路径
 - `PUB_CACHE`: Flutter|Dart包缓存路径看这里 `./dart_tool/package_config.json`
 - 查找工具和开发环境和软件包用 Everything Cli工具 `es.exe` 直接搜索，禁止大范围find
+- 如果要使用`python`可以用这里的 `C:\Home\Develop\venv` 可自由安装pip包
 
 ## 开发测试
 - 普通测试: 改代码后运行 `flutter analyze` 和 `flutter test` 测试通过
