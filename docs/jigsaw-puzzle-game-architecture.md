@@ -11,7 +11,7 @@
 | **UI 表现框架** | Flutter 3.x (Dart 3) | 跨 Android / iOS / Windows / Web 一致渲染 |
 | **游戏/渲染引擎** | **Flame** (Canvas 抽象 + 2D 组件树) | 单画布批量渲染，规避多 Widget 堆叠的性能与手势穿透瓶颈；内置平移缩放视口与组件生命周期 |
 | **本地持久化** | **GameRepository / SharedPreferences** | 轻量高效的本地沙盒持久化，管理关卡进度、断点存档、自制图库与用户设置 |
-| **图片处理** | `image_picker` + `dart:ui` | 本地相册图片选取、自由裁剪、正交旋转与底层像素解码 |
+| **图片处理与超分辨率** | `image` + `image_picker` + `dart:ui` | 本地相册选取、自由裁剪、正交旋转与纯 Dart 非 AI 图像保边降噪 (Guided Filter) + CAS 超分辨率增强 |
 
 ---
 
@@ -42,6 +42,7 @@
 │  ├─ 几何切割: EdgeLayout (确定性拓扑) / PieceShape (贝塞尔路径)│
 │  ├─ 状态机模型: PuzzleDifficulty / Snapshot v2 / UndoManager │
 │  ├─ 纯函数群: resolveSnap() / isSolved() / hintFor()        │
+│  ├─ 超分引擎: ImageUpscaler (导向滤波降噪/Cubic插值/CAS锐化) │
 │  └─ 持久化仓储: GameRepository & CustomPuzzleItem           │
 └─────────────────────────────────────────────────────────────┘
 ```
@@ -316,6 +317,25 @@ $$\frac{\text{cols}}{\text{rows}} = \frac{W_{\text{image}}}{H_{\text{image}}}$$
 - **8 扇区环形全域发散**：将屏幕除中央棋盘安全区外的空间划分为 8 个方位扇区，四向交替（Round-Robin）注入槽位、`0.78 · pieceSize` 步长多行多列、基于种子 `±10%` 自然抖动，棋盘居中比例约 0.56 黄金比例留白。
 - **原地停放**：桌面模式禁用托盘收纳与 Y 轴缩放跳变，未吸附碎片松手即停留在原地坐标；一键整理调用全域开阔散布（步长 `1.18 · pieceSize` 从远到近优先占满外圈四角）。
 
+### 3.13 UGC 自制关卡非 AI 图像超分辨率与保边降噪增强管线 (ImageUpscaler)
+
+为解决玩家导入小尺寸/低分辨率图片在切片后出现马赛克模糊、且确保切片碎片边长安全满足最小物理分辨率（$\ge 30\text{px}$）的要求，系统内置了**纯 Dart 非 AI 图像超分辨率与保边降噪引擎**：
+
+1. **真实物理像素自适应与短边 2160 上限制约**：
+   - 裁切导出尺寸由玩家在视口中所框选的原图实际物理像素范围 $\left(W_{\text{crop}}, H_{\text{crop}}\right)$ 动态自适应决定；
+   - 施加**短边最大 2160px 4K 黄金上限约束**（1:1 最大 $2160 \times 2160$、2:3 最大 $2160 \times 3240$、3:4 最大 $2160 \times 2880$），避免极端大图引起显存暴涨与切片卡顿；
+   - 1080P~2K 正常高清原图保持 100% 1:1 无损物理裁切导出。
+2. **低分辨率智能触发条件**：
+   - 若实际裁切导出的像素尺寸满足 **短边 $\le 750\text{px}$** 或 **长边 $\le 1000\text{px}$**（满足任意一个），自动触发 2x 高清超分辨率增强管线。
+3. **三阶滤波管线流程**：
+   - **温和导向滤波 (Guided Filter)**：基于 $O(1)$ 盒状可分离均值加速，仅平滑传感器暗光杂色与 JPEG 压缩伪影，结合线性残差混合，100% 锁死动物毛发与物体轮廓；
+   - **高质量空间插值**：采用双三次（Cubic）平滑重采样；
+   - **对比度自适应锐化 (CAS)**：基于 AMD FidelityFX CAS 的感知线性化重构，动态约束负权重，恢复边缘微小细节。
+4. **裁切交互上限保护**：
+   - 裁切视图 `InteractiveViewer` 与鼠标滚轮动态限制最大缩放倍率 $\text{maxScale} = \max(1.0, 1.0 / \text{baseScale})$，禁止放大超出原图原本物理分辨率。
+5. **异步并发与无感体验**：
+   - 全流程由 `Isolate.run` 调度至后台线程并发执行，主 UI 保持 60fps 配合半透明加载遮罩，零丢帧、零卡顿。
+
 ## 4. 数据持久化与存档体系
 
 ### 4.1 存档快照规范 (Snapshot v2)
@@ -335,9 +355,11 @@ $$\frac{\text{cols}}{\text{rows}} = \frac{W_{\text{image}}}{H_{\text{image}}}$$
 |---|---|---|
 | `EdgeLayoutTest` | 纯 Dart 单元测试 | 确定性（同 seed 拓扑恒定）、四向相邻互补镜像（一 tab 一 blank） |
 | `PieceShapeTest` | 纯 Dart 几何测试 | 共享边路径重合度误差、局部包围盒与采样矩形 1:1 对齐 |
+| `ImageUpscalerTest`| 纯 Dart 算法测试 | 2x 尺寸放大、温和导向降噪与 CAS 锐化管道正确性、低分辨率判定边界 |
 | `SnapshotRestoreTest`| 纯 Dart 往返测试 | Snapshot v2 序列化与反序列化还原状态、坐标、朝向与簇归属 100% 一致 |
 | `SnapAlgorithmTest` | 纯 Dart 算法测试 | 距离阈值内吸附、带朝向校验吸附、整组 Cluster 坐标协同平移 |
 | `UndoManagerTest` | 纯 Dart 状态测试 | 连续多步状态入栈/撤销/重做幂等性 |
+| `CropPuzzleTest` | Flutter Widget 测试 | 5 种标准长宽比、手势拖动裁切、动态最大缩放比限制校验 |
 | `NewFeaturesTest` | Flutter Widget 测试 | 底图透视透明度循环、未解锁关卡预览/禁用、UGC 删除流程、自适应网格渲染 |
 
 ---

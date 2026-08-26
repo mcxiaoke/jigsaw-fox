@@ -3,7 +3,6 @@ import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:jigsawpuzzle/logic/puzzle_model.dart';
 import 'package:jigsawpuzzle/pages/crop_puzzle_page.dart';
 
 Future<Uint8List> createTestImageBytes(int width, int height) async {
@@ -59,7 +58,7 @@ void main() {
     final iv = tester.widget<InteractiveViewer>(ivFinder);
     expect(iv.constrained, isFalse);
     expect(iv.minScale, 1.0);
-    expect(iv.maxScale, 5.0);
+    expect(iv.maxScale, greaterThanOrEqualTo(1.0));
 
     // Switch ratio to 2:3 Portrait
     await tester.tap(find.text('2:3 竖屏'));

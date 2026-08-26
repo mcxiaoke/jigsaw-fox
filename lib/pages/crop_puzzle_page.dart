@@ -10,6 +10,7 @@ import 'package:phosphoricons_flutter/phosphoricons_flutter.dart';
 
 import '../data/game_repository.dart';
 import '../data/models/custom_puzzle_item.dart';
+import '../logic/image_upscaler.dart';
 import '../logic/puzzle_model.dart';
 
 enum CropRatio {
@@ -132,6 +133,23 @@ class _CropPuzzlePageState extends State<CropPuzzlePage> {
     return Size(imgW * baseScale, imgH * baseScale);
   }
 
+  /// 计算最大允许缩放倍率，限制不能放大超过原图原本物理分辨率
+  double _calculateMaxScale(Size viewportSize, ui.Image? image) {
+    if (image == null || viewportSize.width <= 0 || viewportSize.height <= 0) {
+      return 1.0;
+    }
+    final boxW = viewportSize.width;
+    final boxH = viewportSize.height;
+    final imgW = image.width.toDouble();
+    final imgH = image.height.toDouble();
+    if (boxW <= 0 || boxH <= 0 || imgW <= 0 || imgH <= 0) {
+      return 1.0;
+    }
+    final baseScale = max(boxW / imgW, boxH / imgH);
+    if (baseScale <= 0) return 1.0;
+    return max(1.0, 1.0 / baseScale);
+  }
+
   Matrix4 _getInitialMatrix(Size viewportSize, ui.Image? image) {
     if (image == null || viewportSize.width <= 0 || viewportSize.height <= 0) {
       return Matrix4.identity();
@@ -166,9 +184,12 @@ class _CropPuzzlePageState extends State<CropPuzzlePage> {
     final matrix = _transformController.value;
     final currentScale = matrix.getMaxScaleOnAxis();
 
+    // 限制最大缩放不超过原图原本分辨率
+    final maxAllowedScale = _calculateMaxScale(viewportSize, _decodedImage);
+
     // Smooth stepless 4% delta zoom factor per scroll notch
     final factor = event.scrollDelta.dy < 0 ? 1.04 : 0.96;
-    final targetScale = (currentScale * factor).clamp(1.0, 5.0);
+    final targetScale = (currentScale * factor).clamp(1.0, maxAllowedScale);
     if ((targetScale - currentScale).abs() < 0.0001) return;
 
     final actualFactor = targetScale / currentScale;
@@ -205,30 +226,47 @@ class _CropPuzzlePageState extends State<CropPuzzlePage> {
 
     try {
       final matrix = _transformController.value;
-      final targetW = _selectedRatio.targetWidth;
-      final targetH = _selectedRatio.targetHeight;
-
-      final recorder = ui.PictureRecorder();
-      final canvas = ui.Canvas(
-        recorder,
-        ui.Rect.fromLTWH(0, 0, targetW, targetH),
-      );
+      final currentScale = matrix.getMaxScaleOnAxis();
 
       final imgW = _decodedImage!.width.toDouble();
       final imgH = _decodedImage!.height.toDouble();
 
-      // Viewport geometry
-      final boxW = viewportSize.width;
+      // 1. 视口与基础映射
+      final baseSize = _calculateBaseSize(viewportSize, _decodedImage!);
+      final baseScale = baseSize.width / imgW;
 
-      // Scaling factor from on-screen interactive viewport to target high-res image
-      final exportFactor = targetW / boxW;
+      // 2. 精准计算当前视口裁切框在原图上的实际物理像素尺寸 (Natural Crop Dimensions)
+      final realCropW = viewportSize.width / (baseScale * currentScale);
+      final realCropH = viewportSize.height / (baseScale * currentScale);
+
+      // 3. 短边最大 2160 上限限制 (4K 视网膜安全线，防止超大图引起显存暴涨)
+      const maxShortSide = 2160.0;
+      final shortSide = min(realCropW, realCropH);
+      double targetW = realCropW;
+      double targetH = realCropH;
+
+      if (shortSide > maxShortSide) {
+        final factor = maxShortSide / shortSide;
+        targetW = realCropW * factor;
+        targetH = realCropH * factor;
+      }
+
+      final targetWidthInt = max(1, targetW.round());
+      final targetHeightInt = max(1, targetH.round());
+
+      // 4. 离屏 Canvas 高质量重采样导出
+      final recorder = ui.PictureRecorder();
+      final canvas = ui.Canvas(
+        recorder,
+        ui.Rect.fromLTWH(0, 0, targetWidthInt.toDouble(), targetHeightInt.toDouble()),
+      );
+
+      // 视口到目标画布的导出缩放因子
+      final exportFactor = targetWidthInt / viewportSize.width;
       canvas.scale(exportFactor, exportFactor);
 
-      // Apply the user's interactive pan & zoom transform
+      // 应用手势平移与缩放矩阵
       canvas.transform(matrix.storage);
-
-      // Base dimensions of the child in viewport coordinates
-      final baseSize = _calculateBaseSize(viewportSize, _decodedImage!);
 
       final paint = Paint()
         ..filterQuality = ui.FilterQuality.high
@@ -242,13 +280,28 @@ class _CropPuzzlePageState extends State<CropPuzzlePage> {
       );
 
       final croppedImage = await recorder.endRecording().toImage(
-        targetW.toInt(),
-        targetH.toInt(),
+        targetWidthInt,
+        targetHeightInt,
       );
 
       final byteData = await croppedImage.toByteData(format: ui.ImageByteFormat.png);
       if (byteData == null) throw Exception('图片导出失败');
-      final pngBytes = byteData.buffer.asUint8List();
+      Uint8List pngBytes = byteData.buffer.asUint8List();
+
+      // 5. 低分辨率智能判定：若实际裁切像素短边 <= 750 或 长边 <= 1000，调用非 AI 超分辨率管线进行 2x 增强
+      if (ImageUpscaler.shouldUpscale(
+        width: targetWidthInt,
+        height: targetHeightInt,
+      )) {
+        pngBytes = await ImageUpscaler.upscaleBytes(
+          bytes: pngBytes,
+          scale: 2.0,
+          enableDenoise: true,
+          denoiseStrength: 0.25,
+          enableSharpen: true,
+          sharpness: 0.45,
+        );
+      }
 
       final dir = await getApplicationSupportDirectory();
       final customDir = Directory('${dir.path}/custom_puzzles');
@@ -306,21 +359,10 @@ class _CropPuzzlePageState extends State<CropPuzzlePage> {
           '裁剪与自制拼图',
           style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
         ),
-        actions: [
-          if (_isSaving)
-            const Padding(
-              padding: EdgeInsets.symmetric(horizontal: 16),
-              child: Center(
-                child: SizedBox(
-                  width: 20,
-                  height: 20,
-                  child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
-                ),
-              ),
-            ),
-        ],
       ),
-      body: Column(
+      body: Stack(
+        children: [
+          Column(
         children: [
           const SizedBox(height: 8),
 
@@ -388,6 +430,8 @@ class _CropPuzzlePageState extends State<CropPuzzlePage> {
                   _transformController.value = _getInitialMatrix(viewportSize, _decodedImage);
                 }
 
+                final maxAllowedScale = _calculateMaxScale(viewportSize, _decodedImage);
+
                 return Center(
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
@@ -419,7 +463,7 @@ class _CropPuzzlePageState extends State<CropPuzzlePage> {
                                           key: ValueKey('$_selectedRatio-${viewportSize.width.toStringAsFixed(1)}-${viewportSize.height.toStringAsFixed(1)}'),
                                           transformationController: _transformController,
                                           minScale: 1.0,
-                                          maxScale: 5.0,
+                                          maxScale: maxAllowedScale,
                                           boundaryMargin: EdgeInsets.zero,
                                           clipBehavior: Clip.none,
                                           constrained: false,
@@ -606,6 +650,34 @@ class _CropPuzzlePageState extends State<CropPuzzlePage> {
           ),
         ],
       ),
-    );
+      if (_isSaving)
+        Positioned.fill(
+          child: Container(
+            color: Colors.black.withValues(alpha: 0.65),
+            child: const Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  CircularProgressIndicator(
+                    color: Color(0xFF81C784),
+                    strokeWidth: 3,
+                  ),
+                  SizedBox(height: 16),
+                  Text(
+                    '正在优化画质并生成自制关卡...',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 14.5,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+    ],
+  ),
+);
   }
 }

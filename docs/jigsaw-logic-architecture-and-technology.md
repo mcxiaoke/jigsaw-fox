@@ -231,6 +231,16 @@ class PuzzleBoardState {
 - **容量上限**：`maxHistory = 30` 步，防止长时间游玩导致内存无限制增长；
 - **分支裁剪**：发生新移动时，自动清空当前游标之后的全部 Redo 历史。
 
+### 4.4 图像超分辨率与保边降噪引擎 (`ImageUpscaler`)
+
+- **定位**：位于 `lib/logic/image_upscaler.dart`，纯 Dart 实现的非 AI 图像处理引擎。
+- **三阶管线**：
+  1. **温和导向滤波 (Guided Filter)**：$O(1)$ 盒状可分离加速，只消除低振幅杂色底噪，保护发丝与细小纹理；
+  2. **双三次插值 (Cubic Resize)**：高质量平滑空间放大；
+  3. **感知线性 CAS 锐化 (Contrast Adaptive Sharpening)**：基于 AMD FidelityFX CAS 的线性约束，自然恢复边缘刀锋感。
+- **触发准则**：`ImageUpscaler.shouldUpscale`（短边 $\le 750$ 或长边 $\le 1000$）。
+- **异步调度**：提供 `upscaleBytes` 接口，自动在后台 `Isolate.run` 线程运行。
+
 ---
 
 ## 5. 质量保证与测试规范
@@ -241,6 +251,7 @@ class PuzzleBoardState {
 | :--- | :--- |
 | [`test/logic/edge_layout_test.dart`](file:///c:/Home/Projects/jigsawpuzzle/test/logic/edge_layout_test.dart) | 验证 Seed 确定性拓扑、外边界平直性、相邻边互锁对偶、顺时针旋转映射 |
 | [`test/logic/piece_shape_test.dart`](file:///c:/Home/Projects/jigsawpuzzle/test/logic/piece_shape_test.dart) | 验证 Overhang 裕量分配、fillRect/srcRect 1:1 像素比例、逆向拾取判定 |
+| [`test/logic/image_upscaler_test.dart`](file:///c:/Home/Projects/jigsawpuzzle/test/logic/image_upscaler_test.dart) | 验证 2x 尺寸放大、温和导向降噪与 CAS 锐化管道正确性、低分辨率判定边界 |
 | [`test/logic/snap_algorithm_test.dart`](file:///c:/Home/Projects/jigsawpuzzle/test/logic/snap_algorithm_test.dart) | 验证槽位吸附、自由邻居合并、级联连锁合并、通关判定 |
 | [`test/logic/undo_manager_test.dart`](file:///c:/Home/Projects/jigsawpuzzle/test/logic/undo_manager_test.dart) | 验证 Undo/Redo 状态回滚、分支裁剪与最大栈深度限制 |
 | [`test/generate_cuts_demo_test.dart`](file:///c:/Home/Projects/jigsawpuzzle/test/generate_cuts_demo_test.dart) | 真实切片生成脚本，自动化渲染多种难度切片效果图至 `temp/` 目录 |

@@ -47,6 +47,7 @@ dependencies:
   webview_flutter: ^4.10.0
   desktop_webview_window: ^0.2.3
   flutter_inappwebview: ^6.1.5
+  image: ^4.9.2
 
 dev_dependencies:
   flutter_test:
