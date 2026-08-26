@@ -180,13 +180,13 @@ _.missingPieceCheck = function() {
 
 基于当前项目的技术栈现状，规划以下 3 个阶段的落地演进计划：
 
-| 阶段 | 核心任务 | 涉及模块 | 预期成果 |
+| 阶段 | 核心任务 | 涉及模块 | 落地状态 / 预期成果 |
 | :--- | :--- | :--- | :--- |
-| **Phase 1 (手感质变)** | **主装配体单向吸附 (`isInMainAssembly`)** | `lib/logic/engine/puzzle_engine.dart`<br>`lib/game/jigsaw_puzzle_game.dart` | 消除大拼图被小碎片吸附拉跑的违和感，确立主图空间稳定性 |
-| **Phase 1 (体验闭环)** | **边缘拼完自动闭环复原 (`isEdgeComplete`)** | `lib/logic/models/puzzle_board_state.dart`<br>`lib/game/jigsaw_puzzle_game.dart` | 拼完外框一圈自动触发合拢光效并平滑淡入所有内部碎片 |
-| **Phase 2 (防错自愈)** | **失踪碎片防丢自检 (`missingPieceCheck`)** | `lib/game/jigsaw_puzzle_game.dart` | 拼图接近完成时自动巡检视口外碎片并弹回可视中心 |
-| **Phase 2 (交互升级)** | **实体拼图盒盖浮窗 (`BoxTopOverlay`)** | `lib/widgets/box_top_component.dart`<br>`lib/pages/game_page.dart` | 提供可拖动、半透明、双击放大的经典实体拼图盒盖参考系统 |
-| **Phase 3 (极限性能)** | **GPU 离屏底漆与预烘焙遮罩 (`PrimerMask`)** | `lib/game/puzzle_piece_component.dart` | 支持 500~1000 块高阶大师级拼图的 60fps 极速渲染 |
+| **Phase 1 (手感质变)** | **主装配体单向吸附 (`isInMainAssembly`)** | `lib/logic/engine/puzzle_engine.dart`<br>`lib/game/jigsaw_puzzle_game.dart` | ✅ **已落地**：吸附合并按规模识别主装配体，仅小碎片单向对齐，大集群坐标静止 |
+| **Phase 1 (体验闭环)** | **边缘拼完自动闭环复原 (`isEdgeComplete`)** | `lib/logic/models/puzzle_board_state.dart`<br>`lib/game/jigsaw_puzzle_game.dart` | ✅ **已落地**：`PuzzleBoardState.isEdgeComplete` + 仅看边缘模式下外框闭环自动解除筛选并淡入内部碎片 |
+| **Phase 2 (防错自愈)** | **失踪碎片防丢自检 (`missingPieceCheck`)** | `lib/game/jigsaw_puzzle_game.dart` | ✅ **已落地**：剩余未拼碎片 ≤2 时自动巡检视口外碎片并弹回可视区 |
+| **Phase 2 (交互升级)** | **实体拼图盒盖浮窗 (`BoxTopOverlay`)** | `lib/widgets/box_top_component.dart`<br>`lib/pages/game_page.dart` | ⏳ 未落地：当前以「底图透视 Ghost + 原图全景眼睛」实现对照参考，BoxTop 浮窗作为后续增强项 |
+| **Phase 3 (极限性能)** | **GPU 离屏底漆与预烘焙遮罩 (`PrimerMask`)** | `lib/game/puzzle_piece_component.dart` | ⏳ 未落地：当前命中测试与裁剪为矢量逐帧路径计算，GPU 预烘焙作为 500~1000 块极高性能预留项 |
 
 ---
 

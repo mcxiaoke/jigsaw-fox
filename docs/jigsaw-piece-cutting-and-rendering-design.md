@@ -183,10 +183,12 @@ graph TD
    - 模糊：`MaskFilter.blur(BlurStyle.normal, 5.5)`
    - 颜色：`Color(0x45000000)`（$27\%$ 浓度软黑）
    - 作用：模拟碎片被手指拿起悬浮在棋盘上方时的光学扩散投影。
-3. **物理冲压微切缝（Subtle Press Cutline）**：
-   - 线宽：`0.75px`
-   - 颜色：`Color(0x35000000)`（$21\%$ 透明度微暗深灰）
-   - 作用：替代粗糙的人工黑白高光描边，还原真实刀模冲压在纸板表面形成的微凹切痕。
+3. **物理冲压主切缝（Subtle Press Cutline）**：
+   - 线宽：`1.2px`
+   - 颜色：`Color(0x68000000)`（约 41% 透明度深黑）
+   - 作用：替代粗糙的人工黑白高光描边，还原真实刀模冲压在纸板表面形成的微凹切痕；在暗色或复杂纹理图片上仍具备足够辨识度。
+
+> 说明：上述三维渲染在后续版本中已升级为更完整的「实体硬纸板渲染管线」（四向光照冲压切线、纸板夹芯厚度截面、亚麻布纹漫反射、多阶接触/悬浮阴影），详细参数见专项文档 [`physical-cardboard-rendering-and-lighting-design.md`](file:///c:/Home/Projects/jigsawpuzzle/docs/physical-cardboard-rendering-and-lighting-design.md)。
 
 ---
 

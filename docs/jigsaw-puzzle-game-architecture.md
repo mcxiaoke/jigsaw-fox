@@ -157,6 +157,8 @@ $$\frac{\text{cols}}{\text{rows}} = \frac{W_{\text{image}}}{H_{\text{image}}}$$
 
 - **吸附阈值**：$\text{snapDistance} = \min(w, h) \times 0.48$（黄金手感吸附比例）。
 - **粘连语义 (Adhere & Cluster Merging)**：未归位碎片在空中相互触碰对齐时形成「自由碎片组（Cluster）」，支持整组协同拖拽与重排。
+- **托盘隔离 (onBoardPieceIds)**：托盘内碎片（`isInTray == true`）绝不参与任何空间邻居合并与级联吸附，杜绝高倍率缩放下归一化间距落入容差导致的误粘连，拖回托盘的碎片只做平滑入槽。
+- **主装配体单向吸附 (isInMainAssembly)**：两块集群吸附时按规模识别主装配体（大集群）与小集群，永远由小集群/单块向大集群平移对齐，大集群坐标绝对静止，消除半成品被小碎片拉跑偏位的违和感。
 - **归位锁定 (Solved Piece Locking)**：
   - 当碎片或集群吸附到目标棋盘网格槽位（`isSolved == true`）时，系统立即将其标记为 `isLocked = true`；
   - **锁定拦截**：锁定后的碎片禁止再次被鼠标/触摸拾起或拖拽，彻底杜绝误触移位；
@@ -170,7 +172,9 @@ $$\frac{\text{cols}}{\text{rows}} = \frac{W_{\text{image}}}{H_{\text{image}}}$$
   \text{Layer Board (Priority } = 0 \sim 2\text{)}: & \text{底板边框、底图透视水印与托盘背景}
   \end{cases}$$
 - **命中测试天然上层优先**：Flame 的 Hit-testing 遵循 Priority 倒序遍历。当未归位碎片与底层已归位碎片重叠时，鼠标/触控点击 100% 优先拾取上层的未归位碎片。
-- **通关判定**：所有碎片归位到目标槽位且旋转朝向均为 $0^\circ$ 时判定通关，底板转为完整大图无缝呈现。
+- **通关判定**：所有碎片归位到目标槽位且旋转朝向均为 $0^\circ$ 时判定通关，底板转为完整大图无缝呈现；通关后**保留**所有碎片的冲压接缝切线、立体倒角与亚麻纹质感，呈现真实成品。
+- **边缘闭环自动感知 (isEdgeComplete)**：`PuzzleBoardState` 维护 `isEdgeComplete` 闭环属性；仅看边缘筛选模式下，外框一圈全部归位后自动解除筛选、平滑淡入复原内部碎片。
+- **失踪碎片自愈 (Missing Piece Check)**：剩余未拼碎片 $\le 2$ 块时，后台自检视口外碎片并平滑弹回可视区域，杜绝“找不到最后一块”。
 
 ---
 
@@ -192,26 +196,34 @@ $$\frac{\text{cols}}{\text{rows}} = \frac{W_{\text{image}}}{H_{\text{image}}}$$
 
 ---
 
-### 3.8 3D 立体浮雕边缘与悬浮投影渲染管线
+### 3.8 实体硬纸板渲染管线 (Physical Cardboard Render Pipeline)
 
-`PuzzlePieceComponent` 采用多层复合渲染管线：
-1. **动态悬浮阴影**：静止状态下在路径后方绘制轻微偏移阴影；拖拽悬浮状态下动态扩大偏移与模糊半径，营造逼真离地浮空感。
-2. **3D 双色浮雕法向切口**：左上方模拟环境光源绘制柔和漫反射高光线；右下方绘制半透明黑色深边，形成凹凸咬合的物理厚度与立体感。
-3. **主轮廓平滑包边**：使用平滑贝塞尔封闭路径抗锯齿绘制深色轮廓线，保证高分辨率与缩放下的锐利边缘。
+`PuzzlePieceComponent` 采用多层复合渲染管线（详见专项文档 [`physical-cardboard-rendering-and-lighting-design.md`](file:///c:/Home/Projects/jigsawpuzzle/docs/physical-cardboard-rendering-and-lighting-design.md)）：
+
+1. **动态悬浮阴影**：静止状态绘制紧致贴地接触微阴影（Contact AO）；拖拽悬浮时切换为深层大模糊右下方扩散软投影。
+2. **4 大方案实体纸板分层**：
+   - **方案 1 四向光照冲压切线**：Top/Left 边绘制 0.8px 半透明柔白高光微边，Bottom/Right 边绘制 1.2px 半透明深黑冲压切缝，模拟刀模挤压倒角；
+   - **方案 2 纸板厚度截面**：悬浮/拾起时向右下方偏移填充纸板夹芯色并描底边暗线，呈现 1.8mm 实体侧截面；
+   - **方案 3 多阶阴影**：静止贴地 AO + 拾起深层扩散投影；
+   - **方案 4 亚麻布纹压花**：64x64 程序化亚麻网格微纹理，经 GPU `ImageShader(TileMode.repeated)` + `BlendMode.softLight` 叠加在正面图案上，还原哑光纸质漫反射。
+3. **吸附高亮 / 边缘筛选光晕**：吸附就位或边缘筛选激活时无缝切换为全圈高亮。
+4. **冲压主切缝**：主线宽 1.2px、41% 深黑（`0x68000000`），保证暗色复杂纹理下图块咬合缝隙清晰可辨。
 
 ---
 
 ### 3.9 图层堆叠与渲染管线 (Wallpaper & Overlay Pipeline)
 
-游戏主界面采用基于 Flutter `Stack` 的复合渲染管线：
+游戏主界面采用基于 Flutter `Stack` + `Column` 的复合渲染管线（头部纵向排布、画布不重叠）：
 
-1. **底图层 (`Layer 0: Wallpaper`)**：自适应居中缩放并裁剪（`BoxFit.cover`）铺满除顶栏外的全屏背景壁纸。
-2. **游戏引擎层 (`Layer 1: Flame GameWidget`)**：背景完全透明；画布区域绘制半透明暗色底槽与底图透视水印（`BoardGhostComponent`）。
-3. **托盘遮罩层 (`Layer 2: Tray Mask`)**：`TrayBackgroundComponent` 绘制半透明纯色底板与微圆角边框，消除壁纸纹理干扰。
-4. **原图全景覆盖层 (`Layer 3: Original Image Overlay`)**：点击眼睛图标激活，居中呈现高清原图，点击背景即刻切回拼图。
-5. **两层式导航与悬浮工具栏层 (`Layer 4: Two-Tier Navigation & Sub-Bar`)**：
-   - **Tier 1 (标准 AppBar)**：返回按钮、大号关卡标题、壁纸切换、原图眼睛与暂停菜单；
-   - **Tier 2 (独立悬浮 Sub-Bar)**：实时用时、已拼碎片胶囊、6 大对局工具组（撤销/重做/透视/筛选/理盘/提示）与细线性进度条；
+1. **底图层 (`Layer 0: Seamless Tabletop Backdrop`)**：全屏平铺**无缝桌板背景**（当前 12 款 `assets/bg/tile_000~011.webp`，`ImageRepeat.repeat`），任意窗口与屏幕尺寸 1:1 像素级清晰、零拉伸模糊。
+2. **头部区 (Header: Column 顶部纵向排布)**：标准 AppBar + 独立悬浮 Sub-Bar + 细线性进度条，与画布互不重叠，横屏不遮挡。
+3. **游戏引擎层 (`Layer 1: Flame GameWidget`)**：背景完全透明；画布区域绘制半透明暗色底槽与底图透视水印（`BoardGhostComponent`）；外层包裹 `ClipRect` 防止碎片放大/平移溢出穿透头部。
+4. **托盘遮罩层 (`Layer 2: Tray Mask`)**：`TrayBackgroundComponent` 绘制半透明纯色底板与微圆角边框，消除背景纹理干扰。
+5. **原图全景覆盖层 (`Layer 3: Original Image Overlay`)**：点击眼睛图标激活，居中呈现高清原图，点击背景即刻切回拼图。
+6. **悬浮层 (`Layer 4: Floating HUD`)**：放大倍率徽标 + 一键复位；通关后底部常驻庆祝 Banner。
+7. **两层式导航与悬浮工具栏层 (`Layer 5: Two-Tier Navigation & Sub-Bar`)**：
+   - **Tier 1 (标准 AppBar)**：返回、大号关卡标题 + 4 个高频工具（智能提示 / 壁纸切换 / 原图眼睛 / 暂停菜单）；
+   - **Tier 2 (独立悬浮 Sub-Bar)**：实时用时、已拼碎片胶囊 + 5 大对局工具组（撤销/重做/透视/边缘筛选/托盘整理）与细线性进度条；
    - 彻底杜绝超窄屏下的 RenderFlex 溢出问题。
 
 ---
@@ -285,6 +297,25 @@ $$\frac{\text{cols}}{\text{rows}} = \frac{W_{\text{image}}}{H_{\text{image}}}$$
 
 ---
 
+### 3.12 画布缩放平移、窗口自适应与桌面散落布局
+
+#### A. 全局缩放与定点平移 (Zoom & Pan)
+- **缩放上限**：`_maxZoom = 3.0`（300%），无论原图分辨率多大均不过度放大，保持适度视野与操作手感。
+- **触屏双指**：以两指中心为基准的仿射变换，捏合缩放 + 双指拖拽平移，缩放时中心图案绝对锁定无漂移。
+- **桌面定点缩放**：`Ctrl/⌘ + 鼠标滚轮` 以鼠标光标为中心定点缩放；`Ctrl` 未按且在棋盘区域滚轮亦触发；
+- **拖拽漫游**：鼠标中键按住拖拽平移；放大状态（`zoom > 1.0`）下按住空白区域（未拖拽任何碎片）以左键/单指直接平移画布。
+- **漫游边界 (Pan Clamping Bounds)**：按放大后棋盘内容外接包围盒与视口物理尺寸精确推导上/下/左/右非对称边界，保证四角与边缘可畅行漫游、定点缩放稳定不跳。
+
+#### B. Windows 窗口 Resize 自适应
+- 监听 `onGameResize`，以 `_lastGameSize` 尺寸变更守卫防重入；
+- 游离单块按视口安全边界 Clamp 并反向更新归一化坐标，多块自由集群以外接包围盒整体原子平移（绝不拆散）；
+- 桌面散落槽位缓存随尺寸重置；重组 `PieceShape` 与 `pieceSize`，碎片按 `nx, ny` 等比换算屏幕坐标。
+
+#### C. 桌面散落模式 (Tabletop Mode) 与 8 扇区环形全域发散
+- **设置开关**：`pieceScatterMode`（`tray` / `tabletop`）持久化；桌面模式仅在宽场景（`size > 450px`）启用，窄场景自动回退托盘收纳。
+- **8 扇区环形全域发散**：将屏幕除中央棋盘安全区外的空间划分为 8 个方位扇区，四向交替（Round-Robin）注入槽位、`0.78 · pieceSize` 步长多行多列、基于种子 `±10%` 自然抖动，棋盘居中比例约 0.56 黄金比例留白。
+- **原地停放**：桌面模式禁用托盘收纳与 Y 轴缩放跳变，未吸附碎片松手即停留在原地坐标；一键整理调用全域开阔散布（步长 `1.18 · pieceSize` 从远到近优先占满外圈四角）。
+
 ## 4. 数据持久化与存档体系
 
 ### 4.1 存档快照规范 (Snapshot v2)
@@ -293,6 +324,8 @@ $$\frac{\text{cols}}{\text{rows}} = \frac{W_{\text{image}}}{H_{\text{image}}}$$
 
 ### 4.2 本地仓储管理 (GameRepository)
 - 管理 100 关官方关卡状态、多难度独立通关记录、每日挑战历史、自制拼图元数据与全局用户设置。
+- **全局设置项**：拼图吸附音效 / 触感震动、12 款无缝桌板背景（`selectedBackground`，持久化 Key `jigsaw_setting_selected_background`）、碎片初始排布模式（`pieceScatterMode`：`tray | tabletop`）。
+- **来源追踪字段**：`CustomPuzzleItem` 扩展 `sourceType`（`gallery | online | preset`）、`sourcePlatform` 与 `sourceUrl`，序列化向下兼容历史老数据。
 
 ---
 

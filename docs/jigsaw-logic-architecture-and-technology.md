@@ -173,6 +173,8 @@ sequenceDiagram
 - **`defaultSnapRatio = 0.48`**：
   $$\text{snapThreshold} = \min\left(\frac{1}{\text{cols}}, \frac{1}{\text{rows}}\right) \times 0.48$$
   经过多轮玩家手感实验验证，48% 碎片尺寸能够提供极其爽快利落的就位吸附感，同时避免拖动误触相邻槽位。
+- **托盘隔离 (`onBoardPieceIds`)**：`resolveSnap` 接收 `onBoardPieceIds` 集合，托盘碎片（`isInTray == true`）绝不参与空间邻居合并与级联吸附，杜绝高倍率缩放下归一化间距落入容差导致的误粘连。
+- **主装配体单向吸附 (`isInMainAssembly`)**：两块集群吸附时按规模识别大集群为主装配体，仅小集群/单块坐标向主装配体平移，主装配体坐标绝对静止。
 
 ### 3.2 碎片集群旋转算法 (`rotateCluster`)
 
@@ -203,13 +205,14 @@ class PuzzleBoardState {
   final List<PieceState> pieces;
   final String levelId;
 
-  /// 通关判定：所有碎片均满足归一化坐标误差 <= 0.05 且旋转角度归零
+  /// 通关判定：所有碎片均满足归一化坐标误差 <= 0.035 且旋转角度归零
   bool get isSolved => pieces.every((p) => p.isSolved(rows, cols));
 }
 ```
 
 - **不可变设计（Immutability）**：所有状态变更均通过 `copyWith` 生成全新对象，确保快照栈与历史回溯安全无副作用；
-- **通关容差（$\epsilon = 0.05$）**：吸附后坐标会被锁定为标准 $targetNx$，浮点容差用于防御极端微小计算误差。
+- **通关容差 / 就位容差（$\epsilon = 0.035$）**：吸附后坐标会被锁定为标准 $targetNx$，浮点容差用于防御极端微小计算误差；
+- **边缘闭环 (`isEdgeComplete`)**：模型维护外框一圈碎片是否全部归位的闭环计算属性，供「仅看边缘」筛选自动解除使用。
 
 ### 4.2 碎片归位锁定与四阶 Priority 映射机制
 
@@ -225,7 +228,7 @@ class PuzzleBoardState {
 ### 4.3 撤销与重做机制 (`UndoManager`)
 
 - **数据结构**：基于 `List<PuzzleBoardState>` 的双向游标栈；
-- **容量上限**：`maxHistory = 50` 步，防止长时间游玩导致内存无限制增长；
+- **容量上限**：`maxHistory = 30` 步，防止长时间游玩导致内存无限制增长；
 - **分支裁剪**：发生新移动时，自动清空当前游标之后的全部 Redo 历史。
 
 ---
