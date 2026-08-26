@@ -135,8 +135,21 @@ class PuzzleBoardState {
 
   int get totalPieces => rows * cols;
 
-  /// Piece lookup by ID.
-  PieceState pieceById(int id) => pieces.firstWhere((p) => p.id == id);
+  /// Piece lookup by ID with safety check.
+  PieceState pieceById(int id) {
+    for (final p in pieces) {
+      if (p.id == id) return p;
+    }
+    throw StateError('PieceState with id=$id not found in PuzzleBoardState (total=${pieces.length})');
+  }
+
+  /// Piece lookup by ID, returning null if not found.
+  PieceState? pieceByIdOrNull(int id) {
+    for (final p in pieces) {
+      if (p.id == id) return p;
+    }
+    return null;
+  }
 
   /// Returns all pieces belonging to a cluster.
   List<PieceState> piecesInCluster(int clusterId) =>
@@ -153,15 +166,34 @@ class PuzzleBoardState {
     return true;
   }
 
-  /// Returns true if all outer border (edge) pieces are correctly aligned and oriented.
+  /// Returns true if all border (outer edge) pieces are in their solved positions.
   bool get isEdgeComplete {
     for (final p in pieces) {
-      final isEdge = (p.r == 0 || p.r == rows - 1 || p.c == 0 || p.c == cols - 1);
-      if (isEdge && !p.isSolved(rows, cols)) {
-        return false;
-      }
+      final isBorder = p.r == 0 || p.r == rows - 1 || p.c == 0 || p.c == cols - 1;
+      if (isBorder && !p.isSolved(rows, cols)) return false;
     }
     return true;
+  }
+
+  /// Returns the set of piece IDs belonging to the largest connected cluster on board.
+  Set<int> get mainAssemblyPieceIds {
+    if (pieces.isEmpty) return const {};
+    final clusterSizes = <int, int>{};
+    for (final p in pieces) {
+      clusterSizes[p.clusterId] = (clusterSizes[p.clusterId] ?? 0) + 1;
+    }
+    var maxClusterId = pieces.first.clusterId;
+    var maxSize = 0;
+    for (final entry in clusterSizes.entries) {
+      if (entry.value > maxSize) {
+        maxSize = entry.value;
+        maxClusterId = entry.key;
+      }
+    }
+    return pieces
+        .where((p) => p.clusterId == maxClusterId)
+        .map((p) => p.id)
+        .toSet();
   }
 
   PuzzleBoardState copyWith({
@@ -214,34 +246,4 @@ class PuzzleBoardState {
       levelId: (json['levelId'] ?? 'default_level') as String,
     );
   }
-}
-
-/// Result of an engine transition (e.g. after a drag release).
-class BoardTransitionResult {
-  const BoardTransitionResult({
-    required this.state,
-    required this.didSnap,
-    required this.didMerge,
-    required this.affectedPieceIds,
-    required this.isCompleted,
-  });
-
-  final PuzzleBoardState state;
-  final bool didSnap;
-  final bool didMerge;
-  final List<int> affectedPieceIds;
-  final bool isCompleted;
-}
-
-/// Result of a hint query.
-class HintResult {
-  const HintResult({
-    required this.pieceId,
-    required this.targetNx,
-    required this.targetNy,
-  });
-
-  final int pieceId;
-  final double targetNx;
-  final double targetNy;
 }

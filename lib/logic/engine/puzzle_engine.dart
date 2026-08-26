@@ -21,7 +21,7 @@ class PuzzleEngine {
   /// 【算法过程】：
   /// 1. 使用固定关卡种子 [seed] 初始化 PRNG；
   /// 2. 若启用旋转难度（[rotationEnabled]），随机分配 0~3 次 90° 初始旋转；
-  /// 3. 将碎片散落在棋盘四周的边缘托盘区域，并做防重叠校验，确保不会开局直接落在正确答案槽位上。
+  /// 3. 将碎片初始散落分布在棋盘两侧的边缘区域，确保不会开局直接落在正确答案槽位上。
   static PuzzleBoardState createInitialState({
     required int rows,
     required int cols,
@@ -37,25 +37,17 @@ class PuzzleEngine {
         final id = r * cols + c;
         final rot = rotationEnabled ? rng.nextInt(4) : 0;
 
-        // 打散位置尝试：避免开局直接落入正确槽位
-        double sx, sy;
-        for (var attempt = 0; attempt < 100; attempt++) {
-          sx = -0.2 + rng.nextDouble() * 1.4;
-          sy = -0.2 + rng.nextDouble() * 1.4;
-          final tnx = c / cols;
-          final tny = r / rows;
-          if ((sx - tnx).abs() > 0.15 || (sy - tny).abs() > 0.15) {
-            break;
-          }
-        }
+        // 初始散落位置分布在棋盘两侧（左侧/右侧），避免开局直接落入正确槽位
+        final nx = -0.15 + (c % 2 == 0 ? -0.1 : 1.1) + rng.nextDouble() * 0.1;
+        final ny = (r / rows) + (rng.nextDouble() - 0.5) * 0.1;
 
         pieces.add(
           PieceState(
             id: id,
             r: r,
             c: c,
-            nx: -0.15 + (c % 2 == 0 ? -0.1 : 1.1) + rng.nextDouble() * 0.1,
-            ny: (r / rows) + (rng.nextDouble() - 0.5) * 0.1,
+            nx: nx,
+            ny: ny,
             clusterId: id,
             rot: rot,
           ),

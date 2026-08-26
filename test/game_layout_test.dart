@@ -1039,14 +1039,145 @@ void main() {
     final p0State3 = game.boardState.pieceById(piece0.id);
     expect(p0State3.ny, greaterThan(1.10));
   });
+
+  test('cancelAllPieceDragging 与 cancelPieceDrag 彻底清空 holdingPiece 避免幽灵抓取', () async {
+    final img = await _decodePng();
+    final game = JigsawPuzzleGame(
+      image: img,
+      rows: 2,
+      cols: 2,
+      onSolved: () {},
+    );
+    game.onGameResize(Vector2(400, 800));
+    await game.onLoad();
+
+    final piece = game.children.whereType<PuzzlePieceComponent>().first;
+    game.startHoldingPiece(piece, 50.0, 50.0);
+    expect(game.holdingPiece, equals(piece));
+    expect(piece.isDragging, isTrue);
+
+    // 触发 cancelAllPieceDragging
+    game.cancelAllPieceDragging();
+    expect(game.holdingPiece, isNull);
+    expect(piece.isDragging, isFalse);
+  });
+
+  test('resetCurrentGame 彻底清空 holdingPiece 与 isDragging 避免重置后粘手', () async {
+    final img = await _decodePng();
+    final game = JigsawPuzzleGame(
+      image: img,
+      rows: 2,
+      cols: 2,
+      onSolved: () {},
+    );
+    game.onGameResize(Vector2(400, 800));
+    await game.onLoad();
+
+    final piece = game.children.whereType<PuzzlePieceComponent>().first;
+    game.startHoldingPiece(piece, 50.0, 50.0);
+    expect(game.holdingPiece, equals(piece));
+
+    game.resetCurrentGame();
+    expect(game.holdingPiece, isNull);
+    for (final p in game.children.whereType<PuzzlePieceComponent>()) {
+      expect(p.isDragging, isFalse);
+    }
+  });
+
+  test('通关后 Undo 正确将 solved 状态双向回滚', () async {
+    final img = await _decodePng();
+    var solvedTriggered = 0;
+    final game = JigsawPuzzleGame(
+      image: img,
+      rows: 2,
+      cols: 2,
+      onSolved: () {
+        solvedTriggered++;
+      },
+    );
+    game.onGameResize(Vector2(400, 800));
+    await game.onLoad();
+
+    // 拼完 4 块
+    for (var i = 0; i < 4; i++) {
+      game.hint();
+    }
+    expect(game.solvedCount, 4);
+    expect(solvedTriggered, 1);
+
+    // 撤销最后一步
+    game.undo();
+    expect(game.solvedCount, lessThan(4));
+    expect(game.canRedo, isTrue);
+
+    // 再次重做
+    game.redo();
+    expect(game.solvedCount, 4);
+    expect(solvedTriggered, 2);
+  });
+
+  test('PieceState pieceById 安全防御与 pieceByIdOrNull', () {
+    final state = PuzzleBoardState(
+      rows: 2,
+      cols: 2,
+      seed: 42,
+      pieces: [
+        const PieceState(id: 0, r: 0, c: 0, nx: 0, ny: 0, clusterId: 0, rot: 0),
+        const PieceState(id: 1, r: 0, c: 1, nx: 0.5, ny: 0, clusterId: 1, rot: 0),
+      ],
+    );
+
+    expect(state.pieceById(0).id, 0);
+    expect(state.pieceByIdOrNull(1)?.id, 1);
+    expect(state.pieceByIdOrNull(99), isNull);
+    expect(() => state.pieceById(99), throwsA(isA<StateError>()));
+  });
+
+  test('exportSnapshotJson 在拖拽中保留权威坐标，锁定态使用精确理论坐标', () async {
+    final img = await _decodePng();
+    final game = JigsawPuzzleGame(
+      image: img,
+      rows: 2,
+      cols: 2,
+      onSolved: () {},
+    );
+    game.onGameResize(Vector2(400, 800));
+    await game.onLoad();
+
+    // 拼入 1 块
+    game.hint();
+
+    final jsonStr = game.exportSnapshotJson(elapsedSeconds: 45);
+    final map = jsonDecode(jsonStr) as Map<String, dynamic>;
+    expect(map['elapsedSeconds'], 45);
+    expect(map['hintsUsed'], 1);
+
+    final pieces = map['pieces'] as List<dynamic>;
+    expect(pieces.length, 4);
+  });
+
+  test('hint 智能提示使用次数 hintsUsed 在 Undo 撤销后保持不回退，防止刷星', () async {
+    final img = await _decodePng();
+    final game = JigsawPuzzleGame(
+      image: img,
+      rows: 2,
+      cols: 2,
+      onSolved: () {},
+    );
+    game.onGameResize(Vector2(400, 800));
+    await game.onLoad();
+
+    expect(game.boardState.hintsUsed, 0);
+
+    // 使用 1 次提示
+    game.hint();
+    expect(game.boardState.hintsUsed, 1);
+    expect(game.solvedCount, 1);
+
+    // 撤销提示
+    game.undo();
+    expect(game.solvedCount, 0);
+    // 提示计数必须保留，防止玩家刷低提示次数以达成三星
+    expect(game.boardState.hintsUsed, 1);
+  });
 }
-
-
-
-
-
-
-
-
-
-

@@ -84,7 +84,7 @@ class TrayBackgroundComponent extends PositionComponent
   @override
   void onDragUpdate(DragUpdateEvent event) {
     super.onDragUpdate(event);
-    if (game.holdingPiece == null) {
+    if (!game.isTabletop && game.holdingPiece == null && !game.isDraggingAnyPiece) {
       game.scrollTray(event.localDelta.x);
     }
   }
@@ -279,7 +279,6 @@ class JigsawPuzzleGame extends FlameGame
           srcHeightPerRow: srcPieceH,
         );
 
-        final isTabletop = scatterMode == 'tabletop' && (size.x > 400.0 || size.y > 400.0);
         final pPos = isTabletop
             ? _getScatterPositionForIndex(trayIndex, totalPieces)
             : _getTrayPositionForIndex(trayIndex);
@@ -523,7 +522,6 @@ class JigsawPuzzleGame extends FlameGame
         Vector2(_sideMargin, size.y - targetTrayH - _bottomTrayMargin);
 
     // 2. Smart Board Layout in remaining upper workspace (maximize available area, minimize side margins)
-    final isTabletop = scatterMode == 'tabletop' && (size.x > 450.0 || size.y > 450.0);
     final availableBoardW = isTabletop
         ? max(100.0, (size.x - _sideMargin * 2) * 0.56)
         : max(100.0, size.x - _sideMargin * 2);
@@ -828,14 +826,10 @@ class JigsawPuzzleGame extends FlameGame
   @override
   void onPanUpdate(DragUpdateInfo info) {
     super.onPanUpdate(info);
-    final pos = info.eventPosition.global;
-    if (!isTabletop && pos.y >= trayPosition.y && pos.y <= trayPosition.y + traySize.y) {
-      if (!isDraggingAnyPiece) {
-        scrollTray(info.delta.global.x);
-      }
-    } else {
-      // 放大状态下，按住空白区域（未抓取碎片时）平移棋盘画布
-      if (!isDraggingAnyPiece && _zoom > 1.0) {
+    // 放大状态下，按住空白区域（未抓取碎片且在棋盘区）平移棋盘画布
+    if (!isDraggingAnyPiece && _zoom > 1.0) {
+      final pos = info.eventPosition.global;
+      if (isTabletop || pos.y < trayPosition.y) {
         panBy(info.delta.global);
       }
     }
@@ -1065,6 +1059,10 @@ class JigsawPuzzleGame extends FlameGame
 
   /// Resets current game state and moves all unsolved pieces back to tray or tabletop.
   void resetCurrentGame() {
+    cancelHoldingPiece();
+    cancelAllPieceDragging();
+    _holdingPiece = null;
+
     _tabletopScatterSlots = null;
     _isSolved = false;
     _borderFilterActive = false;
@@ -1073,7 +1071,8 @@ class JigsawPuzzleGame extends FlameGame
     _trayScrollX = 0.0;
     undoManager.clear();
 
-    _boardGhostComp.opacity = _boardGhostOpacity;
+    _boardGhostOpacity = 0.0;
+    _boardGhostComp.opacity = 0.0;
     _boardGhostComp.priority = 0;
     _boardOutlineRect.paint.color = const Color(0x66FFFFFF);
 
@@ -1089,8 +1088,6 @@ class JigsawPuzzleGame extends FlameGame
     final normOut = [0.0, 0.0];
     final initialPieces = <PieceState>[];
     var trayIndex = 0;
-
-    final isTabletop = scatterMode == 'tabletop' && (size.x > 400.0 || size.y > 400.0);
 
     for (final id in _trayOrder) {
       final r = id ~/ cols;
@@ -1113,6 +1110,8 @@ class JigsawPuzzleGame extends FlameGame
 
       final comp = _pieces[id];
       if (comp != null) {
+        comp.clearActiveEffects();
+        comp.isDragging = false;
         comp.isInTray = !isTabletop;
         comp.hideBorders = false;
         comp.isFilteredOut = false;
@@ -1182,17 +1181,9 @@ class JigsawPuzzleGame extends FlameGame
     }
   }
 
-  /// Called during drag movement. Moves all pieces in the cluster simultaneously.
-  void handlePieceDragUpdate(PuzzlePieceComponent piece, Vector2 delta) {
-    for (final p in _pieces.values) {
-      if (p.clusterId == piece.clusterId) {
-        p.position += delta;
-      }
-    }
-  }
-
   /// 取消当前所有碎片的拖拽状态，平滑恢复其原有位置
   void cancelAllPieceDragging() {
+    _holdingPiece = null;
     for (final p in _pieces.values) {
       if (p.isDragging) {
         cancelPieceDrag(p);
@@ -1202,6 +1193,9 @@ class JigsawPuzzleGame extends FlameGame
 
   /// 取消指定碎片集群的拖拽并恢复原位
   void cancelPieceDrag(PuzzlePieceComponent piece) {
+    if (_holdingPiece == piece) {
+      _holdingPiece = null;
+    }
     piece.isDragging = false;
     final clusterPieces =
         _pieces.values.where((p) => p.clusterId == piece.clusterId).toList();
@@ -1285,6 +1279,7 @@ class JigsawPuzzleGame extends FlameGame
 
     _boardState = _boardState.copyWith(pieces: updatedPieces);
 
+    final prevState = _boardState;
     final result = PuzzleEngine.resolveSnap(
       state: _boardState,
       draggedPieceId: piece.id,
@@ -1293,7 +1288,16 @@ class JigsawPuzzleGame extends FlameGame
 
     if (result.didSnap || result.didMerge || result.isCompleted || _boardState.isSolved) {
       _boardState = result.state;
-      undoManager.record(_boardState);
+      undoManager.record(prevState);
+
+      // 全量同步 clusterId，确保级联合并后的状态一致
+      for (final p in _boardState.pieces) {
+        final comp = _pieces[p.id];
+        if (comp != null) {
+          comp.clusterId = p.clusterId;
+          comp.rot = p.rot;
+        }
+      }
 
       for (final affectedId in result.affectedPieceIds) {
         final statePiece = _boardState.pieceById(affectedId);
@@ -1463,21 +1467,39 @@ class JigsawPuzzleGame extends FlameGame
   }
 
   /// Serializes current board state into Snapshot JSON string.
-  String exportSnapshotJson() {
+  String exportSnapshotJson({int? elapsedSeconds}) {
     final out = [0.0, 0.0];
     final updated = _boardState.pieces.map((p) {
       final comp = _pieces[p.id];
       if (comp != null) {
+        // 若组件正在被拖拽，保留原权威状态坐标，避免将拖拽中途临时位置写入存档
+        if (comp.isDragging || comp == _holdingPiece) {
+          return p;
+        }
+        // 若已锁定就位，直接使用理论精确槽位坐标
+        if (comp.isLocked) {
+          return p.copyWith(
+            nx: p.c / cols,
+            ny: p.r / rows,
+            clusterId: comp.clusterId,
+            rot: comp.rot,
+          );
+        }
         _screenToNormalized(comp.position, out);
         return p.copyWith(nx: out[0], ny: out[1], clusterId: comp.clusterId, rot: comp.rot);
       }
       return p;
     }).toList();
-    return jsonEncode(_boardState.copyWith(pieces: updated).toJson());
+    return jsonEncode(_boardState.copyWith(
+      pieces: updated,
+      elapsedSeconds: elapsedSeconds ?? _boardState.elapsedSeconds,
+    ).toJson());
   }
 
   /// Restores previous snapshot from undo history.
   void undo() {
+    cancelHoldingPiece();
+    cancelAllPieceDragging();
     final prev = undoManager.undo(_boardState);
     if (prev != null) {
       _applyBoardState(prev);
@@ -1487,6 +1509,8 @@ class JigsawPuzzleGame extends FlameGame
 
   /// Restores next snapshot from redo history.
   void redo() {
+    cancelHoldingPiece();
+    cancelAllPieceDragging();
     final next = undoManager.redo(_boardState);
     if (next != null) {
       _applyBoardState(next);
@@ -1503,7 +1527,8 @@ class JigsawPuzzleGame extends FlameGame
     }
     _boardState = newState;
     for (final p in newState.pieces) {
-      final comp = _pieces[p.id]!;
+      final comp = _pieces[p.id];
+      if (comp == null) continue;
       comp.clusterId = p.clusterId;
       comp.rot = p.rot;
 
@@ -1525,19 +1550,24 @@ class JigsawPuzzleGame extends FlameGame
     onProgressChanged?.call(solvedCount);
     onStateUpdated?.call();
 
-    if (_boardState.isSolved && !_isSolved) {
-      _isSolved = true;
+    final wasSolved = _isSolved;
+    _isSolved = _boardState.isSolved;
+    if (_isSolved && !wasSolved) {
       onSolved();
     }
   }
 
   /// Automatically snaps one unsolved piece into place.
   void hint() {
+    cancelHoldingPiece();
+    cancelAllPieceDragging();
+
     final hint = PuzzleEngine.hintFor(_boardState);
     final targetPieceId = hint.pieceId;
     final targetComp = _pieces[targetPieceId];
     if (targetComp == null) return;
 
+    final prevState = _boardState;
     final updated = _boardState.pieces.map((p) {
       if (p.id == targetPieceId) {
         return p.copyWith(
@@ -1554,13 +1584,29 @@ class JigsawPuzzleGame extends FlameGame
       hintsUsed: _boardState.hintsUsed + 1,
     );
 
+    final onBoardPieceIds = _pieces.values
+        .where((p) => !p.isInTray && !p.isFilteredOut)
+        .map((p) => p.id)
+        .toSet();
+    onBoardPieceIds.add(targetPieceId);
+
     final result = PuzzleEngine.resolveSnap(
       state: _boardState,
       draggedPieceId: targetPieceId,
+      onBoardPieceIds: onBoardPieceIds,
     );
 
     _boardState = result.state;
-    undoManager.record(_boardState);
+    undoManager.record(prevState.copyWith(hintsUsed: _boardState.hintsUsed));
+
+    // 全量同步 clusterId
+    for (final p in _boardState.pieces) {
+      final comp = _pieces[p.id];
+      if (comp != null) {
+        comp.clusterId = p.clusterId;
+        comp.rot = p.rot;
+      }
+    }
 
     // ONLY animate the hinted piece and its directly affected cluster members
     final affectedIds = result.affectedPieceIds.isNotEmpty
@@ -1611,19 +1657,25 @@ class JigsawPuzzleGame extends FlameGame
       if (comp == null || comp.isDragging || comp == _holdingPiece || comp.isInTray) continue;
       if (holdingClusterId != null && comp.clusterId == holdingClusterId) continue;
 
-      final isOutOfBounds = comp.position.x < -comp.size.x * 0.5 ||
-          comp.position.x > size.x - comp.size.x * 0.5 ||
-          comp.position.y < -comp.size.y * 0.5 ||
-          comp.position.y > size.y - comp.size.y * 0.5;
+      final visualW = comp.size.x * comp.scale.x;
+      final visualH = comp.size.y * comp.scale.y;
+      final isOutOfBounds = comp.position.x < -visualW * 0.5 ||
+          comp.position.x > size.x - visualW * 0.5 ||
+          comp.position.y < -visualH * 0.5 ||
+          comp.position.y > size.y - visualH * 0.5;
 
       if (isOutOfBounds) {
         final safeTarget = Vector2(
-          (size.x - comp.size.x * comp.scale.x) / 2,
-          (trayPosition.y - comp.size.y * comp.scale.y - 20.0).clamp(20.0, size.y - comp.size.y * comp.scale.y),
+          (size.x - visualW) / 2,
+          (trayPosition.y - visualH - 20.0).clamp(20.0, size.y - visualH),
         );
         comp.position.setFrom(safeTarget);
-        comp.animateTo(safeTarget, duration: 0.35);
         comp.triggerSnapGlow();
+        final normOut = [0.0, 0.0];
+        _screenToNormalized(safeTarget, normOut);
+        _boardState = _boardState.copyWith(
+          pieces: _boardState.pieces.map((p) => p.id == pState.id ? p.copyWith(nx: normOut[0], ny: normOut[1]) : p).toList(),
+        );
       }
     }
   }

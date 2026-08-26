@@ -1,4 +1,6 @@
 import 'dart:async';
+import 'dart:convert';
+import 'dart:ui' as ui;
 
 import 'package:flame/game.dart';
 import 'package:flutter/gestures.dart';
@@ -38,13 +40,17 @@ class GamePage extends StatefulWidget {
 class _GamePageState extends State<GamePage> {
   final _repo = GameRepository.instance;
   JigsawPuzzleGame? _game;
+  ui.Image? _gameImage;
 
   bool _isSolved = false;
+  bool _isPaused = false;
   int _seconds = 0;
   Timer? _timer;
   int _solvedPieces = 0;
   bool _showOriginalImage = false;
   late String _selectedBackground;
+  PuzzleDifficulty? _effectiveDifficulty;
+  int get _totalPieces => (_effectiveDifficulty ?? widget.difficulty).pieceCount;
 
   // Multi-touch tracking for pinch-to-zoom & two-finger pan
   final Map<int, Offset> _pointerPositions = {};
@@ -64,7 +70,7 @@ class _GamePageState extends State<GamePage> {
 
   void _startTimer() {
     _timer = Timer.periodic(const Duration(seconds: 1), (_) {
-      if (!_isSolved && mounted) {
+      if (!_isSolved && !_isPaused && mounted) {
         setState(() => _seconds++);
       }
     });
@@ -72,8 +78,21 @@ class _GamePageState extends State<GamePage> {
 
   Future<void> _loadImage() async {
     final img = await decodeFlameImage(widget.imageBytes);
+    _gameImage = img;
     final effectiveDiff = widget.difficulty
         .adaptiveForSize(img.width.toDouble(), img.height.toDouble());
+    _effectiveDifficulty = effectiveDiff;
+
+    if (widget.initialSnapshotJson != null) {
+      try {
+        final map = jsonDecode(widget.initialSnapshotJson!) as Map<String, dynamic>;
+        if (map['elapsedSeconds'] is int) {
+          _seconds = map['elapsedSeconds'] as int;
+        }
+      } catch (e) {
+        debugPrint('Failed to parse initialSnapshotJson elapsedSeconds: $e');
+      }
+    }
 
     final game = JigsawPuzzleGame(
       image: img,
@@ -89,7 +108,13 @@ class _GamePageState extends State<GamePage> {
         _autoSaveProgress();
       },
       onStateUpdated: () {
-        if (mounted) setState(() {});
+        if (mounted) {
+          setState(() {
+            if (_game != null) {
+              _isSolved = _game!.isSolved;
+            }
+          });
+        }
       },
     );
 
@@ -112,9 +137,9 @@ class _GamePageState extends State<GamePage> {
 
   void _autoSaveProgress() {
     if (_game == null || _isSolved) return;
-    final total = widget.difficulty.pieceCount;
+    final total = _totalPieces;
     final percent = total > 0 ? (_solvedPieces * 100 ~/ total) : 0;
-    final snapshot = _game!.exportSnapshotJson();
+    final snapshot = _game!.exportSnapshotJson(elapsedSeconds: _seconds);
 
     if (widget.levelIndex != null) {
       _repo.updateLevelProgress(
@@ -138,8 +163,8 @@ class _GamePageState extends State<GamePage> {
   }
 
   int _calculateStars() {
-    final hints = _game?.undoManager != null ? 0 : 0;
-    if (hints == 0 && _seconds < widget.difficulty.pieceCount * 6) {
+    final hints = _game?.boardState.hintsUsed ?? 0;
+    if (hints == 0 && _seconds < _totalPieces * 6) {
       return 3;
     } else if (hints <= 2) {
       return 2;
@@ -157,11 +182,11 @@ class _GamePageState extends State<GamePage> {
 
     setState(() {
       _isSolved = true;
-      _solvedPieces = widget.difficulty.pieceCount;
+      _solvedPieces = _totalPieces;
     });
 
     _repo.recordSnapStats(durationSeconds: _seconds);
-    final completedCount = widget.difficulty.pieceCount;
+    final completedCount = _totalPieces;
     final stars = _calculateStars();
 
     if (widget.levelIndex != null) {
@@ -244,6 +269,7 @@ class _GamePageState extends State<GamePage> {
   }
 
   void _showPauseMenu() {
+    setState(() => _isPaused = true);
     showDialog<void>(
       context: context,
       builder: (ctx) => StatefulBuilder(
@@ -279,7 +305,7 @@ class _GamePageState extends State<GamePage> {
                       children: [
                         const Text('拼图进度', style: TextStyle(fontSize: 12, color: Colors.black54)),
                         const SizedBox(height: 2),
-                        Text('$_solvedPieces / ${widget.difficulty.pieceCount}',
+                        Text('$_solvedPieces / $_totalPieces',
                             style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF2E7D32))),
                       ],
                     ),
@@ -372,10 +398,15 @@ class _GamePageState extends State<GamePage> {
           ],
         ),
       ),
-    );
+    ).then((_) {
+      if (mounted) {
+        setState(() => _isPaused = false);
+      }
+    });
   }
 
   void _showVictoryDialog() {
+    setState(() => _isPaused = true);
     final stars = _calculateStars();
     final hasNext = widget.levelIndex != null && widget.levelIndex! < _repo.levels.length;
 
@@ -440,7 +471,7 @@ class _GamePageState extends State<GamePage> {
                     Column(
                       children: [
                         const Text('规格', style: TextStyle(fontSize: 12, color: Colors.black54)),
-                        Text('${widget.difficulty.pieceCount} 块',
+                        Text('$_totalPieces 块',
                             style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF2E7D32))),
                       ],
                     ),
@@ -501,6 +532,7 @@ class _GamePageState extends State<GamePage> {
     _pointerPositions[event.pointer] = event.localPosition;
     if (_pointerPositions.length >= 2) {
       _game?.isPinching = true;
+      _game?.cancelHoldingPiece();
       _game?.cancelAllPieceDragging();
     }
     if (_pointerPositions.length == 2) {
@@ -541,15 +573,8 @@ class _GamePageState extends State<GamePage> {
     } else if ((event.buttons & kMiddleMouseButton) != 0 && _game != null) {
       _game!.panBy(Vector2(event.delta.dx, event.delta.dy));
       if (mounted) setState(() {});
-    } else if (_game != null &&
-        _game!.zoom > 1.0 &&
-        _pointerPositions.length == 1 &&
-        !_game!.isDraggingAnyPiece &&
-        (_game!.isTabletop || event.localPosition.dy < _game!.trayPosition.y)) {
-      // 放大状态下，鼠标左键或单指按住空白区域拖动 -> 实时平移棋盘画布
-      _game!.panBy(Vector2(event.delta.dx, event.delta.dy));
-      if (mounted) setState(() {});
     }
+    // 注意：单指左键拖动空白平移由 Flame PanDetector (JigsawPuzzleGame.onPanUpdate) 统一处理，消除速度翻倍问题
   }
 
   void _onPointerHover(PointerHoverEvent event) {
@@ -592,9 +617,16 @@ class _GamePageState extends State<GamePage> {
       final isCtrl = HardwareKeyboard.instance.isControlPressed ||
           HardwareKeyboard.instance.isMetaPressed;
       final mousePos = event.localPosition;
-      final inTray = mousePos.dy >= _game!.trayPosition.y;
+      final inTray = !_game!.isTabletop && mousePos.dy >= _game!.trayPosition.y;
 
-      if (isCtrl || (!inTray && event.scrollDelta.dy.abs() > 0)) {
+      if (inTray) {
+        // 托盘区域直接响应鼠标滚轮与触摸板水平/垂直滚动
+        final delta = event.scrollDelta.dx != 0
+            ? -event.scrollDelta.dx
+            : -event.scrollDelta.dy;
+        _game!.scrollTray(delta * 0.8);
+        if (mounted) setState(() {});
+      } else if (isCtrl || event.scrollDelta.dy.abs() > 0) {
         final zoomDelta = -event.scrollDelta.dy * 0.003;
         _game!.zoomAt(Vector2(mousePos.dx, mousePos.dy), zoomDelta);
         if (mounted) setState(() {});
@@ -606,13 +638,14 @@ class _GamePageState extends State<GamePage> {
   void dispose() {
     _timer?.cancel();
     _focusNode.dispose();
+    _gameImage?.dispose();
     super.dispose();
   }
 
   /// Top navigation bar + live stats sub-bar + thin progress line.
   /// Rendered above (not on top of) the Flame game canvas.
   Widget _buildHeader() {
-    final total = widget.difficulty.pieceCount;
+    final total = _totalPieces;
     final ghostOpacity = _game?.boardGhostOpacity ?? 0.0;
     final isBorderActive = _game?.isBorderFilterActive ?? false;
 
@@ -668,7 +701,10 @@ class _GamePageState extends State<GamePage> {
                   color: _showOriginalImage ? const Color(0xFF0288D1) : Colors.black54,
                 ),
                 tooltip: '查看原图',
-                onPressed: () => setState(() => _showOriginalImage = !_showOriginalImage),
+                onPressed: () => setState(() {
+                  _showOriginalImage = !_showOriginalImage;
+                  _isPaused = _showOriginalImage;
+                }),
               ),
               // 4. Pause Menu / Options
               IconButton(
@@ -888,7 +924,10 @@ class _GamePageState extends State<GamePage> {
             if (_showOriginalImage)
               Positioned.fill(
                 child: GestureDetector(
-                  onTap: () => setState(() => _showOriginalImage = false),
+                  onTap: () => setState(() {
+                    _showOriginalImage = false;
+                    _isPaused = false;
+                  }),
                   child: Container(
                     color: Colors.black87,
                     padding: const EdgeInsets.fromLTRB(20, 50, 20, 24),
