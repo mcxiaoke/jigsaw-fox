@@ -791,11 +791,11 @@ class _GamePageState extends State<GamePage> {
                       padding: const EdgeInsets.symmetric(horizontal: 2),
                       constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
                       icon: Icon(
-                        PhosphorIconsBold.cornersOut,
+                        isBorderActive ? PhosphorIconsFill.cornersOut : PhosphorIconsBold.cornersOut,
                         size: 19,
                         color: isBorderActive ? const Color(0xFF2E7D32) : Colors.black54,
                       ),
-                      tooltip: '边缘碎片筛选',
+                      tooltip: isBorderActive ? '显示全部碎片' : '仅显示边缘碎片',
                       onPressed: () {
                         _game?.toggleBorderFilter();
                         setState(() {});

@@ -502,7 +502,8 @@ class JigsawPuzzleGame extends FlameGame
 
     // 6. 重排托盘碎片
     if (!isTabletop) {
-      final trayPieces = _pieces.values.where((p) => p.isInTray).toList();
+      final trayPieces =
+          _pieces.values.where((p) => p.isInTray && !p.isFilteredOut).toList();
       final contentWidth =
           trayPieces.length * (_trayPieceWidth + _traySpacing) + 36.0;
       final minScroll = min(0.0, traySize.x - contentWidth);
@@ -842,10 +843,12 @@ class JigsawPuzzleGame extends FlameGame
 
   /// Scrolls the bottom tray horizontally.
   void scrollTray(double deltaX) {
-    final trayPieces = _pieces.values.where((p) => p.isInTray).toList();
+    final trayPieces =
+        _pieces.values.where((p) => p.isInTray && !p.isFilteredOut).toList();
     if (trayPieces.isEmpty) return;
 
-    final contentWidth = trayPieces.length * (_trayPieceWidth + _traySpacing) + 36.0;
+    final contentWidth =
+        trayPieces.length * (_trayPieceWidth + _traySpacing) + 36.0;
     final minScroll = min(0.0, traySize.x - contentWidth);
     const maxScroll = 0.0;
 
@@ -858,9 +861,11 @@ class JigsawPuzzleGame extends FlameGame
     // 1. 先从 _trayOrder 中剔除该 piece.id（如果之前在）
     _trayOrder.remove(piece.id);
 
-    // 2. 获取当前托盘内已有碎片在 _trayOrder 中的有序列表
-    final currentTrayIds =
-        _trayOrder.where((id) => _pieces[id]?.isInTray == true).toList();
+    // 2. 获取当前托盘内已有可见碎片在 _trayOrder 中的有序列表
+    final currentTrayIds = _trayOrder
+        .where((id) =>
+            _pieces[id]?.isInTray == true && _pieces[id]?.isFilteredOut == false)
+        .toList();
 
     if (currentTrayIds.isEmpty) {
       _trayOrder.insert(0, piece.id);
@@ -891,7 +896,7 @@ class JigsawPuzzleGame extends FlameGame
     var idx = 0;
     for (final id in _trayOrder) {
       final p = _pieces[id];
-      if (p == null || !p.isInTray) continue;
+      if (p == null || !p.isInTray || p.isFilteredOut) continue;
       final targetPos = _getTrayPositionForIndex(idx);
       if (p != _holdingPiece && !p.isDragging) {
         p.animateScaleTo(Vector2.all(_trayPieceScale));
@@ -1060,6 +1065,7 @@ class JigsawPuzzleGame extends FlameGame
   void resetCurrentGame() {
     _tabletopScatterSlots = null;
     _isSolved = false;
+    _borderFilterActive = false;
     _zoom = 1.0;
     _panOffset.setZero();
     _trayScrollX = 0.0;
@@ -1107,6 +1113,7 @@ class JigsawPuzzleGame extends FlameGame
       if (comp != null) {
         comp.isInTray = !isTabletop;
         comp.hideBorders = false;
+        comp.isFilteredOut = false;
         comp.clusterId = id;
         comp.rot = 0;
         comp.scale.setAll(isTabletop ? _zoom : _trayPieceScale);
@@ -1224,6 +1231,7 @@ class JigsawPuzzleGame extends FlameGame
     if (!isTabletop) {
       _realignTrayPieces(animate: true);
     }
+    updatePieceVisibility(animateTray: true);
     updatePiecesStateAndPriorities();
   }
 
@@ -1238,7 +1246,7 @@ class JigsawPuzzleGame extends FlameGame
       _insertPieceIntoTrayAt(piece, piece.position.x);
       piece.isInTray = true;
       piece.animateScaleTo(Vector2.all(_trayPieceScale), duration: 0.15);
-      _realignTrayPieces(animate: true);
+      updatePieceVisibility(animateTray: true);
       updatePiecesStateAndPriorities();
       onStateUpdated?.call();
       return;
@@ -1299,6 +1307,7 @@ class JigsawPuzzleGame extends FlameGame
         comp.triggerSnapGlow();
       }
 
+      updatePieceVisibility(animateTray: true);
       updatePiecesStateAndPriorities();
       _checkEdgeCompleteAutoDismiss();
       missingPieceCheck();
@@ -1322,9 +1331,46 @@ class JigsawPuzzleGame extends FlameGame
         p.isInTray = false;
         p.animateScaleTo(Vector2.all(_zoom), duration: 0.15);
       }
-      _realignTrayPieces(animate: true);
+      updatePieceVisibility(animateTray: true);
       updatePiecesStateAndPriorities();
       onStateUpdated?.call();
+    }
+  }
+
+  /// 根据当前边缘筛选状态 [_borderFilterActive]，更新所有碎片的可见性并重排托盘
+  void updatePieceVisibility({bool animateTray = true}) {
+    for (final p in _pieces.values) {
+      final isBorder = edgeLayout.edgesFor(p.r, p.c).isBorder;
+      final statePiece = _boardState.pieceById(p.id);
+      final isSolved = statePiece.isSolved(rows, cols);
+
+      if (_borderFilterActive) {
+        // 边缘筛选模式下：
+        // 1. 已归位碎片始终可见；
+        // 2. 边缘碎片（包含至少一条平直外框）可见；
+        // 3. 与边缘碎片或已归位碎片合并在同一集群的碎片可见；
+        // 4. 其他单纯未拼的内部碎片隐藏。
+        final clusterPieces =
+            _pieces.values.where((o) => o.clusterId == p.clusterId);
+        final clusterHasBorderOrSolved = clusterPieces.any((o) =>
+            edgeLayout.edgesFor(o.r, o.c).isBorder ||
+            _boardState.pieceById(o.id).isSolved(rows, cols));
+
+        p.isFilteredOut = !(isSolved || isBorder || clusterHasBorderOrSolved);
+      } else {
+        p.isFilteredOut = false;
+      }
+    }
+
+    if (!isTabletop) {
+      final trayPieces = _pieces.values
+          .where((p) => p.isInTray && !p.isFilteredOut)
+          .toList();
+      final contentWidth =
+          trayPieces.length * (_trayPieceWidth + _traySpacing) + 36.0;
+      final minScroll = min(0.0, traySize.x - contentWidth);
+      _trayScrollX = _trayScrollX.clamp(minScroll, 0.0);
+      _realignTrayPieces(animate: animateTray);
     }
   }
 
@@ -1333,20 +1379,15 @@ class JigsawPuzzleGame extends FlameGame
     if (!_borderFilterActive) return;
     if (_boardState.isEdgeComplete) {
       _borderFilterActive = false;
-      for (final p in _pieces.values) {
-        p.isHighlight = false;
-      }
+      updatePieceVisibility(animateTray: true);
       onStateUpdated?.call();
     }
   }
 
-  /// Toggles border pieces filter (highlights/top-prioritizes border pieces).
+  /// Toggles border pieces filter (only shows border pieces when active).
   void toggleBorderFilter() {
     _borderFilterActive = !_borderFilterActive;
-    for (final p in _pieces.values) {
-      final isBorder = edgeLayout.edgesFor(p.r, p.c).isBorder;
-      p.isHighlight = _borderFilterActive && isBorder;
-    }
+    updatePieceVisibility(animateTray: true);
     onStateUpdated?.call();
   }
 
@@ -1379,6 +1420,7 @@ class JigsawPuzzleGame extends FlameGame
         }
       }
       _boardState = _boardState.copyWith(pieces: updatedPieces);
+      updatePieceVisibility(animateTray: true);
       updatePiecesStateAndPriorities();
       onStateUpdated?.call();
       return;
@@ -1394,7 +1436,7 @@ class JigsawPuzzleGame extends FlameGame
       }
     }
     _trayScrollX = 0.0;
-    _realignTrayPieces(animate: true);
+    updatePieceVisibility(animateTray: true);
     updatePiecesStateAndPriorities();
     onStateUpdated?.call();
   }
@@ -1456,7 +1498,7 @@ class JigsawPuzzleGame extends FlameGame
         comp.scale.setAll(_trayPieceScale);
       }
     }
-    _realignTrayPieces(animate: false);
+    updatePieceVisibility(animateTray: false);
     updatePiecesStateAndPriorities();
     _checkEdgeCompleteAutoDismiss();
     onProgressChanged?.call(solvedCount);
@@ -1524,7 +1566,7 @@ class JigsawPuzzleGame extends FlameGame
       c.triggerSnapGlow();
     }
 
-    _realignTrayPieces(animate: true);
+    updatePieceVisibility(animateTray: true);
     updatePiecesStateAndPriorities();
     _checkEdgeCompleteAutoDismiss();
     missingPieceCheck();

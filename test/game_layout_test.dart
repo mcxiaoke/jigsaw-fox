@@ -459,7 +459,49 @@ void main() {
     expect(mainPiece.position.y, closeTo(posBefore.y, 0.001));
   });
 
-  test('边缘闭环自动感知 (isEdgeComplete) 自动解除边缘筛选', () async {
+  test('边缘筛选 (toggleBorderFilter) 仅显示外围边缘碎片并紧凑重排托盘', () async {
+    final img = await _decodePng();
+    final game = JigsawPuzzleGame(
+      image: img,
+      rows: 3,
+      cols: 3,
+      onSolved: () {},
+    );
+    game.onGameResize(Vector2(400, 800));
+    await game.onLoad();
+
+    final pieces = game.children.whereType<PuzzlePieceComponent>().toList();
+    expect(pieces.length, equals(9));
+
+    // 初始状态：未开启筛选，所有碎片均可见
+    expect(game.isBorderFilterActive, isFalse);
+    expect(pieces.every((p) => !p.isFilteredOut), isTrue);
+
+    // 开启边缘筛选
+    game.toggleBorderFilter();
+    expect(game.isBorderFilterActive, isTrue);
+
+    // 验证：3x3 共有 8 块外框碎片和 1 块中心内部碎片
+    final borderPieces = pieces.where((p) => p.r == 0 || p.r == 2 || p.c == 0 || p.c == 2).toList();
+    final centerPieces = pieces.where((p) => p.r == 1 && p.c == 1).toList();
+
+    expect(borderPieces.length, equals(8));
+    expect(centerPieces.length, equals(1));
+
+    // 8 块边缘碎片保持可见，1 块中心碎片被过滤隐藏
+    expect(borderPieces.every((p) => !p.isFilteredOut), isTrue);
+    expect(centerPieces.first.isFilteredOut, isTrue);
+
+    // 中心碎片被过滤后，碰撞测试返回 false 且无法响应交互
+    expect(centerPieces.first.containsLocalPoint(Vector2(10, 10)), isFalse);
+
+    // 再次切换解除边缘筛选
+    game.toggleBorderFilter();
+    expect(game.isBorderFilterActive, isFalse);
+    expect(pieces.every((p) => !p.isFilteredOut), isTrue);
+  });
+
+  test('边缘闭环自动感知 (isEdgeComplete) 自动解除边缘筛选并恢复全部碎片显示', () async {
     final img = await _decodePng();
     final game = JigsawPuzzleGame(
       image: img,
@@ -474,14 +516,18 @@ void main() {
     game.toggleBorderFilter();
     expect(game.isBorderFilterActive, isTrue);
 
+    final centerPiece = game.children.whereType<PuzzlePieceComponent>().firstWhere((p) => p.r == 1 && p.c == 1);
+    expect(centerPiece.isFilteredOut, isTrue);
+
     // 连续提示直到 3x3 外围 8 块边缘全部归位（3x3 共有 8 块外框）
     for (var i = 0; i < 8; i++) {
       game.hint();
     }
 
-    // 验证边缘全部归位后，自动感知并解除筛选模式
+    // 验证边缘全部归位后，自动感知并解除筛选模式，内部中心碎片自动恢复可见
     expect(game.boardState.isEdgeComplete, isTrue);
     expect(game.isBorderFilterActive, isFalse);
+    expect(centerPiece.isFilteredOut, isFalse);
   });
 
   test('桌面打散模式 (scatterMode=tabletop) 上下左右全域环形散落且中心绝对留白', () async {

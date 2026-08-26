@@ -83,6 +83,9 @@ class PuzzlePieceComponent extends PositionComponent
   /// 是否已被吸附归位锁定（锁定后禁止拖拽移动，置于最底层渲染）
   bool isLocked = false;
 
+  /// 是否被边缘筛选过滤隐藏（当开启仅显示边缘碎片时，未拼的内部碎片会被过滤隐藏）
+  bool isFilteredOut = false;
+
   /// 归一化抓取锚点（用于保持光标在缩放过程中与拾取点锁定）
   double grabAnchorX = 0.5;
   double grabAnchorY = 0.5;
@@ -169,6 +172,7 @@ class PuzzlePieceComponent extends PositionComponent
   /// 碰撞拾取判定：精确测试触摸点是否在碎片实际贝塞尔外轮廓内
   @override
   bool containsLocalPoint(Vector2 point) {
+    if (isFilteredOut) return false;
     final offset = ui.Offset(point.x, point.y);
     return shape.containsLocalPoint(offset, rot);
   }
@@ -176,7 +180,7 @@ class PuzzlePieceComponent extends PositionComponent
   /// 核心渲染循环（分层渲染管线）
   @override
   void render(ui.Canvas canvas) {
-    if (hideBorders) return; // 通关后整图渲染，跳过单片绘制
+    if (isFilteredOut || hideBorders) return; // 边缘过滤隐藏或通关后整图渲染，跳过单片绘制
 
     final isElevated = isDragging && !isInTray;
 
@@ -233,7 +237,7 @@ class PuzzlePieceComponent extends PositionComponent
 
   @override
   void onTapDown(TapDownEvent event) {
-    if (game.isSolved || game.isPinching) return;
+    if (isFilteredOut || game.isSolved || game.isPinching) return;
 
     // 如果当前游戏已有吸附抓取的碎片，任意点击都触发放下
     if (game.holdingPiece != null) {
@@ -252,7 +256,7 @@ class PuzzlePieceComponent extends PositionComponent
 
   @override
   void onDragStart(DragStartEvent event) {
-    if (isLocked || game.isSolved || game.isPinching) return;
+    if (isFilteredOut || isLocked || game.isSolved || game.isPinching) return;
 
     // 若已有正在拖拽的碎片，同集群保持跟随，不打断不重入
     if (game.holdingPiece != null) {
