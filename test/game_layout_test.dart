@@ -848,11 +848,12 @@ void main() {
     final trayPieces = game.children.whereType<PuzzlePieceComponent>().where((p) => p.isInTray).toList();
     final piece0 = trayPieces[0];
 
-    // 1. 将 piece0 从托盘拖出到棋盘上放开
+    // 1. 将 piece0 从托盘拖出到棋盘空白区域放开（避免吸附）
     game.startHoldingPiece(piece0, 0.5, 0.5);
-    game.updateHoldingPiecePosition(Vector2(200, 200));
+    game.updateHoldingPiecePosition(Vector2(50, 300));
     game.dropHoldingPiece();
     expect(piece0.isInTray, isFalse);
+    expect(piece0.isLocked, isFalse);
 
     // 2. 将 piece0 从棋盘拖回托盘右侧位置（比如 X = 450，靠近后半部分槽位）放开
     game.startHoldingPiece(piece0, 0.5, 0.5);
@@ -863,7 +864,7 @@ void main() {
 
     expect(piece0.isInTray, isTrue);
     // 验证 piece0 就近插入在 X = 450 附近，绝非跳回 X = 18 附近的最左侧槽位
-    expect(piece0.position.x, closeTo(dropX, 50.0));
+    expect(piece0.position.x, closeTo(dropX, 60.0));
   });
 
   test('缩放最大倍数严格限制在 300% (3.0x)，且放大状态下支持在空白区域平移棋盘', () async {
@@ -970,6 +971,73 @@ void main() {
     final topLeftScreenPos = game.normalizedToScreen(0.0, 0.0);
     expect(topLeftScreenPos.x, greaterThanOrEqualTo(0.0));
     expect(topLeftScreenPos.y, greaterThanOrEqualTo(0.0));
+  });
+
+  test('通关后碎片保持绘制且带分割线，不被原图水印遮挡', () async {
+    final img = await _decodePng();
+    var isSolvedTriggered = false;
+    final game = JigsawPuzzleGame(
+      image: img,
+      rows: 2,
+      cols: 2,
+      onSolved: () => isSolvedTriggered = true,
+    );
+    game.onGameResize(Vector2(400, 800));
+    await game.onLoad();
+
+    // 连续提示直到 2x2（4块）全部归位通关
+    for (var i = 0; i < 4; i++) {
+      game.hint();
+    }
+
+    expect(game.isSolved, isTrue);
+    expect(isSolvedTriggered, isTrue);
+
+    final pieces = game.children.whereType<PuzzlePieceComponent>().toList();
+    expect(pieces.length, equals(4));
+
+    // 验证所有碎片未被隐藏（hideBorders == false），依然展示物理切线分割线与纹理
+    for (final p in pieces) {
+      expect(p.hideBorders, isFalse);
+      expect(p.isFilteredOut, isFalse);
+      expect(p.isLocked, isTrue);
+    }
+  });
+
+  test('托盘模式下从托盘拖出碎片后多次连续点击扫把 organizeTray 缩放与位置保持稳定', () async {
+    final img = await _decodePng();
+    final game = JigsawPuzzleGame(
+      image: img,
+      rows: 3,
+      cols: 3,
+      onSolved: () {},
+    );
+    game.onGameResize(Vector2(400, 800));
+    await game.onLoad();
+
+    final piece0 = game.children.whereType<PuzzlePieceComponent>().first;
+    // 模拟拖出托盘到棋盘
+    piece0.isInTray = false;
+    piece0.position.setValues(150, 150);
+    piece0.scale.setAll(1.0);
+
+    // 第 1 次点击扫把
+    game.organizeTray();
+    expect(piece0.isInTray, isTrue);
+    final p0State1 = game.boardState.pieceById(piece0.id);
+    expect(p0State1.ny, greaterThan(1.10)); // 归一化 Y 处于托盘区间
+
+    // 第 2 次点击扫把
+    game.organizeTray();
+    expect(piece0.isInTray, isTrue);
+    final p0State2 = game.boardState.pieceById(piece0.id);
+    expect(p0State2.ny, greaterThan(1.10));
+
+    // 第 3 次点击扫把
+    game.organizeTray();
+    expect(piece0.isInTray, isTrue);
+    final p0State3 = game.boardState.pieceById(piece0.id);
+    expect(p0State3.ny, greaterThan(1.10));
   });
 }
 

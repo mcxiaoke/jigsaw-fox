@@ -314,7 +314,6 @@ class PuzzlePieceComponent extends PositionComponent
 
   /// 带有平滑曲线的缓动平移位移动画
   void animateTo(Vector2 targetPos, {double duration = 0.15}) {
-    // 启动新平移动画前立即清除已有 MoveEffect，杜绝多重动画叠加争抢坐标
     removeAll(children.whereType<MoveEffect>());
     if ((position - targetPos).length < 0.5) {
       position.setFrom(targetPos);
@@ -333,7 +332,6 @@ class PuzzlePieceComponent extends PositionComponent
 
   /// 带有平滑曲线的缓动缩放动画
   void animateScaleTo(Vector2 targetScale, {double duration = 0.15}) {
-    // 启动新缩放动画前立即清除已有 ScaleEffect，杜绝动画叠加冲突
     removeAll(children.whereType<ScaleEffect>());
     if ((scale - targetScale).length < 0.01) {
       scale.setFrom(targetScale);

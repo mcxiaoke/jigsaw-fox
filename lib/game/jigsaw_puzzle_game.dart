@@ -899,10 +899,12 @@ class JigsawPuzzleGame extends FlameGame
       if (p == null || !p.isInTray || p.isFilteredOut) continue;
       final targetPos = _getTrayPositionForIndex(idx);
       if (p != _holdingPiece && !p.isDragging) {
-        p.animateScaleTo(Vector2.all(_trayPieceScale));
         if (animate) {
+          p.animateScaleTo(Vector2.all(_trayPieceScale), duration: 0.2);
           p.animateTo(targetPos, duration: 0.2);
         } else {
+          p.clearActiveEffects();
+          p.scale.setAll(_trayPieceScale);
           p.position.setFrom(targetPos);
         }
       }
@@ -1317,12 +1319,6 @@ class JigsawPuzzleGame extends FlameGame
 
       if ((result.isCompleted || _boardState.isSolved) && !_isSolved) {
         _isSolved = true;
-        _boardGhostComp.opacity = 1.0;
-        _boardGhostComp.priority = 1000;
-        _boardOutlineRect.paint.color = const Color(0x00000000);
-        for (final p in _pieces.values) {
-          p.hideBorders = true;
-        }
         onSolved();
       }
     } else {
@@ -1426,15 +1422,40 @@ class JigsawPuzzleGame extends FlameGame
       return;
     }
 
-    for (final p in _pieces.values) {
-      // If piece is not solved and is single in cluster, park back into tray
-      final clusterSize = _pieces.values.where((o) => o.clusterId == p.clusterId).length;
+    final normOut = [0.0, 0.0];
+    final updatedPiecesMap = <int, PieceState>{};
+    var idx = 0;
+
+    for (final id in _trayOrder) {
+      final p = _pieces[id];
+      if (p == null) continue;
       final statePiece = _boardState.pieceById(p.id);
-      if (clusterSize == 1 && !statePiece.isSolved(rows, cols)) {
+      final isSolved = statePiece.isSolved(rows, cols);
+      final clusterSize =
+          _pieces.values.where((o) => o.clusterId == p.clusterId).length;
+
+      if (!isSolved && clusterSize == 1) {
         p.isInTray = true;
-        p.animateScaleTo(Vector2.all(_trayPieceScale), duration: 0.2);
+      }
+
+      if (p.isInTray && !p.isFilteredOut) {
+        final targetPos = _getTrayPositionForIndex(idx);
+        _screenToNormalized(targetPos, normOut);
+        updatedPiecesMap[p.id] = statePiece.copyWith(
+          nx: normOut[0],
+          ny: normOut[1],
+        );
+        idx++;
       }
     }
+
+    if (updatedPiecesMap.isNotEmpty) {
+      final newPieces = _boardState.pieces.map((p) {
+        return updatedPiecesMap[p.id] ?? p;
+      }).toList();
+      _boardState = _boardState.copyWith(pieces: newPieces);
+    }
+
     _trayScrollX = 0.0;
     updatePieceVisibility(animateTray: true);
     updatePiecesStateAndPriorities();
@@ -1506,12 +1527,6 @@ class JigsawPuzzleGame extends FlameGame
 
     if (_boardState.isSolved && !_isSolved) {
       _isSolved = true;
-      _boardGhostComp.opacity = 1.0;
-      _boardGhostComp.priority = 1000;
-      _boardOutlineRect.paint.color = const Color(0x00000000);
-      for (final p in _pieces.values) {
-        p.hideBorders = true;
-      }
       onSolved();
     }
   }
@@ -1577,12 +1592,6 @@ class JigsawPuzzleGame extends FlameGame
 
     if ((result.isCompleted || _boardState.isSolved) && !_isSolved) {
       _isSolved = true;
-      _boardGhostComp.opacity = 1.0;
-      _boardGhostComp.priority = 1000;
-      _boardOutlineRect.paint.color = const Color(0x00000000);
-      for (final p in _pieces.values) {
-        p.hideBorders = true;
-      }
       onSolved();
     }
   }
