@@ -75,6 +75,7 @@ class _CropPuzzlePageState extends State<CropPuzzlePage> {
   late PuzzleDifficulty _selectedDifficulty;
   ui.Image? _decodedImage;
   bool _isSaving = false;
+  bool _needsResetMatrix = false;
 
   @override
   void initState() {
@@ -107,6 +108,7 @@ class _CropPuzzlePageState extends State<CropPuzzlePage> {
           (t) => t.difficulty.recommended,
           orElse: () => tiers[0],
         ).difficulty;
+        _needsResetMatrix = true;
       });
     }
   }
@@ -118,10 +120,32 @@ class _CropPuzzlePageState extends State<CropPuzzlePage> {
     super.dispose();
   }
 
+  Size _calculateBaseSize(Size viewportSize, ui.Image image) {
+    final boxW = viewportSize.width;
+    final boxH = viewportSize.height;
+    final imgW = image.width.toDouble();
+    final imgH = image.height.toDouble();
+    if (boxW <= 0 || boxH <= 0 || imgW <= 0 || imgH <= 0) {
+      return viewportSize;
+    }
+    final baseScale = max(boxW / imgW, boxH / imgH);
+    return Size(imgW * baseScale, imgH * baseScale);
+  }
+
+  Matrix4 _getInitialMatrix(Size viewportSize, ui.Image? image) {
+    if (image == null || viewportSize.width <= 0 || viewportSize.height <= 0) {
+      return Matrix4.identity();
+    }
+    final baseSize = _calculateBaseSize(viewportSize, image);
+    final initTx = (viewportSize.width - baseSize.width) / 2.0;
+    final initTy = (viewportSize.height - baseSize.height) / 2.0;
+    return Matrix4.identity()..setTranslationRaw(initTx, initTy, 0.0);
+  }
+
   void _onRatioChanged(CropRatio ratio) {
     setState(() {
       _selectedRatio = ratio;
-      _transformController.value = Matrix4.identity();
+      _needsResetMatrix = true;
       final tiers = ratio.aspectRatio.tiers;
       _selectedDifficulty = tiers.firstWhere(
         (t) => t.difficulty.recommended,
@@ -130,11 +154,15 @@ class _CropPuzzlePageState extends State<CropPuzzlePage> {
     });
   }
 
-  void _resetZoom() {
-    _transformController.value = Matrix4.identity();
+  void _resetTransform(Size viewportSize) {
+    if (_decodedImage != null) {
+      _transformController.value = _getInitialMatrix(viewportSize, _decodedImage);
+    } else {
+      _transformController.value = Matrix4.identity();
+    }
   }
 
-  void _handlePointerScroll(PointerScrollEvent event, Size viewportSize) {
+  void _handlePointerScroll(PointerScrollEvent event, Size viewportSize, Size baseSize) {
     final matrix = _transformController.value;
     final currentScale = matrix.getMaxScaleOnAxis();
 
@@ -154,8 +182,8 @@ class _CropPuzzlePageState extends State<CropPuzzlePage> {
 
     final boxW = viewportSize.width;
     final boxH = viewportSize.height;
-    final scaledW = boxW * targetScale;
-    final scaledH = boxH * targetScale;
+    final scaledW = baseSize.width * targetScale;
+    final scaledH = baseSize.height * targetScale;
 
     final minTx = boxW - scaledW;
     const maxTx = 0.0;
@@ -191,7 +219,6 @@ class _CropPuzzlePageState extends State<CropPuzzlePage> {
 
       // Viewport geometry
       final boxW = viewportSize.width;
-      final boxH = viewportSize.height;
 
       // Scaling factor from on-screen interactive viewport to target high-res image
       final exportFactor = targetW / boxW;
@@ -200,12 +227,8 @@ class _CropPuzzlePageState extends State<CropPuzzlePage> {
       // Apply the user's interactive pan & zoom transform
       canvas.transform(matrix.storage);
 
-      // Base layout math exactly matching FittedBox(fit: BoxFit.cover) inside boxW x boxH
-      final scaleCover = max(boxW / imgW, boxH / imgH);
-      final drawW = imgW * scaleCover;
-      final drawH = imgH * scaleCover;
-      final drawX = (boxW - drawW) / 2.0;
-      final drawY = (boxH - drawH) / 2.0;
+      // Base dimensions of the child in viewport coordinates
+      final baseSize = _calculateBaseSize(viewportSize, _decodedImage!);
 
       final paint = Paint()
         ..filterQuality = ui.FilterQuality.high
@@ -214,7 +237,7 @@ class _CropPuzzlePageState extends State<CropPuzzlePage> {
       canvas.drawImageRect(
         _decodedImage!,
         ui.Rect.fromLTWH(0, 0, imgW, imgH),
-        ui.Rect.fromLTWH(drawX, drawY, drawW, drawH),
+        ui.Rect.fromLTWH(0, 0, baseSize.width, baseSize.height),
         paint,
       );
 
@@ -265,28 +288,13 @@ class _CropPuzzlePageState extends State<CropPuzzlePage> {
     }
   }
 
+  Size _currentViewportSize = Size.zero;
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final screenSize = MediaQuery.of(context).size;
-
-    // Viewport Max Dimensions in Crop Area
-    final maxW = screenSize.width - 32;
-    final maxH = screenSize.height * 0.44;
-
-    final targetRatio = _selectedRatio.ratio;
-    double boxW, boxH;
-
-    if (targetRatio >= maxW / maxH) {
-      boxW = maxW;
-      boxH = boxW / targetRatio;
-    } else {
-      boxH = maxH;
-      boxW = boxH * targetRatio;
-    }
-
-    final viewportSize = Size(boxW, boxH);
     final currentTiers = _selectedRatio.aspectRatio.tiers;
+    final targetRatio = _selectedRatio.ratio;
 
     return Scaffold(
       backgroundColor: const Color(0xFF181818),
@@ -354,103 +362,155 @@ class _CropPuzzlePageState extends State<CropPuzzlePage> {
 
           // Large Interactive Cropping Viewport
           Expanded(
-            child: Center(
-              child: Container(
-                width: boxW,
-                height: boxH,
-                clipBehavior: Clip.antiAlias,
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: const Color(0xFF81C784), width: 2.5),
-                  boxShadow: const [
-                    BoxShadow(color: Colors.black87, blurRadius: 18),
-                  ],
-                ),
-                child: _decodedImage != null
-                    ? Stack(
-                        children: [
-                          Positioned.fill(
-                            child: Listener(
-                              onPointerSignal: (event) {
-                                if (event is PointerScrollEvent) {
-                                  _handlePointerScroll(event, viewportSize);
-                                }
-                              },
-                              child: InteractiveViewer(
-                                key: ValueKey(_selectedRatio),
-                                transformationController: _transformController,
-                                minScale: 1.0,
-                                maxScale: 5.0,
-                                boundaryMargin: EdgeInsets.zero,
-                                clipBehavior: Clip.none,
-                                child: SizedBox(
-                                  width: boxW,
-                                  height: boxH,
-                                  child: RawImage(
-                                    image: _decodedImage,
-                                    fit: BoxFit.cover,
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ),
-                          // Compact Top-Right Scale Percentage Pill (Click to reset 100%)
-                          Positioned(
-                            top: 10,
-                            right: 10,
-                            child: ValueListenableBuilder<Matrix4>(
-                              valueListenable: _transformController,
-                              builder: (context, matrix, _) {
-                                final scalePercent = (matrix.getMaxScaleOnAxis() * 100).round();
-                                final isZoomed = scalePercent > 100;
-                                return Material(
-                                  color: Colors.transparent,
-                                  child: InkWell(
-                                    onTap: isZoomed ? _resetZoom : null,
-                                    borderRadius: BorderRadius.circular(16),
-                                    child: Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
-                                      decoration: BoxDecoration(
-                                        color: Colors.black.withValues(alpha: 0.65),
-                                        borderRadius: BorderRadius.circular(16),
-                                        border: Border.all(
-                                          color: isZoomed ? const Color(0xFF81C784) : Colors.white24,
-                                          width: 1.2,
-                                        ),
-                                      ),
-                                      child: Row(
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          Icon(
-                                            isZoomed ? PhosphorIconsBold.magnifyingGlassPlus : PhosphorIconsRegular.magnifyingGlass,
-                                            size: 13,
-                                            color: isZoomed ? const Color(0xFF81C784) : Colors.white70,
-                                          ),
-                                          const SizedBox(width: 4),
-                                          Text(
-                                            '$scalePercent%',
-                                            style: TextStyle(
-                                              color: isZoomed ? const Color(0xFF81C784) : Colors.white,
-                                              fontSize: 11.5,
-                                              fontWeight: FontWeight.bold,
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final maxW = max(50.0, constraints.maxWidth - 32);
+                final maxH = max(50.0, constraints.maxHeight - 36);
+
+                double boxW, boxH;
+                if (targetRatio >= maxW / maxH) {
+                  boxW = maxW;
+                  boxH = boxW / targetRatio;
+                } else {
+                  boxH = maxH;
+                  boxW = boxH * targetRatio;
+                }
+
+                final viewportSize = Size(boxW, boxH);
+                _currentViewportSize = viewportSize;
+
+                final baseSize = _decodedImage != null
+                    ? _calculateBaseSize(viewportSize, _decodedImage!)
+                    : viewportSize;
+
+                if (_needsResetMatrix && _decodedImage != null) {
+                  _needsResetMatrix = false;
+                  _transformController.value = _getInitialMatrix(viewportSize, _decodedImage);
+                }
+
+                return Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(
+                        width: boxW,
+                        height: boxH,
+                        clipBehavior: Clip.antiAlias,
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(color: const Color(0xFF81C784), width: 2.5),
+                          boxShadow: const [
+                            BoxShadow(color: Colors.black87, blurRadius: 18),
+                          ],
+                        ),
+                        child: _decodedImage != null
+                            ? Stack(
+                                children: [
+                                  Positioned.fill(
+                                    child: MouseRegion(
+                                      cursor: SystemMouseCursors.grab,
+                                      child: Listener(
+                                        onPointerSignal: (event) {
+                                          if (event is PointerScrollEvent) {
+                                            _handlePointerScroll(event, viewportSize, baseSize);
+                                          }
+                                        },
+                                        child: InteractiveViewer(
+                                          key: ValueKey('$_selectedRatio-${viewportSize.width.toStringAsFixed(1)}-${viewportSize.height.toStringAsFixed(1)}'),
+                                          transformationController: _transformController,
+                                          minScale: 1.0,
+                                          maxScale: 5.0,
+                                          boundaryMargin: EdgeInsets.zero,
+                                          clipBehavior: Clip.none,
+                                          constrained: false,
+                                          child: SizedBox(
+                                            width: baseSize.width,
+                                            height: baseSize.height,
+                                            child: RawImage(
+                                              image: _decodedImage,
+                                              fit: BoxFit.fill,
                                             ),
                                           ),
-                                          if (isZoomed) ...[
-                                            const SizedBox(width: 4),
-                                            const Icon(PhosphorIconsBold.arrowCounterClockwise, size: 11, color: Colors.white70),
-                                          ],
-                                        ],
+                                        ),
                                       ),
                                     ),
                                   ),
-                                );
-                              },
-                            ),
+                                  // Compact Top-Right Scale Percentage Pill (Click to reset 100% & center)
+                                  Positioned(
+                                    top: 10,
+                                    right: 10,
+                                    child: ValueListenableBuilder<Matrix4>(
+                                      valueListenable: _transformController,
+                                      builder: (context, matrix, _) {
+                                        final scalePercent = (matrix.getMaxScaleOnAxis() * 100).round();
+                                        final initMatrix = _getInitialMatrix(viewportSize, _decodedImage);
+                                        final isChanged = scalePercent > 100 ||
+                                            (matrix.storage[12] - initMatrix.storage[12]).abs() > 1.0 ||
+                                            (matrix.storage[13] - initMatrix.storage[13]).abs() > 1.0;
+                                        return Material(
+                                          color: Colors.transparent,
+                                          child: InkWell(
+                                            onTap: isChanged ? () => _resetTransform(viewportSize) : null,
+                                            borderRadius: BorderRadius.circular(16),
+                                            child: Container(
+                                              padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+                                              decoration: BoxDecoration(
+                                                color: Colors.black.withValues(alpha: 0.65),
+                                                borderRadius: BorderRadius.circular(16),
+                                                border: Border.all(
+                                                  color: isChanged ? const Color(0xFF81C784) : Colors.white24,
+                                                  width: 1.2,
+                                                ),
+                                              ),
+                                              child: Row(
+                                                mainAxisSize: MainAxisSize.min,
+                                                children: [
+                                                  Icon(
+                                                    isChanged ? PhosphorIconsBold.arrowsOutCardinal : PhosphorIconsRegular.magnifyingGlass,
+                                                    size: 13,
+                                                    color: isChanged ? const Color(0xFF81C784) : Colors.white70,
+                                                  ),
+                                                  const SizedBox(width: 4),
+                                                  Text(
+                                                    '$scalePercent%',
+                                                    style: TextStyle(
+                                                      color: isChanged ? const Color(0xFF81C784) : Colors.white,
+                                                      fontSize: 11.5,
+                                                      fontWeight: FontWeight.bold,
+                                                    ),
+                                                  ),
+                                                  if (isChanged) ...[
+                                                    const SizedBox(width: 4),
+                                                    const Icon(PhosphorIconsBold.arrowCounterClockwise, size: 11, color: Colors.white70),
+                                                  ],
+                                                ],
+                                              ),
+                                            ),
+                                          ),
+                                        );
+                                      },
+                                    ),
+                                  ),
+                                ],
+                              )
+                            : const Center(child: CircularProgressIndicator(color: Colors.white)),
+                      ),
+                      const SizedBox(height: 8),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: const [
+                          Icon(PhosphorIconsBold.handGrabbing, size: 13, color: Colors.white54),
+                          SizedBox(width: 5),
+                          Text(
+                            '按住拖动调整裁切位置 · 双指或滚轮缩放',
+                            style: TextStyle(color: Colors.white54, fontSize: 11.5),
                           ),
                         ],
-                      )
-                    : const Center(child: CircularProgressIndicator(color: Colors.white)),
-              ),
+                      ),
+                    ],
+                  ),
+                );
+              },
             ),
           ),
 
@@ -527,7 +587,7 @@ class _CropPuzzlePageState extends State<CropPuzzlePage> {
                   width: double.infinity,
                   height: 50,
                   child: FilledButton.icon(
-                    onPressed: _isSaving ? null : () => _saveAndCreate(viewportSize),
+                    onPressed: _isSaving ? null : () => _saveAndCreate(_currentViewportSize),
                     style: FilledButton.styleFrom(
                       backgroundColor: const Color(0xFF2E7D32),
                       shape: RoundedRectangleBorder(
