@@ -4,13 +4,14 @@ import 'dart:ui' as ui;
 
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../data/models/downloaded_image_item.dart';
 
-/// Singleton manager for batch downloaded online images with local persistence,
-/// deduplication, and metadata parsing.
+/// Singleton manager for batch downloaded and locally imported images (Material Box / 素材库)
+/// with local persistence, deduplication, and metadata parsing.
 class DownloadManager {
   DownloadManager._();
   static final DownloadManager instance = DownloadManager._();
@@ -68,6 +69,70 @@ class DownloadManager {
   bool isDownloaded(String sourceUrl) {
     if (sourceUrl.isEmpty) return false;
     return itemsNotifier.value.any((item) => item.sourceUrl == sourceUrl);
+  }
+
+  /// Batch import local image files (from system gallery / multi-picker) into material box.
+  Future<List<DownloadedImageItem>> importFromLocalFiles(List<XFile> files) async {
+    await init();
+    if (files.isEmpty) return [];
+
+    final appSupportDir = await getApplicationSupportDirectory();
+    final cacheDir = Directory('${appSupportDir.path}/download_cache');
+    if (!await cacheDir.exists()) {
+      await cacheDir.create(recursive: true);
+    }
+
+    final newlyAdded = <DownloadedImageItem>[];
+
+    for (var i = 0; i < files.length; i++) {
+      final file = files[i];
+      try {
+        final rawBytes = await file.readAsBytes();
+        if (rawBytes.isEmpty) continue;
+
+        // Decode and validate
+        final codec = await ui.instantiateImageCodec(rawBytes);
+        final frame = await codec.getNextFrame();
+        final width = frame.image.width;
+        final height = frame.image.height;
+        frame.image.dispose();
+        codec.dispose();
+
+        if (width < 100 || height < 100) {
+          debugPrint('[DownloadManager:ImportLocal] Skipped tiny image: ${file.path} (${width}x$height)');
+          continue;
+        }
+
+        final id = 'local_${DateTime.now().millisecondsSinceEpoch}_$i';
+        final ext = file.name.contains('.') ? file.name.split('.').last : 'jpg';
+        final targetPath = '${cacheDir.path}/mat_$id.$ext';
+        final targetFile = File(targetPath);
+        await targetFile.writeAsBytes(rawBytes);
+
+        final item = DownloadedImageItem(
+          id: id,
+          sourceUrl: file.path,
+          localPath: targetPath,
+          sourcePlatform: '本地相册',
+          width: width,
+          height: height,
+          downloadedAt: DateTime.now(),
+          fileSizeBytes: rawBytes.length,
+        );
+
+        newlyAdded.add(item);
+      } catch (e) {
+        debugPrint('[DownloadManager:ImportLocal] Error importing file ${file.path}: $e');
+      }
+    }
+
+    if (newlyAdded.isNotEmpty) {
+      itemsNotifier.value = [...newlyAdded, ...itemsNotifier.value];
+      await _saveToStorage();
+      debugPrint('[DownloadManager:ImportLocal] Successfully imported ${newlyAdded.length} local images.');
+    }
+
+    return newlyAdded;
   }
 
   /// Download or save image bytes, extract metadata, and register to download drawer.

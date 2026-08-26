@@ -71,6 +71,9 @@ void main() {
     // Verify reset zoom percentage pill exists
     expect(find.text('100%'), findsOneWidget);
 
+    // Verify real-time crop resolution label exists
+    expect(find.textContaining('裁切区域:'), findsOneWidget);
+
     // Verify save button exists
     expect(find.text('保存自制关卡'), findsOneWidget);
   });

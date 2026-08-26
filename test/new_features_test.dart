@@ -16,6 +16,7 @@ import 'package:jigsawpuzzle/pages/tabs/daily_tab_view.dart';
 import 'package:jigsawpuzzle/pages/tabs/home_tab_view.dart';
 import 'package:jigsawpuzzle/pages/tabs/my_puzzles_tab_view.dart';
 import 'package:jigsawpuzzle/widgets/choose_difficulty_sheet.dart';
+import 'package:jigsawpuzzle/widgets/downloaded_drawer_sheet.dart';
 import 'package:phosphoricons_flutter/phosphoricons_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -307,9 +308,9 @@ void main() {
       );
 
       expect(find.text('相册选图'), findsOneWidget);
-      expect(find.text('已下载'), findsOneWidget);
+      expect(find.text('批量导入'), findsOneWidget);
+      expect(find.text('素材库'), findsOneWidget);
       expect(find.text('在线搜图'), findsOneWidget);
-      expect(find.text('已下载图片'), findsNothing);
       expect(find.text('我的自制合辑'), findsOneWidget);
     });
 
@@ -352,6 +353,28 @@ void main() {
       await tester.tap(find.text('放弃进度并重新开始'));
       await tester.pumpAndSettle();
       expect(resetCalled, isTrue);
+    });
+
+    testWidgets('DownloadedDrawerSheet renders Material Box title and empty state', (tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: Builder(
+              builder: (context) => ElevatedButton(
+                onPressed: () => DownloadedDrawerSheet.show(context),
+                child: const Text('Open Material Box'),
+              ),
+            ),
+          ),
+        ),
+      );
+
+      await tester.tap(find.text('Open Material Box'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('素材库'), findsOneWidget);
+      expect(find.text('素材库暂无图片'), findsOneWidget);
+      expect(find.text('点击「相册选图」批量导入本地照片，或在「在线搜图」中一键下载，即可将图片加入素材库随时制作拼图。'), findsOneWidget);
     });
   });
 }

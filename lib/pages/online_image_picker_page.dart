@@ -456,7 +456,7 @@ class _OnlineImagePickerPageState extends State<OnlineImagePickerPage> {
               tooltip: '刷新网页',
             ),
 
-            // Download Drawer Button with Badge (Always accessible)
+            // Material Box Button with Badge (Always accessible)
             ValueListenableBuilder<List<DownloadedImageItem>>(
               valueListenable: DownloadManager.instance.itemsNotifier,
               builder: (context, items, _) {
@@ -464,8 +464,8 @@ class _OnlineImagePickerPageState extends State<OnlineImagePickerPage> {
                   alignment: Alignment.center,
                   children: [
                     IconButton(
-                      icon: const Icon(PhosphorIconsBold.tray, size: 21),
-                      tooltip: '打开已下载图片箱',
+                      icon: const Icon(PhosphorIconsBold.archive, size: 21),
+                      tooltip: '打开素材库',
                       onPressed: () => DownloadedDrawerSheet.show(context),
                     ),
                     if (items.isNotEmpty)
@@ -657,7 +657,7 @@ class _OnlineImagePickerPageState extends State<OnlineImagePickerPage> {
                             mainAxisSize: MainAxisSize.min,
                             children: [
                               Text(
-                                '已存入下载箱 (${_lastDownloadedItem!.width}×${_lastDownloadedItem!.height})',
+                                '已存入素材库 (${_lastDownloadedItem!.width}×${_lastDownloadedItem!.height})',
                                 style: const TextStyle(
                                   color: Colors.white,
                                   fontWeight: FontWeight.bold,

@@ -69,8 +69,6 @@ class CropPuzzlePage extends StatefulWidget {
 
 class _CropPuzzlePageState extends State<CropPuzzlePage> {
   final TransformationController _transformController = TransformationController();
-  final TextEditingController _titleController =
-      TextEditingController(text: '我的自制拼图');
 
   CropRatio _selectedRatio = CropRatio.square;
   late PuzzleDifficulty _selectedDifficulty;
@@ -117,7 +115,6 @@ class _CropPuzzlePageState extends State<CropPuzzlePage> {
   @override
   void dispose() {
     _transformController.dispose();
-    _titleController.dispose();
     super.dispose();
   }
 
@@ -315,7 +312,7 @@ class _CropPuzzlePageState extends State<CropPuzzlePage> {
 
       final customItem = CustomPuzzleItem(
         id: 'ugc_${DateTime.now().millisecondsSinceEpoch}',
-        title: _titleController.text.trim().isEmpty ? '我的自制拼图' : _titleController.text.trim(),
+        title: '我的自制拼图',
         imagePathOrUrl: file.path,
         isLocalFile: true,
         difficulty: _selectedDifficulty,
@@ -345,8 +342,6 @@ class _CropPuzzlePageState extends State<CropPuzzlePage> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final currentTiers = _selectedRatio.aspectRatio.tiers;
     final targetRatio = _selectedRatio.ratio;
 
     return Scaffold(
@@ -407,7 +402,7 @@ class _CropPuzzlePageState extends State<CropPuzzlePage> {
             child: LayoutBuilder(
               builder: (context, constraints) {
                 final maxW = max(50.0, constraints.maxWidth - 32);
-                final maxH = max(50.0, constraints.maxHeight - 36);
+                final maxH = max(50.0, constraints.maxHeight - 72);
 
                 double boxW, boxH;
                 if (targetRatio >= maxW / maxH) {
@@ -436,6 +431,39 @@ class _CropPuzzlePageState extends State<CropPuzzlePage> {
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
+                      // 实时显示当前裁切物理像素分辨率 (例如: 1930 × 1343)
+                      ValueListenableBuilder<Matrix4>(
+                        valueListenable: _transformController,
+                        builder: (context, matrix, _) {
+                          if (_decodedImage == null) return const SizedBox(height: 24);
+                          final currentScale = matrix.getMaxScaleOnAxis();
+                          final imgW = _decodedImage!.width.toDouble();
+                          final baseSize = _calculateBaseSize(viewportSize, _decodedImage!);
+                          final baseScale = baseSize.width / imgW;
+                          final realCropW = max(1, (viewportSize.width / (baseScale * currentScale)).round());
+                          final realCropH = max(1, (viewportSize.height / (baseScale * currentScale)).round());
+                          return Padding(
+                            padding: const EdgeInsets.only(bottom: 8),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+                              decoration: BoxDecoration(
+                                color: Colors.black45,
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(color: Colors.white12, width: 1),
+                              ),
+                              child: Text(
+                                '裁切区域: $realCropW × $realCropH',
+                                style: const TextStyle(
+                                  color: Colors.white70,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w500,
+                                  letterSpacing: 0.3,
+                                ),
+                              ),
+                            ),
+                          );
+                        },
+                      ),
                       Container(
                         width: boxW,
                         height: boxH,
@@ -558,94 +586,30 @@ class _CropPuzzlePageState extends State<CropPuzzlePage> {
             ),
           ),
 
-          // Configuration Bottom Sheet
+          // Simplified Bottom Action Bar
           Container(
-            padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
+            padding: const EdgeInsets.fromLTRB(20, 14, 20, 20),
             decoration: const BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+              color: Color(0xFF222222),
+              borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
             ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextField(
-                  controller: _titleController,
-                  decoration: const InputDecoration(
-                    labelText: '自制关卡名称',
-                    prefixIcon: Icon(PhosphorIconsBold.pencilSimple),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.all(Radius.circular(12)),
-                    ),
-                    contentPadding: EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            child: SizedBox(
+              width: double.infinity,
+              height: 48,
+              child: FilledButton.icon(
+                onPressed: _isSaving ? null : () => _saveAndCreate(_currentViewportSize),
+                style: FilledButton.styleFrom(
+                  backgroundColor: const Color(0xFF2E7D32),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14),
                   ),
                 ),
-                const SizedBox(height: 12),
-                Row(
-                  children: [
-                    Text(
-                      '选择规格',
-                      style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold),
-                    ),
-                    const SizedBox(width: 8),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFE3F2FD),
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                      child: Text(
-                        '正方形切片 · ${_selectedRatio.aspectRatio.label}',
-                        style: const TextStyle(fontSize: 10.5, color: Color(0xFF0D47A1), fontWeight: FontWeight.bold),
-                      ),
-                    ),
-                  ],
+                icon: const Icon(PhosphorIconsBold.checkCircle),
+                label: Text(
+                  _isSaving ? '正在保存...' : '保存自制关卡',
+                  style: const TextStyle(fontSize: 15.5, fontWeight: FontWeight.bold),
                 ),
-                const SizedBox(height: 8),
-                SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: Row(
-                    children: [
-                      for (final tier in currentTiers) ...[
-                        ChoiceChip(
-                          label: Text(tier.difficulty.label),
-                          selected: _selectedDifficulty.pieceCount == tier.difficulty.pieceCount,
-                          selectedColor: const Color(0xFFE8F5E9),
-                          labelStyle: TextStyle(
-                            color: _selectedDifficulty.pieceCount == tier.difficulty.pieceCount
-                                ? const Color(0xFF2E7D32)
-                                : Colors.black87,
-                            fontWeight: FontWeight.bold,
-                          ),
-                          onSelected: (selected) {
-                            if (selected) setState(() => _selectedDifficulty = tier.difficulty);
-                          },
-                        ),
-                        const SizedBox(width: 8),
-                      ],
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 18),
-                SizedBox(
-                  width: double.infinity,
-                  height: 50,
-                  child: FilledButton.icon(
-                    onPressed: _isSaving ? null : () => _saveAndCreate(_currentViewportSize),
-                    style: FilledButton.styleFrom(
-                      backgroundColor: const Color(0xFF2E7D32),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(14),
-                      ),
-                    ),
-                    icon: const Icon(PhosphorIconsBold.checkCircle),
-                    label: Text(
-                      _isSaving ? '正在保存...' : '保存自制关卡',
-                      style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                    ),
-                  ),
-                ),
-              ],
+              ),
             ),
           ),
         ],

@@ -25,7 +25,7 @@ class DownloadedDrawerSheet extends StatelessWidget {
     if (!await file.exists()) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('图片文件不存在或已被清理')),
+          const SnackBar(content: Text('素材文件不存在或已被清理')),
         );
       }
       return;
@@ -36,10 +36,11 @@ class DownloadedDrawerSheet extends StatelessWidget {
 
     Navigator.of(context).pop(); // Close bottom sheet
 
+    final isLocalGallery = item.sourcePlatform == '本地相册';
     await CropPuzzlePage.push(
       context,
       bytes,
-      sourceType: 'online',
+      sourceType: isLocalGallery ? 'gallery' : 'online',
       sourcePlatform: item.sourcePlatform,
       sourceUrl: item.sourceUrl,
     );
@@ -49,8 +50,8 @@ class DownloadedDrawerSheet extends StatelessWidget {
     showDialog<void>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('清空已下载图片'),
-        content: const Text('确定要清空所有已下载的图片缓存吗？（不会影响已经制作成功的拼图关卡）'),
+        title: const Text('清空素材库'),
+        content: const Text('确定要清空所有待制作的素材图片吗？（不会影响已经制作成功的拼图关卡）'),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(),
@@ -109,10 +110,10 @@ class DownloadedDrawerSheet extends StatelessWidget {
                   children: [
                     Row(
                       children: [
-                        const Icon(PhosphorIconsBold.tray, color: Color(0xFF2E7D32), size: 22),
+                        const Icon(PhosphorIconsBold.archive, color: Color(0xFFE65100), size: 22),
                         const SizedBox(width: 8),
                         Text(
-                          '已下载图片库',
+                          '素材库',
                           style: theme.textTheme.titleMedium?.copyWith(
                             fontWeight: FontWeight.bold,
                             fontSize: 18,
@@ -122,13 +123,13 @@ class DownloadedDrawerSheet extends StatelessWidget {
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                           decoration: BoxDecoration(
-                            color: const Color(0xFFE8F5E9),
+                            color: const Color(0xFFFFF3E0),
                             borderRadius: BorderRadius.circular(12),
                           ),
                           child: Text(
-                            '${items.length} 张',
+                            '${items.length} 张素材',
                             style: const TextStyle(
-                              color: Color(0xFF2E7D32),
+                              color: Color(0xFFE65100),
                               fontWeight: FontWeight.bold,
                               fontSize: 12,
                             ),
@@ -174,15 +175,15 @@ class DownloadedDrawerSheet extends StatelessWidget {
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          Icon(PhosphorIconsRegular.cloudArrowDown, size: 56, color: Colors.grey.shade400),
+                          Icon(PhosphorIconsRegular.archive, size: 56, color: Colors.grey.shade400),
                           const SizedBox(height: 12),
                           const Text(
-                            '暂无已下载图片',
+                            '素材库暂无图片',
                             style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.black54),
                           ),
                           const SizedBox(height: 6),
                           const Text(
-                            '在在线图库浏览时，点击图片下载或右下角「提取当前页大图」即可加入此下载箱。',
+                            '点击「相册选图」批量导入本地照片，或在「在线搜图」中一键下载，即可将图片加入素材库随时制作拼图。',
                             textAlign: TextAlign.center,
                             style: TextStyle(fontSize: 13, color: Colors.black45),
                           ),

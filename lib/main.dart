@@ -7,6 +7,7 @@ import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:path_provider/path_provider.dart';
 
 import 'data/game_repository.dart';
+import 'logic/download_manager.dart';
 import 'pages/main_screen.dart';
 
 /// Global Windows WebViewEnvironment instance for InAppWebView
@@ -35,6 +36,7 @@ void main() async {
   }
 
   await GameRepository.instance.init();
+  await DownloadManager.instance.init();
   runApp(const JigsawPuzzleApp());
 }
 

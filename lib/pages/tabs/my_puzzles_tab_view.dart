@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:phosphoricons_flutter/phosphoricons_flutter.dart';
 
 import '../../data/game_repository.dart';
@@ -26,16 +27,56 @@ class _MyPuzzlesTabViewState extends State<MyPuzzlesTabView> {
   final _repo = GameRepository.instance;
   bool _loading = false;
 
+  @override
+  void initState() {
+    super.initState();
+    DownloadManager.instance.init();
+  }
+
   Future<void> _createFromGallery() async {
     setState(() => _loading = true);
     try {
-      final source = GallerySource();
-      final bytes = await source.loadBytes();
-      if (!mounted) return;
+      final picker = ImagePicker();
+      final files = await picker.pickMultiImage(imageQuality: 90);
+      if (files.isEmpty) return;
 
-      final result = await CropPuzzlePage.push(context, bytes);
-      if (result != null && mounted) {
-        setState(() {}); // refresh created puzzle
+      final imported = await DownloadManager.instance.importFromLocalFiles(files);
+      if (!mounted || imported.isEmpty) return;
+
+      if (files.length == 1) {
+        // Single pick: Auto-save to Material Box & seamlessly proceed to Crop
+        final item = imported.first;
+        final file = File(item.localPath);
+        final bytes = await file.readAsBytes();
+        if (!mounted) return;
+
+        final result = await CropPuzzlePage.push(
+          context,
+          bytes,
+          sourceType: 'gallery',
+          sourcePlatform: '本地相册',
+          sourceUrl: item.sourceUrl,
+        );
+        if (result != null && mounted) {
+          setState(() {}); // refresh created puzzle
+        }
+      } else {
+        // Multi pick: Batch imported into Material Box with instant action SnackBar
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('已成功导入 ${imported.length} 张图片到素材库'),
+              action: SnackBarAction(
+                label: '查看素材库',
+                textColor: const Color(0xFF81C784),
+                onPressed: () {
+                  DownloadedDrawerSheet.show(context);
+                },
+              ),
+              duration: const Duration(seconds: 4),
+            ),
+          );
+        }
       }
     } catch (e) {
       if (mounted) {
@@ -140,7 +181,7 @@ class _MyPuzzlesTabViewState extends State<MyPuzzlesTabView> {
                   Expanded(
                     child: _buildTopActionCard(
                       title: '相册选图',
-                      subtitle: '本地导入',
+                      subtitle: '批量导入',
                       iconWidget: _loading
                           ? const SizedBox(
                               width: 14,
@@ -156,15 +197,15 @@ class _MyPuzzlesTabViewState extends State<MyPuzzlesTabView> {
                   ),
                   const SizedBox(width: 8),
 
-                  // 1.2 Middle Card: Downloaded Box
+                  // 1.2 Middle Card: Material Box (素材库)
                   Expanded(
                     child: ValueListenableBuilder(
                       valueListenable: DownloadManager.instance.itemsNotifier,
-                      builder: (context, downloadedItems, _) {
+                      builder: (context, materialItems, _) {
                         return _buildTopActionCard(
-                          title: '已下载',
-                          subtitle: '${downloadedItems.length} 张图片',
-                          iconWidget: const Icon(PhosphorIconsFill.tray, color: Color(0xFFE65100), size: 18),
+                          title: '素材库',
+                          subtitle: '${materialItems.length} 张素材',
+                          iconWidget: const Icon(PhosphorIconsFill.archive, color: Color(0xFFE65100), size: 18),
                           gradientColors: const [Color(0xFFFFF3E0), Color(0xFFFFE0B2)],
                           borderColor: const Color(0xFFFFB74D),
                           textColor: const Color(0xFFE65100),
@@ -228,7 +269,7 @@ class _MyPuzzlesTabViewState extends State<MyPuzzlesTabView> {
                     children: [
                       Icon(PhosphorIconsRegular.images, size: 48, color: Colors.grey),
                       SizedBox(height: 10),
-                      Text('还没有自制拼图，点击上方卡片导入相册创建吧！', style: TextStyle(color: Colors.grey)),
+                      Text('还没有自制拼图，点击上方「相册选图」或「素材库」开始制作吧！', style: TextStyle(color: Colors.grey)),
                     ],
                   ),
                 ),
