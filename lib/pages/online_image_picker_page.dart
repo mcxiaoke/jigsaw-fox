@@ -396,11 +396,11 @@ class _OnlineImagePickerPageState extends State<OnlineImagePickerPage> {
         }
       },
       child: Scaffold(
-        backgroundColor: const Color(0xFF1E1E1E),
+        backgroundColor: const Color(0xFFF7F8FA),
         appBar: AppBar(
-          backgroundColor: const Color(0xFF1E1E1E),
-          foregroundColor: Colors.white,
-          elevation: 0,
+          backgroundColor: Colors.white,
+          foregroundColor: const Color(0xFF1F2937),
+          elevation: 0.5,
           leading: IconButton(
             icon: const Icon(PhosphorIconsBold.x, size: 20),
             onPressed: () {
@@ -410,14 +410,21 @@ class _OnlineImagePickerPageState extends State<OnlineImagePickerPage> {
             tooltip: '关闭在线选图',
           ),
           titleSpacing: 0,
-          title: _buildSiteSegmentedTabs(),
+          title: Center(
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              child: _buildSiteSegmentedTabs(),
+            ),
+          ),
           actions: [
-            // In-page Back Button
+            // In-page Back Button (Compact)
             IconButton(
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(minWidth: 34, minHeight: 34),
               icon: Icon(
                 PhosphorIconsBold.caretLeft,
-                size: 20,
-                color: _canGoBack ? Colors.white : Colors.white24,
+                size: 18,
+                color: _canGoBack ? const Color(0xFF1F2937) : Colors.black26,
               ),
               onPressed: _canGoBack
                   ? () async {
@@ -426,37 +433,22 @@ class _OnlineImagePickerPageState extends State<OnlineImagePickerPage> {
                       _updateHistoryState();
                     }
                   : null,
-              tooltip: '后退上一页',
+              tooltip: '后退',
             ),
 
-            // In-page Forward Button
+            // Browser Refresh Button (Compact)
             IconButton(
-              icon: Icon(
-                PhosphorIconsBold.caretRight,
-                size: 20,
-                color: _canGoForward ? Colors.white : Colors.white24,
-              ),
-              onPressed: _canGoForward
-                  ? () async {
-                      debugPrint('[WebView:Action] User clicked In-Page Forward');
-                      await _webViewController?.goForward();
-                      _updateHistoryState();
-                    }
-                  : null,
-              tooltip: '前进下一页',
-            ),
-
-            // Browser Refresh Button
-            IconButton(
-              icon: const Icon(PhosphorIconsRegular.arrowClockwise, size: 19),
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(minWidth: 34, minHeight: 34),
+              icon: const Icon(PhosphorIconsRegular.arrowClockwise, size: 17),
               onPressed: () {
                 debugPrint('[WebView:Action] User clicked reload.');
                 _webViewController?.reload();
               },
-              tooltip: '刷新网页',
+              tooltip: '刷新',
             ),
 
-            // Material Box Button with Badge (Always accessible)
+            // Material Box Button with Badge (Compact)
             ValueListenableBuilder<List<DownloadedImageItem>>(
               valueListenable: DownloadManager.instance.itemsNotifier,
               builder: (context, items, _) {
@@ -464,8 +456,10 @@ class _OnlineImagePickerPageState extends State<OnlineImagePickerPage> {
                   alignment: Alignment.center,
                   children: [
                     IconButton(
-                      icon: const Icon(PhosphorIconsBold.archive, size: 21),
-                      tooltip: '打开素材库',
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+                      icon: const Icon(PhosphorIconsBold.archive, size: 19),
+                      tooltip: '素材库',
                       onPressed: () => DownloadedDrawerSheet.show(context),
                     ),
                     if (items.isNotEmpty)
@@ -763,8 +757,9 @@ class _OnlineImagePickerPageState extends State<OnlineImagePickerPage> {
       margin: const EdgeInsets.symmetric(horizontal: 4),
       padding: const EdgeInsets.all(3),
       decoration: BoxDecoration(
-        color: const Color(0xFF2A2A2A),
+        color: const Color(0xFFF1F3F4),
         borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: const Color(0xFFE5E7EB), width: 1),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -783,7 +778,7 @@ class _OnlineImagePickerPageState extends State<OnlineImagePickerPage> {
               child: Text(
                 site.label,
                 style: TextStyle(
-                  color: isSelected ? Colors.white : Colors.white70,
+                  color: isSelected ? Colors.white : const Color(0xFF6B7280),
                   fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
                   fontSize: 12,
                 ),

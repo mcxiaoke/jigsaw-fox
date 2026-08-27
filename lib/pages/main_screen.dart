@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:phosphoricons_flutter/phosphoricons_flutter.dart';
 
 import 'achievements_page.dart';
+import 'how_to_play_page.dart';
+import 'import_pack_page.dart';
 import 'settings_page.dart';
 import 'tabs/daily_tab_view.dart';
 import 'tabs/events_tab_view.dart';
@@ -64,14 +66,133 @@ class _MainScreenState extends State<MainScreen> {
             },
           ),
 
-          // Settings Page
-          IconButton(
+          // 更多菜单 (精致游戏风格下拉菜单：导入关卡包、系统设置、玩法手册)
+          PopupMenuButton<String>(
             icon: Image.asset('assets/icons/setting.png', width: 22, height: 22),
-            tooltip: '设置',
-            onPressed: () async {
-              await SettingsPage.open(context);
-              setState(() {});
+            tooltip: '更多选项',
+            elevation: 8,
+            shadowColor: Colors.black38,
+            color: Colors.white,
+            offset: const Offset(0, 48),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(18),
+              side: const BorderSide(color: Color(0xFFE5E7EB), width: 1.2),
+            ),
+            // 将整个菜单（含每行按下高亮）裁剪为圆角，否则 PopupMenuItem 按压变色效果是方形。
+            clipBehavior: Clip.antiAlias,
+            onSelected: (val) async {
+              if (val == 'import') {
+                final pack = await ImportPackPage.push(context);
+                if (pack != null && mounted) {
+                  setState(() => _currentIndex = 3); // 切换到自制 Tab 查看
+                }
+              } else if (val == 'settings') {
+                await SettingsPage.open(context);
+                if (mounted) setState(() {});
+              } else if (val == 'help') {
+                await HowToPlayPage.open(context);
+              }
             },
+            itemBuilder: (ctx) => [
+              PopupMenuItem(
+                value: 'import',
+                height: 52,
+                child: Row(
+                  children: [
+                    Container(
+                      width: 32,
+                      height: 32,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFE8F5E9),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: const Icon(PhosphorIconsBold.downloadSimple, color: Color(0xFF2E7D32), size: 17),
+                    ),
+                    const SizedBox(width: 12),
+                    const Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text(
+                          '导入关卡包',
+                          style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.bold, color: Color(0xFF1F2937)),
+                        ),
+                        Text(
+                          '从本地 ZIP 或网络导入',
+                          style: TextStyle(fontSize: 10.5, color: Color(0xFF6B7280)),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              const PopupMenuDivider(height: 1),
+              PopupMenuItem(
+                value: 'settings',
+                height: 52,
+                child: Row(
+                  children: [
+                    Container(
+                      width: 32,
+                      height: 32,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF3F4F6),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: const Icon(PhosphorIconsBold.gearSix, color: Color(0xFF4B5563), size: 17),
+                    ),
+                    const SizedBox(width: 12),
+                    const Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text(
+                          '游戏设置',
+                          style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.bold, color: Color(0xFF1F2937)),
+                        ),
+                        Text(
+                          '音效、排布与触感设置',
+                          style: TextStyle(fontSize: 10.5, color: Color(0xFF6B7280)),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              const PopupMenuDivider(height: 1),
+              PopupMenuItem(
+                value: 'help',
+                height: 52,
+                child: Row(
+                  children: [
+                    Container(
+                      width: 32,
+                      height: 32,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFE0F2FE),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: const Icon(PhosphorIconsBold.bookOpenText, color: Color(0xFF0284C7), size: 17),
+                    ),
+                    const SizedBox(width: 12),
+                    const Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text(
+                          '玩法手册',
+                          style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.bold, color: Color(0xFF1F2937)),
+                        ),
+                        Text(
+                          '拼图规则与技巧指引',
+                          style: TextStyle(fontSize: 10.5, color: Color(0xFF6B7280)),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ),
           const SizedBox(width: 8),
         ],

@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
 import 'content_manager.dart';
+import 'pipelines/pack_content_pipeline.dart';
 
 /// 全局内容与扩展系统门面单例
 class AppContent {
@@ -14,6 +15,11 @@ class AppContent {
     }
     return _manager!;
   }
+
+  static final PackContentPipeline _fallbackPacks = PackContentPipeline(packsBaseDir: '');
+
+  /// 扩展图包管线快捷访问 (带安全 Fallback)
+  PackContentPipeline get packs => _manager?.packPipeline ?? _fallbackPacks;
 
   bool _isInitialized = false;
   bool get isInitialized => _isInitialized;

@@ -7,6 +7,7 @@ import 'pipelines/daily_content_pipeline.dart';
 import 'pipelines/events_content_pipeline.dart';
 import 'pipelines/main_content_pipeline.dart';
 import 'pipelines/manifest_router.dart';
+import 'pipelines/pack_content_pipeline.dart';
 
 /// 内容与扩展系统统一门面管理器 (Facade)
 class ContentManager {
@@ -33,21 +34,27 @@ class ContentManager {
           cacheFilePath: p.join(appSupportDir, 'events_cache.json'),
           eventsStorageBaseDir: p.join(appDocumentsDir, 'events'),
           httpClient: httpClient,
+        ),
+        packPipeline = PackContentPipeline(
+          packsBaseDir: p.join(appDocumentsDir, 'packs'),
+          httpClient: httpClient,
         );
 
   final ManifestRouter manifestRouter;
   final MainContentPipeline mainPipeline;
   final DailyContentPipeline dailyPipeline;
   final EventsContentPipeline eventsPipeline;
+  final PackContentPipeline packPipeline;
 
   RootManifest? get currentManifest => manifestRouter.currentManifest;
 
-  /// 1. 初始化所有本地缓存 (冷启动快速秒开)
+  /// 1. 初始化所有本地缓存与扩展包 (冷启动快速秒开)
   Future<void> initialize() async {
     await Future.wait([
       manifestRouter.resolveManifest(),
       mainPipeline.initializeFromCache(),
       eventsPipeline.initializeFromCache(),
+      packPipeline.loadAllPacks(),
     ]);
   }
 

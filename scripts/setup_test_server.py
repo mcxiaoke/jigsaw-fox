@@ -255,7 +255,42 @@ def main():
         json.dump(root_manifest, f, ensure_ascii=False, indent=2)
     print("[OK] manifest.json created at root.")
 
+    # 5. 部署扩展测试图包 packs/
+    packs_dir = BASE_DIR / "packs"
+    packs_dir.mkdir(exist_ok=True)
+
+    # 5.1 纯图片测试包 (零元数据) cats_pure_images.zip
+    cats_zip_path = packs_dir / "cats_pure_images.zip"
+    with zipfile.ZipFile(cats_zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
+        for idx in range(6):
+            src_img = src_images[(idx + 3) % len(src_images)]
+            zf.write(src_img, arcname=f"cat_{idx+1:02d}.jpg")
+    print("[OK] packs/cats_pure_images.zip (6 pure images) created.")
+
+    # 5.2 创作者标准扩展包 (带 pack.json 元数据) cyberpunk_with_manifest.zip
+    cyber_zip_path = packs_dir / "cyberpunk_with_manifest.zip"
+    with zipfile.ZipFile(cyber_zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
+        # 封面图
+        zf.write(src_images[5 % len(src_images)], arcname="cover.jpg")
+        # 关卡图片
+        for idx in range(6):
+            src_img = src_images[(idx + 7) % len(src_images)]
+            zf.write(src_img, arcname=f"level_{idx+1:02d}.jpg")
+        # pack.json
+        cyber_manifest = {
+            "id": "cyberpunk_neon_2026",
+            "title": "赛博霓虹·未来都市",
+            "description": "流光溢彩的赛博朋克夜景拼图精选合辑",
+            "author": "NeonArtist",
+            "version": 1,
+            "cover": "cover.jpg",
+            "tags": ["科幻", "夜景", "建筑"]
+        }
+        zf.writestr("pack.json", json.dumps(cyber_manifest, ensure_ascii=False, indent=2))
+    print("[OK] packs/cyberpunk_with_manifest.zip (with pack.json) created.")
+
     print("\nAll rich test server data successfully deployed to X:\\www\\game\\test !")
 
 if __name__ == "__main__":
     main()
+

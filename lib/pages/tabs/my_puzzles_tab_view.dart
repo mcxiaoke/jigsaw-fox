@@ -7,6 +7,8 @@ import 'package:phosphoricons_flutter/phosphoricons_flutter.dart';
 
 import '../../data/game_repository.dart';
 import '../../data/models/custom_puzzle_item.dart';
+import '../../logic/content/app_content.dart';
+import '../../logic/content/models/puzzle_pack_item.dart';
 import '../../logic/download_manager.dart';
 import '../../logic/image_source.dart';
 import '../../widgets/app_cached_image.dart';
@@ -14,7 +16,9 @@ import '../../widgets/choose_difficulty_sheet.dart';
 import '../../widgets/downloaded_drawer_sheet.dart';
 import '../crop_puzzle_page.dart';
 import '../game_page.dart';
+import '../import_pack_page.dart';
 import '../online_image_picker_page.dart';
+import '../pack_levels_page.dart';
 
 /// "My Puzzles" (我的自制关卡) tab view supporting UGC creation, adaptive responsive grid, and play.
 class MyPuzzlesTabView extends StatefulWidget {
@@ -173,86 +177,157 @@ class _MyPuzzlesTabViewState extends State<MyPuzzlesTabView> {
           onRefresh: () async => setState(() {}),
           child: CustomScrollView(
             slivers: [
-              // 1. Top UGC Creation Action Cards (3 compact side-by-side cards)
+              // 1. Top UGC Creation Action Cards (4 compact cards in 2x2 grid or horizontal wrap)
               SliverToBoxAdapter(
                 child: Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
-                  child: Row(
+                  padding: const EdgeInsets.fromLTRB(16, 10, 16, 8),
+                  child: Column(
                     children: [
-                      // 1.1 Left Card: Local Gallery
-                      Expanded(
-                        child: _buildTopActionCard(
-                          title: '相册选图',
-                          subtitle: '批量导入',
-                          iconWidget: _loading
-                              ? const SizedBox(
-                                  width: 14,
-                                  height: 14,
-                                  child: CircularProgressIndicator(color: Color(0xFF2E7D32), strokeWidth: 2),
-                                )
-                              : Image.asset('assets/icons/camera_3d.png', width: 20, height: 20),
-                          gradientColors: const [Color(0xFFE8F5E9), Color(0xFFC8E6C9)],
-                          borderColor: const Color(0xFF81C784),
-                          textColor: const Color(0xFF1B5E20),
-                          onTap: _loading ? null : _createFromGallery,
-                        ),
-                      ),
-                      const SizedBox(width: 8),
+                      Row(
+                        children: [
+                          // 1.1 Left: Local Gallery
+                          Expanded(
+                            child: _buildTopActionCard(
+                              title: '相册选图',
+                              subtitle: '批量导入',
+                              iconWidget: _loading
+                                  ? const SizedBox(
+                                      width: 14,
+                                      height: 14,
+                                      child: CircularProgressIndicator(color: Color(0xFF2E7D32), strokeWidth: 2),
+                                    )
+                                  : Image.asset('assets/icons/camera_3d.png', width: 20, height: 20),
+                              gradientColors: const [Color(0xFFE8F5E9), Color(0xFFC8E6C9)],
+                              borderColor: const Color(0xFF81C784),
+                              textColor: const Color(0xFF1B5E20),
+                              onTap: _loading ? null : _createFromGallery,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
 
-                      // 1.2 Middle Card: Material Box (素材库)
-                      Expanded(
-                        child: ValueListenableBuilder(
-                          valueListenable: DownloadManager.instance.itemsNotifier,
-                          builder: (context, materialItems, _) {
-                            return _buildTopActionCard(
-                              title: '素材库',
-                              subtitle: '${materialItems.length} 张素材',
-                              iconWidget: const Icon(PhosphorIconsFill.archive, color: Color(0xFFE65100), size: 18),
-                              gradientColors: const [Color(0xFFFFF3E0), Color(0xFFFFE0B2)],
-                              borderColor: const Color(0xFFFFB74D),
-                              textColor: const Color(0xFFE65100),
+                          // 1.2 Right: Import Pack (.zip)
+                          Expanded(
+                            child: _buildTopActionCard(
+                              title: '导入关卡包',
+                              subtitle: 'ZIP 扩展包',
+                              iconWidget: const Icon(PhosphorIconsFill.downloadSimple, color: Color(0xFF00796B), size: 18),
+                              gradientColors: const [Color(0xFFE0F2F1), Color(0xFFB2DFDB)],
+                              borderColor: const Color(0xFF80CBC4),
+                              textColor: const Color(0xFF004D40),
                               onTap: () async {
-                                await DownloadedDrawerSheet.show(context);
+                                final pack = await ImportPackPage.push(context);
+                                if (pack != null && mounted) {
+                                  setState(() {});
+                                }
                               },
-                            );
-                          },
-                        ),
+                            ),
+                          ),
+                        ],
                       ),
-                      const SizedBox(width: 8),
+                      const SizedBox(height: 8),
+                      Row(
+                        children: [
+                          // 1.3 Material Box (素材库)
+                          Expanded(
+                            child: ValueListenableBuilder(
+                              valueListenable: DownloadManager.instance.itemsNotifier,
+                              builder: (context, materialItems, _) {
+                                return _buildTopActionCard(
+                                  title: '素材库',
+                                  subtitle: '${materialItems.length} 张素材',
+                                  iconWidget: const Icon(PhosphorIconsFill.archive, color: Color(0xFFE65100), size: 18),
+                                  gradientColors: const [Color(0xFFFFF3E0), Color(0xFFFFE0B2)],
+                                  borderColor: const Color(0xFFFFB74D),
+                                  textColor: const Color(0xFFE65100),
+                                  onTap: () async {
+                                    await DownloadedDrawerSheet.show(context);
+                                  },
+                                );
+                              },
+                            ),
+                          ),
+                          const SizedBox(width: 8),
 
-                      // 1.3 Right Card: Online Search
-                      Expanded(
-                        child: _buildTopActionCard(
-                          title: '在线搜图',
-                          subtitle: '海量图库',
-                          iconWidget: const Icon(PhosphorIconsFill.globeHemisphereWest, color: Color(0xFF0277BD), size: 18),
-                          gradientColors: const [Color(0xFFE1F5FE), Color(0xFFB3E5FC)],
-                          borderColor: const Color(0xFF4FC3F7),
-                          textColor: const Color(0xFF01579B),
-                          onTap: () async {
-                            await OnlineImagePickerPage.push(context);
-                          },
-                        ),
+                          // 1.4 Online Search
+                          Expanded(
+                            child: _buildTopActionCard(
+                              title: '在线搜图',
+                              subtitle: '海量图库',
+                              iconWidget: const Icon(PhosphorIconsFill.globeHemisphereWest, color: Color(0xFF0277BD), size: 18),
+                              gradientColors: const [Color(0xFFE1F5FE), Color(0xFFB3E5FC)],
+                              borderColor: const Color(0xFF4FC3F7),
+                              textColor: const Color(0xFF01579B),
+                              onTap: () async {
+                                await OnlineImagePickerPage.push(context);
+                              },
+                            ),
+                          ),
+                        ],
                       ),
                     ],
                   ),
                 ),
               ),
 
-              // 2. Section Header
+              // 2. Imported Packs Section (若有已导入扩展包，每行一个大 Card 展示，与活动风格对齐)
+              ValueListenableBuilder<List<PuzzlePackItem>>(
+                valueListenable: AppContent.instance.packs.packsNotifier,
+                builder: (context, packs, _) {
+                  if (packs.isEmpty) {
+                    return const SliverToBoxAdapter(child: SizedBox.shrink());
+                  }
+                  return SliverToBoxAdapter(
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              const Text(
+                                '已导入扩展包',
+                                style: TextStyle(fontSize: 16.5, fontWeight: FontWeight.bold),
+                              ),
+                              Text(
+                                '${packs.length} 个扩展包',
+                                style: const TextStyle(fontSize: 12.5, color: Colors.black54),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 10),
+                          ListView.separated(
+                            shrinkWrap: true,
+                            physics: const NeverScrollableScrollPhysics(),
+                            itemCount: packs.length,
+                            separatorBuilder: (ctx, i) => const SizedBox(height: 14),
+                            itemBuilder: (ctx, idx) {
+                              final pack = packs[idx];
+                              return _buildLargePackCard(pack);
+                            },
+                          ),
+                          const SizedBox(height: 6),
+                        ],
+                      ),
+                    ),
+                  );
+                },
+              ),
+
+              // 3. Section Header for Custom Puzzles
               SliverToBoxAdapter(
                 child: Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 6, 16, 10),
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 10),
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       const Text(
-                        '我的自制合辑',
-                        style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
+                        '自制关卡',
+                        style: TextStyle(fontSize: 16.5, fontWeight: FontWeight.bold),
                       ),
                       Text(
                         '共 ${customList.length} 个关卡',
-                        style: const TextStyle(fontSize: 13, color: Colors.black54),
+                        style: const TextStyle(fontSize: 12.5, color: Colors.black54),
                       ),
                     ],
                   ),
@@ -478,6 +553,163 @@ class _MyPuzzlesTabViewState extends State<MyPuzzlesTabView> {
       targetWidth: 360,
       targetHeight: 360,
       errorWidget: Image.asset(assetSamples[0], fit: BoxFit.cover),
+    );
+  }
+
+  Widget _buildLargePackCard(PuzzlePackItem pack) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: const Color(0xFFE5E7EB), width: 1),
+        boxShadow: const [
+          BoxShadow(
+            color: Colors.black12,
+            blurRadius: 8,
+            offset: Offset(0, 3),
+          ),
+        ],
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // 1. Cover Image with Overlays
+          Stack(
+            children: [
+              SizedBox(
+                height: 140,
+                width: double.infinity,
+                child: AppCachedImage(
+                  imagePathOrUrl: pack.coverPath,
+                  fit: BoxFit.cover,
+                  targetWidth: 600,
+                  targetHeight: 300,
+                ),
+              ),
+              // Gradient Overlay
+              Positioned.fill(
+                child: Container(
+                  decoration: const BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [Colors.black45, Colors.transparent, Colors.black54],
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      stops: [0.0, 0.45, 1.0],
+                    ),
+                  ),
+                ),
+              ),
+              // Top-left Pack Badge
+              Positioned(
+                left: 12,
+                top: 12,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF2E7D32),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: const Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(PhosphorIconsFill.package, color: Colors.white, size: 13),
+                      SizedBox(width: 4),
+                      Text(
+                        '扩展合辑',
+                        style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              // Top-right Source Badge
+              Positioned(
+                right: 12,
+                top: 12,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: Colors.black.withValues(alpha: 0.65),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Text(
+                    '${pack.displaySource} • ${pack.displayFileSize}',
+                    style: const TextStyle(color: Colors.white70, fontSize: 10.5),
+                  ),
+                ),
+              ),
+              // Bottom Title on Cover
+              Positioned(
+                left: 14,
+                right: 14,
+                bottom: 12,
+                child: Text(
+                  pack.title,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    shadows: [Shadow(color: Colors.black54, blurRadius: 4)],
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ),
+
+          // 2. Pack Description & Action Bar
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 14),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        pack.description.isNotEmpty ? pack.description : '精选拼图扩展关卡合辑',
+                        style: const TextStyle(color: Colors.black54, fontSize: 12, height: 1.3),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: 6),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFE8F5E9),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Text(
+                          '共 ${pack.levelCount} 关',
+                          style: const TextStyle(
+                            fontSize: 11,
+                            color: Color(0xFF2E7D32),
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 12),
+                ElevatedButton.icon(
+                  icon: const Icon(PhosphorIconsBold.play, size: 14),
+                  label: const Text('进入挑战'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF2E7D32),
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                  ),
+                  onPressed: () => PackLevelsPage.push(context, pack),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 

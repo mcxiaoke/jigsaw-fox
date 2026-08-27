@@ -179,9 +179,20 @@ void main() {
       expect(find.text('自制'), findsOneWidget);
       // Verify help icon is no longer directly in AppBar
       expect(find.byTooltip('玩法指引'), findsNothing);
-      // Verify achievements & settings exist in AppBar
+      // Verify achievements & 更多选项 (PopupMenuButton) exist in AppBar
       expect(find.byTooltip('成就与统计'), findsOneWidget);
-      expect(find.byTooltip('设置'), findsOneWidget);
+      expect(find.byTooltip('更多选项'), findsOneWidget);
+
+      // Open popup menu
+      await tester.tap(find.byTooltip('更多选项'));
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(find.text('导入关卡包'), findsOneWidget);
+      expect(find.text('游戏设置'), findsOneWidget);
+      expect(find.text('玩法手册'), findsOneWidget);
+
+      // Close popup menu to avoid blocking following tests
+      await tester.tapAt(const Offset(10, 10));
+      await tester.pump(const Duration(milliseconds: 300));
     });
 
     testWidgets('HomeTabView renders category filters and reacts to taps', (tester) async {
@@ -320,10 +331,10 @@ void main() {
       );
 
       expect(find.text('相册选图'), findsOneWidget);
-      expect(find.text('批量导入'), findsOneWidget);
+      expect(find.text('导入关卡包'), findsOneWidget);
       expect(find.text('素材库'), findsOneWidget);
       expect(find.text('在线搜图'), findsOneWidget);
-      expect(find.text('我的自制合辑'), findsOneWidget);
+      expect(find.text('自制关卡'), findsOneWidget);
     });
 
     testWidgets('ChooseDifficultySheet renders saved progress banner & continue button', (tester) async {
