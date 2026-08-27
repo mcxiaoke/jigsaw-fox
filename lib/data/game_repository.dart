@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../logic/image_source.dart';
@@ -46,6 +47,9 @@ class GameRepository {
   List<LevelItem> _levels = [];
   List<DailyChallengeItem> _dailyChallenges = [];
   List<CustomPuzzleItem> _customPuzzles = [];
+
+  final ValueNotifier<List<CustomPuzzleItem>> customPuzzlesNotifier =
+      ValueNotifier<List<CustomPuzzleItem>>([]);
 
   List<LevelItem> get levels => List.unmodifiable(_levels);
   List<DailyChallengeItem> get dailyChallenges => List.unmodifiable(_dailyChallenges);
@@ -182,6 +186,7 @@ class GameRepository {
         _customPuzzles = rawList
             .map((e) => CustomPuzzleItem.fromJson(e as Map<String, dynamic>))
             .toList();
+        customPuzzlesNotifier.value = List.unmodifiable(_customPuzzles);
         return;
       } catch (_) {}
     }
@@ -215,6 +220,7 @@ class GameRepository {
       ),
     ];
     _saveCustomPuzzles();
+    customPuzzlesNotifier.value = List.unmodifiable(_customPuzzles);
   }
 
   Future<void> _saveCustomPuzzles() async {
@@ -225,6 +231,7 @@ class GameRepository {
   /// Adds a new user custom puzzle.
   Future<void> addCustomPuzzle(CustomPuzzleItem item) async {
     _customPuzzles.insert(0, item);
+    customPuzzlesNotifier.value = List.unmodifiable(_customPuzzles);
     await _saveCustomPuzzles();
   }
 
@@ -242,6 +249,7 @@ class GameRepository {
         } catch (_) {}
       }
       _customPuzzles.removeAt(idx);
+      customPuzzlesNotifier.value = List.unmodifiable(_customPuzzles);
       await _saveCustomPuzzles();
     }
   }
@@ -372,6 +380,7 @@ class GameRepository {
       completedPieceCounts: updatedCompletedCounts.toList(),
     );
 
+    customPuzzlesNotifier.value = List.unmodifiable(_customPuzzles);
     await _saveCustomPuzzles();
 
     if (isCompleted) {

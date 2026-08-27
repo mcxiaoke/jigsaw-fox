@@ -9,6 +9,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../data/models/downloaded_image_item.dart';
+import 'cache/image_cache_manager.dart';
 
 /// Singleton manager for batch downloaded and locally imported images (Material Box / 素材库)
 /// with local persistence, deduplication, and metadata parsing.
@@ -130,6 +131,11 @@ class DownloadManager {
       itemsNotifier.value = [...newlyAdded, ...itemsNotifier.value];
       await _saveToStorage();
       debugPrint('[DownloadManager:ImportLocal] Successfully imported ${newlyAdded.length} local images.');
+
+      // Background pre-warm thumbnail caches for newly imported images
+      for (final item in newlyAdded) {
+        ImageCacheManager.instance.prewarmThumbnail(item.localPath);
+      }
     }
 
     return newlyAdded;
@@ -265,6 +271,9 @@ class DownloadManager {
     await _saveToStorage();
     debugPrint('[DownloadManager:Complete] Added item $id (${width}x$height, ${rawBytes.length} bytes). Total cached: ${itemsNotifier.value.length}');
 
+    // Background pre-warm thumbnail for the downloaded image
+    ImageCacheManager.instance.prewarmThumbnail(filePath);
+
     return item;
   }
 
@@ -279,6 +288,7 @@ class DownloadManager {
         if (f.existsSync()) {
           f.deleteSync();
         }
+        await ImageCacheManager.instance.removeThumbnailForSource(item.localPath);
       } catch (e) {
         debugPrint('[DownloadManager:Delete] Error deleting file: $e');
       }
@@ -298,6 +308,7 @@ class DownloadManager {
       try {
         final f = File(item.localPath);
         if (f.existsSync()) f.deleteSync();
+        await ImageCacheManager.instance.removeThumbnailForSource(item.localPath);
       } catch (_) {}
     }
     itemsNotifier.value = [];

@@ -10,6 +10,7 @@ import 'package:phosphoricons_flutter/phosphoricons_flutter.dart';
 
 import '../data/game_repository.dart';
 import '../data/models/custom_puzzle_item.dart';
+import '../logic/cache/image_cache_manager.dart';
 import '../logic/image_upscaler.dart';
 import '../logic/puzzle_model.dart';
 
@@ -322,6 +323,9 @@ class _CropPuzzlePageState extends State<CropPuzzlePage> {
         sourceUrl: widget.sourceUrl,
       );
 
+      // Pre-warm thumbnail cache in background
+      ImageCacheManager.instance.prewarmThumbnail(file.path);
+
       await GameRepository.instance.addCustomPuzzle(customItem);
 
       if (mounted) {
@@ -467,18 +471,18 @@ class _CropPuzzlePageState extends State<CropPuzzlePage> {
                       Container(
                         width: boxW,
                         height: boxH,
-                        clipBehavior: Clip.antiAlias,
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(16),
-                          border: Border.all(color: const Color(0xFF81C784), width: 2.5),
-                          boxShadow: const [
-                            BoxShadow(color: Colors.black87, blurRadius: 18),
+                        decoration: const BoxDecoration(
+                          color: Colors.black,
+                          boxShadow: [
+                            BoxShadow(color: Colors.black87, blurRadius: 18, offset: Offset(0, 4)),
                           ],
                         ),
                         child: _decodedImage != null
                             ? Stack(
+                                fit: StackFit.expand,
                                 children: [
-                                  Positioned.fill(
+                                  // 1. 直角精准裁剪的拖拽缩放图片区域
+                                  ClipRect(
                                     child: MouseRegion(
                                       cursor: SystemMouseCursors.grab,
                                       child: Listener(
@@ -507,7 +511,22 @@ class _CropPuzzlePageState extends State<CropPuzzlePage> {
                                       ),
                                     ),
                                   ),
-                                  // Compact Top-Right Scale Percentage Pill (Click to reset 100% & center)
+
+                                  // 2. 顶层直角绿色裁切框 (不阻挡手势，四边四角 100% 完整清晰显示)
+                                  Positioned.fill(
+                                    child: IgnorePointer(
+                                      child: Container(
+                                        decoration: BoxDecoration(
+                                          border: Border.all(
+                                            color: const Color(0xFF81C784),
+                                            width: 2.5,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+
+                                  // 3. Compact Top-Right Scale Percentage Pill (Click to reset 100% & center)
                                   Positioned(
                                     top: 10,
                                     right: 10,

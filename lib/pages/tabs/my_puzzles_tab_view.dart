@@ -9,6 +9,7 @@ import '../../data/game_repository.dart';
 import '../../data/models/custom_puzzle_item.dart';
 import '../../logic/download_manager.dart';
 import '../../logic/image_source.dart';
+import '../../widgets/app_cached_image.dart';
 import '../../widgets/choose_difficulty_sheet.dart';
 import '../../widgets/downloaded_drawer_sheet.dart';
 import '../crop_puzzle_page.dart';
@@ -165,139 +166,140 @@ class _MyPuzzlesTabViewState extends State<MyPuzzlesTabView> {
 
   @override
   Widget build(BuildContext context) {
-    final customList = _repo.customPuzzles;
-
-    return RefreshIndicator(
-      onRefresh: () async => setState(() {}),
-      child: CustomScrollView(
-        slivers: [
-          // 1. Top UGC Creation Action Cards (3 compact side-by-side cards)
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
-              child: Row(
-                children: [
-                  // 1.1 Left Card: Local Gallery
-                  Expanded(
-                    child: _buildTopActionCard(
-                      title: '相册选图',
-                      subtitle: '批量导入',
-                      iconWidget: _loading
-                          ? const SizedBox(
-                              width: 14,
-                              height: 14,
-                              child: CircularProgressIndicator(color: Color(0xFF2E7D32), strokeWidth: 2),
-                            )
-                          : Image.asset('assets/icons/camera_3d.png', width: 20, height: 20),
-                      gradientColors: const [Color(0xFFE8F5E9), Color(0xFFC8E6C9)],
-                      borderColor: const Color(0xFF81C784),
-                      textColor: const Color(0xFF1B5E20),
-                      onTap: _loading ? null : _createFromGallery,
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-
-                  // 1.2 Middle Card: Material Box (素材库)
-                  Expanded(
-                    child: ValueListenableBuilder(
-                      valueListenable: DownloadManager.instance.itemsNotifier,
-                      builder: (context, materialItems, _) {
-                        return _buildTopActionCard(
-                          title: '素材库',
-                          subtitle: '${materialItems.length} 张素材',
-                          iconWidget: const Icon(PhosphorIconsFill.archive, color: Color(0xFFE65100), size: 18),
-                          gradientColors: const [Color(0xFFFFF3E0), Color(0xFFFFE0B2)],
-                          borderColor: const Color(0xFFFFB74D),
-                          textColor: const Color(0xFFE65100),
-                          onTap: () async {
-                            await DownloadedDrawerSheet.show(context);
-                            if (mounted) setState(() {});
-                          },
-                        );
-                      },
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-
-                  // 1.3 Right Card: Online Search
-                  Expanded(
-                    child: _buildTopActionCard(
-                      title: '在线搜图',
-                      subtitle: '海量图库',
-                      iconWidget: const Icon(PhosphorIconsFill.globeHemisphereWest, color: Color(0xFF0277BD), size: 18),
-                      gradientColors: const [Color(0xFFE1F5FE), Color(0xFFB3E5FC)],
-                      borderColor: const Color(0xFF4FC3F7),
-                      textColor: const Color(0xFF01579B),
-                      onTap: () async {
-                        await OnlineImagePickerPage.push(context);
-                        if (mounted) setState(() {});
-                      },
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-
-          // 2. Section Header
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 6, 16, 10),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  const Text(
-                    '我的自制合辑',
-                    style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
-                  ),
-                  Text(
-                    '共 ${customList.length} 个关卡',
-                    style: const TextStyle(fontSize: 13, color: Colors.black54),
-                  ),
-                ],
-              ),
-            ),
-          ),
-
-          // 3. Responsive Grid or Empty state
-          if (customList.isEmpty)
-            const SliverToBoxAdapter(
-              child: Padding(
-                padding: EdgeInsets.symmetric(vertical: 48),
-                child: Center(
-                  child: Column(
+    return ValueListenableBuilder<List<CustomPuzzleItem>>(
+      valueListenable: _repo.customPuzzlesNotifier,
+      builder: (context, customList, _) {
+        return RefreshIndicator(
+          onRefresh: () async => setState(() {}),
+          child: CustomScrollView(
+            slivers: [
+              // 1. Top UGC Creation Action Cards (3 compact side-by-side cards)
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
+                  child: Row(
                     children: [
-                      Icon(PhosphorIconsRegular.images, size: 48, color: Colors.grey),
-                      SizedBox(height: 10),
-                      Text('还没有自制拼图，点击上方「相册选图」或「素材库」开始制作吧！', style: TextStyle(color: Colors.grey)),
+                      // 1.1 Left Card: Local Gallery
+                      Expanded(
+                        child: _buildTopActionCard(
+                          title: '相册选图',
+                          subtitle: '批量导入',
+                          iconWidget: _loading
+                              ? const SizedBox(
+                                  width: 14,
+                                  height: 14,
+                                  child: CircularProgressIndicator(color: Color(0xFF2E7D32), strokeWidth: 2),
+                                )
+                              : Image.asset('assets/icons/camera_3d.png', width: 20, height: 20),
+                          gradientColors: const [Color(0xFFE8F5E9), Color(0xFFC8E6C9)],
+                          borderColor: const Color(0xFF81C784),
+                          textColor: const Color(0xFF1B5E20),
+                          onTap: _loading ? null : _createFromGallery,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+
+                      // 1.2 Middle Card: Material Box (素材库)
+                      Expanded(
+                        child: ValueListenableBuilder(
+                          valueListenable: DownloadManager.instance.itemsNotifier,
+                          builder: (context, materialItems, _) {
+                            return _buildTopActionCard(
+                              title: '素材库',
+                              subtitle: '${materialItems.length} 张素材',
+                              iconWidget: const Icon(PhosphorIconsFill.archive, color: Color(0xFFE65100), size: 18),
+                              gradientColors: const [Color(0xFFFFF3E0), Color(0xFFFFE0B2)],
+                              borderColor: const Color(0xFFFFB74D),
+                              textColor: const Color(0xFFE65100),
+                              onTap: () async {
+                                await DownloadedDrawerSheet.show(context);
+                              },
+                            );
+                          },
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+
+                      // 1.3 Right Card: Online Search
+                      Expanded(
+                        child: _buildTopActionCard(
+                          title: '在线搜图',
+                          subtitle: '海量图库',
+                          iconWidget: const Icon(PhosphorIconsFill.globeHemisphereWest, color: Color(0xFF0277BD), size: 18),
+                          gradientColors: const [Color(0xFFE1F5FE), Color(0xFFB3E5FC)],
+                          borderColor: const Color(0xFF4FC3F7),
+                          textColor: const Color(0xFF01579B),
+                          onTap: () async {
+                            await OnlineImagePickerPage.push(context);
+                          },
+                        ),
+                      ),
                     ],
                   ),
                 ),
               ),
-            )
-          else
-            SliverPadding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-              sliver: SliverGrid(
-                gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-                  maxCrossAxisExtent: 220,
-                  crossAxisSpacing: 14,
-                  mainAxisSpacing: 14,
-                  childAspectRatio: 1.0,
-                ),
-                delegate: SliverChildBuilderDelegate(
-                  (context, index) {
-                    final item = customList[index];
-                    return _buildCustomGridCard(item);
-                  },
-                  childCount: customList.length,
+
+              // 2. Section Header
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 6, 16, 10),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text(
+                        '我的自制合辑',
+                        style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
+                      ),
+                      Text(
+                        '共 ${customList.length} 个关卡',
+                        style: const TextStyle(fontSize: 13, color: Colors.black54),
+                      ),
+                    ],
+                  ),
                 ),
               ),
-            ),
 
-          const SliverToBoxAdapter(child: SizedBox(height: 28)),
-        ],
-      ),
+              // 3. Responsive Grid or Empty state
+              if (customList.isEmpty)
+                const SliverToBoxAdapter(
+                  child: Padding(
+                    padding: EdgeInsets.symmetric(vertical: 48),
+                    child: Center(
+                      child: Column(
+                        children: [
+                          Icon(PhosphorIconsRegular.images, size: 48, color: Colors.grey),
+                          SizedBox(height: 10),
+                          Text('还没有自制拼图，点击上方「相册选图」或「素材库」开始制作吧！', style: TextStyle(color: Colors.grey)),
+                        ],
+                      ),
+                    ),
+                  ),
+                )
+              else
+                SliverPadding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                  sliver: SliverGrid(
+                    gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+                      maxCrossAxisExtent: 220,
+                      crossAxisSpacing: 14,
+                      mainAxisSpacing: 14,
+                      childAspectRatio: 1.0,
+                    ),
+                    delegate: SliverChildBuilderDelegate(
+                      (context, index) {
+                        final item = customList[index];
+                        return _buildCustomGridCard(item);
+                      },
+                      childCount: customList.length,
+                    ),
+                  ),
+                ),
+
+              const SliverToBoxAdapter(child: SizedBox(height: 28)),
+            ],
+          ),
+        );
+      },
     );
   }
 
@@ -501,28 +503,13 @@ class _MyPuzzlesTabViewState extends State<MyPuzzlesTabView> {
   }
 
   Widget _buildThumbnail(CustomPuzzleItem item) {
-    if (item.isLocalFile && !item.imagePathOrUrl.startsWith('assets/')) {
-      final file = File(item.imagePathOrUrl);
-      return Image.file(
-        file,
-        fit: BoxFit.cover,
-        errorBuilder: (ctx, err, stack) => Image.asset(
-          assetSamples[0],
-          fit: BoxFit.cover,
-        ),
-      );
-    } else if (item.imagePathOrUrl.startsWith('assets/')) {
-      return Image.asset(
-        item.imagePathOrUrl,
-        fit: BoxFit.cover,
-        errorBuilder: (ctx, err, stack) => Image.asset(
-          assetSamples[0],
-          fit: BoxFit.cover,
-        ),
-      );
-    } else {
-      return Image.asset(assetSamples[0], fit: BoxFit.cover);
-    }
+    return AppCachedImage(
+      imagePathOrUrl: item.imagePathOrUrl,
+      fit: BoxFit.cover,
+      targetWidth: 360,
+      targetHeight: 360,
+      errorWidget: Image.asset(assetSamples[0], fit: BoxFit.cover),
+    );
   }
 
   Widget _buildTopActionCard({

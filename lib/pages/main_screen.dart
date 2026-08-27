@@ -63,7 +63,7 @@ class _MainScreenState extends State<MainScreen> {
 
           // Settings Page
           IconButton(
-            icon: Image.asset('assets/icons/control_knobs_3d.png', width: 22, height: 22),
+            icon: Image.asset('assets/icons/setting.png', width: 22, height: 22),
             tooltip: '设置',
             onPressed: () async {
               await SettingsPage.open(context);

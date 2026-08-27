@@ -6,6 +6,7 @@ import 'package:phosphoricons_flutter/phosphoricons_flutter.dart';
 import '../data/models/downloaded_image_item.dart';
 import '../logic/download_manager.dart';
 import '../pages/crop_puzzle_page.dart';
+import 'app_cached_image.dart';
 
 /// Modal bottom sheet drawer for managing and selecting batch-downloaded online images.
 class DownloadedDrawerSheet extends StatelessWidget {
@@ -234,15 +235,11 @@ class DownloadedDrawerSheet extends StatelessWidget {
             child: Stack(
               fit: StackFit.expand,
               children: [
-                Image.file(
-                  File(item.localPath),
+                AppCachedImage(
+                  imagePathOrUrl: item.localPath,
                   fit: BoxFit.cover,
-                  errorBuilder: (ctx, err, stack) => Container(
-                    color: Colors.grey.shade200,
-                    child: const Center(
-                      child: Icon(PhosphorIconsRegular.imageBroken, color: Colors.grey),
-                    ),
-                  ),
+                  targetWidth: 360,
+                  targetHeight: 360,
                 ),
                 // Platform Tag
                 Positioned(

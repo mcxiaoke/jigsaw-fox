@@ -381,6 +381,15 @@ $$\frac{\text{cols}}{\text{rows}} = \frac{W_{\text{image}}}{H_{\text{image}}}$$
 - 管理 100 关官方关卡状态、多难度独立通关记录、每日挑战历史、自制拼图元数据与全局用户设置。
 - **全局设置项**：拼图吸附音效 / 触感震动、12 款无缝桌板背景（`selectedBackground`，持久化 Key `jigsaw_setting_selected_background`）、碎片初始排布模式（`pieceScatterMode`：`tray | tabletop`）。
 - **来源追踪字段**：`CustomPuzzleItem` 扩展 `sourceType`（`gallery | online | preset`）、`sourcePlatform` 与 `sourceUrl`，序列化向下兼容历史老数据。
+- **响应式状态通知**：暴露 `customPuzzlesNotifier`（`ValueNotifier<List<CustomPuzzleItem>>`），在增删改自制关卡时自动派发通知，实现列表 100% 响应式自动刷新。
+
+### 4.3 独立分层图片缓存与缩略图引擎 (Image Cache Pipeline)
+- **严格分层解耦架构**：
+  - **核心缓存引擎层 (`ImageCacheManager`)**：纯 Dart 逻辑单例（无 Widget 依赖），管理磁盘缩略图持久化（`<AppSupportDir>/thumbnail_cache/`）、同步命中检索、并发请求合并去重与缓存清理；
+  - **后台 Isolate 生成器 (`ThumbnailGenerator`)**：利用 `package:image` 在后台 Isolate 中对原图下采样并导出高质量 JPEG 缩略图（默认 360px），不阻塞 UI 主线程；
+  - **渲染适配层 (`AppCachedImageProvider`)**：继承官方 `ImageProvider`，将底层缩略图透明桥接至 Flutter 渲染管线，支持原生 `Image` 与 `DecorationImage`；
+  - **UI 便捷层 (`AppCachedImage`)**：可选封装组件，集成 `ResizeImage` 显存下采样、占位微光与淡入动画。
+- **全管道主动预热 (Pre-warm)**：相册批量导入、网络下载入库、自制裁切导出大图时，后台静默预生成缩略图，实现列表 **0 毫秒秒开** 与 60/120fps 流畅滚动。详细技术规范参见专项文档 `docs/image-cache-and-thumbnail-pipeline-architecture.md`。
 
 ---
 

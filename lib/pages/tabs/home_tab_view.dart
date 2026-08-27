@@ -4,6 +4,7 @@ import 'package:phosphoricons_flutter/phosphoricons_flutter.dart';
 
 import '../../data/game_repository.dart';
 import '../../data/models/level_item.dart';
+import '../../widgets/app_cached_image.dart';
 import '../../widgets/choose_difficulty_sheet.dart';
 import '../game_page.dart';
 
@@ -195,10 +196,12 @@ class _HomeTabViewState extends State<HomeTabView> {
                         child: SizedBox(
                           width: 64,
                           height: 64,
-                          child: Image.asset(
-                            todayDaily.assetPath,
+                          child: AppCachedImage(
+                            imagePathOrUrl: todayDaily.assetPath,
                             fit: BoxFit.cover,
-                            errorBuilder: (ctx, err, stack) => const Icon(PhosphorIconsFill.calendarCheck, color: Colors.white),
+                            targetWidth: 160,
+                            targetHeight: 160,
+                            errorWidget: const Icon(PhosphorIconsFill.calendarCheck, color: Colors.white),
                           ),
                         ),
                       ),
@@ -296,33 +299,21 @@ class _HomeTabViewState extends State<HomeTabView> {
         child: Stack(
           fit: StackFit.expand,
           children: [
-            // Level Image
-            if (level.isUnlocked)
-              Image.asset(
-                level.assetPath,
-                fit: BoxFit.cover,
-                errorBuilder: (ctx, err, stack) => Image.asset(
-                  'assets/images/sample_01.jpg',
-                  fit: BoxFit.cover,
-                ),
-              )
-            else
-              ColorFiltered(
-                colorFilter: const ColorFilter.matrix(<double>[
-                  0.2126, 0.7152, 0.0722, 0, 0,
-                  0.2126, 0.7152, 0.0722, 0, 0,
-                  0.2126, 0.7152, 0.0722, 0, 0,
-                  0,      0,      0,      1, 0,
-                ]),
-                child: Image.asset(
-                  level.assetPath,
-                  fit: BoxFit.cover,
-                  errorBuilder: (ctx, err, stack) => Image.asset(
-                    'assets/images/sample_01.jpg',
-                    fit: BoxFit.cover,
-                  ),
-                ),
-              ),
+            // Level Image with Downsampling Memory Cache
+            AppCachedImage(
+              imagePathOrUrl: level.assetPath,
+              fit: BoxFit.cover,
+              targetWidth: 360,
+              targetHeight: 360,
+              colorFilter: level.isUnlocked
+                  ? null
+                  : const ColorFilter.matrix(<double>[
+                      0.2126, 0.7152, 0.0722, 0, 0,
+                      0.2126, 0.7152, 0.0722, 0, 0,
+                      0.2126, 0.7152, 0.0722, 0, 0,
+                      0,      0,      0,      1, 0,
+                    ]),
+            ),
 
             // Top and bottom gradients
             Container(

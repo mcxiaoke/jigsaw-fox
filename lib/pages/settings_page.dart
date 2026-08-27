@@ -33,7 +33,7 @@ class _SettingsPageState extends State<SettingsPage> {
         title: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Image.asset('assets/icons/control_knobs_3d.png', width: 24, height: 24),
+            Image.asset('assets/icons/setting.png', width: 24, height: 24),
             const SizedBox(width: 8),
             const Text('游戏设置', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 19)),
           ],

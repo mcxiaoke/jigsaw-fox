@@ -5,6 +5,7 @@ import 'package:phosphoricons_flutter/phosphoricons_flutter.dart';
 import '../../data/game_repository.dart';
 import '../../data/models/daily_challenge.dart';
 import '../../logic/image_source.dart';
+import '../../widgets/app_cached_image.dart';
 import '../../widgets/choose_difficulty_sheet.dart';
 import '../game_page.dart';
 
@@ -198,10 +199,12 @@ class _DailyTabViewState extends State<DailyTabView> {
                         child: SizedBox(
                           width: 130,
                           height: 120,
-                          child: Image.asset(
-                            todayItem.assetPath,
+                          child: AppCachedImage(
+                            imagePathOrUrl: todayItem.assetPath,
                             fit: BoxFit.cover,
-                            errorBuilder: (ctx, err, stack) => Image.asset(
+                            targetWidth: 360,
+                            targetHeight: 360,
+                            errorWidget: Image.asset(
                               assetSamples[0],
                               fit: BoxFit.cover,
                             ),
@@ -314,10 +317,12 @@ class _DailyTabViewState extends State<DailyTabView> {
         child: Stack(
           fit: StackFit.expand,
           children: [
-            Image.asset(
-              item.assetPath,
+            AppCachedImage(
+              imagePathOrUrl: item.assetPath,
               fit: BoxFit.cover,
-              errorBuilder: (ctx, err, stack) => Image.asset(
+              targetWidth: 360,
+              targetHeight: 360,
+              errorWidget: Image.asset(
                 assetSamples[0],
                 fit: BoxFit.cover,
               ),

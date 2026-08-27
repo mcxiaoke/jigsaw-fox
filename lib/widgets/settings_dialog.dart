@@ -28,7 +28,7 @@ class _SettingsDialogState extends State<SettingsDialog> {
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
       title: Row(
         children: [
-          Image.asset('assets/icons/control_knobs_3d.png', width: 24, height: 24),
+          Image.asset('assets/icons/setting.png', width: 24, height: 24),
           const SizedBox(width: 10),
           const Text('游戏设置', style: TextStyle(fontWeight: FontWeight.bold)),
         ],

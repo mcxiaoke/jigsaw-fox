@@ -7,6 +7,7 @@ import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:path_provider/path_provider.dart';
 
 import 'data/game_repository.dart';
+import 'logic/cache/image_cache_manager.dart';
 import 'logic/download_manager.dart';
 import 'pages/main_screen.dart';
 
@@ -15,6 +16,10 @@ WebViewEnvironment? globalWebViewEnvironment;
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Tune Flutter engine global ImageCache to optimize memory and prevent OOM
+  PaintingBinding.instance.imageCache.maximumSize = 500;
+  PaintingBinding.instance.imageCache.maximumSizeBytes = 150 * 1024 * 1024; // 150 MB
 
   // Initialize WebViewEnvironment on Windows desktop to prevent blank screen and crash
   if (!kIsWeb && defaultTargetPlatform == TargetPlatform.windows) {
@@ -35,6 +40,7 @@ void main() async {
     }
   }
 
+  await ImageCacheManager.instance.init();
   await GameRepository.instance.init();
   await DownloadManager.instance.init();
   runApp(const JigsawPuzzleApp());
