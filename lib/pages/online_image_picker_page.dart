@@ -396,11 +396,7 @@ class _OnlineImagePickerPageState extends State<OnlineImagePickerPage> {
         }
       },
       child: Scaffold(
-        backgroundColor: const Color(0xFFF7F8FA),
         appBar: AppBar(
-          backgroundColor: Colors.white,
-          foregroundColor: const Color(0xFF1F2937),
-          elevation: 0.5,
           leading: IconButton(
             icon: const Icon(PhosphorIconsBold.x, size: 20),
             onPressed: () {

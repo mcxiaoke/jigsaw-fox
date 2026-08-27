@@ -28,7 +28,6 @@ class _SettingsPageState extends State<SettingsPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF7F8FA),
       appBar: AppBar(
         title: Row(
           mainAxisSize: MainAxisSize.min,
@@ -39,8 +38,6 @@ class _SettingsPageState extends State<SettingsPage> {
           ],
         ),
         centerTitle: false,
-        backgroundColor: Colors.white,
-        elevation: 0.5,
       ),
       body: Center(
         child: ConstrainedBox(
@@ -56,8 +53,6 @@ class _SettingsPageState extends State<SettingsPage> {
                   subtitle: const Text('碎片对齐磁吸时播放清脆音效'),
                   secondary: const Icon(PhosphorIconsBold.speakerHigh, color: Color(0xFF2E7D32)),
                   value: _repo.soundEnabled,
-                  activeTrackColor: const Color(0xFF81C784),
-                  activeThumbColor: const Color(0xFF2E7D32),
                   onChanged: (v) => setState(() => _repo.soundEnabled = v),
                 ),
                 const Divider(height: 1, indent: 56),
@@ -66,8 +61,6 @@ class _SettingsPageState extends State<SettingsPage> {
                   subtitle: const Text('拼图吸附与操作时的触觉微震'),
                   secondary: const Icon(PhosphorIconsBold.vibrate, color: Color(0xFF2E7D32)),
                   value: _repo.hapticEnabled,
-                  activeTrackColor: const Color(0xFF81C784),
-                  activeThumbColor: const Color(0xFF2E7D32),
                   onChanged: (v) => setState(() => _repo.hapticEnabled = v),
                 ),
                 const Divider(height: 1, indent: 56),
@@ -76,8 +69,6 @@ class _SettingsPageState extends State<SettingsPage> {
                   subtitle: const Text('在难度选择预览图上叠加异形切线'),
                   secondary: const Icon(PhosphorIconsBold.gridFour, color: Color(0xFF2E7D32)),
                   value: _repo.gridPreviewEnabled,
-                  activeTrackColor: const Color(0xFF81C784),
-                  activeThumbColor: const Color(0xFF2E7D32),
                   onChanged: (v) => setState(() => _repo.gridPreviewEnabled = v),
                 ),
                 const Divider(height: 1, indent: 56),
@@ -89,11 +80,6 @@ class _SettingsPageState extends State<SettingsPage> {
                       : '底部托盘收纳（默认/推荐手机）'),
                   trailing: SegmentedButton<String>(
                     showSelectedIcon: false,
-                    style: SegmentedButton.styleFrom(
-                      selectedBackgroundColor: const Color(0xFF2E7D32),
-                      selectedForegroundColor: Colors.white,
-                      visualDensity: VisualDensity.compact,
-                    ),
                     segments: const [
                       ButtonSegment(value: 'tray', label: Text('托盘')),
                       ButtonSegment(value: 'tabletop', label: Text('桌面')),

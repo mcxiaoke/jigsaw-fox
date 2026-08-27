@@ -66,17 +66,55 @@ class JigsawPuzzleApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // 由种子色一次性生成整套 Material 3 配色，主题内不写死任何具体色值
+    final scheme = ColorScheme.fromSeed(
+      seedColor: const Color(0xFF2E7D32),
+      brightness: Brightness.light,
+    );
     return MaterialApp(
       title: '异形拼图 Jigsaw Puzzle',
       debugShowCheckedModeBanner: false,
       scrollBehavior: const AppScrollBehavior(),
       theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: const Color(0xFF2E7D32),
-          brightness: Brightness.light,
-        ),
+        colorScheme: scheme,
         useMaterial3: true,
         fontFamilyFallback: const ['Microsoft YaHei', 'PingFang SC', 'sans-serif'],
+        // 全局浅色背景由 fromSeed 生成（surfaceContainerLow）
+        scaffoldBackgroundColor: scheme.surfaceContainerLow,
+        // AppBar：背景 = primaryContainer，前景 = onPrimaryContainer
+        appBarTheme: AppBarTheme(
+          backgroundColor: scheme.primaryContainer,
+          foregroundColor: scheme.onPrimaryContainer,
+          elevation: 0.5,
+          scrolledUnderElevation: 0.5,
+          centerTitle: false,
+        ),
+        // 主按钮默认即 scheme.primary/onPrimary，这里仅统一圆角
+        filledButtonTheme: FilledButtonThemeData(
+          style: FilledButton.styleFrom(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          ),
+        ),
+        // 分段按钮选中态 = 主题 primary
+        segmentedButtonTheme: SegmentedButtonThemeData(
+          style: SegmentedButton.styleFrom(
+            selectedBackgroundColor: scheme.primary,
+            selectedForegroundColor: scheme.onPrimary,
+            visualDensity: VisualDensity.compact,
+          ),
+        ),
+        // 开关选中态 = 主题 primary
+        switchTheme: SwitchThemeData(
+          trackColor: WidgetStateProperty.resolveWith(
+            (states) => states.contains(WidgetState.selected) ? scheme.primary : null,
+          ),
+          trackOutlineColor: WidgetStateProperty.resolveWith(
+            (states) => states.contains(WidgetState.selected) ? scheme.primary : null,
+          ),
+          thumbColor: WidgetStateProperty.resolveWith(
+            (states) => states.contains(WidgetState.selected) ? scheme.onPrimary : null,
+          ),
+        ),
       ),
       home: const MainScreen(),
     );

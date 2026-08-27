@@ -100,14 +100,11 @@ class _EventLevelsPageState extends State<EventLevelsPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF7F8FA),
       appBar: AppBar(
         title: Text(
           _currentEvent.title,
           style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 17),
         ),
-        backgroundColor: Colors.white,
-        elevation: 0.5,
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())

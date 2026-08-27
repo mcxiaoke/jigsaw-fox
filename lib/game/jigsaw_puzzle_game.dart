@@ -823,17 +823,11 @@ class JigsawPuzzleGame extends FlameGame
     cancelPieceDrag(piece);
   }
 
-  @override
-  void onPanUpdate(DragUpdateInfo info) {
-    super.onPanUpdate(info);
-    // 放大状态下，按住空白区域（未抓取碎片且在棋盘区）平移棋盘画布
-    if (!isDraggingAnyPiece && _zoom > 1.0) {
-      final pos = info.eventPosition.global;
-      if (isTabletop || pos.y < trayPosition.y) {
-        panBy(info.delta.global);
-      }
-    }
-  }
+  // 空白区域单指平移已由 GamePage 的 Listener (_onPointerMove) 统一处理，
+  // 此处不再覆写 onPanUpdate，以避免：
+  // 1) 与 DragCallbacks 的 MultiDragScaleGestureRecognizer 手势竞技场冲突
+  //    （存在 DragCallbacks 时 PanGestureRecognizer 会被抢占，导致空白拖动失效）
+  // 2) 与 Listener 双重调用导致的 2 倍速平移
 
   /// Scrolls the bottom tray horizontally.
   void scrollTray(double deltaX) {

@@ -144,7 +144,6 @@ class _AchievementsPageState extends State<AchievementsPage> {
     final unlockedCount = badges.where((b) => b.isUnlocked).length;
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF7F8FA),
       appBar: AppBar(
         title: Row(
           mainAxisSize: MainAxisSize.min,
@@ -155,8 +154,6 @@ class _AchievementsPageState extends State<AchievementsPage> {
           ],
         ),
         centerTitle: false,
-        backgroundColor: Colors.white,
-        elevation: 0.5,
         actions: [
           Container(
             margin: const EdgeInsets.only(right: 16),

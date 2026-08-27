@@ -39,7 +39,6 @@ class _MainScreenState extends State<MainScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF7F8FA),
       appBar: AppBar(
         title: Row(
           mainAxisSize: MainAxisSize.min,
@@ -53,8 +52,6 @@ class _MainScreenState extends State<MainScreen> {
           ],
         ),
         centerTitle: false,
-        backgroundColor: Colors.white,
-        elevation: 0.5,
         actions: [
           // Achievements Page
           IconButton(
@@ -78,7 +75,9 @@ class _MainScreenState extends State<MainScreen> {
               borderRadius: BorderRadius.circular(18),
               side: const BorderSide(color: Color(0xFFE5E7EB), width: 1.2),
             ),
-            // 将整个菜单（含每行按下高亮）裁剪为圆角，否则 PopupMenuItem 按压变色效果是方形。
+            // 去掉默认的 8px 垂直内边距，让首/末行按压高亮触达菜单圆角边界并被裁剪，
+            // 避免按下高亮仍是直角（与 clipBehavior: Clip.antiAlias 配合）。
+            menuPadding: EdgeInsets.zero,
             clipBehavior: Clip.antiAlias,
             onSelected: (val) async {
               if (val == 'import') {

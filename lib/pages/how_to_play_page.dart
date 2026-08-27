@@ -56,7 +56,6 @@ class HowToPlayPage extends StatelessWidget {
     ];
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF7F8FA),
       appBar: AppBar(
         title: const Row(
           mainAxisSize: MainAxisSize.min,
@@ -67,8 +66,6 @@ class HowToPlayPage extends StatelessWidget {
           ],
         ),
         centerTitle: false,
-        backgroundColor: Colors.white,
-        elevation: 0.5,
       ),
       body: Center(
         child: ConstrainedBox(

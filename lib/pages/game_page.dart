@@ -49,6 +49,9 @@ class _GamePageState extends State<GamePage> {
   int _solvedPieces = 0;
   bool _showOriginalImage = false;
   late String _selectedBackground;
+  // 顶部导航条背景色跟随所选自适应，随背景贴图近似色（默认白、炭灰前景）
+  Color _headerBarColor = Colors.white;
+  Color _headerIconColor = const Color(0xFF1F2937);
   PuzzleDifficulty? _effectiveDifficulty;
   int get _totalPieces => (_effectiveDifficulty ?? widget.difficulty).pieceCount;
 
@@ -64,8 +67,59 @@ class _GamePageState extends State<GamePage> {
   void initState() {
     super.initState();
     _selectedBackground = _repo.selectedBackground;
+    _loadHeaderColor();
     _startTimer();
     _loadImage();
+  }
+
+  /// 解析背景贴图资产取其近似平均色，与主题 primaryContainer 混合作为顶部导航条背景色，
+  /// 并按合成色亮度自动选择前景（深/浅），保证标题与图标可读。
+  Future<void> _loadHeaderColor() async {
+    final assetPath = _selectedBackground;
+    try {
+      final data = await rootBundle.load(assetPath);
+      final buffer = data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes);
+      final codec = await ui.instantiateImageCodec(buffer, targetWidth: 48, targetHeight: 48);
+      final frame = await codec.getNextFrame();
+      final image = frame.image;
+      final w = image.width;
+      final h = image.height;
+      final pixelData = await image.toByteData(format: ui.ImageByteFormat.rawRgba);
+      image.dispose();
+      if (pixelData == null) return;
+      final bytes = pixelData.buffer.asUint8List();
+      final pixelCount = w * h;
+      if (pixelCount <= 0) return;
+      var r = 0, g = 0, b = 0;
+      for (var i = 0; i < bytes.length; i += 4) {
+        r += bytes[i];
+        g += bytes[i + 1];
+        b += bytes[i + 2];
+      }
+      final avg = Color.fromARGB(255, r ~/ pixelCount, g ~/ pixelCount, b ~/ pixelCount);
+      if (!mounted) return;
+      final scheme = Theme.of(context).colorScheme;
+      final blended = Color.lerp(scheme.primaryContainer, avg, 0.45)!;
+      final luminance =
+          (0.299 * blended.r + 0.587 * blended.g + 0.114 * blended.b) * 255;
+      final isDarkBar = luminance <= 150;
+      // 网格页无 AppBar，需主动让系统状态栏/导航栏跟随顶部导航条颜色与图标亮度
+      SystemChrome.setSystemUIOverlayStyle(
+        SystemUiOverlayStyle(
+          statusBarColor: blended,
+          statusBarIconBrightness: isDarkBar ? Brightness.light : Brightness.dark,
+          statusBarBrightness: isDarkBar ? Brightness.dark : Brightness.light,
+          systemNavigationBarColor: blended,
+          systemNavigationBarIconBrightness: isDarkBar ? Brightness.light : Brightness.dark,
+        ),
+      );
+      setState(() {
+        _headerBarColor = blended;
+        _headerIconColor = isDarkBar ? Colors.white : scheme.onPrimaryContainer;
+      });
+    } catch (_) {
+      // 解析失败时保持默认白底/深色前景
+    }
   }
 
   void _startTimer() {
@@ -242,6 +296,7 @@ class _GamePageState extends State<GamePage> {
       onBackgroundSelected: (newBg) {
         setState(() => _selectedBackground = newBg);
         _repo.selectedBackground = newBg;
+        _loadHeaderColor();
       },
     );
   }
@@ -573,8 +628,16 @@ class _GamePageState extends State<GamePage> {
     } else if ((event.buttons & kMiddleMouseButton) != 0 && _game != null) {
       _game!.panBy(Vector2(event.delta.dx, event.delta.dy));
       if (mounted) setState(() {});
+    } else if (_game != null &&
+        _game!.zoom > 1.0 &&
+        _pointerPositions.length == 1 &&
+        !_game!.isDraggingAnyPiece &&
+        (_game!.isTabletop || event.localPosition.dy < _game!.trayPosition.y)) {
+      // 放大状态下，鼠标左键或单指按住空白区域拖动 -> 实时平移棋盘画布
+      // 使用 Listener 原生 pointer delta 直接驱动，避免 Flame PanDetector 与 DragCallbacks 的手势竞技场冲突
+      _game!.panBy(Vector2(event.delta.dx, event.delta.dy));
+      if (mounted) setState(() {});
     }
-    // 注意：单指左键拖动空白平移由 Flame PanDetector (JigsawPuzzleGame.onPanUpdate) 统一处理，消除速度翻倍问题
   }
 
   void _onPointerHover(PointerHoverEvent event) {
@@ -639,6 +702,8 @@ class _GamePageState extends State<GamePage> {
     _timer?.cancel();
     _focusNode.dispose();
     _gameImage?.dispose();
+    // 恢复浅色主题的默认系统状态栏/导航栏样式（浅底 + 深色图标）
+    SystemChrome.setSystemUIOverlayStyle(SystemUiOverlayStyle.light);
     super.dispose();
   }
 
@@ -656,7 +721,7 @@ class _GamePageState extends State<GamePage> {
         Container(
           height: 48,
           decoration: BoxDecoration(
-            color: Colors.white.withValues(alpha: 0.95),
+            color: _headerBarColor.withValues(alpha: 0.92),
             boxShadow: const [
               BoxShadow(color: Colors.black12, blurRadius: 4, offset: Offset(0, 1)),
             ],
@@ -665,7 +730,7 @@ class _GamePageState extends State<GamePage> {
           child: Row(
             children: [
               IconButton(
-                icon: const Icon(PhosphorIconsBold.arrowLeft, color: Colors.black87),
+                icon: Icon(PhosphorIconsBold.arrowLeft, color: _headerIconColor),
                 tooltip: '返回',
                 onPressed: () {
                   _autoSaveProgress();
@@ -676,7 +741,11 @@ class _GamePageState extends State<GamePage> {
               Expanded(
                 child: Text(
                   _pageTitle,
-                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 17),
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 17,
+                    color: _headerIconColor,
+                  ),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
@@ -698,7 +767,7 @@ class _GamePageState extends State<GamePage> {
                 icon: Icon(
                   _showOriginalImage ? PhosphorIconsFill.eye : PhosphorIconsBold.eyeSlash,
                   size: 21,
-                  color: _showOriginalImage ? const Color(0xFF0288D1) : Colors.black54,
+                  color: _showOriginalImage ? const Color(0xFF0288D1) : _headerIconColor,
                 ),
                 tooltip: '查看原图',
                 onPressed: () => setState(() {
@@ -708,7 +777,7 @@ class _GamePageState extends State<GamePage> {
               ),
               // 4. Pause Menu / Options
               IconButton(
-                icon: const Icon(PhosphorIconsBold.pauseCircle, size: 21, color: Colors.black87),
+                icon: Icon(PhosphorIconsBold.pauseCircle, size: 21, color: _headerIconColor),
                 tooltip: '暂停与菜单',
                 onPressed: _showPauseMenu,
               ),
@@ -722,7 +791,7 @@ class _GamePageState extends State<GamePage> {
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
             decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.94),
+              color: _headerBarColor.withValues(alpha: 0.94),
               borderRadius: BorderRadius.circular(16),
               boxShadow: const [
                 BoxShadow(color: Colors.black12, blurRadius: 4, offset: Offset(0, 2)),
@@ -737,7 +806,7 @@ class _GamePageState extends State<GamePage> {
                   children: [
                     Text(
                       '⏱️ $_timeString',
-                      style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.black87),
+                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: _headerIconColor),
                     ),
                     const SizedBox(width: 6),
                     Container(
@@ -769,7 +838,7 @@ class _GamePageState extends State<GamePage> {
                       icon: Icon(
                         PhosphorIconsBold.arrowUUpLeft,
                         size: 18,
-                        color: (_game?.canUndo ?? false) ? Colors.black87 : Colors.black26,
+                        color: (_game?.canUndo ?? false) ? _headerIconColor : _headerIconColor.withValues(alpha: 0.3),
                       ),
                       tooltip: '撤销',
                       onPressed: (_game?.canUndo ?? false) ? () => _game?.undo() : null,
@@ -781,7 +850,7 @@ class _GamePageState extends State<GamePage> {
                       icon: Icon(
                         PhosphorIconsBold.arrowUUpRight,
                         size: 18,
-                        color: (_game?.canRedo ?? false) ? Colors.black87 : Colors.black26,
+                        color: (_game?.canRedo ?? false) ? _headerIconColor : _headerIconColor.withValues(alpha: 0.3),
                       ),
                       tooltip: '重做',
                       onPressed: (_game?.canRedo ?? false) ? () => _game?.redo() : null,
@@ -795,7 +864,7 @@ class _GamePageState extends State<GamePage> {
                         children: [
                           Icon(
                             ghostOpacity > 0.01 ? PhosphorIconsFill.stack : PhosphorIconsBold.stack,
-                            color: ghostOpacity > 0.01 ? const Color(0xFF2E7D32) : Colors.black54,
+                            color: ghostOpacity > 0.01 ? const Color(0xFF2E7D32) : _headerIconColor,
                             size: 19,
                           ),
                           if (ghostOpacity > 0.01)
@@ -829,7 +898,7 @@ class _GamePageState extends State<GamePage> {
                       icon: Icon(
                         isBorderActive ? PhosphorIconsFill.cornersOut : PhosphorIconsBold.cornersOut,
                         size: 19,
-                        color: isBorderActive ? const Color(0xFF2E7D32) : Colors.black54,
+                        color: isBorderActive ? const Color(0xFF2E7D32) : _headerIconColor,
                       ),
                       tooltip: isBorderActive ? '显示全部碎片' : '仅显示边缘碎片',
                       onPressed: () {
@@ -841,7 +910,7 @@ class _GamePageState extends State<GamePage> {
                       visualDensity: VisualDensity.compact,
                       padding: const EdgeInsets.symmetric(horizontal: 2),
                       constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
-                      icon: const Icon(PhosphorIconsBold.broom, size: 19, color: Colors.black54),
+                      icon: Icon(PhosphorIconsBold.broom, size: 19, color: _headerIconColor),
                       tooltip: '一键整理托盘',
                       onPressed: () => _game?.organizeTray(),
                     ),

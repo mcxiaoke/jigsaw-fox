@@ -239,10 +239,6 @@ class AchievementsDialog extends StatelessWidget {
       actions: [
         FilledButton(
           onPressed: () => Navigator.pop(context),
-          style: FilledButton.styleFrom(
-            backgroundColor: const Color(0xFF2E7D32),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-          ),
           child: const Text('我知道了'),
         ),
       ],
