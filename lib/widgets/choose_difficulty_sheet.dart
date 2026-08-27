@@ -312,7 +312,7 @@ class _ChooseDifficultySheetState extends State<ChooseDifficultySheet> {
                                 borderRadius: BorderRadius.circular(6),
                               ),
                               child: Text(
-                                '来源: ${widget.sourcePlatform}',
+                                '来源: ${widget.sourcePlatform == '本地相册' || widget.sourcePlatform == '相册' ? '相册' : '网络'}',
                                 style: const TextStyle(
                                   fontSize: 10.5,
                                   color: Color(0xFF2E7D32),

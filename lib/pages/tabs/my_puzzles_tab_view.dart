@@ -114,16 +114,16 @@ class _MyPuzzlesTabViewState extends State<MyPuzzlesTabView> {
       imageBytes: bytes,
       initialDifficulty: item.difficulty,
       completedPieceCounts: item.completedPieceCounts.toSet(),
-      title: '${item.title} · 难度选择',
+      title: '自制拼图 · 难度选择',
       savedProgressPercent: item.isCompleted ? null : item.progressPercent,
-      sourcePlatform: item.sourcePlatform,
+      sourcePlatform: item.displaySource,
       sourceUrl: item.sourceUrl,
       onDelete: () async {
         await _repo.deleteCustomPuzzle(item.id);
         if (mounted) {
           setState(() {});
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('已删除「${item.title}」')),
+            const SnackBar(content: Text('已删除自制拼图')),
           );
         }
       },
@@ -304,6 +304,8 @@ class _MyPuzzlesTabViewState extends State<MyPuzzlesTabView> {
   }
 
   Widget _buildCustomGridCard(CustomPuzzleItem item) {
+    final isNetwork = item.displaySource == '网络';
+
     return InkWell(
       onTap: () => _openCustom(item),
       borderRadius: BorderRadius.circular(18),
@@ -336,69 +338,36 @@ class _MyPuzzlesTabViewState extends State<MyPuzzlesTabView> {
               ),
             ),
 
-            // Top-left Title & Source Tag
+            // Top-left Source Badge Only (相册 / 网络，无假标题)
             Positioned(
               left: 10,
               top: 10,
-              right: 60,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                    decoration: BoxDecoration(
-                      color: Colors.black.withValues(alpha: 0.65),
-                      borderRadius: BorderRadius.circular(10),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: (isNetwork ? const Color(0xFF0277BD) : const Color(0xFF2E7D32))
+                      .withValues(alpha: 0.85),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      isNetwork ? PhosphorIconsRegular.globe : PhosphorIconsRegular.image,
+                      color: Colors.white,
+                      size: 11,
                     ),
-                    child: Text(
-                      item.title,
+                    const SizedBox(width: 4),
+                    Text(
+                      item.displaySource,
                       style: const TextStyle(
                         color: Colors.white,
-                        fontSize: 12,
+                        fontSize: 10.5,
                         fontWeight: FontWeight.bold,
                       ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
                     ),
-                  ),
-                  const SizedBox(height: 4),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                    decoration: BoxDecoration(
-                      color: (item.sourceType == 'online'
-                              ? const Color(0xFF0277BD)
-                              : (item.sourceType == 'preset'
-                                  ? const Color(0xFFE65100)
-                                  : const Color(0xFF2E7D32)))
-                          .withValues(alpha: 0.85),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          item.sourceType == 'online'
-                              ? PhosphorIconsRegular.globe
-                              : (item.sourceType == 'preset'
-                                  ? PhosphorIconsRegular.puzzlePiece
-                                  : PhosphorIconsRegular.image),
-                          color: Colors.white,
-                          size: 10,
-                        ),
-                        const SizedBox(width: 3),
-                        Text(
-                          item.sourcePlatform,
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 9.5,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
 

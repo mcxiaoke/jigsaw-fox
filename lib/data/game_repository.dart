@@ -141,8 +141,8 @@ class GameRepository {
   void _initDailyChallenges() {
     final list = <DailyChallengeItem>[];
 
-    // Load from Bing 30-day dataset
-    for (final item in kBingDaily30Days) {
+    // Load from Bing multi-month dataset
+    for (final item in kBingDailyAll) {
       final key = '$_keyDailyPrefix${item.dateStr}';
       final savedStr = _prefs?.getString(key);
       if (savedStr != null) {
@@ -199,6 +199,7 @@ class GameRepository {
         title: '巴黎埃菲尔铁塔晨曦',
         imagePathOrUrl: assetSamples[0],
         isLocalFile: false,
+        sourcePlatform: '网络',
         difficulty: squareTiers[0].difficulty, // 16
         createdAt: DateTime.now().subtract(const Duration(days: 2)),
       ),
@@ -207,6 +208,7 @@ class GameRepository {
         title: '午后阳光与香浓拿铁',
         imagePathOrUrl: assetSamples[1],
         isLocalFile: false,
+        sourcePlatform: '网络',
         difficulty: squareTiers[2].difficulty, // 36
         createdAt: DateTime.now().subtract(const Duration(days: 1)),
       ),
@@ -215,6 +217,7 @@ class GameRepository {
         title: '草地上奔跑的小柴犬',
         imagePathOrUrl: assetSamples[2],
         isLocalFile: false,
+        sourcePlatform: '网络',
         difficulty: squareTiers[3].difficulty, // 64
         createdAt: DateTime.now(),
       ),

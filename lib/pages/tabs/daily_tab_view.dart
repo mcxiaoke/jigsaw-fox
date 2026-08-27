@@ -92,17 +92,49 @@ class _DailyTabViewState extends State<DailyTabView> {
     return streak;
   }
 
+  /// 校验日期字符串 (YYYY-MM-DD) 是否为自然月份内的有效真实日期
+  static bool isValidDateStr(String dateStr) {
+    final parts = dateStr.split('-');
+    if (parts.length != 3) return false;
+    final year = int.tryParse(parts[0]) ?? 0;
+    final month = int.tryParse(parts[1]) ?? 0;
+    final day = int.tryParse(parts[2]) ?? 0;
+    if (year < 2000 || year > 2100 || month < 1 || month > 12) return false;
+    // 动态计算该年该月真实自然天数 (2月28/29天、4/6/9/11月30天、1/3/5/7/8/10/12月31天)
+    final maxDays = DateTime(year, month + 1, 0).day;
+    return day >= 1 && day <= maxDays;
+  }
+
   @override
   Widget build(BuildContext context) {
     final dailyList = _repo.dailyChallenges;
     final now = DateTime.now();
+    final todayStr = '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
+
+    // 1. 严格容错过滤：
+    // - 过滤超出自然月份实际天数的脏数据 (如平年2月29/30/31号、4月31号等)
+    // - 过滤未到达的未来日期 (item.date <= todayStr)
+    // - 若数据源仅有 25 张图片则仅呈现 25 张，自适应实际文件数量
+    final visibleDailyList = dailyList.where((d) {
+      if (!isValidDateStr(d.date)) return false;
+      return d.date.compareTo(todayStr) <= 0;
+    }).toList();
+
+    // 今日挑战对象 (优先匹配当天完整日期)
     final todayItem = dailyList.firstWhere(
-      (d) => d.dayNumber == now.day,
-      orElse: () => dailyList.first,
+      (d) => d.date == todayStr,
+      orElse: () => visibleDailyList.isNotEmpty ? visibleDailyList.first : dailyList.first,
     );
 
-    final completedCount = dailyList.where((d) => d.isCompleted).length;
+    final totalCompletedCount = visibleDailyList.where((d) => d.isCompleted).length;
     final streak = _calculateStreak(dailyList);
+
+    // 2. 按年月进行分组 (如 "2026-08", "2026-07")
+    final Map<String, List<DailyChallengeItem>> monthGroups = {};
+    for (final item in visibleDailyList) {
+      final monthKey = item.date.substring(0, 7);
+      monthGroups.putIfAbsent(monthKey, () => []).add(item);
+    }
 
     return RefreshIndicator(
       onRefresh: () async => setState(() {}),
@@ -155,15 +187,15 @@ class _DailyTabViewState extends State<DailyTabView> {
                                 ),
                               ],
                             ),
-                            const SizedBox(height: 6),
+                            const SizedBox(height: 8),
                             Text(
-                              todayItem.title.replaceFirst('${todayItem.dayNumber} 日 · ', ''),
+                              '${now.month}月${now.day}日 · 今日挑战',
                               style: const TextStyle(
                                 fontSize: 18,
                                 fontWeight: FontWeight.bold,
                                 color: Colors.black87,
                               ),
-                              maxLines: 2,
+                              maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                             ),
                             const SizedBox(height: 14),
@@ -218,7 +250,7 @@ class _DailyTabViewState extends State<DailyTabView> {
             ),
           ),
 
-          // 2. Monthly Streak & Trophy Bar
+          // 2. Global Streak & Trophy Bar
           SliverToBoxAdapter(
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
@@ -237,7 +269,7 @@ class _DailyTabViewState extends State<DailyTabView> {
                         Image.asset('assets/icons/trophy_3d.png', width: 22, height: 22),
                         const SizedBox(width: 6),
                         Text(
-                          '${now.year}年${now.month}月进度: $completedCount/${dailyList.length}',
+                          '每日总进度: $totalCompletedCount/${visibleDailyList.length}',
                           style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13.5),
                         ),
                       ],
@@ -270,29 +302,90 @@ class _DailyTabViewState extends State<DailyTabView> {
             ),
           ),
 
-          const SliverToBoxAdapter(child: SizedBox(height: 10)),
+          const SliverToBoxAdapter(child: SizedBox(height: 8)),
 
-          // 3. 30-Day Responsive Adaptive Grid Stream
-          SliverPadding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-            sliver: SliverGrid(
-              gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-                maxCrossAxisExtent: 220,
-                crossAxisSpacing: 14,
-                mainAxisSpacing: 14,
-                childAspectRatio: 1.0,
+          // 3. Multi-Month Grouped Stream (Each Month has its own Header and Grid)
+          for (final entry in monthGroups.entries) ...[
+            SliverToBoxAdapter(
+              child: _buildMonthHeader(entry.key, entry.value),
+            ),
+            SliverPadding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+              sliver: SliverGrid(
+                gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+                  maxCrossAxisExtent: 220,
+                  crossAxisSpacing: 14,
+                  mainAxisSpacing: 14,
+                  childAspectRatio: 1.0,
+                ),
+                delegate: SliverChildBuilderDelegate(
+                  (context, index) {
+                    final item = entry.value[index];
+                    return _buildDailyCard(item);
+                  },
+                  childCount: entry.value.length,
+                ),
               ),
-              delegate: SliverChildBuilderDelegate(
-                (context, index) {
-                  final item = dailyList[index];
-                  return _buildDailyCard(item);
-                },
-                childCount: dailyList.length,
+            ),
+            const SliverToBoxAdapter(child: SizedBox(height: 12)),
+          ],
+
+          const SliverToBoxAdapter(child: SizedBox(height: 28)),
+        ],
+      ),
+    );
+  }
+
+  /// 渲染每个月份的专属分组 Header (如 "2026年8月"、"2026年7月")
+  Widget _buildMonthHeader(String monthKey, List<DailyChallengeItem> monthItems) {
+    // 解析 YYYY-MM
+    final parts = monthKey.split('-');
+    final year = parts.isNotEmpty ? parts[0] : '';
+    final month = parts.length > 1 ? int.tryParse(parts[1]) ?? 1 : 1;
+    final headerTitle = '$year年$month月';
+    final completedCount = monthItems.where((d) => d.isCompleted).length;
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(18, 14, 18, 6),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 4,
+                height: 16,
+                decoration: BoxDecoration(
+                  color: const Color(0xFF2E7D32),
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Text(
+                headerTitle,
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.black87,
+                ),
+              ),
+            ],
+          ),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+            decoration: BoxDecoration(
+              color: Colors.grey.shade100,
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Text(
+              '已完成 $completedCount/${monthItems.length}',
+              style: TextStyle(
+                fontSize: 11.5,
+                fontWeight: FontWeight.w600,
+                color: Colors.grey.shade700,
               ),
             ),
           ),
-
-          const SliverToBoxAdapter(child: SizedBox(height: 28)),
         ],
       ),
     );
@@ -328,13 +421,13 @@ class _DailyTabViewState extends State<DailyTabView> {
               ),
             ),
 
-            // Top and Bottom gradients
+            // Top gradient overlay
             Container(
               decoration: const BoxDecoration(
                 gradient: LinearGradient(
-                  colors: [Colors.black45, Colors.transparent, Colors.black54],
+                  colors: [Colors.black45, Colors.transparent],
                   begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
+                  end: Alignment.center,
                 ),
               ),
             ),
@@ -362,24 +455,6 @@ class _DailyTabViewState extends State<DailyTabView> {
                     color: Colors.black87,
                   ),
                 ),
-              ),
-            ),
-
-            // Bottom Title
-            Positioned(
-              left: 10,
-              right: 10,
-              bottom: 10,
-              child: Text(
-                item.title.replaceFirst('${item.dayNumber} 日 · ', ''),
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                  shadows: [Shadow(color: Colors.black87, blurRadius: 4)],
-                ),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
               ),
             ),
 

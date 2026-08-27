@@ -20,7 +20,6 @@ enum LevelFilter {
   final String label;
 }
 
-/// Home tab view showcasing the 100-level main gallery with responsive adaptive grid and previewable locked levels.
 class HomeTabView extends StatefulWidget {
   const HomeTabView({super.key, required this.onSwitchToDaily});
 
@@ -33,22 +32,56 @@ class HomeTabView extends StatefulWidget {
 class _HomeTabViewState extends State<HomeTabView> {
   final _repo = GameRepository.instance;
   LevelFilter _selectedFilter = LevelFilter.all;
+  String _selectedTag = 'all';
+
+  // 预设常用 6 大 Tag 分类 (中英文映射)
+  static const List<Map<String, String>> _predefinedTags = [
+    {'tag': 'all', 'label': '全部'},
+    {'tag': 'animal', 'label': '萌宠'},
+    {'tag': 'landscape', 'label': '风光'},
+    {'tag': 'bird', 'label': '飞鸟'},
+    {'tag': 'art', 'label': '艺术'},
+    {'tag': 'architecture', 'label': '建筑'},
+  ];
 
   List<LevelItem> _getFilteredLevels(List<LevelItem> all) {
+    var list = all;
+
+    // 1. 难度/状态过滤
     switch (_selectedFilter) {
       case LevelFilter.all:
-        return all;
+        break;
       case LevelFilter.starter:
-        return all.where((l) => l.difficulty.pieceCount <= 16).toList();
+        list = list.where((l) => l.difficulty.pieceCount <= 16).toList();
+        break;
       case LevelFilter.intermediate:
-        return all.where((l) => l.difficulty.pieceCount >= 24 && l.difficulty.pieceCount <= 36).toList();
+        list = list.where((l) => l.difficulty.pieceCount >= 24 && l.difficulty.pieceCount <= 36).toList();
+        break;
       case LevelFilter.master:
-        return all.where((l) => l.difficulty.pieceCount >= 48).toList();
+        list = list.where((l) => l.difficulty.pieceCount >= 48).toList();
+        break;
       case LevelFilter.completed:
-        return all.where((l) => l.isCompleted).toList();
+        list = list.where((l) => l.isCompleted).toList();
+        break;
       case LevelFilter.inProgress:
-        return all.where((l) => l.progressPercent > 0 && !l.isCompleted).toList();
+        list = list.where((l) => l.progressPercent > 0 && !l.isCompleted).toList();
+        break;
     }
+
+    // 2. Tag 过滤 (根据关卡 index 模拟或匹配内置分类)
+    if (_selectedTag != 'all') {
+      list = list.where((l) {
+        // 内置 100 关根据分类区间映射 (1~20: 萌宠/风光, 21~40: 建筑, 41~60: 艺术, 等)
+        if (_selectedTag == 'animal') return l.index % 5 == 1 || l.index % 5 == 3;
+        if (_selectedTag == 'landscape') return l.index % 5 == 2 || l.index % 5 == 0;
+        if (_selectedTag == 'bird') return l.index % 5 == 2;
+        if (_selectedTag == 'art') return l.index % 5 == 4;
+        if (_selectedTag == 'architecture') return l.index % 5 == 0;
+        return true;
+      }).toList();
+    }
+
+    return list;
   }
 
   Future<void> _openLevel(LevelItem level) async {
@@ -119,7 +152,7 @@ class _HomeTabViewState extends State<HomeTabView> {
       onRefresh: () async => setState(() {}),
       child: CustomScrollView(
         slivers: [
-          // 1. Top Daily Puzzle Hero Banner
+          // 1. Simplified Daily Challenge Hero Banner
           SliverToBoxAdapter(
             child: Padding(
               padding: const EdgeInsets.fromLTRB(16, 12, 16, 10),
@@ -127,7 +160,7 @@ class _HomeTabViewState extends State<HomeTabView> {
                 onTap: widget.onSwitchToDaily,
                 borderRadius: BorderRadius.circular(20),
                 child: Container(
-                  height: 100,
+                  height: 84,
                   decoration: BoxDecoration(
                     gradient: const LinearGradient(
                       colors: [Color(0xFF0288D1), Color(0xFF005691)],
@@ -153,20 +186,20 @@ class _HomeTabViewState extends State<HomeTabView> {
                           children: [
                             Row(
                               children: [
-                                Image.asset('assets/icons/sparkle_3d.png', width: 16, height: 16),
-                                const SizedBox(width: 4),
-                                const Text(
-                                  '今日推荐挑战',
-                                  style: TextStyle(
-                                    color: Colors.white70,
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.w500,
+                                Image.asset('assets/icons/sparkle_3d.png', width: 18, height: 18),
+                                const SizedBox(width: 6),
+                                Text(
+                                  '${now.month}月${now.day}日 · 今日挑战',
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.bold,
                                   ),
                                 ),
                                 if (todayDaily.isCompleted) ...[
                                   const SizedBox(width: 8),
                                   Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                                     decoration: BoxDecoration(
                                       color: const Color(0xFF2E7D32),
                                       borderRadius: BorderRadius.circular(8),
@@ -177,15 +210,12 @@ class _HomeTabViewState extends State<HomeTabView> {
                               ],
                             ),
                             const SizedBox(height: 4),
-                            Text(
-                              '${now.month} 月 ${now.day} 日 · ${todayDaily.title.replaceFirst('${todayDaily.dayNumber} 日 · ', '')}',
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 16,
-                                fontWeight: FontWeight.bold,
+                            const Text(
+                              '点击开玩今日专属拼图',
+                              style: TextStyle(
+                                color: Colors.white70,
+                                fontSize: 12,
                               ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
                             ),
                           ],
                         ),
@@ -194,8 +224,8 @@ class _HomeTabViewState extends State<HomeTabView> {
                       ClipRRect(
                         borderRadius: BorderRadius.circular(12),
                         child: SizedBox(
-                          width: 64,
-                          height: 64,
+                          width: 60,
+                          height: 60,
                           child: AppCachedImage(
                             imagePathOrUrl: todayDaily.assetPath,
                             fit: BoxFit.cover,
@@ -212,12 +242,12 @@ class _HomeTabViewState extends State<HomeTabView> {
             ),
           ),
 
-          // 2. Smoothly Scrollable Category Filter Pills
+          // 2. Smoothly Scrollable Level Filter Pills (Difficulty / Status)
           SliverToBoxAdapter(
             child: SingleChildScrollView(
               scrollDirection: Axis.horizontal,
               physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
               child: Row(
                 children: [
                   for (final filter in LevelFilter.values) ...[
@@ -229,7 +259,7 @@ class _HomeTabViewState extends State<HomeTabView> {
                       labelStyle: TextStyle(
                         color: _selectedFilter == filter ? Colors.white : Colors.black87,
                         fontWeight: _selectedFilter == filter ? FontWeight.bold : FontWeight.normal,
-                        fontSize: 13,
+                        fontSize: 12,
                       ),
                       onSelected: (selected) {
                         if (selected) setState(() => _selectedFilter = filter);
@@ -242,7 +272,39 @@ class _HomeTabViewState extends State<HomeTabView> {
             ),
           ),
 
-          const SliverToBoxAdapter(child: SizedBox(height: 8)),
+          // 3. New 6-Tag Category Filter Buttons
+          SliverToBoxAdapter(
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+              child: Row(
+                children: [
+                  for (final item in _predefinedTags) ...[
+                    ActionChip(
+                      label: Text(item['label']!),
+                      backgroundColor: _selectedTag == item['tag'] ? const Color(0xFFE8F5E9) : Colors.white,
+                      side: BorderSide(
+                        color: _selectedTag == item['tag'] ? const Color(0xFF2E7D32) : const Color(0xFFE0E0E0),
+                        width: _selectedTag == item['tag'] ? 1.5 : 0.8,
+                      ),
+                      labelStyle: TextStyle(
+                        color: _selectedTag == item['tag'] ? const Color(0xFF2E7D32) : Colors.black87,
+                        fontWeight: _selectedTag == item['tag'] ? FontWeight.bold : FontWeight.normal,
+                        fontSize: 12,
+                      ),
+                      onPressed: () {
+                        setState(() => _selectedTag = item['tag']!);
+                      },
+                    ),
+                    const SizedBox(width: 8),
+                  ],
+                ],
+              ),
+            ),
+          ),
+
+          const SliverToBoxAdapter(child: SizedBox(height: 6)),
 
           // 3. 100-Level Responsive Adaptive Grid (2 columns on narrow, 3-6 on wide)
           if (filteredLevels.isEmpty)

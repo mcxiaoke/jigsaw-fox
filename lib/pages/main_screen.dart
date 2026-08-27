@@ -4,10 +4,11 @@ import 'package:phosphoricons_flutter/phosphoricons_flutter.dart';
 import 'achievements_page.dart';
 import 'settings_page.dart';
 import 'tabs/daily_tab_view.dart';
+import 'tabs/events_tab_view.dart';
 import 'tabs/home_tab_view.dart';
 import 'tabs/my_puzzles_tab_view.dart';
 
-/// Main screen featuring the 3-tab bottom navigation (Home / My / Daily) with streamlined header.
+/// Main screen featuring the 4-tab bottom navigation (Home / Daily / Events / My) with streamlined header.
 class MainScreen extends StatefulWidget {
   const MainScreen({super.key});
 
@@ -21,13 +22,15 @@ class _MainScreenState extends State<MainScreen> {
   String get _appBarTitle {
     switch (_currentIndex) {
       case 0:
-        return '关卡画廊';
+        return '主页';
       case 1:
-        return '我的自制';
+        return '每日';
       case 2:
-        return '每日拼图';
+        return '活动';
+      case 3:
+        return '自制';
       default:
-        return '异形拼图';
+        return '主页';
     }
   }
 
@@ -77,10 +80,11 @@ class _MainScreenState extends State<MainScreen> {
         index: _currentIndex,
         children: [
           HomeTabView(
-            onSwitchToDaily: () => setState(() => _currentIndex = 2),
+            onSwitchToDaily: () => setState(() => _currentIndex = 1),
           ),
-          const MyPuzzlesTabView(),
           const DailyTabView(),
+          const EventsTabView(),
+          const MyPuzzlesTabView(),
         ],
       ),
       bottomNavigationBar: Container(
@@ -100,14 +104,19 @@ class _MainScreenState extends State<MainScreen> {
               label: '主页',
             ),
             NavigationDestination(
-              icon: Icon(PhosphorIconsRegular.images),
-              selectedIcon: Icon(PhosphorIconsFill.images, color: Color(0xFF2E7D32)),
-              label: '我的自制',
-            ),
-            NavigationDestination(
               icon: Icon(PhosphorIconsRegular.calendarCheck),
               selectedIcon: Icon(PhosphorIconsFill.calendarCheck, color: Color(0xFF2E7D32)),
-              label: '每日拼图',
+              label: '每日',
+            ),
+            NavigationDestination(
+              icon: Icon(PhosphorIconsRegular.sparkle),
+              selectedIcon: Icon(PhosphorIconsFill.sparkle, color: Color(0xFF2E7D32)),
+              label: '活动',
+            ),
+            NavigationDestination(
+              icon: Icon(PhosphorIconsRegular.images),
+              selectedIcon: Icon(PhosphorIconsFill.images, color: Color(0xFF2E7D32)),
+              label: '自制',
             ),
           ],
         ),

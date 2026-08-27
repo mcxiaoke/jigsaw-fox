@@ -252,7 +252,7 @@ class DownloadedDrawerSheet extends StatelessWidget {
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: Text(
-                      item.sourcePlatform,
+                      item.sourcePlatform == '本地相册' || item.sourcePlatform == '相册' ? '相册' : '网络',
                       style: const TextStyle(
                         color: Colors.white,
                         fontSize: 10.5,

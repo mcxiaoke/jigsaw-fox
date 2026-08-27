@@ -1,358 +1,499 @@
-# 拼图关卡内容体系、存储架构与扩展包系统设计规范 (v2 极简实用版)
+# 拼图关卡内容体系、存储架构与扩展包系统设计规范 (v3 极简动态推导与路由版)
 
-> **文档状态**：方案设计 / 评审通过
-> **面向模块**：内置关卡、云端动态热更新、UGC 数据存储、扩展包 (Zip / 文件夹) 导入、非规范图片规格化与存档隔离
-> **修订日期**：2026-08-26（v2 极简重构版）
+> **文档状态**：已完整落地实现并集成 (v3 生产落地版)
+> **实现工程**：`lib/logic/content/` (根路由清单、增量主线、每日时间锁、活动状态机)、`lib/pages/tabs/` (主页/每日/活动/自制 4-Tab 矩阵)
+> **面向模块**：Root Manifest 根路由、首页主线 (Main)、每日挑战 (Daily)、活动中心 (Events)、关卡扩展包 (Zip / 文件夹)、本地 UGC、统一存档与残局隔离
+> **修订日期**：2026-08-27（v3 落地验证版）
 >
-> **版本修订核心原则**：
-> 1. **图片即关卡**：一个图片文件就是一个关卡，所有可由图片像素计算的数据（长宽比、网格行列、缩略图）全部交给运行时动态推导，**禁止硬编码静态存储**。
-> 2. **内容与存档彻底分离**：关卡图片只读；玩家动态通关记录、最佳用时与断点残局快照集中独立管理，**绝不混入关卡包**。
-> 3. **命名空间 Canonical ID**：采用语义化全局唯一 ID（如 `builtin:featured_001`, `remote:featured_101`）替代无序 UUID，兼顾防冲突、可预测性与顺序链条。
-> 4. **首页混合持续更新**：首页关卡支持“内置基线 (1~100) + 云端增量 Manifest (101+)”三层合并管线，支持无需发版自动追加新关卡。
-> 5. **健壮容错**：严格对齐架构文档 §3.13 标准，低清图（短边 $< 750\text{px}$）直接过滤，超大图（短边 $> 2160\text{px}$）施加 4K 黄金上限约束。
+> **版本核心演进原则**：
+> 1. **根清单路由解耦 (Root Manifest Discovery)**：App 仅内置极简根清单 URL（主备容灾），各业务模块（首页/每日/活动）的 CDN 访问端点由服务端动态下发，杜绝客户端发版硬编码。
+> 2. **图片即关卡，零/极简元数据 (Zero Metadata Philosophy)**：关卡文件名即 ID，去除死板的手工 title/id 冗余，全局通过 `{模块}:{上下文}:{文件名}` 动态推导 Canonical ID；长宽比、网格切片、缩略图全由运行时推导。
+> 3. **多维标签化分类 (Tag-based Taxonomy)**：首页摒弃死板物理目录分类，全面推行多标签（Tags）筛选体系，一套关卡池支持多维度灵活过滤。
+> 4. **二元数据载荷自由切换 (Array vs. Zip)**：支持“轻量流式清单 (Array)”与“整包离线交付 (Zip)”两种模式，兼顾常态更新与大型专题活动。
+> 5. **每日挑战时间锁 (Daily Time-lock)**：每日关卡按月交付，依据 `YYYYMMDD` 文件名自推导，客户端依据系统时间动态施加时间锁（`date <= today` 开放，`date > today` 锁闭防剧透）。
+> 6. **活动状态机与软下线 (Event Lifecycle & Auto-GC)**：活动列表通过 `status`（`upcoming / active / outdated / disabled`）状态机管控生命周期，下线时由客户端自动垃圾回收本地磁盘缓存。
+> 7. **内容只读与存档彻底隔离**：关卡图片与元数据完全只读；玩家通关数据按 Canonical ID 索引管理，残局快照按需单文件落盘。
 
 ---
 
 ## 1. 整体架构全景图
 
-整个拼图游戏的内容数据流与存储系统划分为 **只读内容源（含动态混合）** 与 **独立玩家存档系统**：
-
 ```mermaid
 flowchart TD
-    subgraph ContentSources["关卡内容源 (Read-Only Content Sources)"]
-        subgraph HybridGallery["首页主线画廊混合内容源 (Hybrid Level Stream)"]
-            A1["1. 内置官方基线 (1~100关)<br/>assets/images/levels/分类子目录"]
-            A2["2. 云端热更清单 (101+ 关)<br/>remote_levels.json + 本地增量缓存"]
+    subgraph BootDiscovery["1. 客户端启动与根路由发现 (Discovery Layer)"]
+        A["App 内置主备根清单 URL<br/>[CDN_A/manifest.json, CDN_B/manifest.json]"]
+        B["Root Manifest 根路由清单<br/>(下发 mainUrl, dailyUrl, eventsUrl 及版本号)"]
+        A -->|启动拉取 / 容灾重试| B
+    end
+
+    subgraph ModulePipelines["2. 业务模块与双载荷管道 (Content Pipelines)"]
+        subgraph MainModule["首页主线模块 (Main)"]
+            C1["main.json (Version + Tags + ImageUrls)"]
+            C2["内置 Assets 关卡 (1~100)"]
+            C1 & C2 --> C3["Append-Only 增量合并<br/>Canonical ID: main:101"]
         end
-        B["3. 本地自制拼图 (Local UGC)<br/>custom_puzzles/custom_*.png 扁平图片"]
-        C["4. 导入关卡包 (Zip / 文件夹)<br/>packs/pack_xxx/images/*.webp (可选 pack.json)"]
-        D["5. 每日挑战 (Daily Challenges)<br/>daily_cache/YYYY-MM-DD.webp + 极简清单"]
+
+        subgraph DailyModule["每日挑战模块 (Daily)"]
+            D1["按月整包: 202608.zip (无元数据)<br/>或按月列表: [20260801.webp...]"]
+            D2["客户端时间锁校验<br/>Date <= Today 开放 / > Today 锁定<br/>Canonical ID: daily:20260827"]
+            D1 --> D2
+        end
+
+        subgraph EventsModule["活动中心模块 (Events)"]
+            E1["events.json (活动元数据 + 状态机)"]
+            E2A["形态 A: Zip 整包<br/>一键解压离线"]
+            E2B["形态 B: Array 列表<br/>在线按需加载"]
+            E1 --> E2A & E2B
+            E2A & E2B --> E3["Canonical ID: event:summer:01"]
+        end
+
+        subgraph LocalPacks["扩展与本地模块 (Packs & UGC)"]
+            F1["外部导入包: pack:art:01"]
+            F2["本地自制: ugc:1787548651000"]
+        end
     end
 
-    subgraph RuntimeEngine["统一运行时推导与图片规格化引擎"]
-        E["非规范图片规格化 (短边<750过滤 / 短边>2160降采样 / 杂质过滤)"]
-        F["动态比例与网格推导 (PuzzleAspectRatio.fromSize -> 推荐难度梯队)"]
-        G["内存动态降采样渲染 (Flutter ResizeImage / 零额外磁盘缩略图)"]
+    subgraph RuntimeStorage["3. 客户端存储与呈现系统 (Storage & Engine)"]
+        G["统一关卡池 (GameRepository.levels)"]
+        H["首页：多标签 Tag 内存筛选视图"]
+        I["每日：日历矩阵打卡视图"]
+        J["活动：独立活动面板 / 关卡树"]
+        K["核心拼图引擎 & 规格化滤镜 (短边 750~2160px 约束)"]
+        L["统一玩家存档与残局系统 (SharedPreferences + snapshots/*.snapshot)"]
     end
 
-    subgraph SaveSystem["统一玩家存档与残局系统 (Save & Progress Store)"]
-        H["轻量通关进度与统计 (SharedPreferences / progress.json，按 Canonical ID 索引)"]
-        I["独立对局残局快照 (snapshots/<sanitized_id>.snapshot 按需读写)"]
-    end
-
-    subgraph Presentation["UI 交互与对局引擎"]
-        J["首页画廊 (内置1~100 + 动态热更关卡统一流)"]
-        K["难度选择面板 (ChooseDifficultySheet 16~300块自选)"]
-        L["JigsawPuzzleGame 核心对局引擎 (5大标准比例 + 拼图切片)"]
-    end
-
-    A1 & A2 --> E
-    B & C & D --> E
-    E --> F
-    F --> G --> J
-    J --> K --> L
-    L <--> SaveSystem
+    C3 & D2 & E3 & F1 & F2 --> G
+    G --> H & I & J --> K
+    K <--> L
 ```
 
 ---
 
-## 2. 关卡唯一标识符设计：命名空间 Canonical ID vs UUID
+## 2. 统一关卡主键：全局 Canonical ID 动态合成法则
 
-### 2.1 为什么不推荐纯随机 UUID？
-- **无序且丢失语义**：UUID（如 `8f9b2c3d-e4a1-4b72-...`）无法体现分类、关卡序号与归属包，排查日志、断点追踪和本地文件命名极度不便；
-- **难以保证分布式多端一致**：如果远端更新发布了一批新关卡，使用命名空间 ID 可以让所有客户端拉取到完全相同、可预测的唯一标识，方便版本对齐与云端热更去重。
+系统**不依赖服务端在 JSON 中手动编写 `id`**，所有关卡进入客户端内存与本地落盘时，统一通过 **`{模块前缀}:{上下文/分组}:{纯文件名(无后缀)}`** 自动推导，确保跨端一致、绝对防冲突、语义清晰：
 
-### 2.2 命名空间全局规范 ID（Namespaced Canonical ID）
-
-系统统一采用 **`{namespace}:{category}_{seq_or_hash}`** 格式作为关卡全局主键：
-
-| 关卡源类型 | Canonical ID 示例 | 来源说明与规则 |
-| :--- | :--- | :--- |
-| **内置主线关卡** | `builtin:featured_001` ~ `builtin:featured_100` | 打包在 Assets 中，序号稳定，向后兼容旧 `level_1` 存档映射 |
-| **云端主线热更新** | `remote:featured_101`, `remote:animal_031` | 云端 Manifest 动态追加，自动续接在对应分类尾部 |
-| **导入关卡包 (DLC)**| `pack:cyberpunk_2026:01`, `pack:world_art:05` | `{pack_id}:{image_filename}` 组合，保证不同包之间绝不冲突 |
-| **UGC 自制拼图** | `ugc:custom_1787548651000` | 时间戳/哈希命名，玩家本地私有 |
-| **每日挑战关卡** | `daily:2026-08-26` | 按自然日期全局唯一映射 |
+| 关卡源类型 | 规范格式 (Pattern) | 实例推导 (Example) | 规则与用途 |
+| :--- | :--- | :--- | :--- |
+| **首页内置关卡** | `main:{序号}` | `main:001` ~ `main:100` | 打包在 Assets 中，按文件名自动映射 |
+| **首页云端热更** | `main:{序号}` | `main:101`, `main:102` | 从远端图片文件名或 URL 提取数字序号 |
+| **每日挑战** | `daily:{YYYYMMDD}` | `daily:20260827` | 直接从文件名 `20260827.webp` 提取日期，全局天然唯一 |
+| **限时活动** | `event:{eventId}:{文件名}` | `event:cyberpunk:01_rain` | 活动 ID + 包内图片文件名，活动间绝不冲突 |
+| **导入关卡包 (DLC)**| `pack:{packId}:{文件名}` | `pack:world_art:mona_lisa` | 包名 + 内部文件名 |
+| **UGC 自制拼图** | `ugc:{时间戳或哈希}` | `ugc:1787548651000` | 本地私有图片，时间戳唯一命名 |
 
 ---
 
-## 3. 首页主线画廊：内置 + 云端增量混合更新架构
+## 3. 根清单路由体系 (Root Manifest)
 
-首页关卡绝不仅限于出厂内置的 100 关，而是支持**在线不发版持续推新**。
+App 客户端代码内部**只内置主备 2~3 个根清单的静态 URL**（如主 CDN、GitHub Pages 备用镜像、Cloudflare Workers 等），不再硬编码任何具体业务模块的 URL。
 
+### 3.1 服务端根清单规范 (`manifest.json`)
+```json
+{
+  "schemaVersion": 3,
+  "updatedAt": "2026-08-27T06:00:00Z",
+  "appConfig": {
+    "minAppVersion": "1.0.0",
+    "notice": ""
+  },
+  "modules": {
+    "main": {
+      "url": "https://cdn.example.com/puzzle/main.json",
+      "version": 105
+    },
+    "daily": {
+      "currentMonth": "202608",
+      "zipUrlPattern": "https://cdn.example.com/puzzle/daily/{YYYYMM}.zip",
+      "listUrlPattern": "https://cdn.example.com/puzzle/daily/{YYYYMM}.json",
+      "version": 20260827
+    },
+    "events": {
+      "url": "https://cdn.example.com/puzzle/events.json",
+      "version": 12
+    }
+  }
+}
 ```
- ┌─────────────────────────────────────────────────────────────┐
- │ 1. 基础内置层 (Base Assets)                                  │
- │    • assets/images/levels/featured/level_001~100.webp       │
- │    • order: 1 ~ 100 (零网络延迟秒开)                         │
- └──────────────────────────────┬──────────────────────────────┘
-                                │ (合并 Union)
-                                ▼
- ┌─────────────────────────────────────────────────────────────┐
- │ 2. 本地已下载增量缓存 (Disk Cache)                          │
- │    • [App Support]/remote_levels_cache.json                 │
- │    • [App Support]/remote_levels_images/<id>.webp           │
- └──────────────────────────────┬──────────────────────────────┘
-                                │ (静默拉取 Delta Fetch)
-                                ▼
- ┌─────────────────────────────────────────────────────────────┐
- │ 3. 云端最新清单 (Remote Manifest)                           │
- │    • GET https://cdn.example.com/levels/manifest_v1.json    │
- │    • 包含最新发布的 101, 102... 关卡元数据与图片下载地址      │
- └──────────────────────────────┬──────────────────────────────┘
-                                │
-                                ▼
- ┌─────────────────────────────────────────────────────────────┐
- │ 统一去重与排序管道 (GameRepository.levels)                   │
- │    • 去重规则: Map<String, LevelItem> 以 Canonical ID 为键    │
- │    • 排序规则: 按 order 升序自然排列 (1..100, 101, 102...)   │
- └─────────────────────────────────────────────────────────────┘
+
+### 3.2 客户端发现与容灾流程
+1. **主备轮询**：客户端优先请求主 URL，若超时（如 3 秒）或返回 5xx，自动无缝重试备用 URL；
+2. **本地落盘**：请求成功后将 `manifest.json` 缓存至本地 `[App Support]/manifest_cache.json`；
+3. **离线回退**：若完全无网络且无缓存，回退至 App 打包时内置的 `assets/data/manifest_default.json`。
+
+---
+
+## 4. 三大业务模块数据格式与运作规范
+
+### 4.1 首页主线模块 (Main)：多标签 + 增量流式更新
+
+首页主线关卡面向海量持续推新，采用 **“版本号驱动 + 全量极简 JSON + ID 增量 Upsert + 图片按需懒加载”** 机制。
+
+#### (1) 服务端格式规范 (`main.json`)
+首页关卡仅需提供图片 URL 与分类 Tags，**无需提供 id 和 title**（客户端自动从文件名推导 `main:101`，标题默认展示为 `#101`）：
+```json
+{
+  "version": 105,
+  "levels": [
+    {
+      "url": "https://cdn.example.com/main/101.webp",
+      "tags": ["landscape", "aurora", "snow"]
+    },
+    {
+      "url": "https://cdn.example.com/main/102.webp",
+      "tags": ["animal", "cat", "cute"]
+    },
+    {
+      "url": "https://cdn.example.com/main/103.webp",
+      "tags": ["art", "oil_painting", "landscape"]
+    }
+  ]
+}
 ```
 
-### 3.1 云端增量关卡清单格式 (`remote_levels.json`)
-云端仅需维护一个极简静态 JSON 文件：
+#### (2) 标签化分类 (Tags) 运作机制
+*   **多维命中**：关卡不再受限于单一文件夹或单一类别。例如 `103.webp` 同时拥有 `art` 和 `landscape` 标签，在“艺术”和“风景”两个 Tab 下都会被筛选出来。
+*   **UI 过滤逻辑**：
+    *   顶部 Tab 栏展示：`全部` | `萌宠` (`animal`) | `风光` (`landscape`) | `艺术` (`art`) 等；
+    *   过滤公式：`currentTag == 'all' || level.tags.contains(currentTag)`。
+
+#### (3) 客户端本地存储与增量合并
+*   **本地存储路径**：
+    *   元数据缓存：`[App Support]/main_levels_cache.json`
+    *   已下载原图：`[App Documents]/levels/main/main_101.webp`
+*   **增量合并逻辑**：
+    *   客户端对比 `main.version`，若有更新，拉取 `main.json`；
+    *   以推导出的 `main:101` 为主键，与本地已有的关卡进行 `Upsert`（插入新增关卡，保留本地已有的通关进度和下载标记）；
+    *   图片不在同步时批量下载，而是在玩家点击关卡或进入画廊视图时进行**按需下载并持久化缓存**。
+
+---
+
+### 4.2 每日挑战模块 (Daily)：按月交付 + 零元数据 + 客户端时间锁
+
+每日挑战具有强烈的按天递进与防剧透特性，服务端**彻底取消单独的 JSON 元数据**，完全基于 `YYYYMMDD` 文件名推导。
+
+#### (1) 服务端交付支持的两种形态
+
+##### 形态 A：按月整包 Zip (推荐首选)
+*   **CDN 结构**：`https://cdn.example.com/puzzle/daily/202608.zip`
+*   **Zip 内部文件结构**（纯图片，无配置文件）：
+    ```
+    202608.zip
+    ├── 20260801.webp
+    ├── 20260802.webp
+    ├── ...
+    ├── 20260827.webp
+    └── 20260831.webp
+    ```
+
+##### 形态 B：按月图片列表 Array (降级/在线备用)
+若使用单图列表形式，服务端清单仅包含当月 URL 数组：
+```json
+[
+  "https://cdn.example.com/daily/20260801.webp",
+  "https://cdn.example.com/daily/20260802.webp",
+  "https://cdn.example.com/daily/20260827.webp"
+]
+```
+
+#### (2) 客户端本地存储结构
+Zip 下载后直接解压至专属月份目录：
+```
+[App Documents]/daily/
+├── 202607/                          # 上月归档
+│   ├── 20260701.webp
+│   └── ...
+└── 202608/                          # 当月目录
+    ├── 20260801.webp
+    ├── 20260827.webp
+    └── 20260831.webp
+```
+
+#### (3) 客户端扫描与时间锁 (Time-lock) 机制
+```dart
+// 伪代码：解析每日挑战关卡
+final fileRegex = RegExp(r'^(\d{4})(\d{2})(\d{2})\.(webp|jpg|png)$');
+final todayStr = DateFormat('yyyyMMdd').format(DateTime.now()); // 如 "20260827"
+
+for (final file in directory.listSync()) {
+  final match = fileRegex.firstMatch(path.basename(file.path));
+  if (match != null) {
+    final dateStr = '${match.group(1)}${match.group(2)}${match.group(3)}';
+    final canonicalId = 'daily:$dateStr';
+    final isLocked = dateStr.compareTo(todayStr) > 0; // 未来日期加锁
+    
+    // 生成运行时关卡项
+    yield DailyLevelItem(
+      id: canonicalId,
+      date: dateStr,
+      localPath: file.path,
+      isTimeLocked: isLocked, // true: UI 展示时间锁图标，禁止进入游戏且模糊/屏蔽底图
+    );
+  }
+}
+```
+*   **体验收益**：一个月只下载一次 Zip（约 5~10MB），整月离线可用；同时未来日期由于时间锁限制，杜绝玩家提前看到剧透图。
+
+---
+
+### 4.3 活动中心模块 (Events)：独立主题包 + 状态机生命周期
+
+活动是高度自包含的独立专题。活动自身需要面向玩家的介绍元数据，但**活动内部的关卡图片不需要单独配置 ID**。
+
+#### (1) 服务端活动列表规范 (`events.json`)
+支持 `type: "zip"`（整包）与 `type: "array"`（列表）双模式：
 ```json
 [
   {
-    "id": "remote:featured_101",
-    "title": "极光下的静谧雪原",
-    "category": "featured",
-    "order": 101,
-    "imageUrl": "https://cdn.example.com/levels/featured_101.webp",
-    "publishedAt": "2026-09-01T00:00:00Z"
+    "id": "cyberpunk_2026",
+    "title": "未来赛博都市 · 霓虹幻夜",
+    "desc": "穿梭于流光溢彩的摩天楼群与雨夜街道，挑战 12 张限定高清拼图。",
+    "coverUrl": "https://cdn.example.com/events/cyberpunk_cover.webp",
+    "status": "active",
+    "type": "zip",
+    "zipUrl": "https://cdn.example.com/events/cyberpunk_2026.zip",
+    "zipSha256": "8f3b2a...",
+    "sizeBytes": 24500000,
+    "startTime": "2026-08-01T00:00:00Z",
+    "endTime": "2026-09-01T00:00:00Z",
+    "displayOrder": 1
   },
   {
-    "id": "remote:featured_102",
-    "title": "金色秋日的落叶大道",
-    "category": "featured",
-    "order": 102,
-    "imageUrl": "https://cdn.example.com/levels/featured_102.webp",
-    "publishedAt": "2026-09-08T00:00:00Z"
+    "id": "classic_art",
+    "title": "卢浮宫名画特辑",
+    "desc": "精选世界传世油画名作",
+    "coverUrl": "https://cdn.example.com/events/art_cover.webp",
+    "status": "active",
+    "type": "array",
+    "levels": [
+      "https://cdn.example.com/events/art/01_mona_lisa.webp",
+      "https://cdn.example.com/events/art/02_starry_night.webp"
+    ],
+    "startTime": "2026-08-15T00:00:00Z",
+    "endTime": "2026-09-15T00:00:00Z",
+    "displayOrder": 2
+  },
+  {
+    "id": "summer_2025",
+    "status": "disabled"
   }
 ]
 ```
 
-### 3.2 混合关卡合并与通关解锁逻辑
-1. **数据合并 (Merge Pipeline)**：
-   - 启动时：先加载内置 100 关 + 本地缓存的增量关卡，UI 瞬间呈现；
-   - 后台静默：请求 CDN `remote_levels.json`，若有新增 `order > 100` 的条目，写入本地缓存并增量刷新 UI；
-   - 图片按需下载：玩家点击未缓存的远端关卡时，自动下载至本地磁盘后进入对局。
-2. **通关解锁机制 (Unlock Progression)**：
-   - **链式顺序解锁**：通关 `order = N` 的关卡后，系统自动解锁 `order = N + 1` 关卡（无论该关卡是内置还是云端新推的）；
-   - **新关尝鲜标记**：云端关卡若带有 `"defaultUnlocked": true`，即使用户尚未通关前面关卡，也可直接开玩。
+#### (2) 活动生命周期状态机与客户端行为定义
+
+| 状态 (`status`) | 含义与业务场景 | 客户端 UI 展示 | 本地缓存与磁盘管理行为 |
+| :--- | :--- | :--- | :--- |
+| **`upcoming`** | 活动预告 (未开始) | 卡片置灰，显示“距离开始还有 X 天”倒计时 | 可选在 Wi-Fi 下静默预下载 Zip |
+| **`active`** | 活动进行中 | 正常高亮显示，支持下载与游玩 | 保存在 `[App Documents]/events/<eventId>/` |
+| **`outdated`** | 活动已结束 (往期回顾) | 移至“往期活动”Tab，只读回顾已通关关卡 | 保留本地解压数据，允许玩家在设置中手动清理 |
+| **`disabled`** | **活动彻底下架/废弃** | **客户端完全隐藏该活动入口** | **触发自动垃圾回收 (Auto-GC)**：客户端在后台自动删除本地对应的解压目录及 Zip，释放存储空间 |
+
+#### (3) 活动包内关卡解析
+*   若为 **Zip 模式**：客户端解压至 `[App Documents]/events/{eventId}/`，遍历目录下所有图片文件，排序后生成 `event:{eventId}:{文件名}`（如 `event:cyberpunk_2026:01_rain`）；
+*   若为 **Array 模式**：客户端直接拉取关卡 URL，生成 `event:{eventId}:{文件名}`。
 
 ---
 
-## 4. 四类关卡源极简存储规范
+## 5. 扩展包 (DLC) 与本地自制 (UGC)
 
-### 4.1 内置官方关卡 (Built-in Assets)
-- **目录结构**：
-  ```
-  assets/
-  ├── data/categories.json             # 分类定义（仅定义 ID、展示名称、图标）
-  └── images/levels/
-      ├── featured/                    # 主线（level_001.webp ~ level_100.webp）
-      ├── animals/                     # 萌宠生灵
-      ├── landscape/                   # 自然风光
-      └── architecture/                # 建筑名胜
-  ```
+### 5.1 外部导入关卡包 (Packs)
+*   **导入形式**：用户通过系统分享或文件选择器导入 `.zip` 压缩包或文件夹；
+*   **存储路径**：解压至 `[App Documents]/packs/{packId}/`；
+*   **Canonical ID**：`pack:{packId}:{文件名}`；
+*   **极简原则**：纯图片即可成包，若包内有 `pack.json` 则读取自定义标题与作者，若无则直接以 zip 文件名作为包名。
 
----
-
-### 4.2 本地自制拼图 (Local UGC)
-- **存储原则**：扁平图片单文件存储，无嵌套沙盒。
-- **目录结构**：
-  ```
-  [App Documents]/custom_puzzles/
-  ├── custom_1787548651000.png
-  └── custom_1787548923000.png
-  ```
-- **元数据管理**：在 `GameRepository` 列表中集中记录 `{ id, title, sourcePlatform, sourceUrl, createdAt }`。
+### 5.2 本地 UGC 自制拼图
+*   **存储路径**：`[App Documents]/custom_puzzles/ugc_{timestamp}.png`；
+*   **Canonical ID**：`ugc:{timestamp}`；
+*   **元数据**：保存在本地轻量数据库或 `custom_puzzles.json` 中。
 
 ---
 
-### 4.3 关卡扩展包 (Zip 压缩包 / 本地文件夹导入)
-- **核心理念**：**纯图片集合即关卡包**。
-- **目录规范**：
-  ```
-  cyberpunk_city.zip (或 cyberpunk_city 文件夹)
-  ├── pack.json                        # 【完全可选】包全局信息；若无则自动以 zip 文件名作为包名
-  ├── 01_霓虹雨夜.webp
-  ├── 02_摩天巨厦.jpg
-  └── 03_飞空飞艇.png
-  ```
-- **可选 `pack.json`（仅含展示糖）**：
-  ```json
-  {
-    "name": "未来赛博都市 · 霓虹幻夜",
-    "description": "穿梭于流光溢彩的摩天楼群与雨夜街道。",
-    "author": "Official Studio"
+## 6. 客户端全局存储目录规范树
+
+```
+[App Sandbox]
+├── assets/                                      # 只读打包资源 (Assets)
+│   ├── data/
+│   │   ├── manifest_default.json                # 默认根路由兜底
+│   │   └── tags.json                            # 默认标签多语言定义 (tag -> 显示名称)
+│   └── images/levels/featured/                  # 内置 1~100 关
+│       ├── level_001.webp (映射为 main:001)
+│       └── ...
+│
+├── [App Support Directory]/                     # 内部配置与系统快照 (用户不可见)
+│   ├── manifest_cache.json                      # 缓存的 Root Manifest
+│   ├── main_levels_cache.json                   # 缓存的首页关卡元数据
+│   ├── events_cache.json                        # 缓存的活动列表
+│   └── snapshots/                               # 对局断点残局快照 (独立文件)
+│       ├── main_101.snapshot
+│       └── daily_20260827.snapshot
+│
+└── [App Documents Directory]/                   # 用户数据与大型关卡内容库
+    ├── levels/                                  # 首页按需下载的图片
+    │   └── main/
+    │       ├── 101.webp
+    │       └── 102.webp
+    ├── daily/                                   # 每日挑战月度沙盒
+    │   ├── 202607/ (已归档月份图片)
+    │   └── 202608/ (当月图片: 20260801.webp...)
+    ├── events/                                  # 活动解压沙盒
+    │   ├── cyberpunk_2026/ (01.webp, 02.webp...)
+    │   └── classic_art/
+    ├── packs/                                   # 用户导入的 DLC 关卡包
+    │   └── world_art/
+    └── custom_puzzles/                          # 本地 UGC 图片
+        └── ugc_1787548651000.png
+```
+
+---
+
+## 7. 玩家存档与残局快照系统
+
+### 7.1 通关进度与打卡记录 (SharedPreferences / SQLite)
+统一以 **Canonical ID** 作为主键索引，结构极度扁平：
+```json
+{
+  "main:001": {
+    "isCompleted": true,
+    "completedPieceCounts": [16, 64],
+    "bestTimeSeconds": 75,
+    "stars": 3
+  },
+  "daily:20260827": {
+    "isCompleted": true,
+    "completedPieceCounts": [36],
+    "bestTimeSeconds": 142
+  },
+  "event:cyberpunk_2026:01": {
+    "isCompleted": false,
+    "hasSnapshot": true
   }
-  ```
+}
+```
+
+### 7.2 对局断点残局快照 (Snapshot Isolation)
+*   **独立存储**：`[App Support]/snapshots/<sanitized_canonical_id>.snapshot`；
+*   **生命周期**：进入对局加载 -> 每放置若干碎片异步写入 -> 通关结算瞬间执行 `deleteFile` 彻底销毁；
+*   **解耦收益**：主存档永不膨胀，单个对局崩溃或损坏不影响全局进度。
 
 ---
 
-### 4.4 每日挑战 (Daily Challenges)
-- **云端清单 (`daily_manifest.json`)**：
-  ```json
-  [
-    {
-      "date": "2026-08-26",
-      "title": "中世纪古堡与阿尔卑斯山麓",
-      "author": "Bing Wallpaper",
-      "imageUrl": "https://cdn.example.com/daily/2026-08-26.webp"
-    }
-  ]
-  ```
-- **本地缓存**：下载后存为 `daily_cache/2026-08-26.webp`；离线自动回退到本地内置 30 天数据集。
+## 8. 非规范图片健壮性处理机制 (对齐架构 §3.13)
 
----
-
-## 5. 非规范图片健壮性处理机制 (对齐架构 §3.13 标准)
-
-在用户导入 Zip 包、相册批量入库或下载远端图片时，系统必须严格遵循架构文档 §3.13 的物理切片安全基准：
-
-```
- 用户输入源 (Zip / 文件夹 / 相册批量 / 网络 URL)
-                    │
-                    ▼
- ┌─────────────────────────────────────────────────────────────┐
- │ 1. 杂质文件过滤与格式校验                                    │
- │    • 白名单过滤: 仅允许 .jpg / .jpeg / .png / .webp          │
- │    • 自动丢弃: .DS_Store, Thumbs.db, .txt, .json 等杂质文件  │
- │    • 坏图容错: 尝试 instantiateImageCodec 解码, 失败则跳过   │
- └──────────────────────────────┬──────────────────────────────┘
-                                │
-                                ▼
- ┌─────────────────────────────────────────────────────────────┐
- │ 2. 低分辨率硬性过滤门槛 (严格对齐 §3.13 安全切片基准)        │
- │    • 过滤规则: 短边 min(W, H) < 750px 直接忽略, 拒绝导入     │
- │    • 核心原因: 保证在最高 225~300 块难度大切片下，单片物理   │
- │      像素远高于 30px 安全基准线，杜绝马赛克模糊              │
- │    • 统计反馈: 导入完成提示 "已成功导入 M 张, 忽略 N 张低清图"│
- └──────────────────────────────┬──────────────────────────────┘
-                                │
-                                ▼
- ┌─────────────────────────────────────────────────────────────┐
- │ 3. 超大分辨率短边 2160 黄金上限约束 (对齐 §3.13)            │
- │    • 上限规则: 短边 min(W, H) > 2160px 时执行等比缩放约束    │
- │      (1:1 最大 2160×2160, 2:3 最大 2160×3240, 3:4 最大 2160×2880)
- │    • 收益: 1080P~2K 高清原图 100% 保持无损物理尺寸; 超大图   │
- │      (4K/8K) 显存严格压制在 15~25MB 安全区间，彻底杜绝 OOM   │
- └──────────────────────────────┬──────────────────────────────┘
-                                │
-                                ▼
- ┌─────────────────────────────────────────────────────────────┐
- │ 4. 长宽比自适应与极端比例居中裁切                           │
- │    • 标准范围 [0.6 ~ 1.7]: 自动通过 PuzzleAspectRatio.fromSize│
- │      吸附到 1:1 / 2:3 / 3:2 / 3:4 / 4:3 五大标准比例        │
- │    • 极端超宽 (r > 1.8) / 极端超长 (r < 0.55):              │
- │      安全居中裁切至最接近的标准比例 (保证切片基础格为正方形) │
- └──────────────────────────────┬──────────────────────────────┘
-                                │
-                                ▼
-                     规格化关卡图片 (用于游戏对局)
-```
-
-### 5.1 规格化与过滤具体规则表
+在用户导入 Zip 包、相册自制或下载网络资源时，运行时引擎统一执行安全规整：
 
 | 异常情况 | 判定标准 | 系统处理策略 |
 | :--- | :--- | :--- |
-| **低分辨率小图** | **短边 $\min(W, H) < 750\text{px}$** | **直接忽略，拒绝导入**。弹出汇总提示（“已跳过 $N$ 张低分辨率图片”），确保所有关卡切片后碎片单片像素 $\ge 30\text{px}$。 |
-| **1080P ~ 2K 标准高清图** | $750\text{px} \le \text{短边} \le 2160\text{px}$ | **100% 原图无损导入**，不进行任何重采样或尺寸压制。 |
-| **超大高分图 (4K/8K/20MB+)** | 短边 $\min(W, H) > 2160\text{px}$ | 按**短边 2160px 上限等比缩放约束**（对齐架构 §3.13），后台线程由 `Isolate.run` 执行高质量缩放并保存为 WebP，解压显存控制在 15~25MB。 |
-| **极端超宽图 (如 21:9 全景)** | 宽高比 $r = W/H > 1.8$ | 自动进行居中安全裁剪至 `16:9` / `4:3` / `3:2` 最接近标准比例。 |
-| **极端超长图 (如 1:3 竖长图)**| 宽高比 $r = W/H < 0.55$ | 自动进行居中安全裁剪至 `2:3` / `3:4` 标准竖屏比例。 |
-| **动图 (GIF / 动效 WebP)** | 帧数 $> 1$ | 仅解码提取首帧（Frame 0）作为静态拼图底图。 |
-| **损坏图片 / 假图片** | 解码 Header 失败或抛出异常 | 忽略该文件，导入统计提示“已跳过 $N$ 张无效图片”，不中断压缩包其余图片导入。 |
+| **低分辨率小图** | **短边 $\min(W, H) < 750\text{px}$** | **直接拦截并跳过**。杜绝切片后单片像素 $< 30\text{px}$ 导致的模糊马赛克。 |
+| **标准高清图** | $750\text{px} \le \text{短边} \le 2160\text{px}$ | **100% 原图无损导入**，不进行二次压缩。 |
+| **超大高分图 (4K/8K)**| 短边 $\min(W, H) > 2160\text{px}$ | **等比缩放至短边 2160px 黄金上限**，由 `Isolate.run` 异步重采样，显存压制在 20MB 内防 OOM。 |
+| **极端比例图** | 宽高比 $> 1.8$ 或 $< 0.55$ | 自动居中安全裁剪至最接近的标准比例（`1:1` / `2:3` / `3:2` / `3:4` / `4:3`）。 |
+| **动图 / 坏图** | GIF / Header 损坏 | GIF 仅取首帧静态图；坏图自动丢弃并弹窗提示跳过。 |
 
 ---
 
-## 6. 玩家存档与残局快照系统设计
-
-### 6.1 通关进度与成就数据
-- **存储位置**：`SharedPreferences`，统一以 **Canonical ID** 作为索引 Key。
-- **数据结构**：
-  ```json
-  {
-    "builtin:featured_001": {
-      "isCompleted": true,
-      "completedPieceCounts": [16, 64],
-      "bestTimeSeconds": 83,
-      "stars": 3
-    },
-    "remote:featured_101": {
-      "isCompleted": false,
-      "progressPercent": 45
-    }
-  }
-  ```
-
-### 6.2 对局断点残局快照 (Snapshot) 独立落盘
-- **独立落盘方案**：
-  - 残局文件存为：`[App Support]/snapshots/<sanitized_canonical_id>.snapshot`
-  - 对局中：每放置 5 块碎片或切换后台时异步写入单个 `.snapshot` 文件；
-  - 通关结算时：立即删除该关卡对应的 `.snapshot` 文件；
-  - 进度元数据中仅保存 `hasSavedSnapshot: true` 标记，极度轻量且杜绝主存档膨胀。
-
----
-
-## 7. 统一关卡数据模型 (Dart Model)
+## 9. 统一运行时核心数据模型 (Dart Models)
 
 ```dart
-/// 统一关卡运行时模型（适用于内置、云端热更、自制、扩展包、每日挑战）
+/// 统一关卡运行时模型
 class PuzzleLevelItem {
   const PuzzleLevelItem({
-    required this.id,                     // Canonical ID (如 "builtin:featured_001", "remote:featured_101")
-    required this.title,                  // 展示标题
-    required this.imagePathOrUrl,         // 本地路径、Asset 路径或远端 URL
-    required this.isLocalFile,            // 是否本地已存在文件
-    this.order = 0,                       // 全局排序权重 (1..100 为内置，101+ 为热更)
-    this.category = 'featured',           // 分类主题
-    this.packId,                          // 扩展包 ID (可选)
-    this.author,                          // 作者 (可选)
-    this.createdAt,                       // 创建时间
-    this.isUnlocked = false,              // 是否解锁
-    this.isCompleted = false,             // 是否已通关任意难度
-    this.completedPieceCounts = const [], // 已通关的难度块数列表 (如 [16, 36])
-    this.bestTimeSeconds = 0,             // 最佳耗时 (秒)
-    this.stars = 0,                       // 星级 (0~3)
-    this.hasSavedSnapshot = false,        // 是否有未完成的残局快照
+    required this.id,                     // Canonical ID (如 "main:101", "daily:20260827", "event:summer:01")
+    required this.imagePathOrUrl,         // 本地绝对路径、Asset 路径或远端 URL
+    required this.isLocalFile,            // 是否本地已就绪 (可直接无网开玩)
+    this.title,                           // 展示标题 (可选，若无则 UI 依据 ID 格式化)
+    this.order = 0,                       // 排序权重
+    this.tags = const [],                 // 核心：多标签列表
+    this.sourceModule = 'main',           // 'main' | 'daily' | 'events' | 'pack' | 'ugc'
+    this.eventId,                         // 所属活动 ID (可选)
+    this.dailyDate,                       // 所属每日日期 YYYYMMDD (可选)
+    this.isTimeLocked = false,            // 是否受每日时间锁限制
+    // --- 动态注入的存档数据 ---
+    this.isUnlocked = false,
+    this.isCompleted = false,
+    this.completedPieceCounts = const [],
+    this.bestTimeSeconds = 0,
+    this.hasSavedSnapshot = false,
   });
 
   final String id;
-  final String title;
   final String imagePathOrUrl;
   final bool isLocalFile;
+  final String? title;
   final int order;
-  final String category;
-  final String? packId;
-  final String? author;
-  final DateTime? createdAt;
+  final List<String> tags;
+  final String sourceModule;
+  final String? eventId;
+  final String? dailyDate;
+  final bool isTimeLocked;
+
   final bool isUnlocked;
   final bool isCompleted;
   final List<int> completedPieceCounts;
   final int bestTimeSeconds;
-  final int stars;
   final bool hasSavedSnapshot;
+
+  /// UI 展示标题快捷推导
+  String get displayTitle {
+    if (title != null && title!.isNotEmpty) return title!;
+    if (id.startsWith('main:')) return '#${id.substring(5)}';
+    if (id.startsWith('daily:')) return '${id.substring(6, 10)}-${id.substring(10, 12)}-${id.substring(12, 14)}';
+    return id.split(':').last;
+  }
+}
+
+/// 活动列表项模型
+class PuzzleEventItem {
+  const PuzzleEventItem({
+    required this.id,
+    required this.title,
+    required this.status,                // 'upcoming' | 'active' | 'outdated' | 'disabled'
+    required this.type,                  // 'zip' | 'array'
+    this.desc = '',
+    this.coverUrl,
+    this.zipUrl,
+    this.zipSha256,
+    this.levels = const [],
+    this.startTime,
+    this.endTime,
+    this.displayOrder = 0,
+  });
+
+  final String id;
+  final String title;
+  final String status;
+  final String type;
+  final String desc;
+  final String? coverUrl;
+  final String? zipUrl;
+  final String? zipSha256;
+  final List<String> levels;
+  final DateTime? startTime;
+  final DateTime? endTime;
+  final int displayOrder;
+
+  bool get isActive => status == 'active';
+  bool get isDisabled => status == 'disabled';
+  bool get isOutdated => status == 'outdated';
 }
 ```
 
 ---
 
-## 8. 实施路线图
+## 10. 实施与迁移路线图
 
-### 阶段一：Canonical ID 规范化与旧数据向后兼容
-1. 将 `LevelItem.id` 从 `level_1` 规范化为 `builtin:featured_001`，`GameRepository` 自动兼容读取旧版存档并透明平移；
-2. 内置图片整理归入 `assets/images/levels/` 分类子目录。
-
-### 阶段二：关卡包 (Zip / 文件夹) 导入与非规范图片过滤
-1. 实现 Zip 解压与本地文件夹导入管道，生成 `pack:{pack_id}:{seq}` 关卡；
-2. 接入非规范图片过滤（短边 $< 750\text{px}$ 拦截，短边 $> 2160\text{px}$ 等比降采样）。
-
-### 阶段三：残局快照独立文件落盘
-1. 将 `savedSnapshotJson` 从全局 SharedPreferences 剥离为单文件存储。
-
-### 阶段四：首页云端热更 Manifest 与增量同步
-1. 制定 `remote_levels.json` CDN 托管规范；
-2. 实现三层合并管道（内置 1~100 ∪ 本地缓存 ∪ 远端增量），支持主线关卡无限在线扩展。
+1. **第一阶段：模型重构与 Canonical ID 规范对齐**
+   - 升级 `PuzzleLevelItem` 模型，实现 `{模块}:{上下文}:{文件名}` 动态推导生成器；
+   - 兼容现有 `level_1` 旧存档，平滑迁移映射到 `main:001`。
+2. **第二阶段：根清单与首页多标签改造**
+   - 接入 Root Manifest 主备请求与缓存；
+   - 首页接入 `main.json`，实现基于 `tags` 的前端 Tab 内存过滤与 Append-Only 合并。
+3. **第三阶段：每日挑战月度 Zip 与时间锁**
+   - 实现 `YYYYMM.zip` 下载与解压至 `daily/YYYYMM/` 目录；
+   - 编写基于文件名正则的时间锁过滤器，对接日历 UI。
+4. **第四阶段：活动中心双模式与 Auto-GC**
+   - 接入 `events.json` 状态机；
+   - 实现 Zip 整包解压与 Array 在线加载；
+   - 接入 `status: "disabled"` 时的客户端本地目录自动垃圾清理。

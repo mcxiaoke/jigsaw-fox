@@ -173,7 +173,10 @@ void main() {
         ),
       );
 
-      expect(find.text('关卡画廊'), findsOneWidget);
+      expect(find.text('主页'), findsWidgets);
+      expect(find.text('每日'), findsOneWidget);
+      expect(find.text('活动'), findsOneWidget);
+      expect(find.text('自制'), findsOneWidget);
       // Verify help icon is no longer directly in AppBar
       expect(find.byTooltip('玩法指引'), findsNothing);
       // Verify achievements & settings exist in AppBar
@@ -199,7 +202,7 @@ void main() {
       await tester.tap(find.text('新手 (9-16)'));
       await tester.pumpAndSettle();
 
-      expect(find.text('今日推荐挑战'), findsOneWidget);
+      expect(find.textContaining('今日挑战'), findsOneWidget);
     });
 
     testWidgets('DailyTabView renders streak stats and header', (tester) async {
@@ -213,6 +216,15 @@ void main() {
 
       expect(find.text('TODAY'), findsOneWidget);
       expect(find.textContaining('连胜'), findsOneWidget);
+      expect(find.textContaining('2026年8月'), findsOneWidget);
+
+      // Scroll until 2026年7月 month header is visible
+      await tester.scrollUntilVisible(
+        find.textContaining('2026年7月'),
+        300,
+        scrollable: find.byType(Scrollable),
+      );
+      expect(find.textContaining('2026年7月'), findsOneWidget);
     });
 
     testWidgets('ChooseDifficultySheet renders locked state and disables start button', (tester) async {

@@ -54,18 +54,21 @@ class AppCachedImage extends StatelessWidget {
   /// Whether to utilize disk thumbnail caching for local files
   final bool useThumbnailCache;
 
+  ImageProvider _wrapResize(ImageProvider provider) {
+    if (targetWidth == null && targetHeight == null) return provider;
+    // 仅按单边等比下采样解码，保证原图宽高比绝对不被破坏，由外层 Image(fit: BoxFit.cover) 执行等比居中裁剪
+    final dim = targetWidth ?? targetHeight;
+    return ResizeImage(
+      provider,
+      width: dim,
+      allowUpscaling: false,
+    );
+  }
+
   ImageProvider _resolveImageProvider() {
     if (memoryBytes != null && memoryBytes!.isNotEmpty) {
       final memProvider = MemoryImage(memoryBytes!);
-      if (targetWidth != null || targetHeight != null) {
-        return ResizeImage(
-          memProvider,
-          width: targetWidth,
-          height: targetHeight,
-          policy: ResizeImagePolicy.exact,
-        );
-      }
-      return memProvider;
+      return _wrapResize(memProvider);
     }
 
     final path = imagePathOrUrl ?? '';
@@ -73,32 +76,25 @@ class AppCachedImage extends StatelessWidget {
       return const AssetImage('assets/images/sample_01.jpg');
     }
 
-    if (path.startsWith('assets/')) {
-      final assetProvider = AssetImage(path);
-      if (targetWidth != null || targetHeight != null) {
-        return ResizeImage(
-          assetProvider,
-          width: targetWidth,
-          height: targetHeight,
-        );
-      }
-      return assetProvider;
+    // 1. 网络图片支持 (支持 HTTP / HTTPS)
+    if (path.startsWith('http://') || path.startsWith('https://')) {
+      final netProvider = NetworkImage(path);
+      return _wrapResize(netProvider);
     }
 
-    // Local file path
+    // 2. Assets 打包静态资源
+    if (path.startsWith('assets/')) {
+      final assetProvider = AssetImage(path);
+      return _wrapResize(assetProvider);
+    }
+
+    // 3. Local file 本地文件路径
     if (useThumbnailCache) {
       final targetDim = targetWidth ?? targetHeight ?? ImageCacheManager.kDefaultThumbnailDimension;
       return AppCachedImageProvider(path, targetDimension: targetDim);
     } else {
       final fileProvider = FileImage(File(path));
-      if (targetWidth != null || targetHeight != null) {
-        return ResizeImage(
-          fileProvider,
-          width: targetWidth,
-          height: targetHeight,
-        );
-      }
-      return fileProvider;
+      return _wrapResize(fileProvider);
     }
   }
 

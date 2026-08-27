@@ -8,6 +8,7 @@ import 'package:path_provider/path_provider.dart';
 
 import 'data/game_repository.dart';
 import 'logic/cache/image_cache_manager.dart';
+import 'logic/content/app_content.dart';
 import 'logic/download_manager.dart';
 import 'pages/main_screen.dart';
 
@@ -43,6 +44,7 @@ void main() async {
   await ImageCacheManager.instance.init();
   await GameRepository.instance.init();
   await DownloadManager.instance.init();
+  await AppContent.instance.init();
   runApp(const JigsawPuzzleApp());
 }
 

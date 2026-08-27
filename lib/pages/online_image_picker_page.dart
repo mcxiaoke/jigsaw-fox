@@ -338,7 +338,7 @@ class _OnlineImagePickerPageState extends State<OnlineImagePickerPage> {
       // 2. Save and strictly validate via DownloadManager
       final item = await DownloadManager.instance.saveOrDownloadImage(
         sourceUrl: targetUrl,
-        sourcePlatform: _currentSite.label,
+        sourcePlatform: '网络',
         refererUrl: currentWebUrl,
         directBytes: fetchedBytes,
       );
@@ -666,9 +666,9 @@ class _OnlineImagePickerPageState extends State<OnlineImagePickerPage> {
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                               ),
-                              Text(
-                                '来源: ${_lastDownloadedItem!.sourcePlatform} · 点击查看',
-                                style: const TextStyle(color: Colors.white70, fontSize: 11),
+                              const Text(
+                                '来源: 网络 · 点击查看',
+                                style: TextStyle(color: Colors.white70, fontSize: 11),
                               ),
                             ],
                           ),

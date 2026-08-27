@@ -48,6 +48,8 @@ dependencies:
   desktop_webview_window: ^0.2.3
   flutter_inappwebview: ^6.1.5
   image: ^4.9.2
+  archive: ^4.2.0
+  path: ^1.9.1
 
 dev_dependencies:
   flutter_test:

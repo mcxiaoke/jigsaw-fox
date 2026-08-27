@@ -34,11 +34,19 @@ class CustomPuzzleItem {
   /// Source type: 'gallery' (相册导入), 'online' (网络图库), 'preset' (官方预置)
   final String sourceType;
 
-  /// Specific platform name: '本地相册', 'Unsplash', 'Pixabay', 'Pexels', etc.
+  /// Specific platform name
   final String sourcePlatform;
 
   /// Original image URL or local source path
   final String? sourceUrl;
+
+  /// 规范合规的来源显示：仅输出 '相册' 或 '网络' (杜绝具体第三方网站名称防侵权)
+  String get displaySource {
+    if (sourceType == 'gallery' || sourceType == 'local' || sourcePlatform == '相册' || sourcePlatform == '本地相册') {
+      return '相册';
+    }
+    return '网络';
+  }
 
   CustomPuzzleItem copyWith({
     String? id,

@@ -10,6 +10,7 @@
 |---|---|---|
 | **UI 表现框架** | Flutter 3.x (Dart 3) | 跨 Android / iOS / Windows / Web 一致渲染 |
 | **游戏/渲染引擎** | **Flame** (Canvas 抽象 + 2D 组件树) | 单画布批量渲染，规避多 Widget 堆叠的性能与手势穿透瓶颈；内置平移缩放视口与组件生命周期 |
+| **内容分发与存储** | **ContentManager / ManifestRouter** | 极简根路由发现、主备容灾、主线增量合并 (Append-Only)、每日挑战按月 Zip/时间锁推导、活动状态机与 Auto-GC |
 | **本地持久化** | **GameRepository / SharedPreferences** | 轻量高效的本地沙盒持久化，管理关卡进度、断点存档、自制图库与用户设置 |
 | **图片处理与超分辨率** | `image` + `image_picker` + `dart:ui` | 本地相册选取、自由裁剪、正交旋转与纯 Dart 非 AI 图像保边降噪 (Guided Filter) + CAS 超分辨率增强 |
 
@@ -17,14 +18,13 @@
 
 ## 2. 整体分层架构
 
-系统采用 **「领域核心算法 / 游戏渲染引擎 / UI 交互表现」** 严格三层分离架构。领域核心不依赖任何 Flutter UI 或 Flame 引擎代码，保证 100% 可脱机单元测试。
+系统采用 **「领域核心算法 / 内容分发与存储 / 游戏渲染引擎 / UI 交互表现」** 严格分层解耦架构。领域核心与内容分发不依赖任何 Flutter UI 或 Flame 引擎代码，保证 100% 可脱机单元测试。
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│  1. UI 表现层 (Flutter Widgets)                            │
-│  HomePage / GamePage / CropPuzzlePage / Dialogs             │
-│  - 负责页面路由、弹窗动效、分层工具栏、音效触觉触发与无障碍   │
-│  - 驱动数据流并响应玩家全局交互意图                           │
+│  1. UI 表现层 (Flutter Widgets - 4-Tab 架构)                 │
+│  MainScreen: 主页 (Home) / 每日 (Daily) / 活动 (Events) / 自制 (My) │
+│  - 负责页面路由、多月日历网格、活动中心、标签筛选、音效触觉与无障碍   │
 └──────────────────────────────┬──────────────────────────────┘
                                │ 用户操作 / 状态传递
 ┌──────────────────────────────▼──────────────────────────────┐
@@ -36,14 +36,23 @@
 │   └─ GhostOutlineComponent (磁吸虚线高亮层)                 │
 │  * 职责: 60fps 实时手势平移、磁吸 Tween 缓动、Canvas 批渲染  │
 └──────────────────────────────┬──────────────────────────────┘
-                               │ 拖拽释放结算 / 纯函数调用
+                               │ 拖拽释放结算 / 内容数据供给
 ┌──────────────────────────────▼──────────────────────────────┐
-│  3. 领域逻辑与数据层 (Pure Dart, 零 UI/Flame 依赖)           │
+│  3. 内容分发与扩展层 (Content Layer - Pure Dart)             │
+│  ├─ 根路由发现: ManifestRouter (内置主备 URL 容灾 + 缓存自愈) │
+│  ├─ 主线管线: MainContentPipeline (版本感知增量合并 + 多标签) │
+│  ├─ 每日管线: DailyContentPipeline (按月Zip解压+自然天数防溢出+时间锁) │
+│  ├─ 活动管线: EventsContentPipeline (Zip/Array双载荷+Auto-GC)│
+│  └─ 规范化 ID: CanonicalId (main:101 / daily:20260827 / event:x:01) │
+└──────────────────────────────┬──────────────────────────────┘
+                               │ 纯函数调用 / 关卡与存档
+┌──────────────────────────────▼──────────────────────────────┐
+│  4. 领域逻辑与数据层 (Domain & Data Layer)                   │
 │  ├─ 几何切割: EdgeLayout (确定性拓扑) / PieceShape (贝塞尔路径)│
 │  ├─ 状态机模型: PuzzleDifficulty / Snapshot v2 / UndoManager │
 │  ├─ 纯函数群: resolveSnap() / isSolved() / hintFor()        │
 │  ├─ 超分引擎: ImageUpscaler (导向滤波降噪/Cubic插值/CAS锐化) │
-│  └─ 持久化仓储: GameRepository & CustomPuzzleItem           │
+│  └─ 持久化仓储: GameRepository (关卡存档、打卡日历、自制拼图)  │
 └─────────────────────────────────────────────────────────────┘
 ```
 
