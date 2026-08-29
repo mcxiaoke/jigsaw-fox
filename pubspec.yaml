@@ -51,6 +51,7 @@ dependencies:
   archive: ^4.2.0
   path: ^1.9.1
   file_picker: ^8.1.7
+  flame_audio: ^2.12.2
 
 dev_dependencies:
   flutter_test:
@@ -78,6 +79,7 @@ flutter:
     - assets/images/
     - assets/icons/
     - assets/bg/
+    - assets/audio/
 
   # To add assets to your application, add an assets section, like this:
   # assets:

@@ -11,6 +11,7 @@ import 'logic/cache/image_cache_manager.dart';
 import 'logic/content/app_content.dart';
 import 'logic/download_manager.dart';
 import 'pages/main_screen.dart';
+import 'services/sound_service.dart';
 
 /// Global Windows WebViewEnvironment instance for InAppWebView
 WebViewEnvironment? globalWebViewEnvironment;
@@ -45,6 +46,7 @@ void main() async {
   await GameRepository.instance.init();
   await DownloadManager.instance.init();
   await AppContent.instance.init();
+  await SoundService.I.init();
   runApp(const JigsawPuzzleApp());
 }
 

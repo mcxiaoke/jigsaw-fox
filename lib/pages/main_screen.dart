@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:phosphoricons_flutter/phosphoricons_flutter.dart';
 
+import '../services/sound_service.dart';
+
 import 'achievements_page.dart';
 import 'how_to_play_page.dart';
 import 'import_pack_page.dart';
@@ -83,6 +85,7 @@ class _MainScreenState extends State<MainScreen> {
               if (val == 'import') {
                 final pack = await ImportPackPage.push(context);
                 if (pack != null && mounted) {
+                  SoundService.I.play(Sfx.tap);
                   setState(() => _currentIndex = 3); // 切换到自制 Tab 查看
                 }
               } else if (val == 'settings') {
@@ -200,7 +203,10 @@ class _MainScreenState extends State<MainScreen> {
         index: _currentIndex,
         children: [
           HomeTabView(
-            onSwitchToDaily: () => setState(() => _currentIndex = 1),
+            onSwitchToDaily: () {
+              SoundService.I.play(Sfx.tap);
+              setState(() => _currentIndex = 1);
+            },
           ),
           const DailyTabView(),
           const EventsTabView(),
@@ -214,7 +220,12 @@ class _MainScreenState extends State<MainScreen> {
         ),
         child: NavigationBar(
           selectedIndex: _currentIndex,
-          onDestinationSelected: (idx) => setState(() => _currentIndex = idx),
+          onDestinationSelected: (idx) {
+            if (idx != _currentIndex) {
+              SoundService.I.play(Sfx.tap);
+            }
+            setState(() => _currentIndex = idx);
+          },
           backgroundColor: Colors.white,
           indicatorColor: const Color(0xFFE8F5E9),
           destinations: const [

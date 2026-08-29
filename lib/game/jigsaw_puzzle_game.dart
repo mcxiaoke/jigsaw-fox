@@ -15,6 +15,7 @@ import '../logic/geometry/edge_layout.dart';
 import '../logic/geometry/piece_shape.dart';
 import '../logic/models/puzzle_state.dart';
 import '../logic/rendering/linen_texture_manager.dart';
+import '../services/sound_service.dart';
 import 'puzzle_piece_component.dart';
 
 typedef PuzzleImage = ui.Image;
@@ -1320,7 +1321,8 @@ class JigsawPuzzleGame extends FlameGame
         onSolved();
       }
     } else {
-      // 未吸附 -> 确保保持棋盘当前 _zoom 尺寸
+      // 未吸附 -> 轻落位音 + 保持棋盘当前 _zoom 尺寸
+      SoundService.I.play(Sfx.place);
       for (final p in clusterPieces) {
         p.isInTray = false;
         p.animateScaleTo(Vector2.all(_zoom), duration: 0.15);

@@ -11,6 +11,7 @@ import 'package:phosphoricons_flutter/phosphoricons_flutter.dart';
 import '../data/game_repository.dart';
 import '../game/jigsaw_puzzle_game.dart';
 import '../logic/puzzle_model.dart';
+import '../services/sound_service.dart';
 import '../widgets/choose_background_sheet.dart';
 import 'how_to_play_page.dart';
 
@@ -180,9 +181,7 @@ class _GamePageState extends State<GamePage> {
   }
 
   void _onPieceSnapped() {
-    if (_repo.soundEnabled) {
-      SystemSound.play(SystemSoundType.click);
-    }
+    SoundService.I.play(Sfx.snap);
     if (_repo.hapticEnabled) {
       HapticFeedback.lightImpact();
     }
@@ -233,6 +232,10 @@ class _GamePageState extends State<GamePage> {
     if (_repo.hapticEnabled) {
       HapticFeedback.heavyImpact();
     }
+    // 胜利音：大规格或满星用 TrophySound，否则普通 win
+    final solveStars = _calculateStars();
+    final isBigWin = _totalPieces >= 100 || solveStars == 3;
+    SoundService.I.play(isBigWin ? Sfx.winBig : Sfx.win);
 
     setState(() {
       _isSolved = true;
@@ -290,6 +293,7 @@ class _GamePageState extends State<GamePage> {
   }
 
   void _openBackgroundSelector() {
+    SoundService.I.play(Sfx.moveIn);
     ChooseBackgroundSheet.show(
       context: context,
       selectedBackground: _selectedBackground,
@@ -373,7 +377,15 @@ class _GamePageState extends State<GamePage> {
                 title: const Text('拼图吸附音效'),
                 value: _repo.soundEnabled,
                 onChanged: (v) {
-                  setMenuState(() => _repo.soundEnabled = v);
+                  // 从开→关也播一次，带 ignoreMute
+                  if (v) {
+                    _repo.soundEnabled = v;
+                    SoundService.I.play(Sfx.switchToggle, ignoreMute: true);
+                  } else {
+                    SoundService.I.play(Sfx.switchToggle, ignoreMute: true);
+                    _repo.soundEnabled = v;
+                  }
+                  setMenuState(() {});
                   setState(() {});
                 },
               ),
@@ -439,6 +451,7 @@ class _GamePageState extends State<GamePage> {
           actions: [
             TextButton(
               onPressed: () {
+                SoundService.I.play(Sfx.tap);
                 _autoSaveProgress();
                 Navigator.pop(ctx);
                 Navigator.pop(context);
@@ -446,7 +459,10 @@ class _GamePageState extends State<GamePage> {
               child: const Text('保存并退出', style: TextStyle(color: Colors.redAccent)),
             ),
             FilledButton(
-              onPressed: () => Navigator.pop(ctx),
+              onPressed: () {
+                SoundService.I.play(Sfx.tap);
+                Navigator.pop(ctx);
+              },
               style: FilledButton.styleFrom(backgroundColor: const Color(0xFF2E7D32)),
               child: const Text('继续游戏'),
             ),
@@ -540,6 +556,7 @@ class _GamePageState extends State<GamePage> {
         actions: [
           TextButton(
             onPressed: () {
+              SoundService.I.play(Sfx.tap);
               Navigator.pop(ctx);
             },
             child: const Text('查看已完成拼图'),
@@ -547,6 +564,7 @@ class _GamePageState extends State<GamePage> {
           if (hasNext)
             FilledButton.icon(
               onPressed: () {
+                SoundService.I.play(Sfx.tap);
                 Navigator.pop(ctx);
                 _playNextLevel();
               },
@@ -560,6 +578,7 @@ class _GamePageState extends State<GamePage> {
           else
             FilledButton(
               onPressed: () {
+                SoundService.I.play(Sfx.tap);
                 Navigator.pop(ctx);
                 Navigator.pop(context);
               },
@@ -728,6 +747,7 @@ class _GamePageState extends State<GamePage> {
         icon: Icon(PhosphorIconsBold.arrowLeft, color: _headerIconColor),
         tooltip: '返回',
         onPressed: () {
+          SoundService.I.play(Sfx.tap);
           _autoSaveProgress();
           Navigator.of(context).pop();
         },
@@ -748,6 +768,8 @@ class _GamePageState extends State<GamePage> {
           tooltip: isBorderActive ? '显示全部碎片' : '仅显示边缘碎片',
           onPressed: () {
             _game?.toggleBorderFilter();
+            final active = _game?.isBorderFilterActive ?? false;
+            SoundService.I.play(active ? Sfx.edgesIn : Sfx.edgesOut);
             setState(() {});
           },
         ),
@@ -755,7 +777,10 @@ class _GamePageState extends State<GamePage> {
         IconButton(
           icon: const Icon(PhosphorIconsFill.lightbulb, size: 21, color: Colors.amber),
           tooltip: '智能提示',
-          onPressed: () => _game?.hint(),
+          onPressed: () {
+            _game?.hint();
+            SoundService.I.play(Sfx.hint);
+          },
         ),
         // 3. 半透明原图叠层（底图透视 0%/20%/45%）
         IconButton(
@@ -788,6 +813,7 @@ class _GamePageState extends State<GamePage> {
           tooltip: '底图透视参考 (0%/20%/45%)',
           onPressed: () {
             _game?.toggleGhostOpacity();
+            SoundService.I.play(Sfx.preview);
             setState(() {});
           },
         ),
@@ -795,7 +821,10 @@ class _GamePageState extends State<GamePage> {
         IconButton(
           icon: Icon(PhosphorIconsBold.broom, size: 21, color: _headerIconColor),
           tooltip: '一键整理托盘',
-          onPressed: () => _game?.organizeTray(),
+          onPressed: () {
+            _game?.organizeTray();
+            SoundService.I.play(Sfx.tap);
+          },
         ),
         const SizedBox(width: 4),
       ],
@@ -839,10 +868,13 @@ class _GamePageState extends State<GamePage> {
                   color: _showOriginalImage ? const Color(0xFF0288D1) : _headerIconColor,
                 ),
                 tooltip: '查看原图',
-                onPressed: () => setState(() {
-                  _showOriginalImage = !_showOriginalImage;
-                  _isPaused = _showOriginalImage;
-                }),
+                onPressed: () {
+                  SoundService.I.play(Sfx.preview);
+                  setState(() {
+                    _showOriginalImage = !_showOriginalImage;
+                    _isPaused = _showOriginalImage;
+                  });
+                },
               ),
             ],
           ),

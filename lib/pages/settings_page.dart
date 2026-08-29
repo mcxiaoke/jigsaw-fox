@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:phosphoricons_flutter/phosphoricons_flutter.dart';
 
 import '../data/game_repository.dart';
+import '../services/sound_service.dart';
 import '../widgets/choose_background_sheet.dart';
 import 'how_to_play_page.dart';
 
@@ -53,7 +54,16 @@ class _SettingsPageState extends State<SettingsPage> {
                   subtitle: const Text('碎片对齐磁吸时播放清脆音效'),
                   secondary: const Icon(PhosphorIconsBold.speakerHigh, color: Color(0xFF2E7D32)),
                   value: _repo.soundEnabled,
-                  onChanged: (v) => setState(() => _repo.soundEnabled = v),
+                  onChanged: (v) {
+                    if (v) {
+                      _repo.soundEnabled = v;
+                      SoundService.I.play(Sfx.switchToggle, ignoreMute: true);
+                    } else {
+                      SoundService.I.play(Sfx.switchToggle, ignoreMute: true);
+                      _repo.soundEnabled = v;
+                    }
+                    setState(() {});
+                  },
                 ),
                 const Divider(height: 1, indent: 56),
                 SwitchListTile(

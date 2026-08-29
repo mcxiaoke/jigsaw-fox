@@ -119,7 +119,7 @@ jigsawpuzzle/
 │  └─ widgets/
 │     ├─ choose_difficulty_sheet.dart     # 难度选择 + 网格预览
 │     ├─ choose_background_sheet.dart     # 9 壁纸切换
-│     ├─ achievements_dialog.dart / how_to_play_dialog.dart / settings_dialog.dart
+│     ├─ achievements_dialog.dart / how_to_play_dialog.dart
 │     └─ ...
 ├─ assets/
 │  ├─ images/  # bg_00*.webp (9) + sample_*.jpg (10) + icon/splash
