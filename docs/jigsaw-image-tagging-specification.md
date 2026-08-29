@@ -1,46 +1,52 @@
-# Jigsaw Puzzle Image Tagging Specification v1.0
+# Jigsaw Puzzle Image Tagging Specification v1.1
+
+> 变更记录（v1.0 → v1.1）
+> - 移除 `Travel` / `Vintage` / `Cozy`：三者属"意图/年代/氛围"维度，无法由像素稳定判定，已从 AI 自动打标中删除，仅作为**用户层筛选**（见附录 A）。
+> - 移除 `Landmarks`，并入 `Architecture`：著名地标不再单列，统一归 "Architecture / 建筑"。
+> - 对 5 个"风格/符号/属性"类标签（`Art` / `Seasons` / `Holidays` / `Abstract` / `Cartoon`）增加**护栏规则**：必须基于图内内容证据，禁止仅凭观感/色调判定。
+> - 标签总数：25 → 21。
 
 ## 1. 总体规则
 
 每张图片只分配 **1 个 Primary Tag**。
 
-AI 不允许自己创建新的分类名称，只能从以下 25 个固定 Tag 中选择。
+AI 不允许自己创建新的分类名称，只能从以下 21 个固定 Tag 中选择。
 
 ### 标准 Tag 列表
 
-| ID | Tag | 中文 | 核心定义 |
-|---|---|---|---|
-| 01 | Animals | 动物 | 野生动物、动物群、动物自然场景 |
-| 02 | Pets | 宠物 | 猫、狗、兔子、仓鼠等家庭宠物 |
-| 03 | Nature | 自然 | 森林、植物、自然生态、自然元素 |
-| 04 | Landscapes | 风景 | 山川、湖泊、田野、峡谷等景观 |
-| 05 | Flowers | 花卉 | 花朵、花束、花田、园艺植物 |
-| 06 | Ocean | 海洋 | 海洋、海滩、海浪、水下、海洋生态 |
-| 07 | Birds | 鸟类 | 鹰、猫头鹰、鹦鹉、火烈鸟等鸟类 |
-| 08 | Travel | 旅行 | 旅游目的地、异国风情、旅行体验 |
-| 09 | Cities | 城市 | 城市街景、城市生活、城市天际线 |
-| 10 | Architecture | 建筑 | 建筑本体、住宅、教堂、桥梁、城堡等 |
-| 11 | Landmarks | 地标 | 世界著名地标或容易识别的著名建筑 |
-| 12 | Food | 美食 | 食物、甜点、料理、餐桌、美食摄影 |
-| 13 | Art | 艺术 | 绘画、艺术作品、艺术风格、经典名画 |
-| 14 | Fantasy | 奇幻 | 魔法、龙、独角兽、精灵、幻想世界 |
-| 15 | Space | 太空 | 宇宙、星球、银河、宇航员 |
-| 16 | Transportation | 交通 | 汽车、飞机、火车、轮船、自行车等 |
-| 17 | People | 人物 | 人像、人物活动、人物生活场景 |
-| 18 | Sports | 运动 | 足球、篮球、网球、滑雪等运动 |
-| 19 | Seasons | 四季 | 春、夏、秋、冬及明显季节场景 |
-| 20 | Holidays | 节日 | 圣诞节、万圣节、复活节、新年等 |
-| 21 | Vintage | 复古 | 老照片、复古海报、怀旧物件、历史感 |
-| 22 | Abstract | 抽象 | 抽象艺术、几何图案、纹理、非具象视觉 |
-| 23 | Cozy | 温馨 | 室内、壁炉、客厅、咖啡馆、舒适生活氛围 |
-| 24 | Cartoon | 卡通 | 卡通、动漫风、漫画、儿童插画 |
-| 25 | Others | 其他 | 无法稳定归入上述主题的小众内容 |
+> 类型说明：
+> - **主体/场景**：图中可"看见"的实体或场景，AI 直接判定，准确率高。
+> - **风格/符号/属性**：描述"画风/符号/时间属性"，需内容证据，且必须服从护栏（见第 3 章对应小节）。
+
+| ID | Tag | 中文 | 类型 | 核心定义 |
+|---|---|---|---|---|
+| 01 | Animals | 动物 | 主体 | 野生动物、动物群、动物自然场景（不含家庭宠物/鸟类，见 Pets/Birds） |
+| 02 | Pets | 宠物 | 主体 | 猫、狗、兔子、仓鼠等家庭宠物 |
+| 03 | Nature | 自然 | 场景 | 森林、植物、自然生态、自然元素 |
+| 04 | Landscapes | 风景 | 场景 | 山川、湖泊、田野、峡谷等宏观景观 |
+| 05 | Flowers | 花卉 | 主体 | 花朵、花束、花田、园艺植物 |
+| 06 | Ocean | 海洋 | 场景/主体 | 海洋、海滩、海浪、水下、海洋生态 |
+| 07 | Birds | 鸟类 | 主体 | 鹰、猫头鹰、鹦鹉、火烈鸟等鸟类 |
+| 08 | Cities | 城市 | 场景 | 城市街景、城市生活、城市天际线 |
+| 09 | Architecture | 建筑 | 主体 | 建筑本体、住宅、教堂、桥梁、城堡、以及著名地标（见护栏） |
+| 10 | Food | 美食 | 主体 | 食物、甜点、料理、餐桌、美食摄影 |
+| 11 | Art | 艺术 | 风格 | 绘画、艺术作品、艺术风格、经典名画（需护栏） |
+| 12 | Fantasy | 奇幻 | 主体 | 魔法、龙、独角兽、精灵、幻想世界 |
+| 13 | Space | 太空 | 主体/场景 | 宇宙、星球、银河、宇航员 |
+| 14 | Transportation | 交通 | 主体 | 汽车、飞机、火车、轮船、自行车等 |
+| 15 | People | 人物 | 主体 | 人像、人物活动、人物生活场景 |
+| 16 | Sports | 运动 | 活动 | 足球、篮球、网球、滑雪等运动 |
+| 17 | Seasons | 四季 | 属性 | 春、夏、秋、冬及明显季节场景（需护栏） |
+| 18 | Holidays | 节日 | 符号 | 圣诞节、万圣节、复活节、新年等（需护栏） |
+| 19 | Abstract | 抽象 | 风格 | 抽象艺术、几何图案、纹理、非具象视觉（需护栏） |
+| 20 | Cartoon | 卡通 | 风格 | 卡通、动漫风、漫画、儿童插画（需护栏） |
+| 21 | Others | 其他 | 兜底 | 无法稳定归入上述主题的小众内容 |
 
 ---
 
 # 2. Tag 判定原则
 
-AI 的任务不是判断“这张图看起来像什么”，而是判断：
+AI 的任务不是判断"这张图看起来像什么"，而是判断：
 
 > **用户最可能为什么主题来搜索/筛选这张拼图？**
 
@@ -67,17 +73,20 @@ AI 的任务不是判断“这张图看起来像什么”，而是判断：
 - 山谷和湖泊 → Landscapes
 - 城市夜景 → Cities
 - 森林风景 → Nature
-- 海边度假场景 → Ocean / Travel
+- 海边度假场景 → Ocean
 
-### Priority 3：著名地点
+### Priority 3：著名地点归入 Architecture
 
-如果图片的核心价值在于一个著名地标，则优先 Landmarks，而不是 Architecture。
+原 `Landmarks` 已并入 `Architecture`。如果图片的核心价值在于一个**著名且易识别的地标建筑**，仍使用 `Architecture`，但需明确它是"以地标建筑为主体"的建筑图。
 
 例：
 
-- 埃菲尔铁塔 → Landmarks
-- 泰姬陵 → Landmarks
-- 长城 → Landmarks
+- 埃菲尔铁塔 → Architecture
+- 泰姬陵 → Architecture
+- 长城 → Architecture
+- 普通城堡 → Architecture
+
+> 不再单列 `Landmarks`；判断要点是"建筑/地标本身是图片卖点"，而非"这是哪里"。
 
 ### Priority 4：艺术/风格
 
@@ -88,9 +97,18 @@ AI 的任务不是判断“这张图看起来像什么”，而是判断：
 - 卡通插画 → Cartoon
 - 抽象图案 → Abstract
 
-### Priority 5：氛围
+> 风格类标签（Art / Cartoon / Abstract）**必须服从护栏**（见第 3 章）：仅当图中确有"非照片的绘画/插画/卡通笔触"或"无具象主体的图案"等内容证据时才使用，禁止仅凭画风艺术感或色调归类。
 
-只有当图片缺乏明确主体，而主要卖点是生活氛围时，才使用 Cozy。
+### Priority 5：属性类（Seasons / Holidays）
+
+季节与节日属于"属性/符号"维度，不是独立主体：
+
+- 仅当"季节本身就是主题"（如满屏秋叶、积雪冬景）才用 `Seasons`，否则归入 `Nature` / `Landscapes`。
+- 仅当图中存在**明确节日符号**（圣诞树、南瓜灯、复活节彩蛋等）才用 `Holidays`，否则归入对应主体/场景类。
+
+### 已移除：氛围维度（Cozy）
+
+原 `Cozy / 温馨` 已从 AI 打标移除——"温暖舒适"是氛围而非图中物体，AI 极易误判。若图片核心价值是室内温馨场景，请将其作为**用户层筛选**（见附录 A "Interiors / 室内家居"），AI 打标时仍按具体主体（如 `Food` / `Architecture`）归类。
 
 ---
 
@@ -134,7 +152,7 @@ AI 的任务不是判断“这张图看起来像什么”，而是判断：
 
 → **Pets**
 
-因为“猫”作为主体比“森林”更明确。
+因为"猫"作为主体比"森林"更明确。
 
 ---
 
@@ -192,7 +210,7 @@ AI 的任务不是判断“这张图看起来像什么”，而是判断：
 
 Nature = 自然本身
 
-Landscapes = “风景画面 / 景观视角”
+Landscapes = "风景画面 / 景观视角"
 
 例如：
 
@@ -224,7 +242,7 @@ Landscapes = “风景画面 / 景观视角”
 
 通常可以把图片描述为：
 
-> “A beautiful scenic view of ...”
+> "A beautiful scenic view of ..."
 
 而不是某一个具体主体。
 
@@ -305,30 +323,7 @@ Landscapes = “风景画面 / 景观视角”
 
 ---
 
-## 08 Travel / 旅行
-
-### 使用条件
-
-图片重点是“旅行目的地/旅行体验”，但不属于一个明确的城市、地标或纯自然风景。
-
-典型：
-
-- European village
-- Tropical vacation
-- Exotic destination
-- Travel photography
-- Foreign streets
-- Resort destinations
-
-### 与 Cities 区别
-
-城市本身 → Cities
-
-旅游感、目的地感更强 → Travel
-
----
-
-## 09 Cities / 城市
+## 08 Cities / 城市
 
 ### 使用条件
 
@@ -351,11 +346,11 @@ Paris street → Cities
 
 ---
 
-## 10 Architecture / 建筑
+## 09 Architecture / 建筑（含著名地标）
 
 ### 使用条件
 
-重点是建筑本身：
+重点是建筑本身或著名地标：
 
 - Houses
 - Castles
@@ -365,48 +360,29 @@ Paris street → Cities
 - Mansions
 - Buildings
 - Interior architecture
+- **著名地标（Eiffel Tower / Big Ben / Statue of Liberty / Taj Mahal / Great Wall / Colosseum / Sydney Opera House 等）**
 
-### 与 Landmarks 区别
+### 与 Cities 区别
 
-普通建筑 → Architecture
+城市街景 / 城市生活感 → Cities
 
-世界著名、具有明显识别意义的地标 → Landmarks
+建筑本体是视觉核心（无论普通还是著名） → Architecture
 
 例如：
 
 普通城堡 → Architecture
 
-Neuschwanstein Castle → Landmarks
+Neuschwanstein Castle → Architecture
+
+埃菲尔铁塔 → Architecture
+
+### 重要
+
+原 `Landmarks` 已并入本类。判断核心是"建筑/地标本身是图片卖点"，而不是"这是哪座城市"。
 
 ---
 
-## 11 Landmarks / 地标
-
-### 使用条件
-
-图片包含一个明确的著名地标：
-
-- Eiffel Tower
-- Big Ben
-- Statue of Liberty
-- Taj Mahal
-- Great Wall
-- Colosseum
-- Sydney Opera House
-
-### 核心判断
-
-必须满足：
-
-> 这个地方/建筑本身就是图片的卖点。
-
-如果只是普通建筑：
-
-→ Architecture
-
----
-
-## 12 Food / 美食
+## 10 Food / 美食
 
 ### 使用条件
 
@@ -428,11 +404,11 @@ Neuschwanstein Castle → Landmarks
 
 食物/咖啡占主体 → Food
 
-整个咖啡馆氛围 → Cozy
+整个咖啡馆氛围（无明确食物主体） → 按建筑/场景归类（AI 不判 Cozy；用户层可归 Interiors）
 
 ---
 
-## 13 Art / 艺术
+## 11 Art / 艺术（风格类 · 需护栏）
 
 ### 使用条件
 
@@ -445,11 +421,17 @@ Neuschwanstein Castle → Landmarks
 - Famous artworks
 - Artistic compositions
 
-如果图片明显是“艺术作品”，而不是现实摄影，则优先 Art。
+如果图片明显是"艺术作品"，而不是现实摄影，则优先 Art。
+
+### 护栏（必须遵守）
+
+- 仅当图中确有**非照片的绘画/插画笔触/材质证据**时才用 Art。
+- 有明确猫/花/建筑主体、只是"画风比较艺术"的现实摄影 → 仍按主体分类（Animals / Flowers / Architecture 等）。
+- 禁止仅凭"色调复古/滤镜/艺术感"判定为 Art。
 
 ---
 
-## 14 Fantasy / 奇幻
+## 12 Fantasy / 奇幻
 
 ### 使用条件
 
@@ -471,13 +453,13 @@ Neuschwanstein Castle → Landmarks
 
 例如：
 
-卡通龙 → Fantasy
+卡通龙 → Fantasy（题材是幻想）
 
-卡通猫 → Cartoon / Pets
+卡通猫 → Cartoon / Pets（题材是宠物，形式是卡通）
 
 ---
 
-## 15 Space / 太空
+## 13 Space / 太空
 
 ### 使用条件
 
@@ -496,7 +478,7 @@ Neuschwanstein Castle → Landmarks
 
 ---
 
-## 16 Transportation / 交通
+## 14 Transportation / 交通
 
 ### 使用条件
 
@@ -524,7 +506,7 @@ Neuschwanstein Castle → Landmarks
 
 ---
 
-## 17 People / 人物
+## 15 People / 人物
 
 ### 使用条件
 
@@ -551,7 +533,7 @@ Neuschwanstein Castle → Landmarks
 
 ---
 
-## 18 Sports / 运动
+## 16 Sports / 运动
 
 ### 使用条件
 
@@ -579,7 +561,7 @@ Neuschwanstein Castle → Landmarks
 
 ---
 
-## 19 Seasons / 四季
+## 17 Seasons / 四季（属性类 · 需护栏）
 
 ### 使用条件
 
@@ -593,9 +575,15 @@ Neuschwanstein Castle → Landmarks
 - Autumn foliage
 - Spring blossoms
 
+### 护栏（必须遵守）
+
+- 仅当"季节本身就是图片主题"时使用（例如满屏秋叶、积雪冬景、盛大开春花海）。
+- 只是普通森林/风景恰好有少量秋叶或雪 → 归 `Nature` / `Landscapes`，**不要**用 Seasons。
+- Seasons 是 `Nature` / `Landscapes` 的**属性**，不是独立主体；不确定时归 Nature/Landscapes。
+
 ### 判断方法
 
-如果用户更可能因为“这是秋天”而选择它：
+如果用户更可能因为"这是秋天"而选择它：
 
 → Seasons
 
@@ -605,20 +593,26 @@ Neuschwanstein Castle → Landmarks
 
 ---
 
-## 20 Holidays / 节日
+## 18 Holidays / 节日（符号类 · 需护栏）
 
 ### 使用条件
 
-明确的节日主题：
+图中存在**明确节日符号**：
 
-- Christmas
-- Halloween
-- Easter
+- Christmas（圣诞树、彩灯、礼物袜）
+- Halloween（南瓜灯、鬼怪装饰）
+- Easter（彩蛋、兔子）
 - New Year
 - Valentine's Day
 - Thanksgiving
 - Hanukkah
 - Lunar New Year
+
+### 护栏（必须遵守）
+
+- 必须有可见的节日符号证据，不能仅凭"感觉像过节"或红金配色判定。
+- 没有明显节日符号的普通装饰/温馨场景 → 归对应主体/场景类（如 Food / Architecture），**不要**用 Holidays。
+- Holidays 优先于 Seasons（见 Rule E）。
 
 ### 边界案例
 
@@ -628,34 +622,11 @@ Neuschwanstein Castle → Landmarks
 
 一间温暖的房间里摆着普通装饰，但没有明显节日元素：
 
-→ Cozy
+→ 按主体/场景归类（AI 不判 Cozy）
 
 ---
 
-## 21 Vintage / 复古
-
-### 使用条件
-
-主要卖点是怀旧/历史感：
-
-- Old photographs
-- Retro posters
-- Vintage cars
-- Antique objects
-- 1950s / 1960s style
-- Historical scenes
-
-### 重要规则
-
-Vintage 是“主题/时代风格”，不是单纯“图片颜色偏黄”。
-
-现代照片做成复古滤镜：
-
-不要因为色调复古就强制选 Vintage。
-
----
-
-## 22 Abstract / 抽象
+## 19 Abstract / 抽象（风格类 · 需护栏）
 
 ### 使用条件
 
@@ -668,6 +639,12 @@ Vintage 是“主题/时代风格”，不是单纯“图片颜色偏黄”。
 - Mandala
 - Decorative patterns
 
+### 护栏（必须遵守）
+
+- 仅当图中**确实无具象主体**（纯几何/图案/纹理/曼陀罗）时使用。
+- 有明确猫/花/建筑主体，只是画风比较抽象 → 仍按主体分类。
+- 若连"图案/装饰"都难以界定、主题混杂 → 用 `Others`，不要硬套 Abstract。
+
 ### 不应该使用
 
 有明确猫/花/建筑主体，只是画风比较艺术：
@@ -676,28 +653,7 @@ Vintage 是“主题/时代风格”，不是单纯“图片颜色偏黄”。
 
 ---
 
-## 23 Cozy / 温馨
-
-### 使用条件
-
-核心卖点是舒适、温暖、惬意的生活氛围：
-
-- Cozy room
-- Fireplace
-- Warm bedroom
-- Reading corner
-- Cottage interior
-- Café atmosphere
-- Warm home
-- Hygge lifestyle
-
-### 这是一个“氛围型”Tag
-
-只有当没有比 Cozy 更明确的主题时才使用它。
-
----
-
-## 24 Cartoon / 卡通
+## 20 Cartoon / 卡通（风格类 · 需护栏）
 
 ### 使用条件
 
@@ -710,15 +666,21 @@ Vintage 是“主题/时代风格”，不是单纯“图片颜色偏黄”。
 - Cute illustration
 - Hand-drawn character art
 
+### 护栏（必须遵守）
+
+- 仅当图中确有**卡通/动漫/漫画/手绘插画笔触**时才用 Cartoon。
+- 现实照片（哪怕内容可爱） → 按主体分类（Pets / Animals 等），不要因"可爱"判 Cartoon。
+- 卡通化的幻想龙 → Fantasy（题材优先于表现形式）。
+
 ### 边界案例
 
 一只卡通猫：
 
 优先判断：
 
-如果图片卖点是“猫” → Pets
+如果图片卖点是"猫" → Pets
 
-如果图片卖点是“卡通角色/插画风” → Cartoon
+如果图片卖点是"卡通角色/插画风" → Cartoon
 
 如果图片是卡通化的幻想龙：
 
@@ -726,18 +688,18 @@ Vintage 是“主题/时代风格”，不是单纯“图片颜色偏黄”。
 
 ---
 
-## 25 Others / 其他
+## 21 Others / 其他
 
 只有在以下情况下使用：
 
-1. 无法稳定归入其他 24 类
+1. 无法稳定归入其他 20 类
 2. 内容非常小众
 3. 图片主题混杂且没有明显主次
 4. 模型视觉信息不足，无法可靠判断
 
 ### 重要规则
 
-Others 不是“模型不知道”。
+Others 不是"模型不知道"。
 
 如果只是两个类别难以选择，必须根据优先级做判断。
 
@@ -761,7 +723,7 @@ Others 不是“模型不知道”。
 | 森林 | Nature |
 | 海滩 | Ocean |
 | 城市街景 | Cities |
-| 埃菲尔铁塔 | Landmarks |
+| 埃菲尔铁塔 | Architecture |
 | 普通城堡 | Architecture |
 | 一盘意大利面 | Food |
 | 名画 | Art |
@@ -772,10 +734,10 @@ Others 不是“模型不知道”。
 | 足球比赛 | Sports |
 | 秋季森林 | Seasons |
 | 圣诞场景 | Holidays |
-| 老照片 | Vintage |
 | 几何图案 | Abstract |
-| 温暖客厅 | Cozy |
 | 卡通角色 | Cartoon |
+
+> 已移除项处理：旅行感图 → 按 Cities/Architecture/Landscapes/Ocean 归类；复古观感图 → 按主体归类（不用 Vintage）；温馨室内图 → 按 Food/Architecture 等主体归类（用户层可归 Interiors）。
 
 ---
 
@@ -802,14 +764,14 @@ Others 不是“模型不知道”。
 
 ---
 
-## Rule B：著名地标优先于普通建筑
+## Rule B：地标归入建筑
 
-> Landmark > Architecture
+> 著名地标 → Architecture（不再单列 Landmarks）
 
 例：
 
 Eiffel Tower + Paris  
-→ Landmarks
+→ Architecture
 
 普通欧洲教堂  
 → Architecture
@@ -837,9 +799,9 @@ Eiffel Tower + Paris
 
 ---
 
-## Rule D：明确主题优先于氛围
+## Rule D：明确主题优先于风格/氛围
 
-> Subject > Cozy
+> Subject > Style / Mood
 
 例如：
 
@@ -849,9 +811,9 @@ Eiffel Tower + Paris
 
 → Food
 
-如果重点是整个室内氛围：
+如果重点是整个室内环境（无明确食物主体）：
 
-→ Cozy
+→ Architecture（AI 不判 Cozy；用户层可归 Interiors）
 
 ---
 
@@ -859,14 +821,14 @@ Eiffel Tower + Paris
 
 如果出现非常明确的节日符号：
 
-> Holidays > Cozy / Seasons
+> Holidays > Seasons
 
 例如：
 
 圣诞树 + 壁炉  
 → Holidays
 
-而不是 Cozy。
+而不是 Seasons。
 
 ---
 
@@ -900,10 +862,8 @@ Landscapes
 Flowers
 Ocean
 Birds
-Travel
 Cities
 Architecture
-Landmarks
 Food
 Art
 Fantasy
@@ -913,9 +873,7 @@ People
 Sports
 Seasons
 Holidays
-Vintage
 Abstract
-Cozy
 Cartoon
 Others
 ```
@@ -961,24 +919,20 @@ Allowed categories:
 5. Flowers
 6. Ocean
 7. Birds
-8. Travel
-9. Cities
-10. Architecture
-11. Landmarks
-12. Food
-13. Art
-14. Fantasy
-15. Space
-16. Transportation
-17. People
-18. Sports
-19. Seasons
-20. Holidays
-21. Vintage
-22. Abstract
-23. Cozy
-24. Cartoon
-25. Others
+8. Cities
+9. Architecture
+10. Food
+11. Art
+12. Fantasy
+13. Space
+14. Transportation
+15. People
+16. Sports
+17. Seasons
+18. Holidays
+19. Abstract
+20. Cartoon
+21. Others
 
 Classification principles:
 
@@ -990,23 +944,20 @@ Classification principles:
 6. Use Ocean for ocean, beach, underwater scenes, and marine environments when the environment is the main theme.
 7. Use Nature for forests, trees, plants, waterfalls, and natural ecosystems.
 8. Use Landscapes for scenic panoramic views such as mountains, lakes, valleys, countryside, and scenic sunsets.
-9. Use Landmarks for famous recognizable landmarks.
-10. Use Architecture for buildings and structures that are not primarily famous landmarks.
-11. Use Travel for destination-oriented travel scenes that are not better represented by Cities, Landmarks, Ocean, Nature, or Landscapes.
-12. Use Food when food or drinks are the main visual subject.
-13. Use Art for paintings and fine-art compositions.
-14. Use Fantasy for dragons, unicorns, fairies, magic, mythical creatures, and fantasy worlds.
-15. Use Space for planets, galaxies, astronauts, stars, and outer space.
-16. Use Transportation for cars, trains, airplanes, ships, bicycles, motorcycles, buses, etc.
-17. Use People for portraits and human-centered scenes unless a more specific category such as Sports, Space, or Holidays applies.
-18. Use Sports for recognizable sporting activities.
-19. Use Seasons when the main theme is a season such as autumn, winter, spring, or summer.
-20. Use Holidays for clearly recognizable holiday themes such as Christmas, Halloween, Easter, New Year, etc.
-21. Use Vintage when the main theme is historical, retro, nostalgic, or vintage imagery, not merely because of a warm color filter.
-22. Use Abstract for non-representational visual compositions, geometric patterns, textures, and mandalas.
-23. Use Cozy for warm, comfortable lifestyle or interior scenes when no more specific category dominates.
-24. Use Cartoon for cartoon, anime, comic, and illustration-oriented imagery when the illustration style itself is the main theme.
-25. Use Others only when none of the other categories can reasonably represent the image.
+9. Use Architecture for buildings, structures, bridges, castles, and FAMOUS LANDMARKS (Eiffel Tower, Taj Mahal, Great Wall, etc.) when the building/landmark itself is the main subject.
+10. Use Cities for city skylines, urban streets, and city life.
+11. Use Food when food or drinks are the main visual subject.
+12. Use Art ONLY when the image is clearly a painting, fine-art, or illustration (non-photographic evidence). Do NOT use Art merely because a photo looks artistic or has a retro filter; if a clear subject exists, classify by that subject.
+13. Use Fantasy for dragons, unicorns, fairies, magic, mythical creatures, and fantasy worlds.
+14. Use Space for planets, galaxies, astronauts, stars, and outer space.
+15. Use Transportation for cars, trains, airplanes, ships, bicycles, motorcycles, buses, etc.
+16. Use People for portraits and human-centered scenes unless a more specific category such as Sports, Space, or Holidays applies.
+17. Use Sports for recognizable sporting activities.
+18. Use Seasons ONLY when the season itself is the main theme (heavy autumn foliage, snowy winter, spring blossoms). Otherwise classify as Nature or Landscapes.
+19. Use Holidays ONLY when clear holiday symbols are present (Christmas tree, pumpkin, Easter egg, etc.). Do NOT use Holidays based on color or mood alone.
+20. Use Abstract ONLY when there is genuinely no recognizable subject (geometric patterns, textures, mandala). If a clear subject exists, classify by that subject.
+21. Use Cartoon ONLY when the image clearly uses cartoon / anime / comic / hand-drawn illustration style. Do NOT use Cartoon merely because the content is cute; classify cute real photos by their subject.
+22. Use Others only when none of the other categories can reasonably represent the image.
 
 When multiple categories are possible, use this priority:
 
@@ -1014,11 +965,9 @@ main subject
 >
 specific semantic category
 >
-famous landmark
->
 scene/environment
 >
-style
+style (only with content evidence)
 >
 mood
 
@@ -1067,10 +1016,8 @@ Analyze the image carefully before choosing the tag.
         "Flowers",
         "Ocean",
         "Birds",
-        "Travel",
         "Cities",
         "Architecture",
-        "Landmarks",
         "Food",
         "Art",
         "Fantasy",
@@ -1080,9 +1027,7 @@ Analyze the image carefully before choosing the tag.
         "Sports",
         "Seasons",
         "Holidays",
-        "Vintage",
         "Abstract",
-        "Cozy",
         "Cartoon",
         "Others"
       ]
@@ -1139,10 +1084,8 @@ SCHEMA = {
                 "Flowers",
                 "Ocean",
                 "Birds",
-                "Travel",
                 "Cities",
                 "Architecture",
-                "Landmarks",
                 "Food",
                 "Art",
                 "Fantasy",
@@ -1152,9 +1095,7 @@ SCHEMA = {
                 "Sports",
                 "Seasons",
                 "Holidays",
-                "Vintage",
                 "Abstract",
-                "Cozy",
                 "Cartoon",
                 "Others"
             ]
@@ -1229,7 +1170,7 @@ print(json.dumps(result, ensure_ascii=False, indent=2))
   "subject": "cat",
   "scene": "indoor home",
   "model": "qwen3-vl:8b",
-  "prompt_version": "jigsaw-tag-v1.0",
+  "prompt_version": "jigsaw-tag-v1.1",
   "review_required": false
 }
 ```
@@ -1252,7 +1193,7 @@ Others
     → 单独进入人工审核池
 ```
 
-尤其建议把 `Others` 做成一个非常重要的“异常检测池”。
+尤其建议把 `Others` 做成一个非常重要的"异常检测池"。
 
 如果某一批图片里：
 
@@ -1281,7 +1222,7 @@ Others = 18%
 
 # 12. 一个很重要的产品层建议
 
-**不要把 `confidence` 直接当成“模型正确率”。**
+**不要把 `confidence` 直接当成"模型正确率"。**
 
 例如：
 
@@ -1307,22 +1248,22 @@ Nature        100 images
 
 ```text
 Nature vs Landscapes
-Travel vs Cities
-Architecture vs Landmarks
 Animals vs Pets
 Animals vs Birds
 Ocean vs Landscapes
 Seasons vs Nature
-Cozy vs Food
-Cartoon vs Fantasy
 Art vs Abstract
+Art vs Cartoon
+Cartoon vs Fantasy
+Holidays vs Seasons
+Abstract vs Others
 ```
 
-这几组会比“猫到底是不是 Pets”这种简单样本更值得测试。
+这几组会比"猫到底是不是 Pets"这种简单样本更值得测试。
 
 ---
 
-# 13. V1 最终标准
+# 13. V1.1 最终标准
 
 你的整个分类系统可以简单概括为：
 
@@ -1341,7 +1282,9 @@ Art vs Abstract
        │                     │
        └──────────┬──────────┘
                   ▼
-           Check special cases
+        Style/Symbol guardrails
+        (Art/Seasons/Holidays/Abstract/Cartoon
+         need CONTENT evidence)
                   │
                   ▼
         Select exactly ONE tag
@@ -1350,6 +1293,20 @@ Art vs Abstract
        Confidence + Review flag
 ```
 
-最终目标不是让 AI “描述图片”，而是让 AI **稳定地把图片压缩到一个固定的商业分类体系里**。
+最终目标不是让 AI "描述图片"，而是让 AI **稳定地把图片压缩到一个固定的商业分类体系里**。
 
-对于你的 Jigsaw Puzzle App，这比让模型输出几十个自由 Tag 更实用，因为前台筛选、推荐、统计和后续运营都能直接复用这 25 个枚举值。
+对于你的 Jigsaw Puzzle App，这比让模型输出几十个自由 Tag 更实用，因为前台筛选、推荐、统计和后续运营都能直接复用这 21 个枚举值。
+
+---
+
+# 附录 A：用户层筛选分类（与 AI 打标解耦）
+
+以下三类已从 AI 自动打标中移除，但可作为**用户层筛选维度**存在（由多个 AI 标签映射聚合，或作为可选的"风格"过滤）：
+
+| 用户层筛选 | 来源 / 映射 | 说明 |
+|---|---|---|
+| Travel / 旅行 | Cities + Architecture + Landscapes + Ocean | "旅行目的地感"是策展概念，AI 不打标，仅作聚合筛选 |
+| Vintage / 复古 | 任意 AI 标签 + 元数据标记 | 年代/怀旧是风格维度，建议用显式标记而非 AI 视觉判定 |
+| Interiors / 室内家居 | Architecture（室内）+ Food（咖啡馆）等 | 替代原 Cozy；具体场景比"氛围"更易分类 |
+
+> 推荐做法：AI 只产出上述 21 个 Primary Tag；用户层筛选 UI 在这 21 类之上做聚合/风格标记，互不污染。

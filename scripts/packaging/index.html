@@ -1,0 +1,756 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Content Studio — 拼图内容打包工具</title>
+<style>
+:root{
+  --bg:#f7f8fa; --card:#fff; --line:#e8ecf0; --text:#1a2332; --muted:#6b7a90;
+  --accent:#1a73e8; --accent-2:#0b57d0; --ok:#0f9d58; --warn:#f59e0b; --bad:#e53935;
+  --r:14px; --r-sm:10px;
+}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{margin:0;font:14px/1.5 ui-sans-serif,system-ui,Segoe UI,Roboto,Helvetica,Arial;color:var(--text);background:var(--bg)}
+a{color:var(--accent)}
+button{font:inherit}
+input,select,textarea{font:inherit}
+
+/* header */
+.header{
+  position:sticky;top:0;z-index:10;
+  background:rgba(255,255,255,.92);backdrop-filter:blur(8px);
+  border-bottom:1px solid var(--line);
+}
+.header-inner{max-width:none;width:100%;margin:0;padding:14px 16px;display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+.brand{display:flex;gap:10px;align-items:center;font-weight:800;letter-spacing:.2px}
+.brand .logo{width:32px;height:32px;border-radius:9px;background:linear-gradient(135deg,#1a73e8,#00c6a0);display:grid;place-items:center;color:#fff;font-size:16px}
+.brand small{font-weight:600;color:var(--muted);font-size:12px;margin-left:6px}
+.header-actions{margin-left:auto;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.btn{border:1px solid var(--line);background:var(--card);padding:8px 12px;border-radius:999px;cursor:pointer}
+.btn:hover{border-color:#cbd5e1;background:#fcfdff}
+.btn.primary{background:var(--accent);color:#fff;border-color:var(--accent)}
+.btn.primary:hover{background:var(--accent-2)}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.btn.small{padding:6px 10px;font-size:12px}
+.btn.active{background:#0b57d0;color:#fff;border-color:#0b57d0}
+
+/* segmented toggle */
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:999px;overflow:hidden;background:var(--card)}
+.seg button{border:0;background:transparent;padding:6px 14px;cursor:pointer;font-size:12px;font-weight:600;color:var(--muted)}
+.seg button.active{background:var(--accent);color:#fff}
+
+/* config bar — full width */
+.config{
+  max-width:none;width:100%;margin:12px 0 0;padding:0 16px;
+  display:grid;grid-template-columns:1.2fr 1.2fr 1fr auto;gap:10px;align-items:end
+}
+@media(max-width:980px){ .config{grid-template-columns:1fr 1fr} }
+.fld{display:flex;flex-direction:column;gap:6px}
+.fld label{font-size:12px;color:var(--muted);font-weight:600}
+.fld input{border:1px solid var(--line);background:var(--card);border-radius:10px;padding:9px 11px;outline:none}
+.fld input:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(26,115,232,.12)}
+.inline{display:flex;gap:8px;align-items:center}
+.hint{font-size:12px;color:var(--muted)}
+
+/* stats — full width */
+.stats{
+  max-width:none;width:100%;margin:10px 0 0;padding:0 16px;
+  display:flex;gap:8px;flex-wrap:wrap;align-items:center
+}
+.chip{border:1px solid var(--line);background:var(--card);padding:6px 10px;border-radius:999px;font-size:12px;display:inline-flex;gap:6px;align-items:center}
+.chip b{font-weight:800}
+.chip.warn{border-color:#f59e0b;background:#fff8e1}
+.chip.bad{border-color:#ef9a9a;background:#ffebee}
+.chip.ok{border-color:#a5d6a7;background:#e8f5e9}
+.dot{width:8px;height:8px;border-radius:50%}
+.dot.ok{background:var(--ok)} .dot.warn{background:var(--warn)} .dot.bad{background:var(--bad)}
+
+/* toolbar — full width */
+.toolbar{
+  max-width:none;width:100%;margin:10px 0 0;padding:0 16px;
+  display:flex;gap:8px;flex-wrap:wrap;align-items:center
+}
+.toolbar .grow{flex:1}
+.search{position:relative;flex:1;max-width:320px}
+.search input{width:100%;border:1px solid var(--line);background:var(--card);border-radius:999px;padding:8px 12px 8px 32px;outline:none}
+.search span{position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--muted)}
+.select{border:1px solid var(--line);background:var(--card);border-radius:999px;padding:8px 10px}
+
+/* layout — full width, no max-width cap */
+.shell{max-width:none;width:100%;margin:14px 0;padding:0 16px;display:grid;grid-template-columns:1fr 360px;gap:14px}
+@media(max-width:1100px){ .shell{grid-template-columns:1fr} .detail{order:2} .main-col{order:1} }
+.panel{background:var(--card);border:1px solid var(--line);border-radius:var(--r);overflow:hidden}
+.panel h3{margin:0;padding:12px 12px 10px;border-bottom:1px solid var(--line);font-size:13px;display:flex;align-items:center;gap:8px}
+.panel h3 small{color:var(--muted);font-weight:600}
+
+/* tag bar on top of grid */
+.tag-bar{padding:10px 12px;border-bottom:1px solid var(--line);background:#fbfcfe}
+.tag-bar-head{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px}
+.tag-bar-head b{font-size:12px}
+.tag-chips{display:flex;gap:6px;flex-wrap:wrap;max-height:96px;overflow:auto;padding:2px}
+.tag-chip{border:1px solid var(--line);background:#fff;padding:5px 10px;border-radius:999px;font-size:12px;cursor:pointer;display:inline-flex;gap:6px;align-items:center}
+.tag-chip:hover{border-color:#cbd5e1;background:#f8fafc}
+.tag-chip.active{border-color:var(--accent);background:#e8f0fe;color:#0b57d0;font-weight:700}
+.tag-chip .zh{color:var(--muted)}
+.tag-chip .cnt{background:#f1f5f9;color:var(--muted);padding:1px 6px;border-radius:999px;font-size:11px}
+.tag-chip.active .cnt{background:#dbeafe;color:#0b57d0}
+.tag-bar-actions{margin-left:auto;display:flex;gap:6px;align-items:center}
+
+/* grid */
+.grid-wrap{padding:12px}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px}
+@media(min-width:1400px){ .grid{grid-template-columns:repeat(auto-fill,minmax(165px,1fr))} }
+@media(min-width:1600px){ .grid{grid-template-columns:repeat(auto-fill,minmax(180px,1fr))} }
+.card{border:1px solid var(--line);border-radius:14px;overflow:hidden;background:#fff;display:flex;flex-direction:column;cursor:pointer;position:relative}
+.card.selected{outline:2px solid var(--accent);border-color:var(--accent)}
+.card.active{box-shadow:0 0 0 2px var(--accent) inset}
+.card .thumb{aspect-ratio:1.2;overflow:hidden;background:#eef2f7;position:relative}
+.card .thumb img{width:100%;height:100%;object-fit:cover;display:block}
+.card .thumb .sel{position:absolute;left:8px;top:8px;width:22px;height:22px;border-radius:50%;border:2px solid #fff;background:rgba(255,255,255,.92);display:grid;place-items:center;font-size:12px;box-shadow:0 2px 8px rgba(0,0,0,.18)}
+.card.selected .thumb .sel{background:var(--accent);color:#fff;border-color:var(--accent)}
+.card .meta{padding:8px 9px;display:flex;flex-direction:column;gap:4px}
+.card .name{font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:600}
+.card .badge{font-size:11px;display:inline-flex;gap:6px;align-items:center;flex-wrap:wrap}
+.badge-tag{border:1px solid var(--line);padding:2px 7px;border-radius:999px;background:#f8fafc}
+.badge-tag.effective{border-color:var(--accent);background:#e8f0fe;color:#0b57d0;font-weight:700}
+.badge-conf{font-size:11px;color:var(--muted)}
+.flag{position:absolute;right:8px;top:8px;font-size:11px;padding:3px 7px;border-radius:999px;border:1px solid var(--line);background:#fff}
+.flag.warn{background:#fff8e1;border-color:#f59e0b;color:#a16207}
+.flag.bad{background:#ffebee;border-color:#ef9a9a;color:#b71c1c}
+.flag.ok{background:#e8f5e9;border-color:#a5d6a7;color:#1b5e20}
+.mode-hint{font-size:12px;padding:6px 10px;border-radius:999px;background:#e8f0fe;color:#0b57d0;border:1px solid #c2d7ff}
+
+/* detail */
+.detail{position:sticky;top:78px;align-self:start;max-height:calc(100vh - 90px);display:flex;flex-direction:column}
+@media(max-width:1100px){ .detail{position:static;max-height:none} }
+.detail-scroll{overflow:auto}
+.preview{aspect-ratio:1.3;background:#eef2f7;display:grid;place-items:center;overflow:hidden}
+.preview img{width:100%;height:100%;object-fit:contain;background:#0f172a}
+.detail-body{padding:12px;display:flex;flex-direction:column;gap:10px}
+.kv{display:grid;grid-template-columns:84px 1fr;gap:8px;font-size:12px}
+.kv b{color:var(--muted);font-weight:600}
+.kv span{word-break:break-all}
+.tag-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px;max-height:220px;overflow:auto;padding:2px}
+.tag-opt{border:1px solid var(--line);border-radius:10px;padding:7px 8px;display:flex;gap:8px;align-items:center;cursor:pointer}
+.tag-opt:hover{border-color:#cbd5e1;background:#f8fafc}
+.tag-opt.active{border-color:var(--accent);background:#e8f0fe}
+.tag-opt input{accent-color:var(--accent)}
+.tag-opt .zh{color:var(--muted);font-size:12px}
+.actions{display:flex;gap:8px;flex-wrap:wrap}
+.log{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:12px;background:#0f172a;color:#cbd5e1;border-radius:10px;padding:10px;max-height:160px;overflow:auto;white-space:pre-wrap}
+.empty{padding:28px;text-align:center;color:var(--muted)}
+.empty b{color:var(--text)}
+</style>
+</head>
+<body>
+
+<header class="header">
+  <div class="header-inner">
+    <div class="brand">
+      <div class="logo">🧩</div>
+      <div>Content Studio <small>v1.2 · 21 Tags</small></div>
+      <span class="hint" style="margin-left:10px">按需启动 · 本地打包（`python scripts/packaging/server.py`）</span>
+    </div>
+    <div class="header-actions">
+      <button class="btn" id="btnSave">💾 保存 tags.json</button>
+      <button class="btn primary" id="btnExport">📦 导出 main.json</button>
+      <button class="btn" id="btnCopyLog">复制日志</button>
+    </div>
+  </div>
+</header>
+
+<!-- config -->
+<section class="config">
+  <label class="fld">
+    <span>源图片目录（必填）</span>
+    <input id="srcDir" placeholder="例如 D:\puzzle\raw\home_202609 或 C:\Home\Projects\jigsawpuzzle\temp\testimages" />
+    <span class="hint">支持递归扫描，需与 <code>tags.json</code> 同目录</span>
+  </label>
+  <label class="fld">
+    <span>输出目录（outDir）</span>
+    <input id="outDir" placeholder="例如 X:\www\game\test 或 D:\puzzle\out" />
+    <span class="hint">将生成 <code>main.json + main/*.jpg</code></span>
+  </label>
+  <label class="fld">
+    <span>HTTP Base（CDN前缀）</span>
+    <input id="httpBase" value="http://192.168.1.118/data/www/game/test" />
+    <span class="hint">用于拼接 <code>levels[].url</code></span>
+  </label>
+  <label class="fld">
+    <span>version</span>
+    <div class="inline">
+      <input id="version" type="number" placeholder="留空自动自增" style="width:130px" />
+      <button class="btn small" id="btnScan">🔍 扫描</button>
+    </div>
+    <span class="hint"><a href="#" id="linkHealth">健康检查</a> · <code>has_pil</code></span>
+  </label>
+</section>
+
+<!-- stats -->
+<section class="stats" id="stats"></section>
+
+<!-- toolbar -->
+<section class="toolbar">
+  <div class="search"><span>🔎</span><input id="q" placeholder="搜索文件名 / subject / scene / reason" /></div>
+  <select id="filterTag" class="select"><option value="">全部 Tag</option></select>
+  <label class="chip"><input type="checkbox" id="onlyReview" /> 仅看待复核</label>
+  <label class="chip"><input type="checkbox" id="onlyUncorrected" /> 仅看未校正</label>
+  <span class="hint" id="countHint"></span>
+  <span class="grow"></span>
+  <!-- 模式切换 + 批量操作（按需求新增） -->
+  <div class="seg" id="modeSeg" title="单选：点图查看详情；多选：点图直接选中">
+    <button data-mode="single" class="active">单选</button>
+    <button data-mode="multi">多选</button>
+  </div>
+  <span class="mode-hint" id="modeHint">单选模式：点图查看详情</span>
+  <button class="btn small" id="btnSelectAll">全选</button>
+  <button class="btn small" id="btnDeselectAll">取消全选</button>
+  <button class="btn small" id="btnInvert">反选</button>
+  <span class="hint" id="selHint"></span>
+  <select id="bulkTag" class="select"><option value="">批量设为…</option></select>
+  <button class="btn small" id="btnBulk">应用</button>
+</section>
+
+<!-- shell — new layout: main-col (tag bar + grid) + detail -->
+<section class="shell">
+  <div class="main-col" style="display:flex;flex-direction:column;gap:14px;min-width:0">
+    <!-- 标签分布（原左侧边栏上移至网格顶部） -->
+    <div class="panel">
+      <div class="tag-bar">
+        <div class="tag-bar-head">
+          <b>📂 标签分布</b>
+          <small id="leftTotal" class="hint"></small>
+          <span class="hint" id="leftScanInfo" style="margin-left:6px"></span>
+          <div class="tag-bar-actions">
+            <button class="btn small" id="btnRefresh">刷新</button>
+            <button class="btn small" id="btnExportDaily">📅 导出 daily ZIP</button>
+            <button class="btn small" id="btnExportEvents">🎉 导出 events.json</button>
+          </div>
+        </div>
+        <div class="tag-chips" id="tagList"></div>
+      </div>
+    </div>
+
+    <!-- 图片网格 -->
+    <div class="panel">
+      <h3>🖼️ 图片网格 <small id="gridHint"></small><span style="margin-left:auto" class="hint" id="gridModeHint">单选：点图查看详情 · 多选：点图选中</span></h3>
+      <div class="grid-wrap">
+        <div class="grid" id="grid"></div>
+        <div class="empty" id="empty" style="display:none">
+          <div style="font-size:22px">📭</div>
+          <b>暂无图片</b><div class="hint">请检查源目录是否包含 jpg/png/webp，或 tags.json 路径</div>
+        </div>
+      </div>
+      <div style="padding:10px;border-top:1px solid var(--line)" class="hint">
+        已扫描 <span id="leftScanInfo2">-</span> · <span class="log" id="miniLog" style="display:block;margin-top:6px;max-height:90px;padding:8px">就绪。先填源目录后点“扫描”。</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- right: detail -->
+  <div class="panel detail">
+    <h3>🔍 详情与校正 <small id="detailTitle">未选中</small></h3>
+    <div class="preview" id="preview"><span class="hint">未选中图片</span></div>
+    <div class="detail-scroll">
+      <div class="detail-body">
+        <div class="kv"><b>文件名</b><span id="dFile">-</span></div>
+        <div class="kv"><b>路径</b><span id="dPath">-</span></div>
+        <div class="kv"><b>AI 判定</b><span id="dAi">-</span></div>
+        <div class="kv"><b>置信度</b><span id="dConf">-</span></div>
+        <div class="kv"><b>subject/scene</b><span id="dSub">-</span></div>
+        <div class="kv"><b>reason</b><span id="dReason">-</span></div>
+        <div class="kv"><b>review</b><span id="dReview">-</span></div>
+        <div style="height:1px;background:var(--line)"></div>
+        <div style="font-weight:700;font-size:12px">校正为（单选 21 类）</div>
+        <div class="tag-grid" id="tagGrid"></div>
+        <div class="actions">
+          <button class="btn" id="btnClearCorrect">清除校正</button>
+          <button class="btn primary" id="btnNext">保存并下一个 →</button>
+        </div>
+        <div class="hint">保存后标记为“已校正”，`tags.json` 中写入 <code>correctedTag</code>，导出时以校正值为准。`confidence&lt;0.75` 或 `Others` 自动待复核。</div>
+        <div class="log" id="log"></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<script>
+const TAGS = ["Animals","Pets","Nature","Landscapes","Flowers","Ocean","Birds","Cities","Architecture","Food","Art","Fantasy","Space","Transportation","People","Sports","Seasons","Holidays","Abstract","Cartoon","Others"];
+const ZH = {Animals:"动物",Pets:"宠物",Nature:"自然",Landscapes:"风景",Flowers:"花卉",Ocean:"海洋",Birds:"鸟类",Cities:"城市",Architecture:"建筑",Food:"美食",Art:"艺术",Fantasy:"奇幻",Space:"太空",Transportation:"交通",People:"人物",Sports:"运动",Seasons:"四季",Holidays:"节日",Abstract:"抽象",Cartoon:"卡通",Others:"其他"};
+
+let state = {
+  dir: "", outDir: "", httpBase: "http://192.168.1.118/data/www/game/test", version: "",
+  images: [],
+  records: [],
+  recordMap: new Map(),
+  selected: new Set(),
+  active: null,
+  q: "", filterTag: "", onlyReview:false, onlyUncorrected:false,
+  tagFile: null,
+  selectMode: "single", // single | multi  — 新增多选模式
+};
+
+const $ = id=>document.getElementById(id);
+function log(msg){
+  const el=$("log"); const t=new Date().toLocaleTimeString();
+  el.textContent = `[${t}] ${msg}\n` + el.textContent;
+  const ml=$("miniLog"); if(ml) ml.textContent = `[${t}] ${msg}\n` + ml.textContent.slice(0,800);
+}
+function toast(msg){ log(msg); }
+
+function effectiveTag(r){
+  if(!r) return "Others";
+  return (r.correctedTag && r.correctedTag.trim()) ? r.correctedTag.trim() : (r.tag || "Others");
+}
+function isReviewed(r){
+  if(!r) return true;
+  if(r.review_required) return true;
+  const eff = effectiveTag(r);
+  const c = Number(r.confidence || 0);
+  return c < 0.75 || eff === "Others";
+}
+function flagFor(r){
+  if(!r) return {cls:"bad", text:"未标记"};
+  const eff = effectiveTag(r);
+  const c = Number(r.confidence||0);
+  const corrected = !!(r.correctedTag && r.correctedTag.trim());
+  if(corrected) return {cls:"ok", text:"已校正"};
+  if(eff==="Others" || c < 0.6) return {cls:"bad", text:"待复核"};
+  if(c < 0.75) return {cls:"warn", text:"低置信"};
+  return {cls:"ok", text:"已通过"};
+}
+
+function thumbUrl(absPath, size=360){
+  let full = absPath;
+  if(!/^[A-Za-z]:\\/.test(absPath) && !absPath.startsWith("/")){
+    const base = state.dir || "";
+    full = base.replace(/\/+$/,"") + "/" + absPath.replace(/^\/+/,"");
+  }
+  return `/api/thumb?path=${encodeURIComponent(full)}&size=${size}`;
+}
+function fileUrl(absPath){
+  let full = absPath;
+  if(!/^[A-Za-z]:\\/.test(absPath) && !absPath.startsWith("/")){
+    full = (state.dir||"").replace(/\/+$/,"") + "/" + absPath.replace(/^\/+/,"");
+  }
+  return `/api/file?path=${encodeURIComponent(full)}`;
+}
+
+function updateModeUI(){
+  document.querySelectorAll("#modeSeg button").forEach(b=>{
+    b.classList.toggle("active", b.dataset.mode === state.selectMode);
+  });
+  const hint = state.selectMode==="multi" ? "多选模式：点图直接选中/取消" : "单选模式：点图查看详情（Ctrl/⌘+点选 亦可选）";
+  $("modeHint").textContent = hint;
+  $("gridModeHint").textContent = hint;
+}
+
+function initStatic(){
+  const ft=$("filterTag"), bt=$("bulkTag");
+  for(const t of TAGS){
+    const o1=document.createElement("option"); o1.value=t; o1.textContent=`${t} · ${ZH[t]}`; ft.appendChild(o1);
+    const o2=document.createElement("option"); o2.value=t; o2.textContent=`${t} · ${ZH[t]}`; bt.appendChild(o2);
+  }
+  const grid=$("tagGrid");
+  for(const t of TAGS){
+    const lab=document.createElement("label"); lab.className="tag-opt";
+    lab.innerHTML = `<input type="radio" name="ctag" value="${t}" /> <span><b>${t}</b> <span class="zh">· ${ZH[t]}</span></span>`;
+    lab.addEventListener("click", ()=>{
+      const v=t;
+      const r=state.recordMap.get(state.active);
+      if(!r) return;
+      r.correctedTag = v;
+      renderDetail(); renderGrid(); renderStats(); updateSelHint();
+    });
+    grid.appendChild(lab);
+  }
+  // mode seg
+  document.querySelectorAll("#modeSeg button").forEach(b=>{
+    b.addEventListener("click", ()=>{
+      state.selectMode = b.dataset.mode;
+      localStorage.setItem("studio_selectMode", state.selectMode);
+      updateModeUI();
+      toast(`已切换为${state.selectMode==="multi"?"多选":"单选"}模式`);
+    });
+  });
+  const savedMode = localStorage.getItem("studio_selectMode");
+  if(savedMode==="multi"||savedMode==="single") state.selectMode=savedMode;
+  updateModeUI();
+
+  $("btnScan").addEventListener("click", doScan);
+  $("btnRefresh").addEventListener("click", doScan);
+  $("btnSave").addEventListener("click", doSave);
+  $("btnExport").addEventListener("click", doExportMain);
+  $("btnExportDaily").addEventListener("click", doExportDaily);
+  $("btnExportEvents").addEventListener("click", ()=> toast("events 导出请在下方输入活动信息后调用 /api/export/events（原型仅支持 main）"));
+  // 批量选择操作 — 新增 全选/取消全选/反选
+  $("btnSelectAll").addEventListener("click", ()=>{
+    filtered().forEach(i=> state.selected.add(i.path));
+    renderGrid(); updateSelHint(); toast(`已全选 ${state.selected.size} 张（当前视图）`);
+  });
+  $("btnDeselectAll").addEventListener("click", ()=>{
+    // 取消全选：若有筛选则仅清除视图内，否则清空全部
+    const vis = new Set(filtered().map(i=> i.path));
+    if(vis.size && state.selected.size){
+      // 若当前视图有选中，优先清除视图内
+      let n=0; for(const p of vis) if(state.selected.delete(p)) n++;
+      // 若视图内无选中则清空全部
+      if(n===0) state.selected.clear();
+    } else {
+      state.selected.clear();
+    }
+    renderGrid(); updateSelHint(); toast("已取消选中");
+  });
+  $("btnInvert").addEventListener("click", ()=>{
+    const vis = filtered();
+    let added=0, removed=0;
+    for(const it of vis){
+      if(state.selected.has(it.path)){ state.selected.delete(it.path); removed++; }
+      else { state.selected.add(it.path); added++; }
+    }
+    renderGrid(); updateSelHint(); toast(`反选完成：+${added} / -${removed}`);
+  });
+  $("btnBulk").addEventListener("click", doBulk);
+  $("btnClearCorrect").addEventListener("click", ()=>{
+    const r=state.recordMap.get(state.active); if(!r) return;
+    r.correctedTag=null; renderDetail(); renderGrid(); renderStats();
+  });
+  $("btnNext").addEventListener("click", ()=>{
+    const r=state.recordMap.get(state.active); if(r && !r.correctedTag) { toast("请先选择校正标签"); return; }
+    const list=filtered();
+    const idx=list.findIndex(x=> x.path===state.active);
+    const nxt = idx>=0 && idx+1<list.length ? list[idx+1] : list[0];
+    if(nxt){ state.active=nxt.path; renderDetail(); renderGrid(); }
+    $("log").textContent = "已暂存到内存，记得点“保存 tags.json”落地。\n" + $("log").textContent;
+  });
+  $("btnCopyLog").addEventListener("click", ()=>{
+    navigator.clipboard.writeText($("log").textContent||""); toast("日志已复制");
+  });
+  $("q").addEventListener("input", e=>{ state.q=e.target.value.trim().toLowerCase(); renderGrid(); renderStats(); });
+  $("filterTag").addEventListener("change", e=>{ state.filterTag=e.target.value; renderGrid(); renderStats(); });
+  $("onlyReview").addEventListener("change", e=>{ state.onlyReview=e.target.checked; renderGrid(); renderStats(); });
+  $("onlyUncorrected").addEventListener("change", e=>{ state.onlyUncorrected=e.target.checked; renderGrid(); renderStats(); });
+  $("srcDir").addEventListener("change", e=> state.dir=e.target.value.trim());
+  $("outDir").addEventListener("change", e=> state.outDir=e.target.value.trim());
+  $("httpBase").addEventListener("change", e=> state.httpBase=e.target.value.trim());
+  $("version").addEventListener("change", e=> state.version=e.target.value.trim());
+  $("linkHealth").addEventListener("click", async (e)=>{
+    e.preventDefault();
+    try{
+      const r=await fetch("/api/health"); const j=await r.json();
+      toast(`health: has_pil=${j.has_pil} tags=${j.tags.length}`);
+    }catch(err){ toast("health failed: "+err); }
+  });
+  const saved = JSON.parse(localStorage.getItem("studio_cfg")||"{}");
+  if(saved.dir) $("srcDir").value=saved.dir;
+  if(saved.outDir) $("outDir").value=saved.outDir;
+  if(saved.httpBase) $("httpBase").value=saved.httpBase;
+  if(saved.version) $("version").value=saved.version;
+  state.dir=$("srcDir").value.trim();
+  state.outDir=$("outDir").value.trim();
+  state.httpBase=$("httpBase").value.trim()||state.httpBase;
+  state.version=$("version").value.trim();
+  for(const id of ["srcDir","outDir","httpBase","version"]){
+    $(id).addEventListener("change", persistCfg);
+  }
+  function persistCfg(){
+    state.dir=$("srcDir").value.trim();
+    state.outDir=$("outDir").value.trim();
+    state.httpBase=$("httpBase").value.trim();
+    state.version=$("version").value.trim();
+    localStorage.setItem("studio_cfg", JSON.stringify({dir:state.dir,outDir:state.outDir,httpBase:state.httpBase,version:state.version}));
+  }
+  if(state.dir) setTimeout(doScan, 300);
+}
+
+function filtered(){
+  const q=state.q;
+  return state.images.filter(img=>{
+    const r=state.recordMap.get(img.path);
+    const eff = r ? effectiveTag(r) : "Others";
+    if(state.filterTag && eff !== state.filterTag) return false;
+    if(state.onlyReview && !isReviewed(r)) return false;
+    if(state.onlyUncorrected && r && r.correctedTag) return false;
+    if(q){
+      const hay = [img.file, img.path, r?.subject||"", r?.scene||"", r?.reason||"", eff].join(" ").toLowerCase();
+      if(!hay.includes(q)) return false;
+    }
+    return true;
+  });
+}
+
+function renderStats(){
+  const total = state.images.length;
+  const byTag = {};
+  let review=0, uncorrected=0;
+  for(const img of state.images){
+    const r=state.recordMap.get(img.path);
+    const eff = r? effectiveTag(r): "Others";
+    byTag[eff]=(byTag[eff]||0)+1;
+    if(isReviewed(r)) review++;
+    if(!r || !r.correctedTag) uncorrected++;
+  }
+  const stats=$("stats");
+  stats.innerHTML = `
+    <span class="chip"><span class="dot ok"></span> 共 <b>${total}</b> 张</span>
+    <span class="chip warn"><span class="dot warn"></span> 待复核 <b>${review}</b></span>
+    <span class="chip"><span class="dot bad"></span> 未校正 <b>${uncorrected}</b></span>
+    ${state.tagFile?`<span class="chip ok">tags.json: <b>${state.tagFile.split(/[\\/]/).pop()}</b> · ${state.tagFile}</span>`:`<span class="chip bad">未检测到 tags.json（将新建）</span>`}
+    <span class="hint">已选 <b>${state.selected.size}</b> · 视图 <b>${filtered().length}</b> · 模式 <b>${state.selectMode==="multi"?"多选":"单选"}</b></span>
+  `;
+  $("leftTotal").textContent = `(${total})`;
+  const info = state.dir ? `${state.dir} · ${total} 张` : "-";
+  $("leftScanInfo").textContent = info;
+  const el2=$("leftScanInfo2"); if(el2) el2.textContent=info;
+  const list=$("tagList");
+  list.innerHTML="";
+  const entries = Object.entries(byTag).sort((a,b)=> b[1]-a[1]);
+  if(!entries.length){
+    list.innerHTML=`<div class="hint" style="padding:4px">暂无统计，扫描后显示</div>`;
+  } else {
+    for(const [tag,cnt] of entries){
+      const chip=document.createElement("button");
+      chip.className="tag-chip" + (state.filterTag===tag ? " active":"");
+      chip.innerHTML=`<b>${tag}</b> <span class="zh">${ZH[tag]||""}</span> <span class="cnt">${cnt}</span>`;
+      chip.addEventListener("click", ()=>{
+        state.filterTag = state.filterTag===tag ? "" : tag;
+        $("filterTag").value=state.filterTag;
+        renderGrid(); renderStats();
+      });
+      list.appendChild(chip);
+    }
+    for(const t of TAGS){
+      if(!(t in byTag)){
+        const chip=document.createElement("button");
+        chip.className="tag-chip";
+        chip.style.opacity=.45;
+        chip.innerHTML=`<span>${t}</span> <span class="zh">${ZH[t]}</span> <span class="cnt">0</span>`;
+        chip.addEventListener("click", ()=>{
+          state.filterTag=t; $("filterTag").value=t; renderGrid(); renderStats();
+        });
+        list.appendChild(chip);
+      }
+    }
+  }
+  $("countHint").textContent = `视图 ${filtered().length} / ${total}`;
+}
+
+function renderGrid(){
+  const grid=$("grid"), empty=$("empty"), hint=$("gridHint");
+  const list = filtered();
+  hint.textContent = `${list.length} 张 · ${state.selectMode==="multi"?"多选点图选中":"单选点图查看"}`;
+  grid.innerHTML="";
+  if(!list.length){
+    empty.style.display="block";
+    return;
+  }
+  empty.style.display="none";
+  for(const img of list){
+    const r=state.recordMap.get(img.path);
+    const eff = r? effectiveTag(r): "Others";
+    const conf = r? Number(r.confidence||0):0;
+    const flag = flagFor(r);
+    const sel = state.selected.has(img.path);
+    const active = state.active===img.path;
+    const card=document.createElement("div");
+    card.className="card" + (sel? " selected":"") ;
+    card.style.outline = active ? "2px solid #1a73e8" : "";
+    if(active) card.style.boxShadow = "0 0 0 2px #1a73e8 inset";
+    card.innerHTML=`
+      <div class="thumb">
+        <img loading="lazy" src="${thumbUrl(img.path, 360)}" alt="" onerror="this.style.opacity=.25" />
+        <div class="sel">${sel?"✓":""}</div>
+        <div class="flag ${flag.cls}">${flag.text}</div>
+      </div>
+      <div class="meta">
+        <div class="name" title="${img.path}">${img.file}</div>
+        <div class="badge">
+          <span class="badge-tag ${r && r.correctedTag ? 'effective':''}">${eff} · ${ZH[eff]||""}</span>
+          <span class="badge-conf">${conf? conf.toFixed(2):"--"}</span>
+        </div>
+        ${r && r.reason ? `<div class="hint" style="font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${r.reason}</div>` : ``}
+      </div>
+    `;
+    card.addEventListener("click", (e)=>{
+      // 关键：根据模式分流
+      if(state.selectMode==="multi"){
+        // 多选模式：点图直接切换选中
+        if(sel) state.selected.delete(img.path); else state.selected.add(img.path);
+        // 同步详情为当前图，方便右侧校正
+        state.active = img.path;
+        renderDetail(); renderGrid(); updateSelHint(); renderStats();
+      } else {
+        // 单选模式：Ctrl/⌘ 切换选中，其余为查看
+        if(e.ctrlKey || e.metaKey){
+          if(sel) state.selected.delete(img.path); else state.selected.add(img.path);
+          renderGrid(); updateSelHint(); renderStats();
+        } else {
+          state.active = img.path;
+          renderDetail(); renderGrid();
+        }
+      }
+    });
+    card.addEventListener("dblclick", ()=>{
+      // 双击在两种模式下都切换选中（便捷）
+      if(state.selected.has(img.path)) state.selected.delete(img.path); else state.selected.add(img.path);
+      renderGrid(); updateSelHint(); renderStats();
+    });
+    const selEl = card.querySelector(".sel");
+    selEl.addEventListener("click", (e)=>{
+      e.stopPropagation();
+      if(sel) state.selected.delete(img.path); else state.selected.add(img.path);
+      // 点击勾选时也激活详情
+      state.active = img.path;
+      renderDetail(); renderGrid(); updateSelHint(); renderStats();
+    });
+    grid.appendChild(card);
+  }
+}
+
+function renderDetail(){
+  const path = state.active;
+  const r = path ? state.recordMap.get(path) : null;
+  const img = path ? state.images.find(x=> x.path===path) : null;
+  $("detailTitle").textContent = path ? path.split("/").pop() : "未选中";
+  const prev=$("preview");
+  if(!path || !img){
+    prev.innerHTML=`<span class="hint">未选中图片</span>`;
+    $("dFile").textContent="-"; $("dPath").textContent="-"; $("dAi").textContent="-"; $("dConf").textContent="-"; $("dSub").textContent="-"; $("dReason").textContent="-"; $("dReview").textContent="-";
+    return;
+  }
+  prev.innerHTML=`<img src="${fileUrl(path)}" alt="" style="max-height:360px" onerror="this.style.display='none'" />`;
+  $("dFile").textContent = img.file;
+  $("dPath").textContent = img.path;
+  $("dAi").textContent = r ? `${r.tag} · ${ZH[r.tag]||""}` : "—";
+  $("dConf").textContent = r ? Number(r.confidence||0).toFixed(2) : "—";
+  $("dSub").textContent = r ? `${r.subject||"-"} / ${r.scene||"-"}` : "-";
+  $("dReason").textContent = r ? (r.reason||"-") : "-";
+  $("dReview").textContent = r ? (isReviewed(r) ? "需要复核" : "已通过") + (r.correctedTag ? ` · 已校正为 ${r.correctedTag}` : "") : "未标记";
+  const eff = r ? effectiveTag(r) : null;
+  document.querySelectorAll(".tag-opt").forEach(el=>{
+    const inp=el.querySelector("input");
+    const v=inp.value;
+    const active = eff===v;
+    el.classList.toggle("active", active);
+    inp.checked = active;
+  });
+}
+
+function updateSelHint(){
+  $("selHint").textContent = state.selected.size ? `已选 ${state.selected.size}` : "";
+}
+
+async function doScan(){
+  const dir = $("srcDir").value.trim();
+  if(!dir){ toast("请先填写源图片目录"); return; }
+  state.dir=dir; state.outDir=$("outDir").value.trim(); state.httpBase=$("httpBase").value.trim(); state.version=$("version").value.trim();
+  localStorage.setItem("studio_cfg", JSON.stringify({dir:state.dir,outDir:state.outDir,httpBase:state.httpBase,version:state.version}));
+  toast(`扫描中: ${dir}`);
+  try{
+    const res = await fetch(`/api/scan?dir=${encodeURIComponent(dir)}`);
+    const j = await res.json();
+    if(!res.ok){ toast(`扫描失败: ${j.error||res.status}`); return; }
+    state.images = j.images || [];
+    state.tagFile = j.tagFile || null;
+    state.records = j.tagRecords || [];
+    state.recordMap.clear();
+    if(!state.records.length){
+      for(const img of state.images){
+        state.recordMap.set(img.path, {path:img.path,file:img.file,tag:"Others",confidence:0,correctedTag:null,review_required:true,subject:"",scene:"",reason:"未打标"});
+      }
+    } else {
+      for(const rec of state.records){
+        const key = (rec.path||rec.file||"").replace(/\\/g,"/");
+        state.recordMap.set(key, rec);
+      }
+      for(const img of state.images){
+        if(!state.recordMap.has(img.path)){
+          state.recordMap.set(img.path, {path:img.path,file:img.file,tag:"Others",confidence:0,correctedTag:null,review_required:true,subject:"",scene:"",reason:"新增未打标"});
+        }
+      }
+    }
+    state.active = state.images[0]?.path || null;
+    state.selected.clear();
+    renderStats(); renderGrid(); renderDetail(); updateSelHint();
+    toast(`扫描完成: ${state.images.length} 张, tagFile=${state.tagFile||"无"}`);
+  }catch(e){ toast("扫描异常: "+e); console.error(e); }
+}
+
+async function doSave(){
+  if(!state.dir){ toast("缺少源目录"); return; }
+  const list = Array.from(state.recordMap.values());
+  list.sort((a,b)=> (a.path||"").localeCompare(b.path||""));
+  try{
+    const res = await fetch("/api/tags", {
+      method:"POST", headers:{"Content-Type":"application/json"},
+      body: JSON.stringify({dir: state.dir, records: list})
+    });
+    const j=await res.json();
+    if(!res.ok){ toast(`保存失败: ${j.error}`); return; }
+    toast(`已保存 ${j.count} 条 -> ${j.file}`);
+  }catch(e){ toast("保存异常: "+e); }
+}
+
+async function doExportMain(){
+  const src = $("srcDir").value.trim();
+  const out = $("outDir").value.trim();
+  const base = $("httpBase").value.trim();
+  const ver = $("version").value.trim();
+  if(!src || !out){ toast("请填写源目录和输出目录"); return; }
+  let others=0;
+  for(const r of state.recordMap.values()){
+    const eff=effectiveTag(r);
+    if(eff==="Others") others++;
+  }
+  if(others>0){
+    if(!confirm(`仍有 ${others} 张为 Others，确认导出？`)) return;
+  }
+  toast(`导出 main.json 中... src=${src} out=${out}`);
+  try{
+    const res = await fetch("/api/export/main", {
+      method:"POST", headers:{"Content-Type":"application/json"},
+      body: JSON.stringify({srcDir:src, outDir:out, httpBase:base, version: ver})
+    });
+    const j=await res.json();
+    if(!res.ok){ toast(`导出失败: ${j.error}`); return; }
+    toast(`导出成功: version=${j.version} total=${j.total} copied=${j.copied} -> ${j.mainJson} ${j.manifest? "("+j.manifest+")":""}`);
+    if(j.errors && j.errors.length) toast("部分复制失败: "+j.errors.slice(0,3).join("; "));
+  }catch(e){ toast("导出异常: "+e); }
+}
+
+async function doExportDaily(){
+  const src = $("srcDir").value.trim();
+  const out = $("outDir").value.trim();
+  if(!src || !out){ toast("请填写源目录和输出目录"); return; }
+  const month = prompt("请输入月份 YYYYMM，例如 202609", new Date().toISOString().slice(0,7).replace("-",""));
+  if(!month) return;
+  try{
+    const res = await fetch("/api/export/daily", {
+      method:"POST", headers:{"Content-Type":"application/json"},
+      body: JSON.stringify({srcDir:src, outDir:out, month})
+    });
+    const j=await res.json();
+    if(!res.ok){ toast(`daily导出失败: ${j.error}`); return; }
+    toast(`daily导出成功: ${j.count} 张 -> ${j.zip}`);
+  }catch(e){ toast("daily异常: "+e); }
+}
+
+function doBulk(){
+  const tag=$("bulkTag").value;
+  if(!tag){ toast("请选择批量标签"); return; }
+  if(!state.selected.size){ toast("请先在网格中多选图片（切换到多选模式后直接点图，或单选模式用 Ctrl+点）"); return; }
+  let n=0;
+  for(const p of state.selected){
+    const r=state.recordMap.get(p);
+    if(r){ r.correctedTag=tag; n++; }
+  }
+  toast(`批量已设 ${n} 张为 ${tag}`);
+  renderGrid(); renderDetail(); renderStats();
+}
+
+initStatic();
+</script>
+</body>
+</html>
