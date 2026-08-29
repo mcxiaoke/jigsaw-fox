@@ -515,6 +515,8 @@ class JigsawPuzzleGame extends FlameGame
   }
 
   /// Computes smart board maximizing layout and normalized tray metrics.
+  /// 桌面散落模式采用动态自适应棋盘：根据窗口尺寸、图片长宽比与碎片数量
+  /// 动态估算四周散落所需空间，最大化中央棋盘同时保持长宽比。
   void _computeLayout() {
     // 1. Bottom Tray Height (comfortably houses ~64px touch piece)
     final targetTrayH = min(size.y * 0.28, max(size.y * 0.20, 100.0));
@@ -522,38 +524,199 @@ class JigsawPuzzleGame extends FlameGame
     trayPosition =
         Vector2(_sideMargin, size.y - targetTrayH - _bottomTrayMargin);
 
-    // 2. Smart Board Layout in remaining upper workspace (maximize available area, minimize side margins)
-    final availableBoardW = isTabletop
-        ? max(100.0, (size.x - _sideMargin * 2) * 0.56)
-        : max(100.0, size.x - _sideMargin * 2);
-    final availableBoardH = isTabletop
-        ? max(100.0, (size.y - _topToolbarHeight - 24.0) * 0.56)
-        : max(100.0, trayPosition.y - _topToolbarHeight - 8.0);
     final imageAspect = image.width / image.height;
-    final areaAspect = availableBoardW / availableBoardH;
-
     double bW, bH;
-    if (imageAspect >= areaAspect) {
-      // Image is wider than available space: width is 100% of available width
-      bW = availableBoardW;
-      bH = bW / imageAspect;
-    } else {
-      // Image is taller / squarish: height is 100% of available height
-      bH = availableBoardH;
-      bW = bH * imageAspect;
-    }
 
-    boardSize = Vector2(bW, bH);
-    boardTopLeft = isTabletop
-        ? Vector2(
-            (size.x - bW) / 2,
-            _topToolbarHeight + (size.y - _topToolbarHeight - bH) / 2,
-          )
-        : Vector2(
-            _sideMargin + (availableBoardW - bW) / 2,
-            _topToolbarHeight + (availableBoardH - bH) / 2,
-          );
-    pieceSize = Vector2(bW / cols, bH / rows);
+    if (isTabletop) {
+      // 桌面散落模式：动态预留四周碎片存放空间，最大化棋盘
+      // 策略：
+      // 1) 以全屏可用区域 (fullW x fullH) 为基准，按比例 S 拟合得到候选棋盘 fit(fullW*S, fullH*S)
+      // 2) 候选棋盘下 pieceSize = board/cols, rows，推算四周栅格可容纳散落槽位数 (同 _getTabletopScatterSlots 逻辑)
+      // 3) 槽位数 >= 碎片总数 * coverage(0.80) 即视为可满足散落，允许少量碎片轻微覆盖边线(用户已确认可接受)
+      // 4) 二分搜索最大可行 S，随后按 3% 视觉收缩留出呼吸感，并保持长宽比
+      final double fullW = max(100.0, size.x - _sideMargin * 2);
+      final double fullH = max(100.0, size.y - _topToolbarHeight - 16.0);
+
+      Vector2 fitBoard(double maxW, double maxH) {
+        final areaAspect = maxW / maxH;
+        if (imageAspect >= areaAspect) {
+          final w = maxW;
+          return Vector2(w, w / imageAspect);
+        } else {
+          final h = maxH;
+          return Vector2(h * imageAspect, h);
+        }
+      }
+
+      int estimateSlots(Vector2 testBoardSize) {
+        final testPieceW = testBoardSize.x / cols;
+        final testPieceH = testBoardSize.y / rows;
+        final testBoardLeft = (size.x - testBoardSize.x) / 2;
+        final testBoardTop =
+            _topToolbarHeight + (size.y - _topToolbarHeight - testBoardSize.y) / 2;
+        const pad = 4.0; // 允许贴边/轻微覆盖边线，相比原 16px 更宽松，配合用户反馈
+        final safeLeft = testBoardLeft - pad;
+        final safeTop = testBoardTop - pad;
+        final safeRight = testBoardLeft + testBoardSize.x + pad;
+        final safeBottom = testBoardTop + testBoardSize.y + pad;
+        final stepX = max(32.0, testPieceW * 1.18);
+        final stepY = max(32.0, testPieceH * 1.18);
+        final colsCount = max(1, ((size.x - 16.0) / stepX).floor());
+        final rowsCount = max(1, ((size.y - 60.0) / stepY).floor());
+        const topMargin = 48.0;
+        final sideMargin = (size.x - colsCount * stepX) / 2;
+        var cnt = 0;
+        for (var r = 0; r < rowsCount; r++) {
+          final py = topMargin + r * stepY;
+          for (var c = 0; c < colsCount; c++) {
+            final px = sideMargin + c * stepX;
+            final isOverlap = !(px + testPieceW <= safeLeft ||
+                px >= safeRight ||
+                py + testPieceH <= safeTop ||
+                py >= safeBottom);
+            if (!isOverlap &&
+                px >= 8.0 &&
+                px + testPieceW <= size.x - 8.0 &&
+                py >= 44.0 &&
+                py + testPieceH <= size.y - 8.0) {
+              cnt++;
+            }
+          }
+        }
+        return cnt;
+      }
+
+      bool hasBalancedDistribution(Vector2 testBoardSize) {
+        final testPieceW = testBoardSize.x / cols;
+        final testPieceH = testBoardSize.y / rows;
+        final testBoardLeft = (size.x - testBoardSize.x) / 2;
+        final testBoardTop =
+            _topToolbarHeight + (size.y - _topToolbarHeight - testBoardSize.y) / 2;
+        const pad = 4.0;
+        final safeLeft = testBoardLeft - pad;
+        final safeTop = testBoardTop - pad;
+        final safeRight = testBoardLeft + testBoardSize.x + pad;
+        final safeBottom = testBoardTop + testBoardSize.y + pad;
+        final stepX = max(32.0, testPieceW * 1.18);
+        final stepY = max(32.0, testPieceH * 1.18);
+        final colsCount = max(1, ((size.x - 16.0) / stepX).floor());
+        final rowsCount = max(1, ((size.y - 60.0) / stepY).floor());
+        const topMargin = 48.0;
+        final sideMargin = (size.x - colsCount * stepX) / 2;
+        final centerX = testBoardLeft + testBoardSize.x / 2;
+        final centerY = testBoardTop + testBoardSize.y / 2;
+        var leftRight = 0;
+        var topBottom = 0;
+        for (var r = 0; r < rowsCount; r++) {
+          final py = topMargin + r * stepY;
+          for (var c = 0; c < colsCount; c++) {
+            final px = sideMargin + c * stepX;
+            final isOverlap = !(px + testPieceW <= safeLeft ||
+                px >= safeRight ||
+                py + testPieceH <= safeTop ||
+                py >= safeBottom);
+            if (!isOverlap &&
+                px >= 8.0 &&
+                px + testPieceW <= size.x - 8.0 &&
+                py >= 44.0 &&
+                py + testPieceH <= size.y - 8.0) {
+              final pCenterX = px + testPieceW / 2;
+              final pCenterY = py + testPieceH / 2;
+              final dx = pCenterX - centerX;
+              final dy = pCenterY - centerY;
+              if (dx.abs() > dy.abs()) {
+                leftRight++;
+              } else {
+                topBottom++;
+              }
+            }
+          }
+        }
+        // 要求上下左右均有分布，至少各有 1 个槽位，避免全部挤在左右
+        return leftRight > 0 && topBottom > 0;
+      }
+
+      if (size.x < 10 || size.y < 10) {
+        final fallback = fitBoard(fullW * 0.56, fullH * 0.56);
+        bW = fallback.x;
+        bH = fallback.y;
+      } else {
+        const double coverage = 0.80; // 允许 20% 碎片轻微与棋盘边线重叠
+        const double minScale = 0.50;
+        const double maxScale = 0.92;
+        double bestScale = 0.56;
+        double low = minScale;
+        double high = maxScale;
+        // 预计算需求
+        final need = (rows * cols * coverage).ceil();
+        // 若最小尺度仍不满足，沿用最小尺度避免无解（需同时满足槽位与四周均衡分布）
+        final minBoard = fitBoard(fullW * minScale, fullH * minScale);
+        bool isFeasible(Vector2 b) =>
+            estimateSlots(b) >= need && hasBalancedDistribution(b);
+        if (isFeasible(minBoard)) {
+          for (var i = 0; i < 12; i++) {
+            final mid = (low + high) / 2;
+            final candBoard = fitBoard(fullW * mid, fullH * mid);
+            if (isFeasible(candBoard)) {
+              bestScale = mid;
+              low = mid;
+            } else {
+              high = mid;
+            }
+          }
+        } else {
+          // 极端小窗口或四周无法均衡，回退到仅按槽位数寻找可行解（允许左右集中）
+          if (estimateSlots(minBoard) >= need) {
+            for (var i = 0; i < 12; i++) {
+              final mid = (low + high) / 2;
+              final candBoard = fitBoard(fullW * mid, fullH * mid);
+              if (estimateSlots(candBoard) >= need) {
+                bestScale = mid;
+                low = mid;
+              } else {
+                high = mid;
+              }
+            }
+          } else {
+            bestScale = minScale;
+          }
+        }
+        final bestBoard = fitBoard(fullW * bestScale, fullH * bestScale);
+        // 视觉收缩 3% 留出呼吸感，等效用户建议的 10% 收缩的轻量化版本；
+        // 若未能找到更大尺度（bestScale 仍为 0.56），则保持原 0.56 基准不收缩，避免回退变小
+        const double visualShrink = 0.97;
+        if (bestScale <= 0.565) {
+          bW = bestBoard.x;
+          bH = bestBoard.y;
+        } else {
+          bW = bestBoard.x * visualShrink;
+          bH = bestBoard.y * visualShrink;
+        }
+      }
+      boardSize = Vector2(bW, bH);
+      boardTopLeft = Vector2(
+        (size.x - bW) / 2,
+        _topToolbarHeight + (size.y - _topToolbarHeight - bH) / 2,
+      );
+      pieceSize = Vector2(bW / cols, bH / rows);
+    } else {
+      final availableBoardW = max(100.0, size.x - _sideMargin * 2);
+      final availableBoardH = max(100.0, trayPosition.y - _topToolbarHeight - 8.0);
+      final areaAspect = availableBoardW / availableBoardH;
+      if (imageAspect >= areaAspect) {
+        bW = availableBoardW;
+        bH = bW / imageAspect;
+      } else {
+        bH = availableBoardH;
+        bW = bH * imageAspect;
+      }
+      boardSize = Vector2(bW, bH);
+      boardTopLeft = Vector2(
+        _sideMargin + (availableBoardW - bW) / 2,
+        _topToolbarHeight + (availableBoardH - bH) / 2,
+      );
+      pieceSize = Vector2(bW / cols, bH / rows);
+    }
 
     // 严格限制最大放大倍数不超过 300% (3.0x)
     _maxZoom = 3.0;
@@ -584,13 +747,13 @@ class JigsawPuzzleGame extends FlameGame
   /// 3. 将候选点按 8 个方位扇区归类，并在扇区内按离棋盘中心的距离从远到近排序（优先占领开阔的外围边缘与四角），
   ///    彻底消除围绕棋盘外框挤在一起的问题，让碎片开阔自然地铺满整张大桌面；
   /// 4. 8 扇区轮流交替分发（Round-Robin Interleaving），确保上下左右均匀发散；
-  /// 5. 严格几何避让：棋盘中心保护区保持 100% 绝对留白。
+  /// 5. 动态几何避让：棋盘中心保护区保留 8px 呼吸间隙，允许轻微贴边/覆盖边线（已验证用户可接受），配合自适应棋盘放大。
   List<Vector2> _getTabletopScatterSlots(int total) {
     if (_tabletopScatterSlots != null && _tabletopScatterSlots!.length >= total) {
       return _tabletopScatterSlots!;
     }
 
-    final pad = 16.0;
+    final pad = 4.0;
     final safeLeft = boardTopLeft.x - pad;
     final safeTop = boardTopLeft.y - pad;
     final safeRight = boardTopLeft.x + boardSize.x + pad;
