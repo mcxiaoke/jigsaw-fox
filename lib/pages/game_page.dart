@@ -707,66 +707,135 @@ class _GamePageState extends State<GamePage> {
     super.dispose();
   }
 
-  /// Top navigation bar + live stats sub-bar + thin progress line.
-  /// Rendered above (not on top of) the Flame game canvas.
-  Widget _buildHeader() {
-    final total = _totalPieces;
+  /// 标准 AppBar：左侧返回 + 标题，右侧仅保留 4 个图标（左到右）：
+  /// 1) 只显示边缘碎片  2) 提示  3) 半透明原图叠层  4) 扫把整理
+  AppBar _buildAppBar() {
     final ghostOpacity = _game?.boardGhostOpacity ?? 0.0;
     final isBorderActive = _game?.isBorderFilterActive ?? false;
-
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        // Tier 1: Clean, Standard Top AppBar
-        Container(
-          height: 48,
-          decoration: BoxDecoration(
-            color: _headerBarColor.withValues(alpha: 0.92),
-            boxShadow: const [
-              BoxShadow(color: Colors.black12, blurRadius: 4, offset: Offset(0, 1)),
+    return AppBar(
+      backgroundColor: _headerBarColor,
+      elevation: 2,
+      scrolledUnderElevation: 2,
+      surfaceTintColor: Colors.transparent,
+      iconTheme: IconThemeData(color: _headerIconColor),
+      titleTextStyle: TextStyle(
+        fontWeight: FontWeight.bold,
+        fontSize: 17,
+        color: _headerIconColor,
+      ),
+      titleSpacing: 0,
+      leading: IconButton(
+        icon: Icon(PhosphorIconsBold.arrowLeft, color: _headerIconColor),
+        tooltip: '返回',
+        onPressed: () {
+          _autoSaveProgress();
+          Navigator.of(context).pop();
+        },
+      ),
+      title: Text(
+        _pageTitle,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+      ),
+      actions: [
+        // 1. 只显示边缘碎片
+        IconButton(
+          icon: Icon(
+            isBorderActive ? PhosphorIconsFill.cornersOut : PhosphorIconsBold.cornersOut,
+            size: 21,
+            color: isBorderActive ? const Color(0xFF2E7D32) : _headerIconColor,
+          ),
+          tooltip: isBorderActive ? '显示全部碎片' : '仅显示边缘碎片',
+          onPressed: () {
+            _game?.toggleBorderFilter();
+            setState(() {});
+          },
+        ),
+        // 2. 提示
+        IconButton(
+          icon: const Icon(PhosphorIconsFill.lightbulb, size: 21, color: Colors.amber),
+          tooltip: '智能提示',
+          onPressed: () => _game?.hint(),
+        ),
+        // 3. 半透明原图叠层（底图透视 0%/20%/45%）
+        IconButton(
+          icon: Stack(
+            alignment: Alignment.center,
+            children: [
+              Icon(
+                ghostOpacity > 0.01 ? PhosphorIconsFill.stack : PhosphorIconsBold.stack,
+                color: ghostOpacity > 0.01 ? const Color(0xFF2E7D32) : _headerIconColor,
+                size: 21,
+              ),
+              if (ghostOpacity > 0.01)
+                Positioned(
+                  bottom: -1,
+                  right: -2,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 0),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF2E7D32),
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: Text(
+                      '${(ghostOpacity * 100).toInt()}',
+                      style: const TextStyle(fontSize: 7, color: Colors.white, fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                ),
             ],
           ),
-          padding: const EdgeInsets.symmetric(horizontal: 4),
+          tooltip: '底图透视参考 (0%/20%/45%)',
+          onPressed: () {
+            _game?.toggleGhostOpacity();
+            setState(() {});
+          },
+        ),
+        // 4. 扫把一键整理
+        IconButton(
+          icon: Icon(PhosphorIconsBold.broom, size: 21, color: _headerIconColor),
+          tooltip: '一键整理托盘',
+          onPressed: () => _game?.organizeTray(),
+        ),
+        const SizedBox(width: 4),
+      ],
+    );
+  }
+
+  /// AppBar 下方的短状态条：仅在屏幕右侧显示的胶囊短条，内含 2 个图标：
+  /// 换背景图片 + 查看原图（全屏原图叠层切换）
+  Widget _buildShortStatusBar() {
+    return Align(
+      alignment: Alignment.centerRight,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(0, 6, 10, 0),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+          decoration: BoxDecoration(
+            color: _headerBarColor.withValues(alpha: 0.94),
+            borderRadius: BorderRadius.circular(16),
+            boxShadow: const [
+              BoxShadow(color: Colors.black12, blurRadius: 4, offset: Offset(0, 2)),
+            ],
+          ),
           child: Row(
+            mainAxisSize: MainAxisSize.min,
             children: [
               IconButton(
-                icon: Icon(PhosphorIconsBold.arrowLeft, color: _headerIconColor),
-                tooltip: '返回',
-                onPressed: () {
-                  _autoSaveProgress();
-                  Navigator.of(context).pop();
-                },
-              ),
-              const SizedBox(width: 4),
-              Expanded(
-                child: Text(
-                  _pageTitle,
-                  style: TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 17,
-                    color: _headerIconColor,
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-              // 1. Smart hint tool (Moved to AppBar first position)
-              IconButton(
-                icon: const Icon(PhosphorIconsFill.lightbulb, size: 21, color: Colors.amber),
-                tooltip: '智能提示',
-                onPressed: () => _game?.hint(),
-              ),
-              // 2. Wallpaper background switcher
-              IconButton(
-                icon: const Icon(PhosphorIconsBold.image, size: 21, color: Color(0xFF2E7D32)),
+                visualDensity: VisualDensity.compact,
+                padding: const EdgeInsets.symmetric(horizontal: 6),
+                constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+                icon: const Icon(PhosphorIconsBold.image, size: 19, color: Color(0xFF2E7D32)),
                 tooltip: '更换壁纸背景',
                 onPressed: _openBackgroundSelector,
               ),
-              // 3. Fullscreen original image toggle
               IconButton(
+                visualDensity: VisualDensity.compact,
+                padding: const EdgeInsets.symmetric(horizontal: 6),
+                constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
                 icon: Icon(
-                  _showOriginalImage ? PhosphorIconsFill.eye : PhosphorIconsBold.eyeSlash,
-                  size: 21,
+                  _showOriginalImage ? PhosphorIconsFill.eye : PhosphorIconsBold.eye,
+                  size: 19,
                   color: _showOriginalImage ? const Color(0xFF0288D1) : _headerIconColor,
                 ),
                 tooltip: '查看原图',
@@ -775,163 +844,20 @@ class _GamePageState extends State<GamePage> {
                   _isPaused = _showOriginalImage;
                 }),
               ),
-              // 4. Pause Menu / Options
-              IconButton(
-                icon: Icon(PhosphorIconsBold.pauseCircle, size: 21, color: _headerIconColor),
-                tooltip: '暂停与菜单',
-                onPressed: _showPauseMenu,
-              ),
             ],
           ),
         ),
+      ),
+    );
+  }
 
-        // Tier 2: Sub-Bar for Live Stats & In-Game Action Tools (appbar下方内容区域上方)
-        Padding(
-          padding: const EdgeInsets.fromLTRB(10, 6, 10, 0),
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
-            decoration: BoxDecoration(
-              color: _headerBarColor.withValues(alpha: 0.94),
-              borderRadius: BorderRadius.circular(16),
-              boxShadow: const [
-                BoxShadow(color: Colors.black12, blurRadius: 4, offset: Offset(0, 2)),
-              ],
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                // Left: Live Timer & Piece Progress (Without redundant percent to prevent overflow)
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      '⏱️ $_timeString',
-                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: _headerIconColor),
-                    ),
-                    const SizedBox(width: 6),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFE8F5E9),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Text(
-                        '🧩 $_solvedPieces/$total',
-                        style: const TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.bold,
-                          color: Color(0xFF2E7D32),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-
-                // Right: Tools (Undo, Redo, Ghost, Border, Organize)
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    IconButton(
-                      visualDensity: VisualDensity.compact,
-                      padding: const EdgeInsets.symmetric(horizontal: 2),
-                      constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
-                      icon: Icon(
-                        PhosphorIconsBold.arrowUUpLeft,
-                        size: 18,
-                        color: (_game?.canUndo ?? false) ? _headerIconColor : _headerIconColor.withValues(alpha: 0.3),
-                      ),
-                      tooltip: '撤销',
-                      onPressed: (_game?.canUndo ?? false) ? () => _game?.undo() : null,
-                    ),
-                    IconButton(
-                      visualDensity: VisualDensity.compact,
-                      padding: const EdgeInsets.symmetric(horizontal: 2),
-                      constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
-                      icon: Icon(
-                        PhosphorIconsBold.arrowUUpRight,
-                        size: 18,
-                        color: (_game?.canRedo ?? false) ? _headerIconColor : _headerIconColor.withValues(alpha: 0.3),
-                      ),
-                      tooltip: '重做',
-                      onPressed: (_game?.canRedo ?? false) ? () => _game?.redo() : null,
-                    ),
-                    IconButton(
-                      visualDensity: VisualDensity.compact,
-                      padding: const EdgeInsets.symmetric(horizontal: 2),
-                      constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
-                      icon: Stack(
-                        alignment: Alignment.center,
-                        children: [
-                          Icon(
-                            ghostOpacity > 0.01 ? PhosphorIconsFill.stack : PhosphorIconsBold.stack,
-                            color: ghostOpacity > 0.01 ? const Color(0xFF2E7D32) : _headerIconColor,
-                            size: 19,
-                          ),
-                          if (ghostOpacity > 0.01)
-                            Positioned(
-                              bottom: 0,
-                              right: 0,
-                              child: Container(
-                                padding: const EdgeInsets.all(1),
-                                decoration: BoxDecoration(
-                                  color: const Color(0xFF2E7D32),
-                                  borderRadius: BorderRadius.circular(4),
-                                ),
-                                child: Text(
-                                  '${(ghostOpacity * 100).toInt()}',
-                                  style: const TextStyle(fontSize: 7, color: Colors.white, fontWeight: FontWeight.bold),
-                                ),
-                              ),
-                            ),
-                        ],
-                      ),
-                      tooltip: '底图透视参考 (0%/20%/45%)',
-                      onPressed: () {
-                        _game?.toggleGhostOpacity();
-                        setState(() {});
-                      },
-                    ),
-                    IconButton(
-                      visualDensity: VisualDensity.compact,
-                      padding: const EdgeInsets.symmetric(horizontal: 2),
-                      constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
-                      icon: Icon(
-                        isBorderActive ? PhosphorIconsFill.cornersOut : PhosphorIconsBold.cornersOut,
-                        size: 19,
-                        color: isBorderActive ? const Color(0xFF2E7D32) : _headerIconColor,
-                      ),
-                      tooltip: isBorderActive ? '显示全部碎片' : '仅显示边缘碎片',
-                      onPressed: () {
-                        _game?.toggleBorderFilter();
-                        setState(() {});
-                      },
-                    ),
-                    IconButton(
-                      visualDensity: VisualDensity.compact,
-                      padding: const EdgeInsets.symmetric(horizontal: 2),
-                      constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
-                      icon: Icon(PhosphorIconsBold.broom, size: 19, color: _headerIconColor),
-                      tooltip: '一键整理托盘',
-                      onPressed: () => _game?.organizeTray(),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-        ),
-
-        // Tier 3: Thin Linear Progress Indicator
-        Padding(
-          padding: const EdgeInsets.only(top: 4),
-          child: LinearProgressIndicator(
-            value: total > 0 ? _solvedPieces / total : 0.0,
-            minHeight: 2.0,
-            backgroundColor: Colors.black12,
-            valueColor: const AlwaysStoppedAnimation<Color>(Color(0xFF2E7D32)),
-          ),
-        ),
-      ],
+  Widget _buildProgressLine() {
+    final total = _totalPieces;
+    return LinearProgressIndicator(
+      value: total > 0 ? _solvedPieces / total : 0.0,
+      minHeight: 2.0,
+      backgroundColor: Colors.black12,
+      valueColor: const AlwaysStoppedAnimation<Color>(Color(0xFF2E7D32)),
     );
   }
 
@@ -939,55 +865,58 @@ class _GamePageState extends State<GamePage> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFFE2E6EA),
-      body: SafeArea(
-        child: Stack(
-          children: [
-            // 1. Full-Screen Seamless Tiled Background
-            Positioned.fill(
-              child: Image.asset(
-                _selectedBackground,
-                repeat: ImageRepeat.repeat,
-                errorBuilder: (ctx, err, stack) => Container(color: const Color(0xFFE2E6EA)),
-              ),
+      appBar: _buildAppBar(),
+      body: Stack(
+        children: [
+          // 1. Full-Screen Seamless Tiled Background
+          Positioned.fill(
+            child: Image.asset(
+              _selectedBackground,
+              repeat: ImageRepeat.repeat,
+              errorBuilder: (ctx, err, stack) => Container(color: const Color(0xFFE2E6EA)),
             ),
+          ),
 
-            // 2. Header + Flame Game Canvas in a Column so the board
-            //    never sits underneath the status bar in any orientation.
-            Column(
-              children: [
-                _buildHeader(),
-                Expanded(
-                  child: _game != null
-                      ? KeyboardListener(
-                          focusNode: _focusNode,
-                          autofocus: true,
-                          onKeyEvent: (keyEvent) {
-                            if (keyEvent is KeyDownEvent &&
-                                keyEvent.logicalKey == LogicalKeyboardKey.escape &&
-                                _game?.holdingPiece != null) {
-                              _game?.cancelHoldingPiece();
-                              if (mounted) setState(() {});
-                            }
-                          },
-                          child: Listener(
-                            onPointerDown: _onPointerDown,
-                            onPointerMove: _onPointerMove,
-                            onPointerHover: _onPointerHover,
-                            onPointerUp: _onPointerUp,
-                            onPointerCancel: _onPointerCancel,
-                            onPointerSignal: _onPointerSignal,
-                            behavior: HitTestBehavior.translucent,
-                            child: ClipRect(
-                              child: GameWidget(game: _game!),
-                            ),
+          // 2. Short right-aligned status bar + progress + Flame Game Canvas
+          Column(
+            children: [
+              _buildShortStatusBar(),
+              Padding(
+                padding: const EdgeInsets.only(top: 4),
+                child: _buildProgressLine(),
+              ),
+              Expanded(
+                child: _game != null
+                    ? KeyboardListener(
+                        focusNode: _focusNode,
+                        autofocus: true,
+                        onKeyEvent: (keyEvent) {
+                          if (keyEvent is KeyDownEvent &&
+                              keyEvent.logicalKey == LogicalKeyboardKey.escape &&
+                              _game?.holdingPiece != null) {
+                            _game?.cancelHoldingPiece();
+                            if (mounted) setState(() {});
+                          }
+                        },
+                        child: Listener(
+                          onPointerDown: _onPointerDown,
+                          onPointerMove: _onPointerMove,
+                          onPointerHover: _onPointerHover,
+                          onPointerUp: _onPointerUp,
+                          onPointerCancel: _onPointerCancel,
+                          onPointerSignal: _onPointerSignal,
+                          behavior: HitTestBehavior.translucent,
+                          child: ClipRect(
+                            child: GameWidget(game: _game!),
                           ),
-                        )
-                      : const Center(
-                          child: CircularProgressIndicator(color: Color(0xFF2E7D32)),
                         ),
-                ),
-              ],
-            ),
+                      )
+                    : const Center(
+                        child: CircularProgressIndicator(color: Color(0xFF2E7D32)),
+                      ),
+              ),
+            ],
+          ),
 
             // 3. Full-Screen Original Image Overlay (toggled via eye icon)
             if (_showOriginalImage)
@@ -1047,7 +976,7 @@ class _GamePageState extends State<GamePage> {
             // 5. Floating Zoom Level Badge and Reset Button when zoomed
             if (_game != null && _game!.zoom > 1.02)
               Positioned(
-                top: 104,
+                top: 12,
                 right: 12,
                 child: Material(
                   color: Colors.black.withValues(alpha: 0.68),
@@ -1134,7 +1063,6 @@ class _GamePageState extends State<GamePage> {
               ),
           ],
         ),
-      ),
     );
   }
 }
