@@ -90,6 +90,11 @@ class PuzzlePieceComponent extends PositionComponent
   double grabAnchorX = 0.5;
   double grabAnchorY = 0.5;
 
+  // 托盘手势歧义阈值判定：托盘内碎片在未明确向上拖出前，不应随手指移动，避免误触导致左右滑动托盘时碎片跟手
+  Vector2? _trayDragStartPos;
+  bool _pendingTrayDrag = false;
+  bool _trayScrollLocked = false;
+
   /// 计算玩家光标相对碎片逻辑包围盒的归一化锚点坐标 ([0.0, 1.0])
   void computeGrabAnchor(Vector2 canvasPos) {
     final curScaleX = scale.x > 0.001 ? scale.x : 1.0;
@@ -248,6 +253,12 @@ class PuzzlePieceComponent extends PositionComponent
 
     if (isLocked) return;
 
+    // 托盘内碎片：点击不立即拾取，交由拖拽阈值统一判定为“横向滚动托盘”或“向上拖出”
+    // 避免手机上左右滑动托盘时误触移动碎片，符合“大部分时候判定为左右滑动”的预期
+    if (isInTray && !game.isTabletop) {
+      return;
+    }
+
     super.onTapDown(event);
     event.handled = true;
     computeGrabAnchor(event.canvasPosition);
@@ -266,6 +277,16 @@ class PuzzlePieceComponent extends PositionComponent
       game.dropHoldingPiece();
     }
 
+    // 托盘内碎片：进入待判定状态，不立即拾取；由 onDragUpdate 依据滑动角度阈值
+    // 区分“横向滚动托盘”与“向上拖出碎片”，阈值设计保证大部分手势判定为滚动
+    if (isInTray && !game.isTabletop) {
+      _pendingTrayDrag = true;
+      _trayScrollLocked = false;
+      _trayDragStartPos = event.canvasPosition.clone();
+      isDragging = false;
+      return;
+    }
+
     super.onDragStart(event);
     isDragging = true;
     computeGrabAnchor(event.canvasPosition);
@@ -279,8 +300,61 @@ class PuzzlePieceComponent extends PositionComponent
         isDragging = false;
         game.cancelPieceDrag(this);
       }
+      _pendingTrayDrag = false;
+      _trayDragStartPos = null;
+      _trayScrollLocked = false;
       return;
     }
+
+    // 托盘内碎片待判定：依据滑动角度/位移阈值区分横向滚动与向上拖出
+    if (_pendingTrayDrag) {
+      final startPos = _trayDragStartPos;
+      if (startPos == null) return;
+      final curPos = event.canvasEndPosition;
+      final delta = curPos - startPos;
+      final adx = delta.x.abs();
+      final ady = delta.y; // 向上为负
+      final dist = delta.length;
+
+      // 位移过小，继续等待更多位移以判定方向（避免微抖误判）
+      if (dist < 8.0) {
+        return;
+      }
+
+      // 已锁定为横向滚动：持续滚动托盘，不再转为拖拽碎片
+      if (_trayScrollLocked) {
+        game.scrollTray(event.canvasDelta.x);
+        return;
+      }
+
+      // 阈值定义（经权衡：大部分手势应判定为左右滑动托盘）：
+      // - 向上拖出需同时满足：向上位移 >= 12px 且 垂直分量 > 水平 * 1.7（约 >59° 偏离水平，接近垂直）
+      // - 其余所有情况（横向为主、斜向、下移、微小上移）均判为托盘滚动
+      const double upThreshold = 12.0;
+      const double angleFactor = 1.7; // tan(59.5°) ≈1.7，角度陡峭才视为拖出
+
+      if (ady < -upThreshold && ady.abs() > adx * angleFactor) {
+        // 确认为向上拖出：正式进入持有拖拽状态，集群整体跟随光标
+        _pendingTrayDrag = false;
+        _trayDragStartPos = null;
+        _trayScrollLocked = false;
+        super.onDragUpdate(event);
+        isDragging = true;
+        computeGrabAnchor(curPos);
+        game.startHoldingPiece(this, grabAnchorX, grabAnchorY);
+        game.updateHoldingPiecePosition(curPos);
+        return;
+      } else {
+        // 判定为托盘左右滚动（不移动碎片），直接驱动托盘滚动
+        // 当已产生显著横向位移（>16px）且横向占优，锁定为滚动以避免中途突变为拖拽产生抖动
+        if (adx > 16.0 && adx > ady.abs()) {
+          _trayScrollLocked = true;
+        }
+        game.scrollTray(event.canvasDelta.x);
+        return;
+      }
+    }
+
     if (!isDragging && game.holdingPiece != this) return;
 
     super.onDragUpdate(event);
@@ -290,6 +364,14 @@ class PuzzlePieceComponent extends PositionComponent
 
   @override
   void onDragEnd(DragEndEvent event) {
+    // 待判定阶段直接结束：仅滚动托盘，不产生拖拽/吸附
+    if (_pendingTrayDrag) {
+      _pendingTrayDrag = false;
+      _trayDragStartPos = null;
+      _trayScrollLocked = false;
+      super.onDragEnd(event);
+      return;
+    }
     super.onDragEnd(event);
     if (!isDragging && game.holdingPiece != this) return;
 
@@ -300,6 +382,13 @@ class PuzzlePieceComponent extends PositionComponent
 
   @override
   void onDragCancel(DragCancelEvent event) {
+    if (_pendingTrayDrag) {
+      _pendingTrayDrag = false;
+      _trayDragStartPos = null;
+      _trayScrollLocked = false;
+      super.onDragCancel(event);
+      return;
+    }
     super.onDragCancel(event);
     if (!isDragging && game.holdingPiece != this) return;
 
