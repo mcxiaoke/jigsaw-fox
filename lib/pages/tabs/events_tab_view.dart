@@ -40,28 +40,48 @@ class _EventsTabViewState extends State<EventsTabView> {
     return RefreshIndicator(
       onRefresh: () async => await _content.syncAll(),
       child: events.isEmpty
-          ? Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const Icon(PhosphorIconsRegular.calendarBlank, size: 54, color: Colors.black26),
-                  const SizedBox(height: 16),
-                  const Text('暂无正在进行的活动', style: TextStyle(color: Colors.black54, fontSize: 15)),
-                  const SizedBox(height: 12),
-                  ElevatedButton.icon(
-                    icon: const Icon(PhosphorIconsRegular.arrowClockwise, size: 16),
-                    label: const Text('刷新同步'),
-                    onPressed: () async => await _content.syncAll(),
+          ? LayoutBuilder(
+              builder: (context, constraints) => SingleChildScrollView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(minHeight: constraints.maxHeight),
+                  child: Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Icon(PhosphorIconsRegular.calendarBlank, size: 54, color: Colors.black26),
+                        const SizedBox(height: 16),
+                        const Text('暂无正在进行的活动', style: TextStyle(color: Colors.black54, fontSize: 15)),
+                        const SizedBox(height: 12),
+                        ElevatedButton.icon(
+                          icon: const Icon(PhosphorIconsRegular.arrowClockwise, size: 16),
+                          label: const Text('刷新同步'),
+                          onPressed: () async => await _content.syncAll(),
+                        ),
+                      ],
+                    ),
                   ),
-                ],
+                ),
               ),
             )
-          : ListView.builder(
-              padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
-              itemCount: events.length,
-              itemBuilder: (context, index) {
-                final event = events[index];
-                return _buildEventCard(context, event);
+          : LayoutBuilder(
+              builder: (context, constraints) {
+                final isWide = constraints.maxWidth >= 600;
+                return GridView.builder(
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+                  physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
+                  gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: isWide ? 2 : 1,
+                    crossAxisSpacing: 16,
+                    mainAxisSpacing: 16,
+                    mainAxisExtent: 236,
+                  ),
+                  itemCount: events.length,
+                  itemBuilder: (context, index) {
+                    final event = events[index];
+                    return _buildEventCard(context, event);
+                  },
+                );
               },
             ),
     );
@@ -69,7 +89,6 @@ class _EventsTabViewState extends State<EventsTabView> {
 
   Widget _buildEventCard(BuildContext context, PuzzleEventItem event) {
     return Container(
-      margin: const EdgeInsets.only(bottom: 16),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(20),
@@ -96,17 +115,19 @@ class _EventsTabViewState extends State<EventsTabView> {
                   child: AppCachedImage(
                     imagePathOrUrl: event.coverUrl ?? (event.levels.isNotEmpty ? event.levels.first : ''),
                     fit: BoxFit.cover,
+                    alignment: Alignment.center,
                     targetWidth: 720,
                     targetHeight: 360,
                   ),
                 ),
-                Container(
-                  height: 160,
-                  decoration: const BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: [Colors.black54, Colors.transparent, Color(0xBD000000)],
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
+                Positioned.fill(
+                  child: Container(
+                    decoration: const BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [Colors.black54, Colors.transparent, Color(0xBD000000)],
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                      ),
                     ),
                   ),
                 ),
@@ -174,31 +195,33 @@ class _EventsTabViewState extends State<EventsTabView> {
             ),
 
             // 2. Event Description & Action Bar
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      event.desc.isNotEmpty ? event.desc : '精彩专题拼图挑战',
-                      style: const TextStyle(color: Colors.black54, fontSize: 12, height: 1.3),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        event.desc.isNotEmpty ? event.desc : '精彩专题拼图挑战',
+                        style: const TextStyle(color: Colors.black54, fontSize: 12, height: 1.3),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
                     ),
-                  ),
-                  const SizedBox(width: 12),
-                  ElevatedButton.icon(
-                    icon: const Icon(PhosphorIconsBold.play, size: 14),
-                    label: const Text('进入挑战'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF2E7D32),
-                      foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                    const SizedBox(width: 12),
+                    ElevatedButton.icon(
+                      icon: const Icon(PhosphorIconsBold.play, size: 14),
+                      label: const Text('进入挑战'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF2E7D32),
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                      ),
+                      onPressed: () => EventLevelsPage.open(context, event),
                     ),
-                    onPressed: () => EventLevelsPage.open(context, event),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
           ],
