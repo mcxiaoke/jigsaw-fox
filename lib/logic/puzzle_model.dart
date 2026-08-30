@@ -258,6 +258,40 @@ class PuzzleDifficulty {
     }
   }
 
+  /// Difficulty tier index (0 ~ 6).
+  int get tierIndex {
+    switch (pieceCount) {
+      case 24:
+      case 25:
+        return 0; // L1
+      case 36:
+        return 1; // L1.5
+      case 54:
+      case 64:
+        return 2; // L2
+      case 96:
+      case 100:
+        return 3; // L3
+      case 144:
+      case 150:
+        return 4; // L4
+      case 216:
+      case 225:
+        return 5; // L5
+      case 384:
+      case 400:
+        return 6; // L6
+      default:
+        if (pieceCount <= 30) return 0;
+        if (pieceCount <= 45) return 1;
+        if (pieceCount <= 80) return 2;
+        if (pieceCount <= 120) return 3;
+        if (pieceCount <= 180) return 4;
+        if (pieceCount <= 300) return 5;
+        return 6;
+    }
+  }
+
   /// Difficulty tier label (L1 ~ L6).
   String get tierLevel {
     switch (pieceCount) {

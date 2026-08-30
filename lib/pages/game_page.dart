@@ -15,7 +15,9 @@ import '../game/jigsaw_puzzle_game.dart';
 import '../logic/models/puzzle_state.dart';
 import '../logic/puzzle_model.dart';
 import '../logic/star_calculator.dart';
+import '../services/achievement_service.dart';
 import '../services/app_logger.dart';
+import '../services/economy_service.dart';
 import '../services/sound_service.dart';
 import '../widgets/choose_background_sheet.dart';
 
@@ -233,6 +235,7 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
       HapticFeedback.lightImpact();
     }
     _repo.recordSnapStats(pieceCount: 1);
+    AchievementService.instance.onPieceSnapped(1);
   }
 
   void _scheduleSave({bool immediate = false}) {
@@ -452,17 +455,62 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
       );
     }
 
-    // 3. 删除快照
+    // 3. 经济与金币发奖
+    final tier = (_effectiveDifficulty ?? widget.difficulty).tierIndex;
+    final reward = await EconomyService.instance.calculateAndAwardCompletion(
+      tierIndex: tier,
+      stars: stars,
+      isFirstCompletion: updateResult.record.playCount <= 1,
+      deltaStars: updateResult.deltaStars,
+    );
+
+    // 4. 成就系统事件评估
+    final ptype = widget.dailyDateStr != null
+        ? 'daily'
+        : (widget.customId != null ? 'custom' : (widget.packTitle != null ? 'pack' : 'main'));
+    final newAchievements = await AchievementService.instance.onPuzzleSolved(
+      actualPieces: actualPieces,
+      elapsedSeconds: _seconds,
+      hintsUsed: hints,
+      stars: stars,
+      puzzleType: ptype,
+      tierIndex: tier,
+      isFirstNoHintWin: updateResult.isFirstNoHintWin,
+    );
+
+    // 5. 删除快照
     await SnapshotStore.instance.delete(cid, dkey);
 
-    // 4. 显示通关弹窗
+    // 6. 显示通关弹窗
     if (mounted) {
-      _showVictoryDialog(stars: stars, deltaStars: updateResult.deltaStars);
+      _showVictoryDialog(
+        stars: stars,
+        deltaStars: updateResult.deltaStars,
+        earnedCoins: reward.earnedCoins,
+        newAchievements: newAchievements,
+      );
     }
   }
 
-  void _onHintPressed() {
+  Future<void> _onHintPressed() async {
     if (_isSolved || _isPaused) return;
+
+    final tier = (_effectiveDifficulty ?? widget.difficulty).tierIndex;
+    final canUse = await EconomyService.instance.consumeHint(tierIndex: tier);
+    if (!canUse) {
+      if (mounted) {
+        final price = EconomyService.kHintPrices[tier.clamp(0, EconomyService.kHintPrices.length - 1)];
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('金币不足（当前难度提示需 $price 金币，当前拥有 ${EconomyService.instance.coins}）'),
+            duration: const Duration(seconds: 2),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+      return;
+    }
+
     // 提示动画期间暂停计时 1.5 秒
     _hintPauseUntil = DateTime.now().add(const Duration(milliseconds: 1500));
     _game?.hint();
@@ -530,7 +578,12 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
     );
   }
 
-  void _showVictoryDialog({int? stars, int deltaStars = 0}) {
+  void _showVictoryDialog({
+    int? stars,
+    int deltaStars = 0,
+    int earnedCoins = 0,
+    List<AchievementDefinition> newAchievements = const [],
+  }) {
     setState(() => _isPaused = true);
     final earnedStars = stars ?? _calculateStars();
     final hasNext = widget.levelIndex != null && widget.levelIndex! < _repo.levels.length;
@@ -595,6 +648,13 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
                     ),
                     Column(
                       children: [
+                        const Text('获得金币', style: TextStyle(fontSize: 12, color: Colors.black54)),
+                        Text('+$earnedCoins 💰',
+                            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.amber)),
+                      ],
+                    ),
+                    Column(
+                      children: [
                         const Text('规格', style: TextStyle(fontSize: 12, color: Colors.black54)),
                         Text('$_totalPieces 块',
                             style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF2E7D32))),
@@ -603,6 +663,30 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
                   ],
                 ),
               ),
+              if (newAchievements.isNotEmpty) ...[
+                const SizedBox(height: 10),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFFF8E1),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: Colors.amber.shade300),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(PhosphorIconsFill.trophy, color: Colors.amber, size: 20),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          '解锁成就: ${newAchievements.map((a) => a.title).join("、")}',
+                          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF795548)),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
             ],
           ),
         ),
