@@ -111,13 +111,14 @@ class _MyPuzzlesTabViewState extends State<MyPuzzlesTabView> {
     }
     if (!mounted) return;
     final progress = await ResumeHelper.loadProgress(canonicalId);
+    final displayPercent = ResumeHelper.displayProgress(progress, item.progressPercent, item.isCompleted);
     await ChooseDifficultySheet.show(
       context: context,
       imageBytes: bytes,
       initialDifficulty: item.difficulty,
       completedPieceCounts: item.completedPieceCounts.toSet(),
       title: '自制拼图 · 难度选择',
-      savedProgressPercent: item.isCompleted ? null : ResumeHelper.displayProgress(progress, item.progressPercent, item.isCompleted),
+      savedProgressPercent: displayPercent == 0 ? null : displayPercent,
       sourcePlatform: item.displaySource,
       sourceUrl: item.sourceUrl,
       onDelete: () async {

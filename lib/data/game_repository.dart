@@ -313,6 +313,7 @@ class GameRepository {
     String? snapshotJson,
     bool isCompleted = false,
     int? completedPieceCount,
+    String? difficultyKey,
     int stars = 0,
     int timeSeconds = 0,
   }) async {
@@ -372,9 +373,12 @@ class GameRepository {
           snapshotKeys: [enriched.effectiveDifficultyKey],
         );
       } else if (shouldClear) {
-        // 清档或通关：删除该难度文件（若能从 completedPieceCount 推断则删对应难度，否则清全部）
-        if (completedPieceCount != null) {
-          // 尝试按 pieceCount 找到对应难度Key（遍历 presets 兜底）
+        // 清档或通关：优先按显式 difficultyKey 精确删除，消除 pieceCount 横竖歧义
+        if (difficultyKey != null && difficultyKey.isNotEmpty) {
+          await SnapshotStore.instance.delete(canonicalId, difficultyKey);
+          await ProgressStore.instance.clearSnapshot(canonicalId, difficultyKey);
+        } else if (completedPieceCount != null) {
+          // 兜底：按 pieceCount 反查（存在横竖歧义，仅兼容旧调用）
           final diff = PuzzleDifficulty.presets.firstWhere(
             (d) => d.pieceCount == completedPieceCount,
             orElse: () => current.difficulty,
@@ -454,6 +458,7 @@ class GameRepository {
     String? snapshotJson,
     bool isCompleted = false,
     int? completedPieceCount,
+    String? difficultyKey,
     int timeSeconds = 0,
   }) async {
     AppLogger.repo.info('updateDailyProgress date=$dateStr progress=$progressPercent% completed=$isCompleted pieceCount=$completedPieceCount time=${timeSeconds}s');
@@ -495,7 +500,10 @@ class GameRepository {
         await SnapshotStore.instance.save(enriched);
         await ProgressStore.instance.updateProgress(canonicalId: canonicalId, progressPercent: progressPercent, hasSnapshot: true, activeDifficultyKey: enriched.effectiveDifficultyKey, snapshotKeys: [enriched.effectiveDifficultyKey]);
       } else if (shouldClear) {
-        if (completedPieceCount != null) {
+        if (difficultyKey != null && difficultyKey.isNotEmpty) {
+          await SnapshotStore.instance.delete(canonicalId, difficultyKey);
+          await ProgressStore.instance.clearSnapshot(canonicalId, difficultyKey);
+        } else if (completedPieceCount != null) {
           final diff = PuzzleDifficulty.presets.firstWhere((d) => d.pieceCount == completedPieceCount, orElse: () => current.difficulty);
           await SnapshotStore.instance.delete(canonicalId, SnapshotStore.difficultyKeyFor(diff));
           await ProgressStore.instance.clearSnapshot(canonicalId, SnapshotStore.difficultyKeyFor(diff));
@@ -543,6 +551,7 @@ class GameRepository {
     String? snapshotJson,
     bool isCompleted = false,
     int? completedPieceCount,
+    String? difficultyKey,
     int timeSeconds = 0,
   }) async {
     AppLogger.repo.info('updateCustomProgress id=$id progress=$progressPercent% completed=$isCompleted pieceCount=$completedPieceCount time=${timeSeconds}s');
@@ -585,7 +594,10 @@ class GameRepository {
         await SnapshotStore.instance.save(enriched);
         await ProgressStore.instance.updateProgress(canonicalId: canonicalId, progressPercent: progressPercent, hasSnapshot: true, activeDifficultyKey: enriched.effectiveDifficultyKey, snapshotKeys: [enriched.effectiveDifficultyKey]);
       } else if (shouldClear) {
-        if (completedPieceCount != null) {
+        if (difficultyKey != null && difficultyKey.isNotEmpty) {
+          await SnapshotStore.instance.delete(canonicalId, difficultyKey);
+          await ProgressStore.instance.clearSnapshot(canonicalId, difficultyKey);
+        } else if (completedPieceCount != null) {
           final diff = PuzzleDifficulty.presets.firstWhere((d) => d.pieceCount == completedPieceCount, orElse: () => current.difficulty);
           await SnapshotStore.instance.delete(canonicalId, SnapshotStore.difficultyKeyFor(diff));
           await ProgressStore.instance.clearSnapshot(canonicalId, SnapshotStore.difficultyKeyFor(diff));
@@ -634,6 +646,7 @@ class GameRepository {
     String? snapshotJson,
     bool isCompleted = false,
     int? completedPieceCount,
+    String? difficultyKey,
     int timeSeconds = 0,
     PuzzleDifficulty? difficultyHint,
   }) async {
@@ -644,7 +657,10 @@ class GameRepository {
         await SnapshotStore.instance.save(enriched);
         await ProgressStore.instance.updateProgress(canonicalId: canonicalId, progressPercent: progressPercent, hasSnapshot: true, activeDifficultyKey: enriched.effectiveDifficultyKey, snapshotKeys: [enriched.effectiveDifficultyKey]);
       } else if (isCompleted || (snapshotJson == null && progressPercent == 0)) {
-        if (completedPieceCount != null && difficultyHint != null) {
+        if (difficultyKey != null && difficultyKey.isNotEmpty) {
+          await SnapshotStore.instance.delete(canonicalId, difficultyKey);
+          await ProgressStore.instance.clearSnapshot(canonicalId, difficultyKey);
+        } else if (completedPieceCount != null && difficultyHint != null) {
           await SnapshotStore.instance.delete(canonicalId, SnapshotStore.difficultyKeyFor(difficultyHint));
           await ProgressStore.instance.clearSnapshot(canonicalId, SnapshotStore.difficultyKeyFor(difficultyHint));
         } else if (snapshotJson == null && !isCompleted) {

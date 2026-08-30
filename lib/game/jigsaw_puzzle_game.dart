@@ -1760,6 +1760,7 @@ class JigsawPuzzleGame extends FlameGame
     if (newState.rows != rows ||
         newState.cols != cols ||
         newState.pieces.length != _pieces.length) {
+      AppLogger.game.warning('Snapshot apply skipped due to size mismatch: snapshot ${newState.rows}x${newState.cols} len=${newState.pieces.length} vs game $rows x $cols len=${_pieces.length} dkey=${newState.difficultyKey} canonical=${newState.canonicalId}');
       return;
     }
     _boardState = newState;

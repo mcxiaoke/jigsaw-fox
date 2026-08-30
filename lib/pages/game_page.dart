@@ -9,7 +9,9 @@ import 'package:flutter/services.dart';
 import 'package:phosphoricons_flutter/phosphoricons_flutter.dart';
 
 import '../data/game_repository.dart';
+import '../data/snapshot_store.dart';
 import '../game/jigsaw_puzzle_game.dart';
+import '../logic/models/puzzle_state.dart';
 import '../logic/puzzle_model.dart';
 import '../services/app_logger.dart';
 import '../services/sound_service.dart';
@@ -90,8 +92,8 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
         state == AppLifecycleState.hidden ||
         state == AppLifecycleState.detached ||
         state == AppLifecycleState.inactive) {
-      AppLogger.game.info('GamePage lifecycle $state -> flush save');
-      _flushSave();
+      AppLogger.game.info('GamePage lifecycle $state -> flushSync save');
+      _flushSync();
     }
   }
 
@@ -156,20 +158,33 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
   Future<void> _loadImage() async {
     final img = await decodeFlameImage(widget.imageBytes);
     _gameImage = img;
-    final effectiveDiff = widget.difficulty
-        .adaptiveForSize(img.width.toDouble(), img.height.toDouble());
-    _effectiveDifficulty = effectiveDiff;
-
+    PuzzleDifficulty effectiveDiff;
+    // 若有快照，优先使用快照中的 rows/cols，避免 adaptive 覆盖导致 _applyBoardState 静默丢弃（P0-1）
     if (widget.initialSnapshotJson != null) {
       try {
         final map = jsonDecode(widget.initialSnapshotJson!) as Map<String, dynamic>;
         if (map['elapsedSeconds'] is int) {
           _seconds = map['elapsedSeconds'] as int;
         }
+        if (map['rows'] is int && map['cols'] is int) {
+          final r = map['rows'] as int;
+          final c = map['cols'] as int;
+          effectiveDiff = PuzzleDifficulty.presets.firstWhere(
+            (d) => d.rows == r && d.cols == c,
+            orElse: () => PuzzleDifficulty(label: '$r x $c (${r * c}块)', rows: r, cols: c),
+          );
+          AppLogger.game.info('Use snapshot rows/cols r=$r c=$c for effectiveDiff, skip adaptive (P0-1)');
+        } else {
+          effectiveDiff = widget.difficulty.adaptiveForSize(img.width.toDouble(), img.height.toDouble());
+        }
       } catch (e, st) {
-        AppLogger.game.warning('Failed to parse initialSnapshotJson elapsedSeconds', e, st);
+        AppLogger.game.warning('Failed to parse initialSnapshotJson', e, st);
+        effectiveDiff = widget.difficulty.adaptiveForSize(img.width.toDouble(), img.height.toDouble());
       }
+    } else {
+      effectiveDiff = widget.difficulty.adaptiveForSize(img.width.toDouble(), img.height.toDouble());
     }
+    _effectiveDifficulty = effectiveDiff;
 
     final game = JigsawPuzzleGame(
       image: img,
@@ -228,22 +243,65 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
     _doSave();
   }
 
+  /// 同步兜底（用于 dispose / lifecycle 同步落盘，避免 fire-and-forget 丢失）
+  void _flushSync() {
+    _saveDebounce?.cancel();
+    if (_game == null || _isSolved) return;
+    if (_isSaving) return;
+    try {
+      final total = _totalPieces;
+      final liveSolved = _game!.solvedCount;
+      final percent = total > 0 ? (liveSolved * 100 ~/ total) : 0;
+      final boardForCheck = _game!.boardState;
+      final isTrivial = percent == 0 && boardForCheck.hintsUsed == 0 && _seconds < 5 && boardForCheck.pieces.every((p) => p.clusterId == p.id);
+      if (isTrivial) return;
+      final snapshot = _game!.exportSnapshotJson(elapsedSeconds: _seconds);
+      final map = jsonDecode(snapshot) as Map<String, dynamic>;
+      final state = PuzzleBoardState.fromJson(map);
+      SnapshotStore.instance.saveSync(state);
+      final canonicalId = _canonicalIdForSave();
+      if (canonicalId.isNotEmpty) {
+        // ignore: discarded_futures
+        _repo.updateGenericProgress(
+          canonicalId: canonicalId,
+          progressPercent: percent,
+          snapshotJson: snapshot,
+          difficultyHint: _effectiveDifficulty ?? widget.difficulty,
+        );
+      }
+    } catch (_) {}
+  }
+
+  String _canonicalIdForSave() {
+    if (widget.canonicalId != null && widget.canonicalId!.isNotEmpty) return widget.canonicalId!;
+    if (widget.levelIndex != null) return GameRepository.canonicalForLevel(widget.levelIndex!);
+    if (widget.dailyDateStr != null) return GameRepository.canonicalForDaily(widget.dailyDateStr!);
+    if (widget.customId != null) return GameRepository.canonicalForCustom(widget.customId!);
+    return '';
+  }
+
   void _doSave() {
     if (_game == null || _isSolved) return;
     if (_isSaving) {
-      // 若正在保存，稍后重试
+      // 若正在保存，稍后重试（但 dispose 已取消 debounce，不会逃逸）
       _saveDebounce?.cancel();
       _saveDebounce = Timer(const Duration(milliseconds: 300), _doSave);
       return;
     }
     _isSaving = true;
     final total = _totalPieces;
-    // solvedPieces 可能滞后，以棋盘实时计算为准
     final liveSolved = _game!.solvedCount;
     if (liveSolved != _solvedPieces && mounted) {
       _solvedPieces = liveSolved;
     }
     final percent = total > 0 ? (liveSolved * 100 ~/ total) : 0;
+    // 过滤“点进去即退”的无意义残局，避免“只要点进去就有记录”
+    final boardForCheck = _game!.boardState;
+    final isTrivial = percent == 0 && boardForCheck.hintsUsed == 0 && _seconds < 5 && boardForCheck.pieces.every((p) => p.clusterId == p.id);
+    if (isTrivial) {
+      _isSaving = false;
+      return;
+    }
     String snapshot;
     try {
       snapshot = _game!.exportSnapshotJson(elapsedSeconds: _seconds);
@@ -321,12 +379,14 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
     final completedCount = _totalPieces;
     final stars = _calculateStars();
 
+    final dkey = SnapshotStore.difficultyKeyFor(_effectiveDifficulty ?? widget.difficulty);
     if (widget.canonicalId != null && widget.canonicalId!.isNotEmpty) {
       _repo.updateGenericProgress(
         canonicalId: widget.canonicalId!,
         progressPercent: 100,
         isCompleted: true,
         completedPieceCount: completedCount,
+        difficultyKey: dkey,
         timeSeconds: _seconds,
         difficultyHint: _effectiveDifficulty ?? widget.difficulty,
       );
@@ -336,6 +396,7 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
         progressPercent: 100,
         isCompleted: true,
         completedPieceCount: completedCount,
+        difficultyKey: dkey,
         stars: stars,
         timeSeconds: _seconds,
       );
@@ -345,6 +406,7 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
         progressPercent: 100,
         isCompleted: true,
         completedPieceCount: completedCount,
+        difficultyKey: dkey,
         timeSeconds: _seconds,
       );
     } else if (widget.customId != null) {
@@ -353,6 +415,7 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
         progressPercent: 100,
         isCompleted: true,
         completedPieceCount: completedCount,
+        difficultyKey: dkey,
         timeSeconds: _seconds,
       );
     }
@@ -664,10 +727,10 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _saveDebounce?.cancel();
-    // 最后机会保存（若未通关）
+    // 最后机会同步保存（避免 dispose 逃逸 Timer）
     if (!_isSolved) {
       try {
-        _doSave();
+        _flushSync();
       } catch (_) {}
     }
     _timer?.cancel();

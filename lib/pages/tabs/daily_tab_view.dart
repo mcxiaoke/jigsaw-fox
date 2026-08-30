@@ -54,13 +54,14 @@ class _DailyTabViewState extends State<DailyTabView> {
     }
     if (!mounted) return;
     final progress = await ResumeHelper.loadProgress(canonicalId);
+    final displayPercent = ResumeHelper.displayProgress(progress, item.progressPercent, item.isCompleted);
     await ChooseDifficultySheet.show(
       context: context,
       imageBytes: imgBytes,
       initialDifficulty: item.difficulty,
       completedPieceCounts: item.completedPieceCounts.toSet(),
       title: '${item.date} 挑战 · 难度选择',
-      savedProgressPercent: item.isCompleted ? null : ResumeHelper.displayProgress(progress, item.progressPercent, item.isCompleted),
+      savedProgressPercent: displayPercent == 0 ? null : displayPercent,
       onResetProgress: () async {
         final prog = await ResumeHelper.loadProgress(canonicalId);
         if (prog.activeDifficultyKey.isNotEmpty) {

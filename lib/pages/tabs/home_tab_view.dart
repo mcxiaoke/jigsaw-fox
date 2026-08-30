@@ -107,6 +107,7 @@ class _HomeTabViewState extends State<HomeTabView> {
     }
     if (!mounted) return;
     final progress = await ResumeHelper.loadProgress(canonicalId);
+    final displayPercent = ResumeHelper.displayProgress(progress, level.progressPercent, level.isCompleted);
     await ChooseDifficultySheet.show(
       context: context,
       imageBytes: imgBytes,
@@ -115,7 +116,7 @@ class _HomeTabViewState extends State<HomeTabView> {
       isUnlocked: level.isUnlocked,
       lockedMessage: '请先通关第 ${level.index - 1} 关解锁此关卡',
       title: '第 ${level.index} 关 · ${level.isUnlocked ? "难度选择" : "关卡预览(未解锁)"}',
-      savedProgressPercent: level.isCompleted ? null : ResumeHelper.displayProgress(progress, level.progressPercent, level.isCompleted),
+      savedProgressPercent: displayPercent == 0 ? null : displayPercent,
       onResetProgress: () async {
         final prog = await ResumeHelper.loadProgress(canonicalId);
         if (prog.activeDifficultyKey.isNotEmpty) {

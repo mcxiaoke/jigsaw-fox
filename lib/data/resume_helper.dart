@@ -26,14 +26,14 @@ class ResumeInfo {
 class ResumeHelper {
   /// 读取当前可续玩的快照（若无则返回 null）
   ///
-  /// 规则：`isCompleted==true` 直接视为无续玩；否则按 `progress.activeDifficultyKey`
-  /// 优先加载，失败则遍历 `listDifficultyKeys` 兜底；仅当 `0 < percent < 100` 才视为可续玩。
+  /// 规则：不再以 `isCompleted` 阻断（已通关重玩的残局仍需可继续）；仅按
+  /// `hasSnapshot` + 快照存在且未通关（`percent < 100` 且非 isSolved）判定；
+  /// `percent==0` 的自由摆放也视为可续玩（修复 P1-5）。
   static Future<ResumeInfo?> fetchResume(
     String canonicalId,
-    PuzzleDifficulty fallbackDifficulty,
-    bool isCompleted,
-  ) async {
-    if (isCompleted) return null;
+    PuzzleDifficulty fallbackDifficulty, [
+    bool? isCompleted,
+  ]) async {
     final progress = await ProgressStore.instance.load(canonicalId);
     if (!progress.hasSnapshot) return null;
     final dkey = progress.activeDifficultyKey.isNotEmpty
@@ -57,23 +57,30 @@ class ResumeHelper {
         }
       }
     }
-    if (snapshot == null || percent <= 0 || percent >= 100) return null;
-    // 重新加载最新的 progress（保证 active 键一致）
+    if (snapshot == null) return null;
+    if (percent >= 100 || snapshot.isSolved) return null;
+    // 过滤“点进去即退”的无意义残局：0% 且无合并/提示/时长则不视为可续玩，避免“只要点进去就有记录”
+    final isTrivial = percent == 0 &&
+        snapshot.hintsUsed == 0 &&
+        snapshot.elapsedSeconds < 5 &&
+        snapshot.pieces.every((p) => p.clusterId == p.id);
+    if (isTrivial) return null;
     final freshProgress = await ProgressStore.instance.load(canonicalId);
     return ResumeInfo(snapshot: snapshot, dkey: usedDkey, percent: percent, progress: freshProgress);
   }
 
   /// 若存在可续玩存档，则弹出 ContinueDialog 二选一；返回原始 `ContinueDialog.show` 的 `result` 字符串
   /// （`continue:<dkey>` / `restart:<dkey>`），无存档则返回 null，弹后取消返回 `'cancelled'`。
+  /// `isCompleted` 已废弃（为兼容保留），不再阻断续玩。
   static Future<String?> maybeShowResumeDialog({
     required BuildContext context,
     required String canonicalId,
     required PuzzleDifficulty fallbackDifficulty,
-    required bool isCompleted,
+    bool isCompleted = false,
     required String title,
     required Uint8List imageBytes,
   }) async {
-    final info = await fetchResume(canonicalId, fallbackDifficulty, isCompleted);
+    final info = await fetchResume(canonicalId, fallbackDifficulty);
     if (info == null) return null;
     if (!context.mounted) return null;
     final result = await ContinueDialog.show(
@@ -97,9 +104,10 @@ class ResumeHelper {
   }
 
   /// 快捷获取展示用进度百分比（优先 ProgressStore 索引，兜底旧字段）
+  /// 已通关重玩的残局也应显示进度，故 hasSnapshot 优先于 isCompleted
   static int displayProgress(LevelProgress progress, int legacyPercent, bool isCompleted) {
-    if (isCompleted) return 0;
     if (progress.hasSnapshot) return progress.progressPercent;
+    if (isCompleted) return 0;
     return legacyPercent;
   }
 
@@ -142,21 +150,20 @@ class ResumeHelper {
       final k = result.substring('restart:'.length);
       await clearResume(canonicalId, k);
       await onClearRepo(k);
-      final diff = await diffForKey(k, fallbackDifficulty);
-      if (!context.mounted) return true;
-      await onPushGame(diff, null);
-      return true;
+      // 重开不直接进游戏，清除后返回 false 让调用方展示无记录的难度选择页
+      return false;
     }
     return false;
   }
 
   /// 一站式：若有存档则弹对话框并处理分支，返回 true 表示已处理（调用方应直接 return），
-  /// false 表示无存档，调用方应继续走 ChooseDifficultySheet
+  /// false 表示无存档，调用方应继续走 ChooseDifficultySheet。
+  /// `isCompleted` 已废弃，仅为兼容保留。
   static Future<bool> tryHandleResumeFlow({
     required BuildContext context,
     required String canonicalId,
     required PuzzleDifficulty fallbackDifficulty,
-    required bool isCompleted,
+    bool isCompleted = false,
     required String title,
     required Uint8List imageBytes,
     required Future<void> Function(String dkey) onClearRepo,
@@ -167,7 +174,6 @@ class ResumeHelper {
       context: context,
       canonicalId: canonicalId,
       fallbackDifficulty: fallbackDifficulty,
-      isCompleted: isCompleted,
       title: title,
       imageBytes: imageBytes,
     );

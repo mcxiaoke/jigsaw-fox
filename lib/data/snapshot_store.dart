@@ -85,17 +85,65 @@ class SnapshotStore {
     try {
       final tmp = File('${file.path}.tmp');
       await tmp.writeAsString(jsonStr, flush: true);
-      // 原子重命名
-      if (await file.exists()) {
-        try {
-          await file.delete();
-        } catch (_) {}
+      // 原子重命名：直接 rename 覆盖，避免先删后无文件的窗口
+      try {
+        await tmp.rename(file.path);
+      } catch (_) {
+        // Windows 下 rename 覆盖可能失败，回退为删后重命名
+        if (await file.exists()) {
+          try {
+            await file.delete();
+          } catch (_) {}
+        }
+        await tmp.rename(file.path);
       }
-      await tmp.rename(file.path);
       AppLogger.repo.info('SnapshotStore.save ok cid=$cid dkey=$dkey bytes=${jsonStr.length} ${sw.elapsedMilliseconds}ms file=${AppLogger.sanitizePath(file.path)}');
     } catch (e, st) {
       AppLogger.repo.severe('SnapshotStore.save failed cid=$cid dkey=$dkey', e, st);
       rethrow;
+    }
+  }
+
+  /// 同步保存（用于 dispose / lifecycle 同步兜底，避免 fire-and-forget 丢失）
+  void saveSync(PuzzleBoardState state) {
+    if (!_initialized || _snapshotsDir == null) {
+      // 未初始化时尝试同步创建目录（尽力）
+      try {
+        final support = Directory.systemTemp;
+        _snapshotsDir = Directory(p.join(support.path, 'jigsaw_snapshots'));
+        if (!_snapshotsDir!.existsSync()) _snapshotsDir!.createSync(recursive: true);
+      } catch (_) {
+        return;
+      }
+    }
+    final cid = state.effectiveCanonicalId;
+    final dkey = state.effectiveDifficultyKey;
+    if (cid.isEmpty || dkey.isEmpty) return;
+    final file = _fileFor(cid, dkey);
+    final toSave = state.copyWith(
+      version: PuzzleBoardState.currentVersion,
+      canonicalId: cid,
+      difficultyKey: dkey,
+      updatedAt: DateTime.now(),
+      createdAt: state.createdAt ?? DateTime.now(),
+    );
+    final jsonStr = jsonEncode(toSave.toJson());
+    try {
+      final tmp = File('${file.path}.tmp');
+      tmp.writeAsStringSync(jsonStr, flush: true);
+      try {
+        tmp.renameSync(file.path);
+      } catch (_) {
+        if (file.existsSync()) {
+          try {
+            file.deleteSync();
+          } catch (_) {}
+        }
+        tmp.renameSync(file.path);
+      }
+      AppLogger.repo.info('SnapshotStore.saveSync ok cid=$cid dkey=$dkey bytes=${jsonStr.length}');
+    } catch (e, st) {
+      AppLogger.repo.warning('SnapshotStore.saveSync failed cid=$cid dkey=$dkey', e, st);
     }
   }
 

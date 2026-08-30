@@ -1,9 +1,10 @@
 # 存档与续玩（继续 / 重新开始）长期最优设计方案
 
-> **状态**：设计定稿 · 未实施（先不动代码）  
-> **日期**：2026-08-30 10:38 GMT+8  
+> **状态**：已落地（8040f70）· 2026-08-30 13:38 增补“只留最新残局”简化  
+> **日期**：2026-08-30 10:38 GMT+8（初版）/ 2026-08-30 13:38 增补  
 > **作者**：OpenCode / Muse Spark  
-> **关联现状**：`lib/data/game_repository.dart`、`lib/logic/models/puzzle_state.dart:114`、`lib/game/jigsaw_puzzle_game.dart:1799`、`lib/pages/game_page.dart:192`、`lib/widgets/choose_difficulty_sheet.dart:554`、`docs/data-architecture-current.md`、`docs/puzzle-content-storage-and-expansion-design.md:6`
+> **关联现状**：`lib/data/game_repository.dart`、`lib/logic/models/puzzle_state.dart:114`、`lib/game/jigsaw_puzzle_game.dart:1799`、`lib/pages/game_page.dart:192`、`lib/widgets/choose_difficulty_sheet.dart:554`、`docs/data-architecture-current.md`、`docs/puzzle-content-storage-and-expansion-design.md:6`  
+> **增补决策（2026-08-30 13:38）**：按用户要求“多难度并存不做，只保留最新一次残局”，`snapshotKeys` 仅保留 `activeDifficultyKey` 单值，`ContinueDialog` 多难度 Tab 保留但仅传单值，`ProgressStore` 覆盖写而非追加。
 
 ---
 
