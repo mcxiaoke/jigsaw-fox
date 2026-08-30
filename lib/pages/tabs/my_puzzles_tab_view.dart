@@ -112,6 +112,7 @@ class _MyPuzzlesTabViewState extends State<MyPuzzlesTabView> {
     if (!mounted) return;
     final progress = await ResumeHelper.loadProgress(canonicalId);
     final displayPercent = ResumeHelper.displayProgress(progress, item.progressPercent, item.isCompleted);
+    if (!mounted) return;
     await ChooseDifficultySheet.show(
       context: context,
       imageBytes: bytes,
@@ -142,6 +143,7 @@ class _MyPuzzlesTabViewState extends State<MyPuzzlesTabView> {
         final dkey = SnapshotStore.difficultyKeyFor(diff);
         final snapJson = await SnapshotStore.instance.loadJsonString(canonicalId, dkey);
         final fallbackLegacy = (diff.pieceCount == item.difficulty.pieceCount && !item.isCompleted) ? item.savedSnapshotJson : null;
+        if (!mounted) return;
         await Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => GamePage(imageBytes: bytes, difficulty: diff, customId: item.id, initialSnapshotJson: snapJson ?? fallbackLegacy)));
         setState(() {});
       },

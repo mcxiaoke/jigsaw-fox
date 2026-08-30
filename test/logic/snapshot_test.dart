@@ -5,15 +5,15 @@ void main() {
   group('Snapshot v3 Tests', () {
     test('v3 JSON serialization round-trip with forward compat', () {
       const original = PuzzleBoardState(
-        rows: 3,
-        cols: 4,
+        rows: 1,
+        cols: 2,
         seed: 8888,
         rotationEnabled: true,
         elapsedSeconds: 120,
         hintsUsed: 2,
         levelId: 'level_05',
         canonicalId: 'main:005',
-        difficultyKey: '4x3',
+        difficultyKey: '1x2',
         pieces: [
           PieceState(
             id: 0,
@@ -43,8 +43,8 @@ void main() {
       expect(json['rotationEnabled'], isTrue);
 
       final restored = PuzzleBoardState.fromJson(json);
-      expect(restored.rows, 3);
-      expect(restored.cols, 4);
+      expect(restored.rows, 1);
+      expect(restored.cols, 2);
       expect(restored.seed, 8888);
       expect(restored.rotationEnabled, isTrue);
       expect(restored.elapsedSeconds, 120);
@@ -60,7 +60,7 @@ void main() {
       expect(p0.clusterId, 3);
       expect(p0.rot, 2);
       expect(restored.canonicalId, 'main:005');
-      expect(restored.difficultyKey, '4x3');
+      expect(restored.difficultyKey, '1x2');
     });
 
     test('v2 snapshot still readable (backward compat)', () {
@@ -99,10 +99,10 @@ void main() {
         'version': 99,
         'levelId': 'level_99',
         'canonicalId': 'main:099',
-        'difficultyKey': '10x10',
+        'difficultyKey': '1x1',
         'seed': 9999,
-        'rows': 2,
-        'cols': 2,
+        'rows': 1,
+        'cols': 1,
         'rotationEnabled': false,
         'elapsedSeconds': 5,
         'hintsUsed': 0,
@@ -123,6 +123,20 @@ void main() {
       // 再次解析不丢
       final s2 = PuzzleBoardState.fromJson(out);
       expect(s2.extra['futureField'], 'futureValue');
+    });
+
+    test('invalid pieces length throws FormatException', () {
+      final invalidJson = {
+        'version': 3,
+        'levelId': 'level_err',
+        'seed': 1234,
+        'rows': 2,
+        'cols': 2,
+        'pieces': [
+          {'id': 0, 'r': 0, 'c': 0, 'nx': 0.0, 'ny': 0.0, 'g': 0, 'rot': 0},
+        ],
+      };
+      expect(() => PuzzleBoardState.fromJson(invalidJson), throwsA(isA<FormatException>()));
     });
   });
 }

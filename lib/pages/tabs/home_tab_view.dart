@@ -108,6 +108,7 @@ class _HomeTabViewState extends State<HomeTabView> {
     if (!mounted) return;
     final progress = await ResumeHelper.loadProgress(canonicalId);
     final displayPercent = ResumeHelper.displayProgress(progress, level.progressPercent, level.isCompleted);
+    if (!mounted) return;
     await ChooseDifficultySheet.show(
       context: context,
       imageBytes: imgBytes,
@@ -131,6 +132,7 @@ class _HomeTabViewState extends State<HomeTabView> {
         final dkey = SnapshotStore.difficultyKeyFor(diff);
         final snapJson = await SnapshotStore.instance.loadJsonString(canonicalId, dkey);
         final fallbackLegacy = (diff.pieceCount == level.difficulty.pieceCount && !level.isCompleted) ? level.savedSnapshotJson : null;
+        if (!mounted) return;
         await Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => GamePage(imageBytes: imgBytes, difficulty: diff, levelIndex: level.index, initialSnapshotJson: snapJson ?? fallbackLegacy)));
         setState(() {});
       },

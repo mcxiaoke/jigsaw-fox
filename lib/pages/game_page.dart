@@ -471,6 +471,7 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
       final s = await _repo.loadLevelSnapshotJson(nextIndex, nextLevel.difficulty);
       if (s != null) snapJson = s;
     } catch (_) {}
+    if (!mounted) return;
     Navigator.of(context).pushReplacement(
       MaterialPageRoute<void>(
         builder: (_) => GamePage(

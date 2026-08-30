@@ -55,6 +55,7 @@ class _DailyTabViewState extends State<DailyTabView> {
     if (!mounted) return;
     final progress = await ResumeHelper.loadProgress(canonicalId);
     final displayPercent = ResumeHelper.displayProgress(progress, item.progressPercent, item.isCompleted);
+    if (!mounted) return;
     await ChooseDifficultySheet.show(
       context: context,
       imageBytes: imgBytes,
@@ -76,6 +77,7 @@ class _DailyTabViewState extends State<DailyTabView> {
         final dkey = SnapshotStore.difficultyKeyFor(diff);
         final snapJson = await SnapshotStore.instance.loadJsonString(canonicalId, dkey);
         final fallbackLegacy = (diff.pieceCount == item.difficulty.pieceCount && !item.isCompleted) ? item.savedSnapshotJson : null;
+        if (!mounted) return;
         await Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => GamePage(imageBytes: imgBytes, difficulty: diff, dailyDateStr: item.date, initialSnapshotJson: snapJson ?? fallbackLegacy)));
         setState(() {});
       },

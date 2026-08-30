@@ -1,3 +1,5 @@
+import '../../services/app_logger.dart';
+
 /// Immutable state representing a single puzzle piece on the board.
 class PieceState {
   const PieceState({
@@ -338,8 +340,21 @@ class PuzzleBoardState {
         .map((e) => PieceState.fromJson(e as Map<String, dynamic>))
         .toList();
 
+    final rows = json['rows'] as int;
+    final cols = json['cols'] as int;
+    if (pieceList.length != rows * cols) {
+      throw FormatException('PuzzleBoardState pieces length (${pieceList.length}) != rows*cols ($rows * $cols = ${rows * cols})');
+    }
+
     // 兼容 v2：无 version/canonicalId/difficultyKey
     final ver = (json['version'] as int?) ?? 2;
+    if (ver < minSupportedVersion) {
+      throw FormatException('PuzzleBoardState version ($ver) < minSupportedVersion ($minSupportedVersion)');
+    }
+    if (ver > currentVersion) {
+      AppLogger.game.warning('PuzzleBoardState version ($ver) is newer than supported ($currentVersion)');
+    }
+
     final cid = (json['canonicalId'] as String?) ??
         (json['levelId'] as String? ?? 'default_level');
     final dkey = (json['difficultyKey'] as String?) ??
@@ -348,8 +363,8 @@ class PuzzleBoardState {
             : '');
 
     return PuzzleBoardState(
-      rows: json['rows'] as int,
-      cols: json['cols'] as int,
+      rows: rows,
+      cols: cols,
       seed: json['seed'] as int,
       rotationEnabled: (json['rotationEnabled'] ?? false) as bool,
       pieces: pieceList,

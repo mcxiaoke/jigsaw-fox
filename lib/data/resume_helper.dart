@@ -29,6 +29,7 @@ class ResumeHelper {
   /// 规则：不再以 `isCompleted` 阻断（已通关重玩的残局仍需可继续）；仅按
   /// `hasSnapshot` + 快照存在且未通关（`percent < 100` 且非 isSolved）判定；
   /// `percent==0` 的自由摆放也视为可续玩（修复 P1-5）。
+  /// 若索引为 true 但文件丢失，会自动执行对账自愈（修复 P1-8）。
   static Future<ResumeInfo?> fetchResume(
     String canonicalId,
     PuzzleDifficulty fallbackDifficulty, [
@@ -57,16 +58,21 @@ class ResumeHelper {
         }
       }
     }
-    if (snapshot == null) return null;
+    if (snapshot == null) {
+      // 索引记录有快照但实际文件不存在或已损坏被删：自动对账纠正索引（P1-8）
+      await ProgressStore.instance.clearAllSnapshots(canonicalId);
+      return null;
+    }
     if (percent >= 100 || snapshot.isSolved) return null;
-    // 过滤“点进去即退”的无意义残局：0% 且无合并/提示/时长则不视为可续玩，避免“只要点进去就有记录”
+    // 过滤“点进去即退”的无意义残局：0% 且无合并/提示/时长<5s则不视为可续玩，避免“只要点进去就有记录”
     final isTrivial = percent == 0 &&
         snapshot.hintsUsed == 0 &&
         snapshot.elapsedSeconds < 5 &&
         snapshot.pieces.every((p) => p.clusterId == p.id);
     if (isTrivial) return null;
-    final freshProgress = await ProgressStore.instance.load(canonicalId);
-    return ResumeInfo(snapshot: snapshot, dkey: usedDkey, percent: percent, progress: freshProgress);
+
+    // 直接复用 progress，消除多余的第二次 load IO（P2-16）
+    return ResumeInfo(snapshot: snapshot, dkey: usedDkey, percent: percent, progress: progress);
   }
 
   /// 若存在可续玩存档，则弹出 ContinueDialog 二选一；返回原始 `ContinueDialog.show` 的 `result` 字符串

@@ -125,6 +125,7 @@ class _PackLevelsPageState extends State<PackLevelsPage> {
     }
     if (!mounted) return;
     final progress = await ResumeHelper.loadProgress(canonicalId);
+    if (!mounted) return;
     await ChooseDifficultySheet.show(
       context: context,
       imageBytes: bytes,
@@ -147,6 +148,7 @@ class _PackLevelsPageState extends State<PackLevelsPage> {
       onStart: (diff) async {
         final dkey = SnapshotStore.difficultyKeyFor(diff);
         final snapJson = await SnapshotStore.instance.loadJsonString(canonicalId, dkey);
+        if (!mounted) return;
         await Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => GamePage(imageBytes: bytes, difficulty: diff, canonicalId: canonicalId, packTitle: '${widget.pack.title} · 第 ${level.order} 关', initialSnapshotJson: snapJson)));
         if (mounted) setState(() {});
       },

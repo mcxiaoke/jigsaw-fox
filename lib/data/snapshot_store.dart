@@ -8,13 +8,13 @@ import '../logic/models/puzzle_state.dart';
 import '../logic/puzzle_model.dart';
 import '../services/app_logger.dart';
 
-/// 文件级快照存储（原子写、损坏自愈、gzip 透传、版本前瞻兼容）
+/// 文件级快照存储（原子写、损坏自愈、短哈希防串档、版本前瞻兼容）
 ///
 /// 设计要点（见 docs/save-resume-continue-design-20260830.md）：
-/// - 主键 `<canonicalId>::<difficultyKey>`，文件名为安全化后的 `<safeId>_<RxC>.snapshot`
-/// - 原子写：`tmp -> rename`，避免半写损坏
+/// - 主键 `<canonicalId>::<difficultyKey>`，文件名为安全化+短哈希后的 `<safeId>_<hash>__<RxC>.snapshot`
+/// - 原子写：`tmp -> bak 保护 -> rename`，避免半写损坏和 Windows 覆盖失败风险
 /// - 读取时 `PuzzleBoardState.fromJson` 的 `extra` 透传保证前瞻兼容
-/// - 未来可无痛切换到加密/云后端（实现 SnapshotBackend 即可）
+/// - 单关卡只留最新残局，保存新难度时自动清理同关旧快照
 class SnapshotStore {
   SnapshotStore._();
   static final SnapshotStore instance = SnapshotStore._();
@@ -32,6 +32,8 @@ class SnapshotStore {
       }
       _initialized = true;
       AppLogger.repo.info('SnapshotStore init dir=${AppLogger.sanitizePath(_snapshotsDir!.path)}');
+      // 启动时清理残留临时文件
+      _cleanupTempFiles();
     } catch (e, st) {
       AppLogger.repo.warning('SnapshotStore init failed', e, st);
       // 回退到临时目录（测试环境）
@@ -40,13 +42,51 @@ class SnapshotStore {
         if (!await _snapshotsDir!.exists()) await _snapshotsDir!.create(recursive: true);
       } catch (_) {}
       _initialized = true;
+      _cleanupTempFiles();
     }
   }
 
-  String _safeFileName(String canonicalId, String difficultyKey) {
+  /// 异步清理残留的 .tmp / .bak 临时文件
+  void _cleanupTempFiles() {
+    final dir = _snapshotsDir;
+    if (dir == null) return;
+    // 异步后台执行，不阻塞启动
+    () async {
+      try {
+        if (!await dir.exists()) return;
+        await for (final f in dir.list()) {
+          if (f is File) {
+            final name = p.basename(f.path);
+            if (name.endsWith('.tmp') || name.endsWith('.bak')) {
+              try {
+                await f.delete();
+              } catch (_) {}
+            }
+          }
+        }
+      } catch (_) {}
+    }();
+  }
+
+  static String _shortHash(String str) {
+    var hash = 0xcbf29ce484222325;
+    for (var i = 0; i < str.length; i++) {
+      hash ^= str.codeUnitAt(i);
+      hash = (hash * 0x100000001b3) & 0xFFFFFFFFFFFFFFFF;
+    }
+    return hash.toRadixString(16).padLeft(8, '0').substring(0, 8);
+  }
+
+  String _safePrefix(String canonicalId) {
     final safeId = canonicalId.replaceAll(RegExp(r'[^a-zA-Z0-9_-]'), '_');
+    final hash = _shortHash(canonicalId);
+    return '${safeId}_$hash';
+  }
+
+  String _safeFileName(String canonicalId, String difficultyKey) {
+    final prefix = _safePrefix(canonicalId);
     final safeDiff = difficultyKey.replaceAll(RegExp(r'[^a-zA-Z0-9_-]'), '_');
-    return '${safeId}__$safeDiff.snapshot';
+    return '${prefix}__$safeDiff.snapshot';
   }
 
   File _fileFor(String canonicalId, String difficultyKey) {
@@ -63,7 +103,7 @@ class SnapshotStore {
     if (!_initialized) await init();
   }
 
-  /// 原子保存快照
+  /// 原子保存快照（带 .bak 备份回滚保护）
   Future<void> save(PuzzleBoardState state) async {
     await _ensureInit();
     final cid = state.effectiveCanonicalId;
@@ -82,24 +122,48 @@ class SnapshotStore {
     );
     final jsonStr = jsonEncode(toSave.toJson());
     final sw = Stopwatch()..start();
+    final tmp = File('${file.path}.tmp');
+    final bak = File('${file.path}.bak');
     try {
-      final tmp = File('${file.path}.tmp');
       await tmp.writeAsString(jsonStr, flush: true);
-      // 原子重命名：直接 rename 覆盖，避免先删后无文件的窗口
+      // 原子重命名：若目标文件已存在，使用 .bak 保护防止 Windows 覆盖失败及零文件窗口
+      if (await file.exists()) {
+        try {
+          if (await bak.exists()) await bak.delete();
+          await file.rename(bak.path);
+        } catch (_) {}
+      }
       try {
         await tmp.rename(file.path);
-      } catch (_) {
-        // Windows 下 rename 覆盖可能失败，回退为删后重命名
-        if (await file.exists()) {
+        if (await bak.exists()) {
           try {
-            await file.delete();
+            await bak.delete();
           } catch (_) {}
         }
-        await tmp.rename(file.path);
+      } catch (e) {
+        // 重命名失败，尝试恢复 .bak
+        if (await bak.exists()) {
+          try {
+            await bak.rename(file.path);
+          } catch (_) {}
+        }
+        rethrow;
       }
+
+      // 清理同关卡其它难度的旧快照，保证磁盘上单关卡只保留 1 份最新残局（P1-4）
+      final oldKeys = await listDifficultyKeys(cid);
+      for (final k in oldKeys) {
+        if (k != dkey) {
+          await delete(cid, k);
+        }
+      }
+
       AppLogger.repo.info('SnapshotStore.save ok cid=$cid dkey=$dkey bytes=${jsonStr.length} ${sw.elapsedMilliseconds}ms file=${AppLogger.sanitizePath(file.path)}');
     } catch (e, st) {
       AppLogger.repo.severe('SnapshotStore.save failed cid=$cid dkey=$dkey', e, st);
+      try {
+        if (await tmp.exists()) await tmp.delete();
+      } catch (_) {}
       rethrow;
     }
   }
@@ -107,7 +171,6 @@ class SnapshotStore {
   /// 同步保存（用于 dispose / lifecycle 同步兜底，避免 fire-and-forget 丢失）
   void saveSync(PuzzleBoardState state) {
     if (!_initialized || _snapshotsDir == null) {
-      // 未初始化时尝试同步创建目录（尽力）
       try {
         final support = Directory.systemTemp;
         _snapshotsDir = Directory(p.join(support.path, 'jigsaw_snapshots'));
@@ -128,22 +191,37 @@ class SnapshotStore {
       createdAt: state.createdAt ?? DateTime.now(),
     );
     final jsonStr = jsonEncode(toSave.toJson());
+    final tmp = File('${file.path}.tmp');
+    final bak = File('${file.path}.bak');
     try {
-      final tmp = File('${file.path}.tmp');
       tmp.writeAsStringSync(jsonStr, flush: true);
+      if (file.existsSync()) {
+        try {
+          if (bak.existsSync()) bak.deleteSync();
+          file.renameSync(bak.path);
+        } catch (_) {}
+      }
       try {
         tmp.renameSync(file.path);
-      } catch (_) {
-        if (file.existsSync()) {
+        if (bak.existsSync()) {
           try {
-            file.deleteSync();
+            bak.deleteSync();
           } catch (_) {}
         }
-        tmp.renameSync(file.path);
+      } catch (e) {
+        if (bak.existsSync()) {
+          try {
+            bak.renameSync(file.path);
+          } catch (_) {}
+        }
+        rethrow;
       }
       AppLogger.repo.info('SnapshotStore.saveSync ok cid=$cid dkey=$dkey bytes=${jsonStr.length}');
     } catch (e, st) {
       AppLogger.repo.warning('SnapshotStore.saveSync failed cid=$cid dkey=$dkey', e, st);
+      try {
+        if (tmp.existsSync()) tmp.deleteSync();
+      } catch (_) {}
     }
   }
 
@@ -180,11 +258,23 @@ class SnapshotStore {
   Future<PuzzleBoardState?> loadForDifficulty(String canonicalId, PuzzleDifficulty d) =>
       load(canonicalId, difficultyKeyFor(d));
 
-  /// 直接以 JSON 字符串加载（用于 GamePage initialSnapshotJson 透传）
+  /// 直接以 JSON 字符串加载（用于 GamePage initialSnapshotJson 透传，消除重复编解码开销）
   Future<String?> loadJsonString(String canonicalId, String difficultyKey) async {
-    final s = await load(canonicalId, difficultyKey);
-    if (s == null) return null;
-    return jsonEncode(s.toJson());
+    await _ensureInit();
+    final file = _fileFor(canonicalId, difficultyKey);
+    if (!await file.exists()) return null;
+    try {
+      final str = await file.readAsString();
+      final map = jsonDecode(str) as Map<String, dynamic>;
+      PuzzleBoardState.fromJson(map); // 校验格式与完整性
+      return str;
+    } catch (e, st) {
+      AppLogger.repo.warning('SnapshotStore.loadJsonString corrupted delete cid=$canonicalId dkey=$difficultyKey', e, st);
+      try {
+        await file.delete();
+      } catch (_) {}
+      return null;
+    }
   }
 
   Future<bool> hasSnapshot(String canonicalId, String difficultyKey) async {
@@ -192,35 +282,35 @@ class SnapshotStore {
     return _fileFor(canonicalId, difficultyKey).exists();
   }
 
+  /// 异步非阻塞检查是否存在任意快照
   Future<bool> hasAnySnapshot(String canonicalId) async {
     await _ensureInit();
     final dir = _snapshotsDir;
     if (dir == null || !await dir.exists()) return false;
-    final safeId = canonicalId.replaceAll(RegExp(r'[^a-zA-Z0-9_-]'), '_');
-    final files = dir.listSync().whereType<File>();
-    for (final f in files) {
-      if (p.basename(f.path).startsWith('${safeId}__')) return true;
+    final prefix = '${_safePrefix(canonicalId)}__';
+    await for (final f in dir.list()) {
+      if (f is File && p.basename(f.path).startsWith(prefix) && f.path.endsWith('.snapshot')) {
+        return true;
+      }
     }
     return false;
   }
 
+  /// 异步非阻塞列出该关卡的所有难度 key
   Future<List<String>> listDifficultyKeys(String canonicalId) async {
     await _ensureInit();
     final dir = _snapshotsDir;
     if (dir == null || !await dir.exists()) return const [];
-    final safeId = canonicalId.replaceAll(RegExp(r'[^a-zA-Z0-9_-]'), '_');
-    final prefix = '${safeId}__';
-    final suffix = '.snapshot';
+    final prefix = '${_safePrefix(canonicalId)}__';
+    const suffix = '.snapshot';
     final keys = <String>[];
-    for (final f in dir.listSync().whereType<File>()) {
-      final name = p.basename(f.path);
-      if (name.startsWith(prefix) && name.endsWith(suffix)) {
-        final inner = name.substring(prefix.length, name.length - suffix.length);
-        // inner 为 safeDiff 如 10x10，恢复为原始 dkey（safe 转换可逆仅替换非字母数字）
-        keys.add(inner.replaceAll('_', 'x').replaceAll('xx', 'x')); // 保守还原
-        // 实际上我们存的就是 10x10 -> 10x10 safe 不变，直接用 inner
-        // 修正：直接用 inner
-        keys[keys.length - 1] = inner;
+    await for (final f in dir.list()) {
+      if (f is File) {
+        final name = p.basename(f.path);
+        if (name.startsWith(prefix) && name.endsWith(suffix)) {
+          final inner = name.substring(prefix.length, name.length - suffix.length);
+          keys.add(inner);
+        }
       }
     }
     return keys;
@@ -243,6 +333,25 @@ class SnapshotStore {
     final keys = await listDifficultyKeys(canonicalId);
     for (final k in keys) {
       await delete(canonicalId, k);
+    }
+  }
+
+  /// 清空所有快照与临时文件（用于 resetAllData）
+  Future<void> clearAll() async {
+    await _ensureInit();
+    final dir = _snapshotsDir;
+    if (dir == null || !await dir.exists()) return;
+    try {
+      await for (final f in dir.list()) {
+        if (f is File) {
+          try {
+            await f.delete();
+          } catch (_) {}
+        }
+      }
+      AppLogger.repo.info('SnapshotStore.clearAll done');
+    } catch (e, st) {
+      AppLogger.repo.warning('SnapshotStore.clearAll failed', e, st);
     }
   }
 

@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../services/app_logger.dart';
+import 'snapshot_store.dart';
 
 /// 轻量进度索引（按 canonicalId 单条 SharedPreferences JSON）
 ///
@@ -74,10 +75,6 @@ class ProgressStore {
       hasSnapshot: hasSnapshot ?? cur.hasSnapshot,
       lastSavedAt: DateTime.now(),
     );
-    // 若已通关则 hasSnapshot 应清（由 SnapshotStore 删除后调用）
-    if (isCompleted == true) {
-      // 保留 completedCounts，但快照标记清
-    }
     await save(next);
     AppLogger.repo.fine('ProgressStore.update cid=$canonicalId p=$progressPercent completed=$isCompleted stars=$stars time=$bestTimeSeconds dkey=$activeDifficultyKey hasSnap=$hasSnapshot');
   }
@@ -117,6 +114,24 @@ class ProgressStore {
   Future<bool> hasSnapshot(String canonicalId) async {
     final p = await load(canonicalId);
     return p.hasSnapshot;
+  }
+
+  /// 自动对账：根据 SnapshotStore 的实际快照文件纠正索引状态
+  Future<void> reconcile(String canonicalId) async {
+    final keys = await SnapshotStore.instance.listDifficultyKeys(canonicalId);
+    final has = keys.isNotEmpty;
+    final cur = await load(canonicalId);
+    if (cur.hasSnapshot != has || (has && !keys.contains(cur.activeDifficultyKey))) {
+      final nextActive = has
+          ? (keys.contains(cur.activeDifficultyKey) ? cur.activeDifficultyKey : keys.first)
+          : '';
+      await save(cur.copyWith(
+        hasSnapshot: has,
+        snapshotKeys: keys,
+        activeDifficultyKey: nextActive,
+      ));
+      AppLogger.repo.info('ProgressStore.reconcile cid=$canonicalId has=$has keys=$keys active=$nextActive');
+    }
   }
 }
 
@@ -236,5 +251,5 @@ class LevelProgress {
   }
 
   /// 供 UI 判断是否显示“继续”
-  bool get canResume => hasSnapshot && !isCompleted && progressPercent > 0;
+  bool get canResume => hasSnapshot && !isCompleted;
 }

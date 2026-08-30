@@ -4,14 +4,12 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import 'package:path/path.dart' as p;
-import 'package:path_provider/path_provider.dart';
-
 import '../logic/image_source.dart';
 import '../logic/models/puzzle_state.dart';
 import '../logic/puzzle_model.dart';
 import '../services/app_logger.dart';
 import 'bing_daily_data.dart';
+import 'migration_service.dart';
 import 'models/custom_puzzle_item.dart';
 import 'models/daily_challenge.dart';
 import 'models/level_item.dart';
@@ -100,6 +98,14 @@ class GameRepository {
     _initLevels();
     _initDailyChallenges();
     _initCustomPuzzles();
+    if (_prefs != null) {
+      await MigrationService.instance.migrateIfNeeded(
+        prefs: _prefs!,
+        levels: _levels,
+        dailyChallenges: _dailyChallenges,
+        customPuzzles: _customPuzzles,
+      );
+    }
     AppLogger.repo.info('init done ${sw.elapsedMilliseconds}ms levels=${_levels.length} daily=${_dailyChallenges.length} custom=${_customPuzzles.length}');
   }
 
@@ -337,19 +343,19 @@ class GameRepository {
       updatedCompletedCounts.add(completedPieceCount);
     }
 
-    // 使用显式 clearSnapshot 语义修复旧 copyWith 失效问题
+    // 停止向 prefs 双写大 JSON 快照（P1-6），快照由 SnapshotStore 和 ProgressStore 接管
     final shouldClear = isCompleted || (snapshotJson == null && progressPercent == 0);
     _levels[idx] = current.copyWith(
       progressPercent: progressPercent,
       isCompleted: isCompleted || current.isCompleted || updatedCompletedCounts.isNotEmpty,
       stars: newStars,
       bestTimeSeconds: newBestTime,
-      savedSnapshotJson: snapshotJson,
-      clearSnapshot: shouldClear,
+      savedSnapshotJson: null,
+      clearSnapshot: true,
       completedPieceCounts: updatedCompletedCounts.toList(),
     );
 
-    // Save current level (保留旧字段以便调试，但新快照以文件为主)
+    // Save current level (轻量索引与元数据，不再含 savedSnapshotJson 大字段)
     await _prefs?.setString('$_keyLevelsPrefix$levelIndex', jsonEncode(_levels[idx].toJson()));
 
     // 同步到新一代文件级快照与轻量索引
@@ -485,8 +491,8 @@ class GameRepository {
       progressPercent: progressPercent,
       isCompleted: isCompleted || current.isCompleted || updatedCompletedCounts.isNotEmpty,
       bestTimeSeconds: newBestTime,
-      savedSnapshotJson: snapshotJson,
-      clearSnapshot: shouldClear,
+      savedSnapshotJson: null,
+      clearSnapshot: true,
       completedPieceCounts: updatedCompletedCounts.toList(),
     );
 
@@ -578,8 +584,8 @@ class GameRepository {
       progressPercent: progressPercent,
       isCompleted: isCompleted || current.isCompleted || updatedCompletedCounts.isNotEmpty,
       bestTimeSeconds: newBestTime,
-      savedSnapshotJson: snapshotJson,
-      clearSnapshot: shouldClear,
+      savedSnapshotJson: null,
+      clearSnapshot: true,
       completedPieceCounts: updatedCompletedCounts.toList(),
     );
 
@@ -717,19 +723,8 @@ class GameRepository {
     AppLogger.repo.warning('resetAllData clearing all prefs and snapshots and reinitializing');
     await _prefs?.clear();
     try {
-      await SnapshotStore.instance.init();
+      await SnapshotStore.instance.clearAll();
       await ProgressStore.instance.init();
-    } catch (_) {}
-    try {
-      final d = await getApplicationSupportDirectory();
-      final dir = Directory(p.join(d.path, 'snapshots'));
-      if (await dir.exists()) {
-        await for (final e in dir.list()) {
-          try {
-            if (e is File && e.path.endsWith('.snapshot')) await e.delete();
-          } catch (_) {}
-        }
-      }
     } catch (_) {}
     _initLevels();
     _initDailyChallenges();
