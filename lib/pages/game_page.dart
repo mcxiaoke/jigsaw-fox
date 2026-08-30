@@ -9,10 +9,12 @@ import 'package:flutter/services.dart';
 import 'package:phosphoricons_flutter/phosphoricons_flutter.dart';
 
 import '../data/game_repository.dart';
+import '../data/progress_store.dart';
 import '../data/snapshot_store.dart';
 import '../game/jigsaw_puzzle_game.dart';
 import '../logic/models/puzzle_state.dart';
 import '../logic/puzzle_model.dart';
+import '../logic/star_calculator.dart';
 import '../services/app_logger.dart';
 import '../services/sound_service.dart';
 import '../widgets/choose_background_sheet.dart';
@@ -54,6 +56,7 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
   bool _isPaused = false;
   int _seconds = 0;
   Timer? _timer;
+  DateTime? _hintPauseUntil;
   int _solvedPieces = 0;
   bool _showOriginalImage = false;
   late String _selectedBackground;
@@ -150,6 +153,11 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
   void _startTimer() {
     _timer = Timer.periodic(const Duration(seconds: 1), (_) {
       if (!_isSolved && !_isPaused && mounted) {
+        final now = DateTime.now();
+        if (_hintPauseUntil != null && now.isBefore(_hintPauseUntil!)) {
+          // 提示动画时停期间不累加用时
+          return;
+        }
         setState(() => _seconds++);
       }
     });
@@ -349,15 +357,17 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
 
   int _calculateStars() {
     final hints = _game?.boardState.hintsUsed ?? 0;
-    if (hints == 0 && _seconds < _totalPieces * 6) {
-      return 3;
-    } else if (hints <= 2) {
-      return 2;
-    }
-    return 1;
+    final actualPieces = _effectiveDifficulty?.pieceCount ?? widget.difficulty.pieceCount;
+    final secPerPiece = _effectiveDifficulty?.secPerPiece ?? widget.difficulty.secPerPiece;
+    return StarCalculator.calcStars(
+      actualPieces: actualPieces,
+      secPerPiece: secPerPiece,
+      hints: hints,
+      seconds: _seconds,
+    );
   }
 
-  void _handleSolved() {
+  Future<void> _handleSolved() async {
     if (_isSolved) return;
     _timer?.cancel();
     _saveDebounce?.cancel();
@@ -365,9 +375,21 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
     if (_repo.hapticEnabled) {
       HapticFeedback.heavyImpact();
     }
+
+    final hints = _game?.boardState.hintsUsed ?? 0;
+    final actualPieces = _effectiveDifficulty?.pieceCount ?? widget.difficulty.pieceCount;
+    final secPerPiece = _effectiveDifficulty?.secPerPiece ?? widget.difficulty.secPerPiece;
+
+    // 双轴评星打分
+    final stars = StarCalculator.calcStars(
+      actualPieces: actualPieces,
+      secPerPiece: secPerPiece,
+      hints: hints,
+      seconds: _seconds,
+    );
+
     // 胜利音：大规格或满星用 TrophySound，否则普通 win
-    final solveStars = _calculateStars();
-    final isBigWin = _totalPieces >= 100 || solveStars == 3;
+    final isBigWin = actualPieces >= 100 || stars == 3;
     SoundService.I.play(isBigWin ? Sfx.winBig : Sfx.win);
 
     setState(() {
@@ -376,16 +398,26 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
     });
 
     _repo.recordSnapStats(durationSeconds: _seconds);
-    final completedCount = _totalPieces;
-    final stars = _calculateStars();
-
     final dkey = SnapshotStore.difficultyKeyFor(_effectiveDifficulty ?? widget.difficulty);
+    final cid = _canonicalIdForSave();
+
+    // 1. 原子更新 ProgressStore 档位记录并获得 deltaStars 与 minHintsUsed 状态
+    final updateResult = await ProgressStore.instance.recordDifficultyCompletion(
+      canonicalId: cid,
+      difficultyKey: dkey,
+      stars: stars,
+      timeSeconds: _seconds,
+      hintsUsed: hints,
+      completedPieceCount: actualPieces,
+    );
+
+    // 2. 同步更新 GameRepository 关卡状态与内存列表
     if (widget.canonicalId != null && widget.canonicalId!.isNotEmpty) {
       _repo.updateGenericProgress(
         canonicalId: widget.canonicalId!,
         progressPercent: 100,
         isCompleted: true,
-        completedPieceCount: completedCount,
+        completedPieceCount: actualPieces,
         difficultyKey: dkey,
         timeSeconds: _seconds,
         difficultyHint: _effectiveDifficulty ?? widget.difficulty,
@@ -395,7 +427,7 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
         levelIndex: widget.levelIndex!,
         progressPercent: 100,
         isCompleted: true,
-        completedPieceCount: completedCount,
+        completedPieceCount: actualPieces,
         difficultyKey: dkey,
         stars: stars,
         timeSeconds: _seconds,
@@ -405,7 +437,7 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
         dateStr: widget.dailyDateStr!,
         progressPercent: 100,
         isCompleted: true,
-        completedPieceCount: completedCount,
+        completedPieceCount: actualPieces,
         difficultyKey: dkey,
         timeSeconds: _seconds,
       );
@@ -414,13 +446,27 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
         id: widget.customId!,
         progressPercent: 100,
         isCompleted: true,
-        completedPieceCount: completedCount,
+        completedPieceCount: actualPieces,
         difficultyKey: dkey,
         timeSeconds: _seconds,
       );
     }
 
-    _showVictoryDialog();
+    // 3. 删除快照
+    await SnapshotStore.instance.delete(cid, dkey);
+
+    // 4. 显示通关弹窗
+    if (mounted) {
+      _showVictoryDialog(stars: stars, deltaStars: updateResult.deltaStars);
+    }
+  }
+
+  void _onHintPressed() {
+    if (_isSolved || _isPaused) return;
+    // 提示动画期间暂停计时 1.5 秒
+    _hintPauseUntil = DateTime.now().add(const Duration(milliseconds: 1500));
+    _game?.hint();
+    SoundService.I.play(Sfx.hint);
   }
 
   String get _timeString {
@@ -484,9 +530,9 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
     );
   }
 
-  void _showVictoryDialog() {
+  void _showVictoryDialog({int? stars, int deltaStars = 0}) {
     setState(() => _isPaused = true);
-    final stars = _calculateStars();
+    final earnedStars = stars ?? _calculateStars();
     final hasNext = widget.levelIndex != null && widget.levelIndex! < _repo.levels.length;
 
     showDialog<void>(
@@ -513,7 +559,7 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
                   3,
                   (i) => Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 4),
-                    child: i < stars
+                    child: i < earnedStars
                         ? Image.asset('assets/icons/star_3d.png', width: 36, height: 36)
                         : const Icon(PhosphorIconsRegular.star, color: Colors.amber, size: 36),
                   ),
@@ -793,10 +839,7 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
         IconButton(
           icon: const Icon(PhosphorIconsFill.lightbulb, size: 21, color: Colors.amber),
           tooltip: '智能提示',
-          onPressed: () {
-            _game?.hint();
-            SoundService.I.play(Sfx.hint);
-          },
+          onPressed: _onHintPressed,
         ),
         // 3. 半透明原图叠层（底图透视 0%/20%/45%）
         IconButton(
