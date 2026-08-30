@@ -122,21 +122,22 @@ class GameRepository {
     for (var i = 1; i <= totalLevels; i++) {
       final assetPath = assetSamples[(i - 1) % assetSamples.length];
 
-      // Tier difficulty progression (16 -> 25 -> 36 -> 64 -> 100 -> 225)
+      // 主线 100 关阶梯难度配置（对齐 v3.3.1 设计 §3）
+      // 1~10: L1(25) | 11~35: L1.5(36) | 36~60: L2(64) | 61~80: L3(100) | 81~93: L4(144) | 94~100: L5(225)
       final squareTiers = PuzzleAspectRatio.square1x1.tiers;
       PuzzleDifficulty diff;
       if (i <= 10) {
-        diff = squareTiers[0].difficulty; // 4x4 (16)
-      } else if (i <= 25) {
-        diff = squareTiers[1].difficulty; // 5x5 (25)
-      } else if (i <= 50) {
-        diff = squareTiers[2].difficulty; // 6x6 (36)
-      } else if (i <= 75) {
-        diff = squareTiers[3].difficulty; // 8x8 (64)
-      } else if (i <= 90) {
-        diff = squareTiers[4].difficulty; // 10x10 (100)
+        diff = squareTiers[0].difficulty; // L1: 5x5 (25)
+      } else if (i <= 35) {
+        diff = squareTiers[1].difficulty; // L1.5: 6x6 (36)
+      } else if (i <= 60) {
+        diff = squareTiers[2].difficulty; // L2: 8x8 (64)
+      } else if (i <= 80) {
+        diff = squareTiers[3].difficulty; // L3: 10x10 (100)
+      } else if (i <= 93) {
+        diff = squareTiers[4].difficulty; // L4: 12x12 (144)
       } else {
-        diff = squareTiers[6].difficulty; // 15x15 (225)
+        diff = squareTiers[5].difficulty; // L5: 15x15 (225)
       }
 
       // Read saved status from SharedPreferences

@@ -1,9 +1,16 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:phosphoricons_flutter/phosphoricons_flutter.dart';
 
 import '../data/game_repository.dart';
+import '../data/progress_store.dart';
+import '../services/achievement_service.dart';
+import '../services/achievement_store.dart';
+import '../services/economy_service.dart';
+import '../services/sound_service.dart';
 
-/// Full-screen Achievements and Gameplay Statistics page.
+/// 全屏成就勋章与游戏数据统计页面（数据驱动，v3.3.1 设计）
 class AchievementsPage extends StatefulWidget {
   const AchievementsPage({super.key});
 
@@ -21,6 +28,51 @@ class AchievementsPage extends StatefulWidget {
 }
 
 class _AchievementsPageState extends State<AchievementsPage> {
+  final _repo = GameRepository.instance;
+  final _store = AchievementStore.instance;
+  final _eco = EconomyService.instance;
+  final _achService = AchievementService.instance;
+
+  StreamSubscription<AchievementDefinition>? _unlockSub;
+  int _distinct3Star = 0;
+  int _totalStars = 0;
+  int _totalSolved = 0;
+  bool _loading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadAsyncStats();
+    _unlockSub = _achService.onAchievementUnlocked.listen((_) {
+      if (mounted) _loadAsyncStats();
+    });
+  }
+
+  @override
+  void dispose() {
+    _unlockSub?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _loadAsyncStats() async {
+    await ProgressStore.instance.init();
+    await _store.init();
+    await _eco.init();
+
+    final d3 = await ProgressStore.instance.getDistinctImagesWith3Star();
+    final ts = await ProgressStore.instance.getTotalStars();
+    final sv = await ProgressStore.instance.getTotalSolved();
+
+    if (mounted) {
+      setState(() {
+        _distinct3Star = d3;
+        _totalStars = ts > 0 ? ts : _repo.levels.fold<int>(0, (sum, l) => sum + l.stars);
+        _totalSolved = sv > 0 ? sv : _repo.totalCompletedLevels;
+        _loading = false;
+      });
+    }
+  }
+
   String _formatDuration(int seconds) {
     if (seconds < 60) return '$seconds 秒';
     final m = seconds ~/ 60;
@@ -31,117 +83,30 @@ class _AchievementsPageState extends State<AchievementsPage> {
     return '$h 小时 $remM 分';
   }
 
+  Future<void> _claimReward(AchievementDefinition def) async {
+    final ok = await _achService.claimReward(def.id);
+    if (ok && mounted) {
+      SoundService.I.play(Sfx.coinsFly);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('成功领取成就奖励：+${def.coinReward} 金币！💰'),
+          duration: const Duration(seconds: 2),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      _loadAsyncStats();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    final repo = GameRepository.instance;
-    final totalStars = repo.levels.fold<int>(0, (sum, l) => sum + l.stars);
-    final completed = repo.totalCompletedLevels;
-    final snapped = repo.totalPiecesSnapped;
-    final timeSec = repo.totalPlayTimeSeconds;
-    final avgTime = completed > 0 ? (timeSec ~/ completed) : 0;
+    final completed = _totalSolved;
+    final snapped = _repo.totalPiecesSnapped;
+    final timeSec = _repo.totalPlayTimeSeconds;
+    final coins = _eco.coins;
 
-    final badges = [
-      _BadgeData(
-        title: '初入拼界',
-        desc: '完成首局拼图挑战',
-        icon: PhosphorIconsFill.medal,
-        imageAsset: 'assets/icons/medal_3d.png',
-        current: completed,
-        max: 1,
-      ),
-      _BadgeData(
-        title: '拼图学徒',
-        desc: '累计完成 5 局拼图',
-        icon: PhosphorIconsFill.trophy,
-        imageAsset: 'assets/icons/trophy_3d.png',
-        current: completed,
-        max: 5,
-      ),
-      _BadgeData(
-        title: '拼图大师',
-        desc: '累计完成 20 局拼图',
-        icon: PhosphorIconsFill.crown,
-        imageAsset: 'assets/icons/crown_3d.png',
-        current: completed,
-        max: 20,
-      ),
-      _BadgeData(
-        title: '拼图传奇',
-        desc: '累计完成 50 局拼图',
-        icon: PhosphorIconsFill.diamond,
-        imageAsset: 'assets/icons/diamond_3d.png',
-        current: completed,
-        max: 50,
-      ),
-      _BadgeData(
-        title: '碎片收集者',
-        desc: '累计拼合 50 块碎片',
-        icon: PhosphorIconsRegular.puzzlePiece,
-        imageAsset: 'assets/icons/puzzle_piece_3d.png',
-        current: snapped,
-        max: 50,
-      ),
-      _BadgeData(
-        title: '拼图能手',
-        desc: '累计拼合 200 块碎片',
-        icon: PhosphorIconsFill.puzzlePiece,
-        imageAsset: 'assets/icons/puzzle_piece_3d.png',
-        current: snapped,
-        max: 200,
-      ),
-      _BadgeData(
-        title: '千锤百炼',
-        desc: '累计拼合 1000 块碎片',
-        icon: PhosphorIconsFill.sparkle,
-        imageAsset: 'assets/icons/sparkle_3d.png',
-        current: snapped,
-        max: 1000,
-      ),
-      _BadgeData(
-        title: '专注达人',
-        desc: '累计游玩时间超过 30 分钟',
-        icon: PhosphorIconsBold.timer,
-        imageAsset: 'assets/icons/hourglass_3d.png',
-        current: timeSec,
-        max: 1800,
-        isTime: true,
-      ),
-      _BadgeData(
-        title: '沉浸探索',
-        desc: '累计游玩时间超过 2 小时',
-        icon: PhosphorIconsFill.hourglass,
-        imageAsset: 'assets/icons/hourglass_3d.png',
-        current: timeSec,
-        max: 7200,
-        isTime: true,
-      ),
-      _BadgeData(
-        title: '每日不辍',
-        desc: '通关至少 1 次每日拼图',
-        icon: PhosphorIconsFill.calendarCheck,
-        imageAsset: 'assets/icons/calendar_3d.png',
-        current: repo.dailyChallenges.where((d) => d.isCompleted).length,
-        max: 1,
-      ),
-      _BadgeData(
-        title: '匠心自造',
-        desc: '通关至少 1 次自制拼图',
-        icon: PhosphorIconsBold.palette,
-        imageAsset: 'assets/icons/palette_3d.png',
-        current: repo.customPuzzles.where((c) => c.isCompleted).length,
-        max: 1,
-      ),
-      _BadgeData(
-        title: '高阶挑战者',
-        desc: '完成 64 块以上高难度拼图',
-        icon: PhosphorIconsFill.starFour,
-        imageAsset: 'assets/icons/star_3d.png',
-        current: repo.levels.where((l) => l.completedPieceCounts.any((c) => c >= 64)).length,
-        max: 1,
-      ),
-    ];
-
-    final unlockedCount = badges.where((b) => b.isUnlocked).length;
+    final allDefs = AchievementService.allAchievements;
+    final unlockedCount = allDefs.where((a) => _store.isUnlocked(a.id)).length;
 
     return Scaffold(
       appBar: AppBar(
@@ -164,7 +129,7 @@ class _AchievementsPageState extends State<AchievementsPage> {
               border: Border.all(color: Colors.amber.shade300),
             ),
             child: Text(
-              '$unlockedCount / ${badges.length} 已解锁',
+              '$unlockedCount / ${allDefs.length} 已解锁',
               style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.orange, fontSize: 12.5),
             ),
           ),
@@ -176,7 +141,7 @@ class _AchievementsPageState extends State<AchievementsPage> {
           child: ListView(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
             children: [
-              // 1. Stats Dashboard Cards
+              // 1. Stats Dashboard Header
               const Padding(
                 padding: EdgeInsets.only(bottom: 10, left: 4),
                 child: Text(
@@ -184,6 +149,8 @@ class _AchievementsPageState extends State<AchievementsPage> {
                   style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Colors.black87),
                 ),
               ),
+
+              // 2. Stats Grid
               LayoutBuilder(
                 builder: (context, constraints) {
                   final isWide = constraints.maxWidth >= 500;
@@ -196,48 +163,43 @@ class _AchievementsPageState extends State<AchievementsPage> {
                     shrinkWrap: true,
                     physics: const NeverScrollableScrollPhysics(),
                     children: [
-                      // Total Stars Card
                       _buildStatCard(
                         '关卡累积星星',
-                        '$totalStars',
+                        '$_totalStars',
                         PhosphorIconsFill.star,
                         Colors.amber.shade800,
                         imageAsset: 'assets/icons/star_3d.png',
                       ),
-                      // Completed Levels Card
+                      _buildStatCard(
+                        '3星拼图数',
+                        '$_distinct3Star 张',
+                        PhosphorIconsFill.trophy,
+                        const Color(0xFFE65100),
+                        imageAsset: 'assets/icons/trophy_3d.png',
+                      ),
                       _buildStatCard(
                         '完成局数',
                         '$completed',
                         PhosphorIconsBold.checkCircle,
                         const Color(0xFF2E7D32),
                       ),
-                      // Snapped Pieces Card
+                      _buildStatCard(
+                        '拥有金币',
+                        '$coins 💰',
+                        PhosphorIconsFill.coins,
+                        const Color(0xFFF57F17),
+                      ),
                       _buildStatCard(
                         '已拼碎片',
                         '$snapped',
                         PhosphorIconsFill.puzzlePiece,
                         const Color(0xFF0288D1),
                       ),
-                      // Play Time Card
                       _buildStatCard(
                         '总游玩时长',
                         _formatDuration(timeSec),
                         PhosphorIconsBold.timer,
-                        const Color(0xFFE65100),
-                      ),
-                      // Average Time Card
-                      _buildStatCard(
-                        '平均局时',
-                        completed > 0 ? _formatDuration(avgTime) : '--',
-                        PhosphorIconsBold.gauge,
                         const Color(0xFF7B1FA2),
-                      ),
-                      // Badge Unlocked Card
-                      _buildStatCard(
-                        '成就解锁率',
-                        '${(unlockedCount / badges.length * 100).toInt()}%',
-                        PhosphorIconsFill.trophy,
-                        const Color(0xFFC2185B),
                       ),
                     ],
                   );
@@ -246,7 +208,7 @@ class _AchievementsPageState extends State<AchievementsPage> {
 
               const SizedBox(height: 20),
 
-              // 2. Badges Section Header
+              // 3. Badges Section Header
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
@@ -255,18 +217,21 @@ class _AchievementsPageState extends State<AchievementsPage> {
                     style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Colors.black87),
                   ),
                   Text(
-                    '共 ${badges.length} 项成就',
+                    '共 ${allDefs.length} 项成就',
                     style: const TextStyle(fontSize: 12, color: Colors.black54),
                   ),
                 ],
               ),
               const SizedBox(height: 10),
 
-              // 3. Badges List
-              for (final b in badges) ...[
-                _buildBadgeCard(b),
-                const SizedBox(height: 8),
-              ],
+              // 4. Badges List (Data Driven)
+              if (_loading)
+                const Center(child: Padding(padding: EdgeInsets.all(24), child: CircularProgressIndicator()))
+              else
+                for (final def in allDefs) ...[
+                  _buildAchievementCard(def),
+                  const SizedBox(height: 8),
+                ],
               const SizedBox(height: 24),
             ],
           ),
@@ -331,16 +296,21 @@ class _AchievementsPageState extends State<AchievementsPage> {
     );
   }
 
-  Widget _buildBadgeCard(_BadgeData b) {
-    final progress = (b.current / b.max).clamp(0.0, 1.0);
+  Widget _buildAchievementCard(AchievementDefinition def) {
+    final isUnlocked = _store.isUnlocked(def.id);
+    final isClaimed = _store.isClaimed(def.id);
+    final current = def.type == AchievementType.derived
+        ? (allDefsExcludingMaster().where((a) => _store.isUnlocked(a.id)).length)
+        : _store.getCounter(def.metricKey);
+    final progress = (current / def.target).clamp(0.0, 1.0);
 
     return Material(
-      color: b.isUnlocked ? Colors.white : Colors.white.withValues(alpha: 0.85),
+      color: isUnlocked ? Colors.white : Colors.white.withValues(alpha: 0.85),
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(14),
         side: BorderSide(
-          color: b.isUnlocked ? Colors.amber.shade300 : Colors.black12,
-          width: b.isUnlocked ? 1.4 : 0.8,
+          color: isUnlocked ? (isClaimed ? const Color(0xFFC8E6C9) : Colors.amber.shade400) : Colors.black12,
+          width: isUnlocked ? 1.4 : 0.8,
         ),
       ),
       child: Padding(
@@ -349,11 +319,9 @@ class _AchievementsPageState extends State<AchievementsPage> {
           children: [
             CircleAvatar(
               radius: 22,
-              backgroundColor: b.isUnlocked ? Colors.amber.shade50 : Colors.grey.shade100,
-              child: b.isUnlocked
-                  ? (b.imageAsset != null
-                      ? Image.asset(b.imageAsset!, width: 28, height: 28)
-                      : Icon(b.icon, color: Colors.amber.shade800, size: 22))
+              backgroundColor: isUnlocked ? Colors.amber.shade50 : Colors.grey.shade100,
+              child: isUnlocked
+                  ? Image.asset('assets/icons/trophy_3d.png', width: 28, height: 28)
                   : Image.asset('assets/icons/lock_3d.png', width: 22, height: 22),
             ),
             const SizedBox(width: 14),
@@ -365,41 +333,58 @@ class _AchievementsPageState extends State<AchievementsPage> {
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Text(
-                        b.title,
+                        def.title,
                         style: TextStyle(
                           fontWeight: FontWeight.bold,
                           fontSize: 14,
-                          color: b.isUnlocked ? Colors.black87 : Colors.black54,
+                          color: isUnlocked ? Colors.black87 : Colors.black54,
                         ),
                       ),
-                      if (b.isUnlocked)
-                        const Row(
-                          children: [
-                            Icon(PhosphorIconsFill.checkCircle, color: Color(0xFF2E7D32), size: 15),
-                            SizedBox(width: 3),
-                            Text(
-                              '已达成',
-                              style: TextStyle(
-                                fontSize: 11.5,
-                                color: Color(0xFF2E7D32),
-                                fontWeight: FontWeight.bold,
+                      if (isUnlocked)
+                        if (isClaimed)
+                          const Row(
+                            children: [
+                              Icon(PhosphorIconsFill.checkCircle, color: Color(0xFF2E7D32), size: 15),
+                              SizedBox(width: 3),
+                              Text(
+                                '已领取',
+                                style: TextStyle(
+                                  fontSize: 11.5,
+                                  color: Color(0xFF2E7D32),
+                                  fontWeight: FontWeight.bold,
+                                ),
                               ),
+                            ],
+                          )
+                        else
+                          FilledButton.tonal(
+                            onPressed: () => _claimReward(def),
+                            style: FilledButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 0),
+                              visualDensity: VisualDensity.compact,
+                              backgroundColor: Colors.amber.shade100,
+                              foregroundColor: const Color(0xFF795548),
                             ),
-                          ],
-                        )
+                            child: Text(
+                              '领 +${def.coinReward} 💰',
+                              style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
+                            ),
+                          )
                       else
                         Text(
-                          b.isTime ? '${(b.current ~/ 60)}/${(b.max ~/ 60)}分' : '${b.current}/${b.max}',
+                          def.metricKey == 'play_seconds'
+                              ? '${(current ~/ 60)}/${(def.target ~/ 60)}分'
+                              : '$current/${def.target}',
                           style: const TextStyle(fontSize: 11.5, color: Colors.black45, fontWeight: FontWeight.w500),
                         ),
                     ],
                   ),
                   const SizedBox(height: 3),
                   Text(
-                    b.desc,
+                    def.description,
                     style: const TextStyle(fontSize: 12, color: Colors.black54),
                   ),
-                  if (!b.isUnlocked) ...[
+                  if (!isUnlocked) ...[
                     const SizedBox(height: 8),
                     ClipRRect(
                       borderRadius: BorderRadius.circular(4),
@@ -419,26 +404,8 @@ class _AchievementsPageState extends State<AchievementsPage> {
       ),
     );
   }
-}
 
-class _BadgeData {
-  _BadgeData({
-    required this.title,
-    required this.desc,
-    required this.icon,
-    required this.current,
-    required this.max,
-    this.imageAsset,
-    this.isTime = false,
-  });
-
-  final String title;
-  final String desc;
-  final IconData icon;
-  final String? imageAsset;
-  final int current;
-  final int max;
-  final bool isTime;
-
-  bool get isUnlocked => current >= max;
+  List<AchievementDefinition> allDefsExcludingMaster() {
+    return AchievementService.allAchievements.where((a) => a.id != 'master_all').toList();
+  }
 }

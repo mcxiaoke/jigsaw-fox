@@ -122,12 +122,16 @@ void main() {
       expect(find.text('一键整理托盘'), findsOneWidget);
     });
 
-    testWidgets('AchievementsPage renders statistics with total stars and 12 badges', (tester) async {
+    testWidgets('AchievementsPage renders statistics with total stars and data-driven badges', (tester) async {
+      tester.view.physicalSize = const Size(1000, 2000);
+      addTearDown(tester.view.resetPhysicalSize);
+
       await tester.pumpWidget(
         const MaterialApp(
           home: AchievementsPage(),
         ),
       );
+      await tester.pumpAndSettle();
 
       expect(find.text('成就与统计'), findsOneWidget);
       expect(find.text('数据统计看板'), findsOneWidget);
@@ -136,9 +140,9 @@ void main() {
       expect(find.text('已拼碎片'), findsOneWidget);
       expect(find.text('总游玩时长'), findsOneWidget);
       expect(find.text('成就勋章墙'), findsOneWidget);
-      expect(find.text('初入拼界'), findsOneWidget);
-      expect(find.text('拼图学徒'), findsOneWidget);
-      expect(find.text('拼图大师'), findsOneWidget);
+      expect(find.text('初露锋芒'), findsOneWidget);
+      expect(find.text('熟能生巧'), findsOneWidget);
+      expect(find.text('拼图达人'), findsOneWidget);
     });
 
     testWidgets('SettingsPage renders switches, options, and HowToPlay entry', (tester) async {
