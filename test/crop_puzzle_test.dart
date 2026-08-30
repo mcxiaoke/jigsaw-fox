@@ -18,8 +18,8 @@ Future<Uint8List> createTestImageBytes(int width, int height) async {
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  test('CropRatio definitions cover 5 standard aspect ratios with positive target resolutions', () {
-    expect(CropRatio.values.length, 5);
+  test('CropRatio definitions cover 3 standard aspect ratios with positive target resolutions', () {
+    expect(CropRatio.values.length, 3);
     for (final ratio in CropRatio.values) {
       expect(ratio.targetWidth, greaterThan(0));
       expect(ratio.targetHeight, greaterThan(0));
@@ -50,8 +50,6 @@ void main() {
     expect(find.text('1:1 正方形'), findsOneWidget);
     expect(find.text('3:2 横屏'), findsOneWidget);
     expect(find.text('2:3 竖屏'), findsOneWidget);
-    expect(find.text('4:3 横屏'), findsOneWidget);
-    expect(find.text('3:4 竖屏'), findsOneWidget);
 
     final ivFinder = find.byType(InteractiveViewer);
     expect(ivFinder, findsOneWidget);
@@ -64,8 +62,8 @@ void main() {
     await tester.tap(find.text('2:3 竖屏'));
     await tester.pump();
 
-    // Switch ratio to 4:3 Landscape
-    await tester.tap(find.text('4:3 横屏'));
+    // Switch ratio to 3:2 Landscape
+    await tester.tap(find.text('3:2 横屏'));
     await tester.pump();
 
     // Verify reset zoom percentage pill exists

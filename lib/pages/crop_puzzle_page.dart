@@ -17,9 +17,7 @@ import '../logic/puzzle_model.dart';
 enum CropRatio {
   square('1:1 正方形', 1.0, 1080, 1080, PuzzleAspectRatio.square1x1, PhosphorIconsBold.square),
   portrait2x3('2:3 竖屏', 2 / 3, 960, 1440, PuzzleAspectRatio.portrait2x3, PhosphorIconsBold.rectangle),
-  landscape3x2('3:2 横屏', 3 / 2, 1440, 960, PuzzleAspectRatio.landscape3x2, PhosphorIconsBold.rectangle),
-  portrait3x4('3:4 竖屏', 3 / 4, 1080, 1440, PuzzleAspectRatio.portrait3x4, PhosphorIconsBold.rectangle),
-  landscape4x3('4:3 横屏', 4 / 3, 1440, 1080, PuzzleAspectRatio.landscape4x3, PhosphorIconsBold.rectangle);
+  landscape3x2('3:2 横屏', 3 / 2, 1440, 960, PuzzleAspectRatio.landscape3x2, PhosphorIconsBold.rectangle);
 
   const CropRatio(this.label, this.ratio, this.targetWidth, this.targetHeight, this.aspectRatio, this.icon);
   final String label;

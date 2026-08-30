@@ -11,11 +11,11 @@ import 'package:phosphoricons_flutter/phosphoricons_flutter.dart';
 
 void main() {
   test('difficulty preset configuration', () {
-    expect(PuzzleDifficulty.presets.first.pieceCount, 16);
-    expect(PuzzleDifficulty.presets.last.pieceCount, 300);
+    expect(PuzzleDifficulty.presets.first.pieceCount, 24);
+    expect(PuzzleDifficulty.presets.last.pieceCount, 400);
   });
 
-  test('PuzzleAspectRatio detects all 5 standard image ratios correctly', () {
+  test('PuzzleAspectRatio detects standard image ratios correctly using crop loss', () {
     // 1:1
     expect(PuzzleAspectRatio.fromSize(1000, 1000), PuzzleAspectRatio.square1x1);
     expect(PuzzleAspectRatio.fromSize(1024, 1024), PuzzleAspectRatio.square1x1);
@@ -28,13 +28,13 @@ void main() {
     expect(PuzzleAspectRatio.fromSize(1200, 800), PuzzleAspectRatio.landscape3x2);
     expect(PuzzleAspectRatio.fromSize(1440, 960), PuzzleAspectRatio.landscape3x2);
 
-    // 3:4 (Portrait)
-    expect(PuzzleAspectRatio.fromSize(900, 1200), PuzzleAspectRatio.portrait3x4);
-    expect(PuzzleAspectRatio.fromSize(1080, 1440), PuzzleAspectRatio.portrait3x4);
+    // 3:4 (Portrait) -> closest crop is 2:3
+    expect(PuzzleAspectRatio.fromSize(900, 1200), PuzzleAspectRatio.portrait2x3);
+    expect(PuzzleAspectRatio.fromSize(1080, 1440), PuzzleAspectRatio.portrait2x3);
 
-    // 4:3 (Landscape)
-    expect(PuzzleAspectRatio.fromSize(1200, 900), PuzzleAspectRatio.landscape4x3);
-    expect(PuzzleAspectRatio.fromSize(1440, 1080), PuzzleAspectRatio.landscape4x3);
+    // 4:3 (Landscape) -> closest crop is 3:2
+    expect(PuzzleAspectRatio.fromSize(1200, 900), PuzzleAspectRatio.landscape3x2);
+    expect(PuzzleAspectRatio.fromSize(1440, 1080), PuzzleAspectRatio.landscape3x2);
   });
 
   test('Every difficulty tier for each aspect ratio produces 100% square base cells', () {
@@ -185,8 +185,8 @@ void main() {
                   isScrollControlled: true,
                   builder: (_) => ChooseDifficultySheet(
                     imageBytes: kTransparentImage,
-                    initialDifficulty: const PuzzleDifficulty(label: '4 × 4 (16 块)', rows: 4, cols: 4),
-                    completedPieceCounts: const {16, 36},
+                    initialDifficulty: const PuzzleDifficulty(label: '6 × 6 (36 块)', rows: 6, cols: 6),
+                    completedPieceCounts: const {36, 64},
                     title: '第 1 关 · 难度选择',
                     onStart: (_) {},
                   ),
@@ -204,10 +204,10 @@ void main() {
 
     // 1. Check title and header indicator
     expect(find.text('第 1 关 · 难度选择'), findsOneWidget);
-    expect(find.text('已通关'), findsOneWidget); // Header badge for currently selected 16-piece diff
+    expect(find.text('已通关'), findsOneWidget); // Header badge for currently selected 36-piece diff
     expect(find.text('重玩此难度'), findsOneWidget);
 
-    // 2. Check check_circle icons rendered for passed difficulties (16 and 36 + 1 header badge = at least 3 check_circle icons)
+    // 2. Check check_circle icons rendered for passed difficulties (36 and 64 + 1 header badge = at least 3 check_circle icons)
     expect(find.byIcon(PhosphorIconsFill.checkCircle), findsNWidgets(3));
 
     // 3. Tap on unpassed difficulty 25 (5x5)

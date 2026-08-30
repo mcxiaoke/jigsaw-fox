@@ -692,27 +692,27 @@ class _ChooseDifficultySheetState extends State<ChooseDifficultySheet> {
       borderRadius: BorderRadius.circular(16),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 180),
-        width: 76,
-        height: 78,
+        width: 84,
+        height: 84,
         decoration: BoxDecoration(
           color: bgColor,
           borderRadius: BorderRadius.circular(16),
           border: border,
           boxShadow: shadows,
         ),
-        padding: const EdgeInsets.symmetric(vertical: 6),
+        padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 4),
         child: Stack(
           alignment: Alignment.center,
           children: [
             Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Icon(PhosphorIconsFill.puzzlePiece, size: 20, color: iconColor),
-                const SizedBox(height: 2),
+                Icon(PhosphorIconsFill.puzzlePiece, size: 18, color: iconColor),
+                const SizedBox(height: 1),
                 Text(
                   '${opt.pieceCount}',
                   style: TextStyle(
-                    fontSize: 15,
+                    fontSize: 14,
                     fontWeight: FontWeight.bold,
                     color: textColor,
                   ),
@@ -720,17 +720,19 @@ class _ChooseDifficultySheetState extends State<ChooseDifficultySheet> {
                 Text(
                   tier.tag,
                   style: TextStyle(
-                    fontSize: 9.5,
+                    fontSize: 9.0,
                     color: isSelected ? Colors.white70 : Colors.black45,
                     fontWeight: FontWeight.w500,
                   ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
               ],
             ),
             if (isPassed)
               Positioned(
                 top: 0,
-                right: 2,
+                right: 0,
                 child: Icon(
                   PhosphorIconsFill.checkCircle,
                   size: 13,

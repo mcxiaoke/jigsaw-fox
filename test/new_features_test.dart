@@ -286,7 +286,7 @@ void main() {
                   ChooseDifficultySheet.show(
                     context: context,
                     imageBytes: kTestTransparentImage,
-                    initialDifficulty: const PuzzleDifficulty(label: '4 × 4 (16 块)', rows: 4, cols: 4),
+                    initialDifficulty: const PuzzleDifficulty(label: '6 × 6 (36 块)', rows: 6, cols: 6),
                     title: '我的爱犬照片',
                     onDelete: () async {
                       deleteCalled = true;
@@ -348,7 +348,7 @@ void main() {
                   ChooseDifficultySheet.show(
                     context: context,
                     imageBytes: kTestTransparentImage,
-                    initialDifficulty: const PuzzleDifficulty(label: '4 × 4 (16 块)', rows: 4, cols: 4),
+                    initialDifficulty: const PuzzleDifficulty(label: '6 × 6 (36 块)', rows: 6, cols: 6),
                     title: '第 5 关 · 难度选择',
                     savedProgressPercent: 85,
                     onResetProgress: () {
