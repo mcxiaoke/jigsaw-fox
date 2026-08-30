@@ -239,11 +239,11 @@ class ImageCacheManager {
     }
   }
 
-  /// 删除某张原图对应的缩略图缓存
+  /// 删除某张原图对应的缩略图与裁剪派生缓存
   Future<void> removeThumbnailForSource(String sourcePath) async {
-    final cacheKey = getCacheKey(sourcePath);
-    _memoryCache.remove(cacheKey);
-    _diskKeyIndex.remove(cacheKey);
+    final thumbKey = getCacheKey(sourcePath);
+    _memoryCache.remove(thumbKey);
+    _diskKeyIndex.remove(thumbKey);
 
     final diskPath = getThumbnailFilePath(sourcePath);
     try {

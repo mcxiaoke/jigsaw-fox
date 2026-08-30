@@ -61,6 +61,8 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
   Timer? _timer;
   DateTime? _hintPauseUntil;
   int _solvedPieces = 0;
+  /// 已上报的游玩秒数游标（playSeconds 生命周期增量上报，设计 §8.1）
+  int _reportedPlaySeconds = 0;
   bool _showOriginalImage = false;
   late String _selectedBackground;
   // 顶部导航条背景色跟随所选自适应，随背景贴图近似色（默认白、炭灰前景）
@@ -99,8 +101,18 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
         state == AppLifecycleState.detached ||
         state == AppLifecycleState.inactive) {
       AppLogger.game.info('GamePage lifecycle $state -> flushSync save');
+      _reportPlaySeconds(); // 切后台/暂停：上报游玩时长增量（设计 §8.1）
       _flushSync();
     }
+  }
+
+  /// 上报自上次上报以来的游玩秒数增量（暂停/切后台/结算/退出时调用）。
+  /// 由 [_reportedPlaySeconds] 游标保证不重不漏；弃局挂机时间同样计入。
+  void _reportPlaySeconds() {
+    final delta = _seconds - _reportedPlaySeconds;
+    if (delta <= 0) return;
+    _reportedPlaySeconds = _seconds;
+    unawaited(AchievementService.instance.onPlaySecondsElapsed(delta));
   }
 
   /// 解析背景贴图资产取其近似平均色，与主题 primaryContainer 混合作为顶部导航条背景色，
@@ -473,6 +485,8 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
     );
 
     // 4. 成就系统事件评估
+    // （playSeconds 已在结算前上报，onPuzzleSolved 不再重复累加时长）
+    _reportPlaySeconds();
     final ptype = widget.dailyDateStr != null
         ? 'daily'
         : (widget.customId != null ? 'custom' : (widget.packTitle != null ? 'pack' : 'main'));
@@ -483,6 +497,7 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
       stars: stars,
       puzzleType: ptype,
       tierIndex: tier,
+      canonicalId: cid,
       isFirstNoHintWin: updateResult.isFirstNoHintWin,
     );
 
@@ -866,6 +881,7 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _saveDebounce?.cancel();
+    _reportPlaySeconds(); // 退出/弃局：上报剩余游玩时长（设计 §8.1 弃局同样计入）
     // 最后机会同步保存（避免 dispose 逃逸 Timer）
     if (!_isSolved) {
       try {

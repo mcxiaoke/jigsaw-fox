@@ -314,7 +314,8 @@ class _ChooseDifficultySheetState extends State<ChooseDifficultySheet> {
           ),
         );
 
-        if (doNotShowAgain) {
+        // 仅当玩家确认进入（立即挑战）且勾选"不再提示"时才写入，避免"换个难度"也永久跳过提示
+        if (doNotShowAgain && confirmed == true) {
           await prefs.setBool('skip_l2_gap_warning', true);
         }
 
@@ -822,6 +823,22 @@ class _ChooseDifficultySheetState extends State<ChooseDifficultySheet> {
     return InkWell(
       onTap: () {
         SoundService.I.play(Sfx.tap);
+        if (isLocked) {
+          // 设计 §7.2：点击锁定档位 Toast 提示差距，且不可选中
+          final status = _tierUnlockStatuses[tier.difficulty.tierIndex];
+          final gap = (status?.targetRequired ?? 0) - (status?.currentProgress ?? 0);
+          final msg = gap > 0
+              ? '再获得 $gap 张 3 星图即可解锁 ${tier.tag}'
+              : '该档位尚未解锁';
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(msg),
+              duration: const Duration(seconds: 2),
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+          return;
+        }
         setState(() => _selectedDifficulty = opt);
       },
       borderRadius: BorderRadius.circular(16),

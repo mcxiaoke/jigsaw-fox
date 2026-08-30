@@ -337,6 +337,17 @@ class AchievementService {
     return newlyUnlocked;
   }
 
+  /// 游玩时长增量上报（设计 §8.1 生命周期口径）
+  ///
+  /// `playSeconds` 在对局生命周期增量上报：暂停/切后台/结算/退出时由
+  /// GamePage 上报增量，弃局与挂机中途的时间同样计入；
+  /// 通关结算路径不再重复累加（`onPuzzleSolved` 不含 play_seconds）。
+  Future<void> onPlaySecondsElapsed(int deltaSeconds) async {
+    if (deltaSeconds <= 0) return;
+    await _store.init();
+    await _store.incrementCounter('play_seconds', deltaSeconds);
+  }
+
   /// 通关拼图事件触发器（纯内存处理与一次性评估）
   Future<List<AchievementDefinition>> onPuzzleSolved({
     required int actualPieces,
@@ -345,6 +356,7 @@ class AchievementService {
     required int stars,
     required String puzzleType, // 'main' | 'daily' | 'custom' | 'pack'
     required int tierIndex,
+    required String canonicalId,
     bool isFirstNoHintWin = false,
   }) async {
     await _store.init();
@@ -352,14 +364,12 @@ class AchievementService {
     // 1. 局数累加
     await _store.incrementCounter('total_solved', 1);
 
-    // 2. 游玩时长累加
-    if (elapsedSeconds > 0) {
-      await _store.incrementCounter('play_seconds', elapsedSeconds);
-    }
-
-    // 3. 3 星评级
-    if (stars >= 3) {
-      await _store.incrementCounter('three_star_count', 1);
+    // 3. 3 星评级（按 canonicalId 去重：同一张图多档刷 3 星只计 1 次，设计 §8.3）
+    if (stars >= 3 && canonicalId.isNotEmpty) {
+      final isNew = await _store.addStarred(canonicalId);
+      if (isNew) {
+        await _store.incrementCounter('three_star_count', 1);
+      }
     }
 
     // 4. 自制拼图
@@ -402,7 +412,7 @@ class AchievementService {
     return await _evaluateAll();
   }
 
-  /// 领取成就金币奖励
+  /// 领取成就金币奖励（计入每日 200 币软帽，设计 §6.1 "全渠道" + §8.1 日上限兜底）
   Future<bool> claimReward(String achievementId) async {
     await _store.init();
     if (!_store.isUnlocked(achievementId)) return false;
@@ -411,7 +421,7 @@ class AchievementService {
     final def = allAchievements.firstWhere((a) => a.id == achievementId);
     await _store.markClaimed(achievementId);
     await EconomyService.instance.init();
-    await EconomyService.instance.addCoins(def.coinReward, bypassCap: true);
+    await EconomyService.instance.addCoins(def.coinReward);
     return true;
   }
 }

@@ -273,6 +273,9 @@ class ProgressStore {
     );
     await save(next);
 
+    // 结算后刷新 3 星图数缓存，避免解锁面板首帧读到旧值（dsf P2-1）
+    await refreshAggregatesCache();
+
     AppLogger.repo.info(
       'ProgressStore.recordDifficultyCompletion cid=$canonicalId dkey=$difficultyKey stars=$stars (best=$newBestStars delta=$deltaStars) time=${timeSeconds}s minHints=$newMinHints firstNoHint=$isFirstNoHintWin',
     );

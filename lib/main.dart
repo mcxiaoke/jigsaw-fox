@@ -11,7 +11,9 @@ import 'logic/cache/image_cache_manager.dart';
 import 'logic/content/app_content.dart';
 import 'logic/download_manager.dart';
 import 'pages/main_screen.dart';
+import 'services/achievement_store.dart';
 import 'services/app_logger.dart';
+import 'services/economy_service.dart';
 import 'services/sound_service.dart';
 
 /// Global Windows WebViewEnvironment instance for InAppWebView
@@ -63,6 +65,12 @@ void main() async {
   sw.reset();
   await SoundService.I.init();
   AppLogger.system.info('SoundService init done ${sw.elapsedMilliseconds}ms total=${sw.elapsedMilliseconds}ms');
+  sw.reset();
+  // 经济/成就存储预热：新手赠送（5 券 + 100 币）与成就计数在首帧前就绪，
+  // 避免首帧读 coins 返回 0 或成就事件首次触发时阻塞
+  await EconomyService.instance.init();
+  await AchievementStore.instance.init();
+  AppLogger.system.info('Economy/Achievement init done ${sw.elapsedMilliseconds}ms');
   AppLogger.system.info('App launch completed runApp');
   runApp(const JigsawPuzzleApp());
 }

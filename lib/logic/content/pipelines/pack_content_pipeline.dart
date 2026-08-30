@@ -5,6 +5,7 @@ import 'package:archive/archive.dart';
 import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
 import '../../../services/app_logger.dart';
+import '../../cache/thumbnail_generator.dart';
 import '../models/canonical_id.dart';
 import '../models/puzzle_level_item.dart';
 import '../models/puzzle_pack_item.dart';
@@ -179,10 +180,22 @@ class PackContentPipeline {
 
         // 识别支持的图片格式
         if (_imageRegex.hasMatch(baseName)) {
+          final rawBytes = Uint8List.fromList(file.content as List<int>);
+
+          // 静默裁切到最近标准比例（设计 §2.2）：ZIP 图包图片比例不可控，
+          // 入库时裁好避免进游戏切出非正方形碎片；标准比例图原样落盘零损耗。
+          // 后台 Isolate 执行，不阻塞 UI 线程。
+          Uint8List? processed;
+          try {
+            processed = await ThumbnailGenerator.generateCroppedBytesFromBytes(rawBytes: rawBytes);
+          } catch (e, st) {
+            AppLogger.pack.warning('crop failed for $baseName, keep original', e, st);
+          }
+
           final outFile = File(p.join(targetDir.path, baseName));
-          await outFile.writeAsBytes(file.content as List<int>, flush: true);
+          await outFile.writeAsBytes(processed ?? rawBytes, flush: true);
           validImageFiles.add(outFile.path);
-          totalBytes += (file.content as List<int>).length;
+          totalBytes += (processed ?? rawBytes).length;
         }
       }
     }

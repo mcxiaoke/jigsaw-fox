@@ -13,6 +13,7 @@ class AchievementStore {
   static const String _keyCounters = 'jigsaw_achievement_counters';
   static const String _keyUnlocked = 'jigsaw_achievement_unlocked';
   static const String _keyClaimed = 'jigsaw_achievement_claimed';
+  static const String _keyStarred = 'jigsaw_achievement_starred_puzzles';
 
   SharedPreferences? _prefs;
   bool _initialized = false;
@@ -21,12 +22,14 @@ class AchievementStore {
   final Map<String, int> _countersCache = {};
   final Map<String, String> _unlockedCache = {};
   final Set<String> _claimedCache = {};
+  final Set<String> _starredCache = {}; // 已计 3 星的 canonicalId 集合（设计 §8.3 去重）
 
   Future<void> init() async {
     _prefs = await SharedPreferences.getInstance();
     _countersCache.clear();
     _unlockedCache.clear();
     _claimedCache.clear();
+    _starredCache.clear();
 
     // 1. Counters
     final rawCounters = _prefs?.getString(_keyCounters);
@@ -53,6 +56,10 @@ class AchievementStore {
     // 3. Claimed
     final list = _prefs?.getStringList(_keyClaimed) ?? [];
     _claimedCache.addAll(list);
+
+    // 4. Starred puzzles（threeStar 按 canonicalId 去重）
+    final starred = _prefs?.getStringList(_keyStarred) ?? [];
+    _starredCache.addAll(starred);
 
     _initialized = true;
   }
@@ -104,6 +111,29 @@ class AchievementStore {
     if (!_initialized) await init();
     _claimedCache.add(achievementId);
     unawaited(_flushClaimed());
+  }
+
+  /// 是否已计过 3 星（按 canonicalId 去重，设计 §8.3）
+  bool hasStarred(String canonicalId) {
+    return _starredCache.contains(canonicalId);
+  }
+
+  /// 记录一张新图获得 3 星（去重）：若已存在返回 false 不重复计
+  Future<bool> addStarred(String canonicalId) async {
+    if (!_initialized) await init();
+    if (_starredCache.contains(canonicalId)) return false;
+    _starredCache.add(canonicalId);
+    unawaited(_flushStarred());
+    return true;
+  }
+
+  /// 已计 3 星的不同图数量（账号资产口径）
+  int get starredPuzzleCount => _starredCache.length;
+
+  Future<void> _flushStarred() async {
+    try {
+      await _prefs?.setStringList(_keyStarred, _starredCache.toList());
+    } catch (_) {}
   }
 
   Future<void> _flushClaimed() async {
