@@ -235,7 +235,6 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
       HapticFeedback.lightImpact();
     }
     _repo.recordSnapStats(pieceCount: 1);
-    AchievementService.instance.onPieceSnapped(1);
   }
 
   void _scheduleSave({bool immediate = false}) {

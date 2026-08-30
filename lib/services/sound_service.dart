@@ -102,9 +102,11 @@ class SoundService {
     'WinSound.wav',
   ];
 
-  // 节流：glue/snap 类 80ms 内不重复叠放
+  // 节流：glue/snap 类 80ms 内不重复叠放，tap 类 70ms 内不重复叠放
   static const _snapThrottleMs = 80;
+  static const _uiThrottleMs = 70;
   int _lastSnapMs = 0;
+  int _lastUiMs = 0;
 
   /// 是否在每次播放时记录触发调用处（配合排查“棋盘自己响”场景，测试完可关）
   static const bool _logCaller = true;
@@ -148,18 +150,21 @@ class SoundService {
     if (_isTest) return;
     if (!ignoreMute && !GameRepository.instance.soundEnabled) return;
 
+    final now = DateTime.now().millisecondsSinceEpoch;
     if (sfx == Sfx.snap) {
-      final now = DateTime.now().millisecondsSinceEpoch;
       if (now - _lastSnapMs < _snapThrottleMs) {
-        AppLogger.sound.fine('snap THROTTLED ${now - _lastSnapMs}ms<$_snapThrottleMs (skipped)');
         return;
       }
       _lastSnapMs = now;
+    } else if (sfx == Sfx.tap || sfx == Sfx.switchToggle || sfx == Sfx.lock) {
+      if (now - _lastUiMs < _uiThrottleMs) {
+        return;
+      }
+      _lastUiMs = now;
     }
 
     final file = _resolveFile(sfx);
     final vol = volume ?? _volumeFor(sfx);
-    // [SOUND-DEBUG] 以 info 级别记录每次实际播放及其触发调用处，便于定位“棋盘自己响”的来源。
     AppLogger.sound.info('play $file vol=$vol sfx=$sfx caller=${_caller()}');
     FlameAudio.play(file, volume: vol).then((_) {}, onError: (Object e, StackTrace st) {
       AppLogger.sound.warning('play $file failed', e, st);

@@ -271,7 +271,7 @@ void main() {
 
       expect(find.text('第 5 关 · 关卡预览(未解锁)'), findsOneWidget);
       expect(find.text('请先通关第 4 关解锁此关卡'), findsOneWidget);
-      expect(find.text('关卡未解锁 (请先通关前序关卡)'), findsOneWidget);
+      expect(find.text('关卡未解锁'), findsOneWidget);
 
       // Button should be disabled
       final button = tester.widget<FilledButton>(find.byType(FilledButton));

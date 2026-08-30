@@ -1,4 +1,4 @@
-﻿import '../data/game_repository.dart';
+import '../data/game_repository.dart';
 import '../data/progress_store.dart';
 
 /// 解锁状态详细信息
@@ -34,7 +34,32 @@ class UnlockService {
   /// 活动与扩展包所需主线通关数
   static const int kEventUnlockRequiredMainLevels = 5;
 
-  /// 检查特定难度档位（0~6）是否已解锁
+  /// 同步检查特定难度档位（0~6）是否已解锁（避免首帧渲染跳变）
+  UnlockStatus checkDifficultyUnlockSync(int tierIndex) {
+    final safeTier = tierIndex.clamp(0, kDifficultyStarImageRequirements.length - 1);
+    final req = kDifficultyStarImageRequirements[safeTier];
+    if (req <= 0) {
+      return const UnlockStatus(isUnlocked: true);
+    }
+
+    final count3Star = ProgressStore.instance.cachedDistinct3StarCount;
+    if (count3Star >= req) {
+      return UnlockStatus(
+        isUnlocked: true,
+        currentProgress: count3Star,
+        targetRequired: req,
+      );
+    }
+
+    return UnlockStatus(
+      isUnlocked: false,
+      reason: '需要获得 3 星的不同拼图达到 $req 张（当前 $count3Star/$req）',
+      currentProgress: count3Star,
+      targetRequired: req,
+    );
+  }
+
+  /// 检查特定难度档位（0~6）是否已解锁（异步完整版）
   Future<UnlockStatus> checkDifficultyUnlock(int tierIndex) async {
     final safeTier = tierIndex.clamp(0, kDifficultyStarImageRequirements.length - 1);
     final req = kDifficultyStarImageRequirements[safeTier];
@@ -53,7 +78,7 @@ class UnlockService {
 
     return UnlockStatus(
       isUnlocked: false,
-      reason: '需要获得 3 星的不同拼图达到  张（当前 /）',
+      reason: '需要获得 3 星的不同拼图达到 $req 张（当前 $count3Star/$req）',
       currentProgress: count3Star,
       targetRequired: req,
     );
@@ -91,7 +116,7 @@ class UnlockService {
 
     return UnlockStatus(
       isUnlocked: false,
-      reason: '完成 5 关主线即可解锁活动与主题包（当前 /）',
+      reason: '完成 5 关主线即可解锁活动与主题包（当前 $completedCount/$kEventUnlockRequiredMainLevels）',
       currentProgress: completedCount,
       targetRequired: kEventUnlockRequiredMainLevels,
     );

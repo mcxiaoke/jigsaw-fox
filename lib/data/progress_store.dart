@@ -101,9 +101,31 @@ class ProgressStore {
 
   static const String _keyPrefix = 'jigsaw_progress_v3_';
   SharedPreferences? _prefs;
+  int _cachedDistinct3Star = 0;
+  int get cachedDistinct3StarCount => _cachedDistinct3Star;
 
   Future<void> init() async {
-    _prefs ??= await SharedPreferences.getInstance();
+    if (_prefs != null) return;
+    _prefs = await SharedPreferences.getInstance();
+    await refreshAggregatesCache();
+  }
+
+  Future<void> refreshAggregatesCache() async {
+    final keys = _prefs?.getKeys() ?? const {};
+    var count = 0;
+    for (final k in keys) {
+      if (k.startsWith(_keyPrefix)) {
+        final raw = _prefs?.getString(k);
+        if (raw != null) {
+          try {
+            final m = jsonDecode(raw) as Map<String, dynamic>;
+            final p = LevelProgress.fromJson(m);
+            if (p.hasAny3Star) count++;
+          } catch (_) {}
+        }
+      }
+    }
+    _cachedDistinct3Star = count;
   }
 
   String _keyFor(String canonicalId) {

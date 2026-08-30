@@ -1,17 +1,23 @@
-﻿import 'dart:async';
+import 'economy_service.dart';
+import 'dart:async';
 
 import 'achievement_store.dart';
 import 'app_logger.dart';
-import 'economy_service.dart';
 import 'sound_service.dart';
 
+/// 成就类型
 enum AchievementType {
+  /// 累积计数型（如通关 10 局、吸附 500 片）
   accumulative,
+
+  /// 单次条件型（如 0 提示通关、10分钟内完成 100 块）
   conditional,
+
+  /// 派生集合型（如解锁其他全部 24 个成就）
   derived,
 }
 
-/// 成就静态定义（v3.3.1 设计）
+/// 静态不可变成就定义
 class AchievementDefinition {
   const AchievementDefinition({
     required this.id,
@@ -19,10 +25,8 @@ class AchievementDefinition {
     required this.description,
     required this.type,
     required this.target,
-    this.metricKey = '',
-    this.coinReward = 0,
-    this.couponReward = 0,
-    this.iconAsset = 'assets/icons/cup.png',
+    required this.metricKey,
+    required this.coinReward,
   });
 
   final String id;
@@ -32,21 +36,22 @@ class AchievementDefinition {
   final int target;
   final String metricKey;
   final int coinReward;
-  final int couponReward;
-  final String iconAsset;
 }
 
-/// 成就系统业务服务（数据驱动，25项里程碑）
+/// 成就服务核心引擎（25 项官方成就 SSOT）
 class AchievementService {
   AchievementService._();
   static final AchievementService instance = AchievementService._();
 
+  final AchievementStore _store = AchievementStore.instance;
+
+  /// 全部 25 项成就定义（Dart const 静态表）
   static const List<AchievementDefinition> allAchievements = [
-    // 1. 局数累加
+    // 1. 通关局数
     AchievementDefinition(
       id: 'first_win',
       title: '初露锋芒',
-      description: '完成任意 1 局拼图',
+      description: '完成第一局拼图',
       type: AchievementType.accumulative,
       target: 1,
       metricKey: 'total_solved',
@@ -55,7 +60,7 @@ class AchievementService {
     AchievementDefinition(
       id: 'win_10',
       title: '熟能生巧',
-      description: '完成 10 局拼图',
+      description: '累计完成 10 局拼图',
       type: AchievementType.accumulative,
       target: 10,
       metricKey: 'total_solved',
@@ -64,105 +69,96 @@ class AchievementService {
     AchievementDefinition(
       id: 'win_50',
       title: '拼图达人',
-      description: '完成 50 局拼图',
+      description: '累计完成 50 局拼图',
       type: AchievementType.accumulative,
       target: 50,
       metricKey: 'total_solved',
-      coinReward: 150,
+      coinReward: 100,
     ),
     AchievementDefinition(
       id: 'win_100',
       title: '拼图大师',
-      description: '完成 100 局拼图',
+      description: '累计完成 100 局拼图',
       type: AchievementType.accumulative,
       target: 100,
       metricKey: 'total_solved',
-      coinReward: 300,
+      coinReward: 200,
     ),
 
-    // 2. 3 星累加
+    // 2. 三星成就
     AchievementDefinition(
-      id: 'three_star_1',
-      title: '完美开局',
-      description: '首次获得 3 星评价',
+      id: 'star_1',
+      title: '三星启航',
+      description: '首次以 3 星评价完成拼图',
       type: AchievementType.accumulative,
       target: 1,
       metricKey: 'three_star_count',
       coinReward: 30,
     ),
     AchievementDefinition(
-      id: 'three_star_10',
-      title: '十全十美',
+      id: 'star_10',
+      title: '闪耀之星',
       description: '累计获得 10 个 3 星评价',
       type: AchievementType.accumulative,
       target: 10,
       metricKey: 'three_star_count',
-      coinReward: 100,
+      coinReward: 80,
     ),
     AchievementDefinition(
-      id: 'three_star_30',
-      title: '摘星大师',
+      id: 'star_30',
+      title: '群星璀璨',
       description: '累计获得 30 个 3 星评价',
       type: AchievementType.accumulative,
       target: 30,
       metricKey: 'three_star_count',
-      coinReward: 250,
-    ),
-
-    // 3. 每日挑战
-    AchievementDefinition(
-      id: 'daily_1',
-      title: '每日打卡',
-      description: '完成 1 次每日挑战',
-      type: AchievementType.accumulative,
-      target: 1,
-      metricKey: 'daily_solved',
-      coinReward: 30,
+      coinReward: 150,
     ),
     AchievementDefinition(
-      id: 'daily_7',
-      title: '坚持不懈',
-      description: '完成 7 次每日挑战',
+      id: 'star_50',
+      title: '星光领主',
+      description: '累计获得 50 个 3 星评价',
       type: AchievementType.accumulative,
-      target: 7,
-      metricKey: 'daily_solved',
-      coinReward: 100,
-    ),
-    AchievementDefinition(
-      id: 'daily_30',
-      title: '月度全勤',
-      description: '完成 30 次每日挑战',
-      type: AchievementType.accumulative,
-      target: 30,
-      metricKey: 'daily_solved',
+      target: 50,
+      metricKey: 'three_star_count',
       coinReward: 300,
     ),
+
+    // 3. 难度档位突破
     AchievementDefinition(
-      id: 'streak_3',
-      title: '三连胜',
-      description: '连续 3 天完成每日挑战',
+      id: 'tier_l3',
+      title: '中阶挑战',
+      description: '完成一次中等（L3）及以上难度拼图',
       type: AchievementType.accumulative,
-      target: 3,
-      metricKey: 'daily_streak',
+      target: 1,
+      metricKey: 'tier_l3_solved',
       coinReward: 50,
     ),
     AchievementDefinition(
-      id: 'streak_7',
-      title: '每日习惯',
-      description: '连续 7 天完成每日挑战',
+      id: 'tier_l4',
+      title: '进阶高手',
+      description: '完成一次进阶（L4）及以上难度拼图',
       type: AchievementType.accumulative,
-      target: 7,
-      metricKey: 'daily_streak',
-      coinReward: 120,
+      target: 1,
+      metricKey: 'tier_l4_solved',
+      coinReward: 80,
     ),
     AchievementDefinition(
-      id: 'streak_14',
-      title: '毅力勋章',
-      description: '连续 14 天完成每日挑战',
+      id: 'tier_l5',
+      title: '困难征服',
+      description: '完成一次困难（L5）及以上难度拼图',
       type: AchievementType.accumulative,
-      target: 14,
-      metricKey: 'daily_streak',
-      coinReward: 250,
+      target: 1,
+      metricKey: 'tier_l5_solved',
+      coinReward: 150,
+    ),
+    AchievementDefinition(
+      id: 'tier_l6',
+      title: '极限登顶',
+      description: '完成一次极限（L6）难度拼图',
+      type: AchievementType.accumulative,
+      target: 1,
+      metricKey: 'tier_l6_solved',
+      coinReward: 300,
     ),
 
     // 4. 自制拼图
@@ -255,38 +251,45 @@ class AchievementService {
     ),
     AchievementDefinition(
       id: 'time_2h',
-      title: '专注时光',
+      title: '拼图发烧友',
       description: '累计游玩时间达到 2 小时',
       type: AchievementType.accumulative,
       target: 7200,
       metricKey: 'play_seconds',
-      coinReward: 150,
+      coinReward: 120,
+    ),
+    AchievementDefinition(
+      id: 'time_10h',
+      title: '岁月如歌',
+      description: '累计游玩时间达到 10 小时',
+      type: AchievementType.accumulative,
+      target: 36000,
+      metricKey: 'play_seconds',
+      coinReward: 300,
     ),
 
-    // 8. 7 档难度全通
+    // 8. 每日挑战
     AchievementDefinition(
-      id: 'diff_master',
-      title: '全能选手',
-      description: '在全部 7 个难度档位均至少通关 1 次',
+      id: 'daily_7',
+      title: '日积月累',
+      description: '累计完成 7 次每日挑战',
       type: AchievementType.accumulative,
       target: 7,
-      metricKey: 'distinct_tiers',
-      coinReward: 200,
+      metricKey: 'daily_solved',
+      coinReward: 100,
     ),
 
-    // 9. 派生大满贯
+    // 9. 大满贯
     AchievementDefinition(
       id: 'master_all',
-      title: '终极全成就',
-      description: '完成全部其他 24 项成就',
+      title: '拼图宗师',
+      description: '达成以上全部 24 项成就',
       type: AchievementType.derived,
       target: 24,
       metricKey: 'master_all',
-      coinReward: 500,
+      coinReward: 1000,
     ),
   ];
-
-  final _store = AchievementStore.instance;
 
   /// 成就解锁广播通知流
   final _unlockStreamController = StreamController<AchievementDefinition>.broadcast();
@@ -308,7 +311,7 @@ class AchievementService {
     if (reached) {
       final success = await _store.markUnlocked(def.id);
       if (success) {
-        AppLogger.repo.info('Achievement unlocked:  ()');
+        AppLogger.repo.info('Achievement unlocked: ${def.title} (${def.id})');
         SoundService.I.play(Sfx.coinsFly);
         _unlockStreamController.add(def);
         return true;
@@ -317,7 +320,7 @@ class AchievementService {
     return false;
   }
 
-  /// 批量检查所有成就
+  /// 批量检查所有成就（纯内存极速评估）
   Future<List<AchievementDefinition>> _evaluateAll() async {
     final newlyUnlocked = <AchievementDefinition>[];
     for (final def in allAchievements) {
@@ -334,7 +337,7 @@ class AchievementService {
     return newlyUnlocked;
   }
 
-  /// 通关拼图事件触发器
+  /// 通关拼图事件触发器（纯内存处理与一次性评估）
   Future<List<AchievementDefinition>> onPuzzleSolved({
     required int actualPieces,
     required int elapsedSeconds,
@@ -364,71 +367,51 @@ class AchievementService {
       await _store.incrementCounter('custom_solved', 1);
     }
 
-    // 5. 条件型：0 提示
+    // 5. 每日挑战
+    if (puzzleType == 'daily') {
+      await _store.incrementCounter('daily_solved', 1);
+    }
+
+    // 6. 吸附碎片总数累加
+    if (actualPieces > 0) {
+      await _store.incrementCounter('total_snaps', actualPieces);
+    }
+
+    // 7. 条件型：0 提示
     if (hintsUsed == 0 || isFirstNoHintWin) {
       await _store.setCounter('no_hint_win', 1);
     }
 
-    // 6. 条件型：10 分钟内完成 ≥100 片
+    // 8. 条件型：疾风拼手（10 分钟内完成 ≥100 块）
     if (actualPieces >= 100 && elapsedSeconds <= 600) {
       await _store.setCounter('speed_10min', 1);
     }
 
-    // 7. 条件型：夜猫子 (22:00 ~ 05:00)
-    final hour = DateTime.now().hour;
-    if (hour >= 22 || hour < 5) {
+    // 9. 条件型：夜猫子（22:00 ~ 05:00）
+    final nowHour = DateTime.now().hour;
+    if (nowHour >= 22 || nowHour < 5) {
       await _store.setCounter('night_owl', 1);
     }
 
-    // 8. 档位覆盖
-    await _store.incrementCounter('tier_played_', 1);
-    var distinctTiers = 0;
-    for (var i = 0; i < 7; i++) {
-      if (_store.getCounter('tier_played_') > 0) {
-        distinctTiers++;
-      }
-    }
-    await _store.setCounter('distinct_tiers', distinctTiers);
+    // 10. 档位突破
+    if (tierIndex >= 3) await _store.setCounter('tier_l3_solved', 1);
+    if (tierIndex >= 4) await _store.setCounter('tier_l4_solved', 1);
+    if (tierIndex >= 5) await _store.setCounter('tier_l5_solved', 1);
+    if (tierIndex >= 6) await _store.setCounter('tier_l6_solved', 1);
 
     return await _evaluateAll();
   }
 
-  /// 吸附碎片计数触发器
-  Future<List<AchievementDefinition>> onPieceSnapped([int count = 1]) async {
-    await _store.init();
-    await _store.incrementCounter('total_snaps', count);
-    return await _evaluateAll();
-  }
-
-  /// 每日挑战完成触发器
-  Future<List<AchievementDefinition>> onDailyCompleted({required int streak}) async {
-    await _store.init();
-    await _store.incrementCounter('daily_solved', 1);
-    final curStreak = _store.getCounter('daily_streak');
-    if (streak > curStreak) {
-      await _store.setCounter('daily_streak', streak);
-    }
-    return await _evaluateAll();
-  }
-
-  /// 领取成就奖励（金币与道具券）
+  /// 领取成就金币奖励
   Future<bool> claimReward(String achievementId) async {
     await _store.init();
-    if (!_store.isUnlocked(achievementId) || _store.isClaimed(achievementId)) {
-      return false;
-    }
+    if (!_store.isUnlocked(achievementId)) return false;
+    if (_store.isClaimed(achievementId)) return false;
 
-    final def = allAchievements.firstWhere((a) => a.id == achievementId, orElse: () => throw 'Unknown achievement ');
+    final def = allAchievements.firstWhere((a) => a.id == achievementId);
     await _store.markClaimed(achievementId);
-
-    if (def.coinReward > 0) {
-      await EconomyService.instance.addCoins(def.coinReward, bypassCap: true);
-    }
-    if (def.couponReward > 0) {
-      await EconomyService.instance.addHintCoupons(def.couponReward);
-    }
-
-    AppLogger.repo.info('Claimed reward for achievement:  (+ coins)');
+    await EconomyService.instance.init();
+    await EconomyService.instance.addCoins(def.coinReward, bypassCap: true);
     return true;
   }
 }

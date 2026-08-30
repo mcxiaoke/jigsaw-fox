@@ -14,7 +14,7 @@ void main() {
   });
 
   group('AchievementService Unit Tests', () {
-    test('onPuzzleSolved triggers first_win, three_star_1, and no_hint_win', () async {
+    test('onPuzzleSolved triggers first_win, star_1, and no_hint_win', () async {
       final ach = AchievementService.instance;
       final store = AchievementStore.instance;
 
@@ -30,11 +30,11 @@ void main() {
 
       final ids = unlocked.map((a) => a.id).toSet();
       expect(ids.contains('first_win'), isTrue);
-      expect(ids.contains('three_star_1'), isTrue);
+      expect(ids.contains('star_1'), isTrue);
       expect(ids.contains('no_hint_win'), isTrue);
 
       expect(store.isUnlocked('first_win'), isTrue);
-      expect(store.isUnlocked('three_star_1'), isTrue);
+      expect(store.isUnlocked('star_1'), isTrue);
       expect(store.isUnlocked('no_hint_win'), isTrue);
     });
 

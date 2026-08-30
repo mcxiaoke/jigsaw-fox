@@ -168,6 +168,9 @@ class _ChooseDifficultySheetState extends State<ChooseDifficultySheet> {
           orElse: () => defaultTiers[0],
         )
         .difficulty;
+    for (var i = 0; i < 7; i++) {
+      _tierUnlockStatuses[i] = _unlockService.checkDifficultyUnlockSync(i);
+    }
     _decodeImageSize();
     _loadTierUnlocks();
   }
@@ -351,10 +354,11 @@ class _ChooseDifficultySheetState extends State<ChooseDifficultySheet> {
       ),
       child: SafeArea(
         top: false,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
             // Drag handle
             Center(
               child: Container(
@@ -614,10 +618,6 @@ class _ChooseDifficultySheetState extends State<ChooseDifficultySheet> {
                       fontSize: 14.5,
                     ),
                   ),
-                  Text(
-                    '⏱️ ${selectedTier.estimatedMinutes}',
-                    style: const TextStyle(fontSize: 11.5, color: Colors.black54),
-                  ),
                   if (isEffectivePassed)
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
@@ -645,7 +645,12 @@ class _ChooseDifficultySheetState extends State<ChooseDifficultySheet> {
                 ],
               ),
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 4),
+            Text(
+              '⏱️ 预计耗时：${selectedTier.estimatedMinutes}',
+              style: const TextStyle(fontSize: 12, color: Colors.black54, fontWeight: FontWeight.w500),
+            ),
+            const SizedBox(height: 14),
 
             // Horizontal scroll of 7 difficulty tiers
             SingleChildScrollView(
@@ -730,9 +735,9 @@ class _ChooseDifficultySheetState extends State<ChooseDifficultySheet> {
                               ],
                               Text(
                                 !widget.isUnlocked
-                                    ? '关卡未解锁 (请先通关前序关卡)'
+                                    ? '关卡未解锁'
                                     : (!isTierUnlocked
-                                        ? '难度未解锁 (${unlockStatus?.reason ?? ""})'
+                                        ? '未解锁'
                                         : (hasSavedProgress && isMatchingSavedDiff
                                             ? '继续游玩 (进度 ${widget.savedProgressPercent}%)'
                                             : (isEffectivePassed ? '重玩此难度' : '开始'))),
@@ -768,8 +773,9 @@ class _ChooseDifficultySheetState extends State<ChooseDifficultySheet> {
           ],
         ),
       ),
-    );
-  }
+    ),
+  );
+}
 
   Widget _buildPieceOption(DifficultyTier tier, {required bool isSelected, bool isLocked = false}) {
     final opt = tier.difficulty;
