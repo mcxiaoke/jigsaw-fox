@@ -106,6 +106,9 @@ class SoundService {
   static const _snapThrottleMs = 80;
   int _lastSnapMs = 0;
 
+  /// 是否在每次播放时记录触发调用处（配合排查“棋盘自己响”场景，测试完可关）
+  static const bool _logCaller = true;
+
   /// 初始化并预加载全部音效。
   ///
   /// 在 `main()` 中 `GameRepository.init()` 之后调用：
@@ -147,18 +150,37 @@ class SoundService {
 
     if (sfx == Sfx.snap) {
       final now = DateTime.now().millisecondsSinceEpoch;
-      if (now - _lastSnapMs < _snapThrottleMs) return;
+      if (now - _lastSnapMs < _snapThrottleMs) {
+        AppLogger.sound.fine('snap THROTTLED ${now - _lastSnapMs}ms<$_snapThrottleMs (skipped)');
+        return;
+      }
       _lastSnapMs = now;
     }
 
     final file = _resolveFile(sfx);
     final vol = volume ?? _volumeFor(sfx);
-    if (AppLogger.sound.isLoggable(AppLogger.sound.level)) {
-      AppLogger.sound.fine('play $file vol=$vol sfx=$sfx');
-    }
+    // [SOUND-DEBUG] 以 info 级别记录每次实际播放及其触发调用处，便于定位“棋盘自己响”的来源。
+    AppLogger.sound.info('play $file vol=$vol sfx=$sfx caller=${_caller()}');
     FlameAudio.play(file, volume: vol).then((_) {}, onError: (Object e, StackTrace st) {
       AppLogger.sound.warning('play $file failed', e, st);
     });
+  }
+
+  /// 提取本次播放的顶层 UI 调用方（方法+行号），帮助把“某音效”与“触发操作”对上。
+  String _caller() {
+    if (!_logCaller) return '';
+    final trace = StackTrace.current.toString().split('\n');
+    // 跳过本文件内部帧，取第一个业务调用帧（形如 "  #1      lib/x.dart:123:45"）
+    for (String line in trace) {
+      final line0 = line.trim();
+      if (line0.isEmpty) continue;
+      if (line0.startsWith('#0') || line0.startsWith('#')) {
+        if (line0.contains('sound_service.dart')) continue;
+        final idx = line0.indexOf('lib/');
+        if (idx >= 0) return line0.substring(idx).trim();
+      }
+    }
+    return '';
   }
 
   /// 快捷：吸附

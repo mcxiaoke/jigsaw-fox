@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:math' show min, max;
 import 'dart:ui' as ui;
 
 import 'package:flame/components.dart';
@@ -235,8 +236,8 @@ void main() {
 
     // 1. 在屏幕中心执行放大
     final center = Vector2(200, 300);
-    game.zoomAt(center, 1.0); // zoom 从 1.0 增加到 2.0
-    expect(game.zoom, closeTo(2.0, 0.01));
+    game.zoomAt(center, game.maxZoom - 1.0); // 放大到当前 maxZoom
+    expect(game.zoom, closeTo(game.maxZoom, 0.01));
 
     // 2. 坐标归一化正逆变换一致性验证
     const testNx = 0.35;
@@ -278,9 +279,9 @@ void main() {
     game.onGameResize(Vector2(400, 800));
     await game.onLoad();
 
-    // 放大到 3.0 倍
-    game.zoomAt(Vector2(200, 300), 2.0);
-    expect(game.zoom, closeTo(3.0, 0.01));
+    // 放大到当前 maxZoom
+    game.zoomAt(Vector2(200, 300), game.maxZoom - 1.0);
+    expect(game.zoom, closeTo(game.maxZoom, 0.01));
 
     // 模拟多指手势触发
     game.isPinching = true;
@@ -337,9 +338,10 @@ void main() {
     expect(game.boardState.pieceById(a.id).isSolved(3, 3), isFalse);
     expect(game.boardState.pieceById(b.id).isSolved(3, 3), isFalse);
 
-    // 即使随后放大到 3 倍，集群依旧保持合并（放大不是触发条件，只是放大后更容易发生）
-    game.zoomAt(Vector2(200, 300), 2.0);
-    expect(game.zoom, closeTo(3.0, 0.01));
+    // 放大到当前 maxZoom
+    game.zoomAt(Vector2(200, 300), game.maxZoom - 1.0);
+    expect(game.zoom, closeTo(game.maxZoom, 0.01));
+    // 即使随后放大到 maxZoom，集群依旧保持合并（放大不是触发条件，只是放大后更容易发生）
     expect(a.clusterId, equals(b.clusterId));
 
     // 扫把一键整理：organizeTray 只回托盘 clusterSize==1 的游离碎片，
@@ -348,6 +350,143 @@ void main() {
     game.organizeTray(); // 连点两次依旧无效
     expect(a.isInTray, isFalse, reason: '集群碎片未被扫把归位 (organizeTray 跳过 clusterSize>1)');
     expect(b.isInTray, isFalse, reason: '集群碎片未被扫把归位 (organizeTray 跳过 clusterSize>1)');
+  });
+
+  test('放大后吸附容差(屏幕像素)恒定且被硬上限锁定，归一化阈值随放大收紧', () async {
+    final img = await _decodePng();
+    final game = JigsawPuzzleGame(
+      image: img,
+      rows: 4,
+      cols: 4,
+      onSolved: () {},
+    );
+    game.onGameResize(Vector2(400, 800));
+    await game.onLoad();
+
+    // 1× 下的归一化吸附阈值与其对应屏幕像素半径
+    final d1 = game.effectiveSnapDistance();
+    final minBoardPx = min(game.boardSize.x, game.boardSize.y);
+    final screenPx1 = (d1 * minBoardPx * game.zoom).abs();
+
+    // 放大到当前 maxZoom
+    game.zoomAt(Vector2(200, 300), game.maxZoom - 1.0);
+    expect(game.zoom, closeTo(game.maxZoom, 0.01));
+    final d3 = game.effectiveSnapDistance();
+    expect(d3, lessThan(d1), reason: '放大后归一化吸附阈值应收紧（屏幕像素恒定上限）');
+
+    // 两种缩放下，吸附半径对应屏幕像素都应被硬上限 48px 约束住
+    final screenPx3 = (d3 * minBoardPx * game.zoom).abs();
+    expect(screenPx1, lessThanOrEqualTo(48.0 + 0.5), reason: '1× 吸附半径屏幕像素不应超过 48px');
+    expect(screenPx3, lessThanOrEqualTo(48.0 + 0.5), reason: '放大后吸附半径屏幕像素不应超过 48px');
+  });
+
+  test('边缘碎片逐像素逼近槽位：任何时刻“锁定⇒已贴槽”，远距离不锁定(复现状态·视觉脱节)', () async {
+    final img = await _decodePng();
+    final game = JigsawPuzzleGame(
+      image: img,
+      rows: 4,
+      cols: 4,
+      onSolved: () {},
+    );
+    game.onGameResize(Vector2(400, 800));
+    await game.onLoad();
+
+    // 取上边缘非角块 (0,1)：id=1。其余碎片留在托盘，保证它是独立的孤片。
+    final edge = game.children
+        .whereType<PuzzlePieceComponent>()
+        .firstWhere((p) => p.id == 1);
+    final slotScreen = game.normalizedToScreen(edge.c / 4, edge.r / 4); // (0,1) 槽位屏幕坐标
+
+    void check() {
+      // 任何时刻只要 isLocked，视觉就必须已贴到正确槽位（不得“锁了却没吸过去”）
+      if (edge.isLocked) {
+        expect((edge.position - slotScreen).length, lessThanOrEqualTo(2.0),
+            reason: '锁定必须在正确槽位(视觉已贴槽)，绝不允许“锁了却没吸过去”');
+        expect(edge.position.x, closeTo(slotScreen.x, 2.0));
+        expect(edge.position.y, closeTo(slotScreen.y, 2.0));
+      }
+    }
+
+    // 从槽位左侧 -80px 到右侧 +80px，逐像素逼近/远离，观察是否会出现“锁定但未贴槽”
+    var lockSeen = false;
+    for (var d = -80; d <= 80; d++) {
+      edge.isInTray = false;
+      edge.scale.setAll(game.zoom);
+      edge.position.setFrom(Vector2(slotScreen.x + d, slotScreen.y));
+      game.handlePieceDragEnd(edge);
+      if (edge.isLocked) lockSeen = true;
+      check();
+    }
+
+    // 明确远离槽位(±80px，远超 44px 吸附上限)时，边缘碎片绝不能被锁定(应保持可拖动)
+    expect(lockSeen, isTrue, reason: '扫描范围内应当经历“进入吸附区被锁定”的环节(否则扫描无效)');
+    edge.position.setFrom(Vector2(slotScreen.x - 80, slotScreen.y));
+    game.handlePieceDragEnd(edge);
+    expect(edge.isLocked, isFalse, reason: '远离槽位时碎片不应被锁定');
+    // 游离片应可被扫把回收（非锁定、非已就位、单簇）
+    game.organizeTray();
+    expect(edge.isInTray, isTrue, reason: '远离槽位的边缘碎片可被扫把回收归位');
+  });
+
+  // 分组：连通/吸附锁定四类典型场景（#1 内部自由拖动、#2 内部组合自由拖动、#3 边缘就位吸附、
+  //       #4 边缘组吸附不可动、#5 零散碎片补全边缘组合被吸附不可动）
+  PuzzlePieceComponent pieceOf(JigsawPuzzleGame g, int id) =>
+      g.children.whereType<PuzzlePieceComponent>().firstWhere((p) => p.id == id);
+  void placeAtSlot(JigsawPuzzleGame g, int id) {
+    final p = pieceOf(g, id);
+    p.isInTray = false;
+    p.scale.setAll(g.zoom);
+    p.position.setFrom(g.normalizedToScreen(p.c / g.cols, p.r / g.rows));
+    g.handlePieceDragEnd(p);
+  }
+
+  test('场景#1#2：中间杂物碎片及其中间组合应自由拖动(不锁定)', () async {
+    final img = await _decodePng();
+    final g = JigsawPuzzleGame(image: img, rows: 4, cols: 4, onSolved: () {});
+    g.onGameResize(Vector2(400, 800));
+    await g.onLoad();
+
+    // #1 孤立中间碎片放在非槽位 → 不锁定，可自由拖动
+    final interior = pieceOf(g, 5); // (1,1)
+    interior.isInTray = false;
+    interior.position.setFrom(g.normalizedToScreen(0.3, 0.6));
+    g.handlePieceDragEnd(interior);
+    expect(interior.isLocked, isFalse, reason: '#1 孤立中间碎片可自由拖动(不锁定)');
+
+    // #2 中间两片组合(内部岛)就位 → 均不锁定，可整组自由拖动
+    placeAtSlot(g, 5); // (1,1)
+    placeAtSlot(g, 6); // (1,2)
+    final a = pieceOf(g, 5), b = pieceOf(g, 6);
+    expect(a.isLocked, isFalse, reason: '#2 内部组合第1片应保持可拖动');
+    expect(b.isLocked, isFalse, reason: '#2 内部组合第2片应保持可拖动');
+  });
+
+  test('场景#3#4#5：边缘/边缘组吸附锁定不可动，零散碎片补全边缘组合被吸附', () async {
+    final img = await _decodePng();
+    final g = JigsawPuzzleGame(image: img, rows: 4, cols: 4, onSolved: () {});
+    g.onGameResize(Vector2(400, 800));
+    await g.onLoad();
+
+    // #3 单个边缘碎片就位 → 被吸附并锁定
+    placeAtSlot(g, 1); // 上边缘 (0,1)
+    final e1 = pieceOf(g, 1);
+    expect(e1.isLocked, isTrue, reason: '#3 边缘碎片就位应被吸附锁定');
+
+    // #4 第二个边缘碎片就位 → 边缘组全部锁定，不可拖动
+    placeAtSlot(g, 2); // 上边缘 (0,2)
+    final e2 = pieceOf(g, 2);
+    expect(e1.isLocked, isTrue, reason: '#4 边缘组第1片仍锁定');
+    expect(e2.isLocked, isTrue, reason: '#4 边缘组第2片被吸附锁定');
+    // 锁定后拖拽被拦截：holdingPiece 不会建立，priority 不被提升到顶层
+    g.handlePieceDragStart(e1);
+    expect(g.holdingPiece, isNull, reason: '#4 锁定碎片的拖拽被拦截');
+    expect(e1.priority, lessThan(1000), reason: '#4 锁定碎片 priority 不应被提升为拖拽顶层');
+
+    // #5 零散内部碎片补到边缘组合的邻位 → 被吸附且锁定(无法移动)
+    placeAtSlot(g, 6); // 内部 (1,2)，紧邻上方已锁定的边缘 (0,2)
+    final e3 = pieceOf(g, 6);
+    expect(e3.isLocked, isTrue, reason: '#5 补全边缘组合的内部碎片被吸附锁定');
+    expect(g.holdingPiece, isNull);
   });
 
   test('已吸附归位的碎片锁定不可移动，且层级 Priority 为底层 (5)', () async {
@@ -915,7 +1054,7 @@ void main() {
     expect(piece0.position.x, closeTo(dropX, 60.0));
   });
 
-  test('缩放最大倍数严格限制在 300% (3.0x)，且放大状态下支持在空白区域平移棋盘', () async {
+  test('缩放最大倍数按“碎片最大尺寸”动态推导，放大被 clamp 在 maxZoom，放大后可平移', () async {
     final img = await _decodePng();
     final game = JigsawPuzzleGame(
       image: img,
@@ -926,12 +1065,17 @@ void main() {
     game.onGameResize(Vector2(800, 600));
     await game.onLoad();
 
-    // 1. 验证 maxZoom 严格等于 3.0
-    expect(game.maxZoom, equals(3.0));
+    // 1. maxZoom = max(minZoom, maxPieceZoomPx / max(pieceW, pieceH))：
+    //    大块/稀疏拼图取 minZoom 下限；小块按碎片尺寸放大更多并封顶。
+    final pieceMaxSide = max(game.boardSize.x / 3, game.boardSize.y / 3);
+    final expectedMaxZoom = max(JigsawPuzzleGame.minZoom, JigsawPuzzleGame.maxPieceZoomPx / pieceMaxSide);
+    expect(game.maxZoom, closeTo(expectedMaxZoom, 0.01),
+        reason: 'maxZoom 应按碎片最大尺寸与 minZoom 下限动态推导');
 
-    // 2. 尝试过度放大至 500%
-    game.zoomAt(Vector2(400, 300), 4.0);
-    expect(game.zoom, equals(3.0), reason: '放大倍数必须被严格 clamp 在 3.0 (300%)');
+    // 2. 尝试过度放大，必须被 clamp 在 maxZoom
+    game.zoomAt(Vector2(400, 300), 20.0);
+    expect(game.zoom, closeTo(game.maxZoom, 0.01),
+        reason: '放大倍数必须被严格 clamp 在 maxZoom');
 
     // 3. 验证放大状态下在空白区域平移有效
     final initialPanX = game.panOffset.x;
@@ -962,9 +1106,9 @@ void main() {
     final originalNx = game.boardState.pieceById(p0.id).nx;
     final originalNy = game.boardState.pieceById(p0.id).ny;
 
-    // 1. 放大棋盘至 2.0x
-    game.zoomAt(Vector2(500, 400), 1.0);
-    expect(game.zoom, equals(2.0));
+    // 放大到当前 maxZoom
+    game.zoomAt(Vector2(500, 400), game.maxZoom - 1.0);
+    expect(game.zoom, closeTo(game.maxZoom, 0.01));
 
     // 2. 模拟多次连续平移拖动画布
     for (int i = 0; i < 5; i++) {
@@ -1002,9 +1146,9 @@ void main() {
     game.onGameResize(Vector2(1000, 700));
     await game.onLoad();
 
-    // 1. 放大至 2.5x
-    game.zoomAt(Vector2(500, 300), 1.5);
-    expect(game.zoom, equals(2.5));
+    // 1. 放大到当前 maxZoom
+    game.zoomAt(Vector2(500, 300), game.maxZoom - 1.0);
+    expect(game.zoom, closeTo(game.maxZoom, 0.01));
 
     // 2. 向左上方深度拖动，查看棋盘右下角
     game.panBy(Vector2(-1000, -1000));

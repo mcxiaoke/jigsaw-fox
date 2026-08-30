@@ -165,12 +165,14 @@ $$\frac{\text{cols}}{\text{rows}} = \frac{W_{\text{image}}}{H_{\text{image}}}$$
 
 ### 3.5 吸附、归位锁定 (Locking) 与四阶 Priority 层级体系
 
-- **吸附阈值**：$\text{snapDistance} = \min(w, h) \times 0.48$（黄金手感吸附比例）。
-- **粘连语义 (Adhere & Cluster Merging)**：未归位碎片在空中相互触碰对齐时形成「自由碎片组（Cluster）」，支持整组协同拖拽与重排。
+- **缩放无关吸附容差 (`effectiveSnapDistance`)**：吸附半径在屏幕像素上保持恒定并设硬上限（`maxScreenPx = 48px`），缩放越大归一化阈值越小，避免放大后“离槽位还有距离就被吸过去/误锁”。引擎侧 `PuzzleEngine.defaultSnapRatio = 0.40` 作为归一化基准，二者取较小者。
+- **连通到边缘的吸附门控 (Connectivity Gate)**：借鉴 WebJigex 设计，**只有已正确就位且其 4-连通分量内含至少一个边缘碎片的碎片**（即从边框长出的装配体）才允许被吸附/锁定（视为“已植入 planted”）；**孤立内部碎片或内部岛屿（单块/多块拼合）不连通边缘，始终可自由拖动**。吸附判定与锁定判定使用同一“到槽位欧氏距离 ≤ 当前吸附阈值”标准，保证**“锁定 ⟺ 真正被吸附就位”**。
+- **粘连语义 (Adhere & Cluster Merging)**：未归位碎片在空中相互触碰对齐时形成「自由碎片组（Cluster）」，支持整组协同拖拽与重排；内部岛屿即便拼合也保持可拖动。
 - **托盘隔离 (onBoardPieceIds)**：托盘内碎片（`isInTray == true`）绝不参与任何空间邻居合并与级联吸附，杜绝高倍率缩放下归一化间距落入容差导致的误粘连，拖回托盘的碎片只做平滑入槽。
 - **主装配体单向吸附 (isInMainAssembly)**：两块集群吸附时按规模识别主装配体（大集群）与小集群，永远由小集群/单块向大集群平移对齐，大集群坐标绝对静止，消除半成品被小碎片拉跑偏位的违和感。
 - **归位锁定 (Solved Piece Locking)**：
-  - 当碎片或集群吸附到目标棋盘网格槽位（`isSolved == true`）时，系统立即将其标记为 `isLocked = true`；
+  - 当碎片位于**边缘长出装配体（planted）**内、且到目标槽位的欧氏距离 ≤ 当前吸附阈值时，才将其标记为 `isLocked = true`；
+  - **锁定即贴槽**：锁定时强制把视觉对齐到正确槽位（`position = 槽位屏幕坐标`、`scale = zoom`），并在锁定转场触发绿色吸附边框；
   - **锁定拦截**：锁定后的碎片禁止再次被鼠标/触摸拾起或拖拽，彻底杜绝误触移位；
   - **层级降至底层**：已归位碎片的渲染层级（Priority）强制降至底层（Priority = 5），贴底渲染，绝不遮挡上层任何浮动碎片。
 - **四阶 Priority 渲染与交互层级规范**：
@@ -297,7 +299,7 @@ $$\frac{\text{cols}}{\text{rows}} = \frac{W_{\text{image}}}{H_{\text{image}}}$$
 2. **归一化抓取锚点模型 (Normalized Grab Anchor Model)**：
    - 拾起碎片时，计算光标在碎片逻辑尺寸中的相对比例锚点：
      $$anchorX = \frac{x_{\text{cursor}} - pos.x}{size.x \cdot scale.x}, \quad anchorY = \frac{y_{\text{cursor}} - pos.y}{size.y \cdot scale.y}$$
-   - 碎片在托盘与棋盘之间平滑连续缩放（例如从托盘 $0.35$ 放大至棋盘 $1.0$ 或 $3.0$ Zoom）时，碎片的左上角位置实时由下列公式严格推导：
+   - 碎片在托盘与棋盘之间平滑连续缩放（例如从托盘 $0.35$ 放大至棋盘 $1.0$，或放大到当前 `maxZoom`；`maxZoom` 由碎片最大尺寸与 `minZoom` 下限动态推导，见 §3.12）时，碎片的左上角位置实时由下列公式严格推导：
      $$pos.x = x_{\text{cursor}} - anchorX \cdot size.x \cdot scale_{\text{current}}$$
      $$pos.y = y_{\text{cursor}} - anchorY \cdot size.y \cdot scale_{\text{current}}$$
    - **数学保证**：光标永远 100% 牢牢对准碎片上玩家最初抓取的那一个相对纹理点，无论变大变小多少倍，光标与抓握点零位移发散、零距离拉大，实现绝对跟手！
@@ -310,7 +312,10 @@ $$\frac{\text{cols}}{\text{rows}} = \frac{W_{\text{image}}}{H_{\text{image}}}$$
 ### 3.12 画布缩放平移、窗口自适应与桌面散落布局
 
 #### A. 全局缩放与定点平移 (Zoom & Pan)
-- **缩放上限**：`_maxZoom = 3.0`（300%），无论原图分辨率多大均不过度放大，保持适度视野与操作手感。
+- **缩放上限（按碎片最大尺寸动态推导）**：$$ \text{maxZoom} = \max\left(\text{minZoom},\ \frac{\text{maxPieceZoomPx}}{\max(\text{pieceSize.x},\text{pieceSize.y})}\right) $$
+  - `minZoom = 2.0`：最小放大下限——无论碎片多大，都至少能放大到该倍数（用于大块/稀疏拼图的精确贴边）。
+  - `maxPieceZoomPx = 72`：放大后**最大碎片的边长**不超过该屏幕像素数——小块（密集拼图）据此允许放大更多，同时被该目标封顶，避免无限放大。
+  - 两者均为 `JigsawPuzzleGame` 公开常量，可随时调整手感。
 - **触屏双指**：以两指中心为基准的仿射变换，捏合缩放 + 双指拖拽平移，缩放时中心图案绝对锁定无漂移。
 - **桌面定点缩放**：`Ctrl/⌘ + 鼠标滚轮` 以鼠标光标为中心定点缩放；`Ctrl` 未按且在棋盘区域滚轮亦触发；
 - **拖拽漫游**：鼠标中键按住拖拽平移；放大状态（`zoom > 1.0`）下按住空白区域（未拖拽任何碎片）以左键/单指直接平移画布。

@@ -151,8 +151,10 @@ sequenceDiagram
     
     rect rgb(240, 248, 255)
     Note over Engine,Board: 阶段一：棋盘槽位吸附 (Board Slot Snap)
-    Engine->>Board: 检查 cluster 中各碎片与目标 (targetNx, targetNy) 距离
-    alt 距离 <= snapDist 且角度摆正
+    Engine->>Board: ①连通门控：集群须“连通到边缘长出装配体”才允许吸附
+    alt 集群未连通边缘(孤立内部碎片/岛屿) → 拒绝吸附，保持自由可拖动
+        Engine-->>Board: 跳过槽位吸附
+    else 距离 <= snapDist 且角度摆正 且 已连通边缘装配体
         Board-->>Engine: 命中槽位！整体平移集群，坐标精确对齐
     end
     end
@@ -170,9 +172,13 @@ sequenceDiagram
 ```
 
 #### 关键参数配置依据
-- **`defaultSnapRatio = 0.48`**：
-  $$\text{snapThreshold} = \min\left(\frac{1}{\text{cols}}, \frac{1}{\text{rows}}\right) \times 0.48$$
-  经过多轮玩家手感实验验证，48% 碎片尺寸能够提供极其爽快利落的就位吸附感，同时避免拖动误触相邻槽位。
+- **`defaultSnapRatio = 0.40`**：
+  $$\text{snapThreshold} = \min\left(\frac{1}{\text{cols}}, \frac{1}{\text{rows}}\right) \times 0.40$$
+  为吸附比例基准（归一化空间）。实际运行时游戏层会以 `effectiveSnapDistance()` 作为 `customSnapDistance` 传入，见下。
+- **缩放无关吸附容差 (`effectiveSnapDistance`)**：为避免放大后归一化容差在屏幕像素上暴涨（吸得太远/误锁），游戏层将吸附容差改为**屏幕像素恒定并设硬上限（48px）**：缩放越大归一化阈值越小。公式见 `jigsaw-puzzle-game-architecture.md`。吸附与锁定的“就位判定”使用同一阈值，保证“锁定 ⟺ 真正被吸附就位”。
+- **连通到边缘的吸附门控 (`computePlantedPieceIds` / `canSnapCluster`)**：新增现实拼图规则——**只有“已正确就位且其 4-连通分量内含至少一个边缘碎片”的碎片**（即从边框长出的装配体）才允许被吸附/锁定（视为已植入）；**孤立内部碎片或内部岛屿（单块或多块拼合）不连通边缘，始终可自由拖动**。
+  - `computePlantedPieceIds`：对 `isSolved` 碎片做 4-连通分量 BFS，分量含边缘片即视为“已植入（planted）”集合。
+  - `canSnapCluster`：集群含边缘片，或成员目标正交邻格已被 planted 装配体占据，才允许吸附；否则阶段一拒绝吸附（阶段二仍可自由群组合并）。
 - **托盘隔离 (`onBoardPieceIds`)**：`resolveSnap` 接收 `onBoardPieceIds` 集合，托盘碎片（`isInTray == true`）绝不参与空间邻居合并与级联吸附，杜绝高倍率缩放下归一化间距落入容差导致的误粘连。
 - **主装配体单向吸附 (`isInMainAssembly`)**：两块集群吸附时按规模识别大集群为主装配体，仅小集群/单块坐标向主装配体平移，主装配体坐标绝对静止。
 
@@ -265,6 +271,7 @@ class PuzzleBoardState {
    - 在 `JigexCurves` 中定义 12 点（6 段二次贝塞尔）的归一化控制点矩阵；
    - `EdgeCurveDescriptor` 会自动继承切向量、外法向量、镜像翻转与反向绘制能力，无需编写任何额外的渲染代码。
 2. **调整吸附手感**：
-   - 直接微调 `PuzzleEngine.defaultSnapRatio`（当前为 `0.48`），增大可提供更强的磁吸力，减小可提供更硬核的手动对齐手感。
+   - 微调 `PuzzleEngine.defaultSnapRatio`（当前为 `0.40`）：放大/减小归一化吸附比例，改变磁吸力强弱。
+   - 运行时生效的是游戏层 `effectiveSnapDistance()` 的**屏幕像素硬上限**（当前 `48px`）与 `PuzzleEngine.defaultSnapRatio` 的较小者；如需调整手感可改 `jigsaw_puzzle_game.dart` 中 `effectiveSnapDistance()` 的 `maxScreenPx`/ratio。
 3. **扩展异形拼图（如六边形/三角形网格）**：
    - 抽象 `EdgeLayout` 接口，定义多边形网格拓扑矩阵，复用 `PieceShape` 的贝塞尔 Path 拼接管线即可无缝接入。

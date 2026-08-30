@@ -6,6 +6,7 @@ import 'package:flame/components.dart';
 import 'package:flame/events.dart';
 import 'package:flame/game.dart';
 import 'package:flutter/foundation.dart';
+
 import 'package:flutter/painting.dart'
     show Color, Paint, PaintingStyle, RRect, Radius, decodeImageFromList;
 
@@ -18,7 +19,6 @@ import '../logic/rendering/linen_texture_manager.dart';
 import '../services/app_logger.dart';
 import '../services/sound_service.dart';
 import 'puzzle_piece_component.dart';
-import 'package:logging/logging.dart';
 
 typedef PuzzleImage = ui.Image;
 
@@ -141,6 +141,18 @@ class JigsawPuzzleGame extends FlameGame
   static const double _topToolbarHeight = 8.0;
   static const double _sideMargin = 8.0;
   static const double _bottomTrayMargin = 8.0;
+
+  /// 放大倍数的**最小保证下限**：无论碎片多大，都至少允许放大到此倍数，
+  /// 避免“72px 目标小于原始格子 → maxZoom<1 完全无法放大”的问题（可用于精确贴边）。
+  static const double minZoom = 2.0;
+
+  /// 缩放上限的主要依据：放大后**最大碎片边长**不超过该屏幕像素数。
+  ///
+  /// 最终 `_maxZoom = max(minZoom, maxPieceZoomPx / max(pieceSize.x, pieceSize.y))`：
+  /// - 大块/稀疏拼图时，碎片尺寸项通常 < minZoom，取 minZoom（可正常放大到下限）；
+  /// - 小块/密集拼图时，碎片尺寸项更大，允许按需放大更多、让碎片长到目标大小，
+  ///   同时被该目标封顶，避免无限放大。
+  static const double maxPieceZoomPx = 72.0;
 
   late Vector2 boardTopLeft;
   late Vector2 boardSize;
@@ -727,8 +739,11 @@ class JigsawPuzzleGame extends FlameGame
       pieceSize = Vector2(bW / cols, bH / rows);
     }
 
-    // 严格限制最大放大倍数不超过 300% (3.0x)
-    _maxZoom = 3.0;
+    // 缩放上限：保证至少能放大到 minZoom（大块也能精确贴边），
+    // 并让小块（密集拼图）按碎片尺寸放大更多、以 maxPieceZoomPx 封顶。
+    final pieceMaxSide = max(pieceSize.x, pieceSize.y);
+    _maxZoom = max(minZoom, maxPieceZoomPx / pieceMaxSide);
+    AppLogger.game.fine('maxZoom derived from pieceMaxSide=${pieceMaxSide.toStringAsFixed(1)} -> $_maxZoom');
 
     // 3. Normalized Tray Scaling (Target max side = 64px, preserving piece aspect ratio)
     final maxPieceSide = max(pieceSize.x, pieceSize.y);
@@ -982,7 +997,6 @@ class JigsawPuzzleGame extends FlameGame
   void dropHoldingPiece() {
     final piece = _holdingPiece;
     if (piece == null) return;
-    AppLogger.game.info('[STUCK-DEBUG] dropHoldingPiece id=${piece.id} r=${piece.r} c=${piece.c} pos=${piece.position.x.toStringAsFixed(1)},${piece.position.y.toStringAsFixed(1)} scale=${piece.scale.x.toStringAsFixed(2)} zoom=${_zoom.toStringAsFixed(2)} pan=$_panOffset isInTray=${piece.isInTray} cluster=${piece.clusterId}');
     _holdingPiece = null;
     piece.isDragging = false;
     handlePieceDragEnd(piece);
@@ -1098,6 +1112,24 @@ class JigsawPuzzleGame extends FlameGame
   @visibleForTesting
   set boardState(PuzzleBoardState state) => _boardState = state;
 
+  /// 计算“缩放无关、带硬上限”的吸附容差（归一化空间）。
+  ///
+  /// 【问题】：原 `calculateSnapThreshold` 是归一化常量 `0.48 * min(1/cols, 1/rows)`，
+  /// 但在**屏幕像素**上随缩放成正比放大——放大后吸附半径暴涨，导致碎片在离槽位较远时
+  /// 就被吸过去并锁定，出现“离槽位还有距离却被吸附/锁定”的 bug。
+  ///
+  /// 【修复】：屏幕像素吸附半径恒定并设硬上限 44px，缩放越大归一化阈值越小，
+  /// 使吸附手感不再随放大而走样；1× 缩放、且单元格像素×0.48 < 44px 时与原始行为一致，无手感回退。
+  double effectiveSnapDistance() {
+    const double ratio = PuzzleEngine.defaultSnapRatio; // 0.48
+    const double maxScreenPx = 48.0; // 吸附半径屏幕像素硬上限
+    final minBoardPx = min(boardSize.x, boardSize.y);
+    final minCellPx = minBoardPx * min(1.0 / cols, 1.0 / rows);
+    final cellPx = minCellPx * _zoom; // 当前缩放下单格最小边屏幕像素
+    final screenPx = min(cellPx * ratio, maxScreenPx);
+    return screenPx / (minBoardPx * _zoom);
+  }
+
   /// Clamps panOffset so that the entire zoomed board and scatter area can be freely navigated
   /// without being prematurely truncated or losing sight of any corner/piece.
   void _clampPanOffset() {
@@ -1191,7 +1223,6 @@ class JigsawPuzzleGame extends FlameGame
   void _updateBoardTransform() {
     final effectiveTopLeft = boardTopLeft + _panOffset;
     final effectiveBoardSize = boardSize * _zoom;
-    AppLogger.game.info('[STUCK-DEBUG] _updateBoardTransform zoom=${_zoom.toStringAsFixed(2)} pan=$_panOffset boardTL=$boardTopLeft boardSz=$boardSize effTL=$effectiveTopLeft effSz=$effectiveBoardSize');
 
     _boardBgRect.position.setFrom(effectiveTopLeft);
     _boardBgRect.size.setFrom(effectiveBoardSize);
@@ -1208,10 +1239,6 @@ class JigsawPuzzleGame extends FlameGame
       if (comp == null || comp.isInTray || comp.isDragging) continue;
 
       final targetPos = _normalizedToScreen(pState.nx, pState.ny);
-      // [STUCK-DEBUG] 仅在 FINE 时打印逐片更新，避免刷屏；异常时可临时改 INFO
-      if (AppLogger.game.isLoggable(Level.FINE)) {
-        AppLogger.game.fine('[STUCK-DEBUG]  boardXform id=${pState.id} nx=${pState.nx.toStringAsFixed(4)} ny=${pState.ny.toStringAsFixed(4)} -> screen=${targetPos.x.toStringAsFixed(1)},${targetPos.y.toStringAsFixed(1)} scale=${_zoom.toStringAsFixed(2)} isLocked=${comp.isLocked}');
-      }
       comp.position.setFrom(targetPos);
       comp.scale.setAll(_zoom);
     }
@@ -1320,40 +1347,39 @@ class JigsawPuzzleGame extends FlameGame
   /// 3. 托盘中的待拼碎片 -> `_trayPiecePriority`（10）
   /// 4. 吸附且已归位的正确碎片 -> `_solvedPiecePriority`（5，贴底渲染且锁定禁止移动）
   void updatePiecesStateAndPriorities() {
+    // [连通规则] 计算“已就位装配体（连通到边缘）”的碎片集合，仅这些碎片允许锁定不可移动。
+    final planted = PuzzleEngine.computePlantedPieceIds(_boardState);
+    // [一致性] 锁定所用的“吸附就位”判定与 resolveSnap 完全相同（到槽位的欧氏距离 ≤ 当前吸附阈值）。
+    // 原用 isSolved（逐轴 0.035），与欧氏吸附阈值不一致，导致“锁定了却没被吸过去、没绿框、视觉没贴边”
+    // 的状态/视觉脱节。统一后：锁定 ⟺ 真正被吸附就位，且锁定时强制对齐到槽位。
+    final snapDistLock = effectiveSnapDistance();
     for (final pState in _boardState.pieces) {
       final comp = _pieces[pState.id];
       if (comp == null) continue;
 
       if (comp.isDragging || comp == _holdingPiece) {
         comp.priority = _topPriority;
-        // [STUCK-DEBUG] 拖拽中暂不锁定
-        if (AppLogger.game.isLoggable(Level.FINE)) {
-          AppLogger.game.fine('[STUCK-DEBUG] priority-drag id=${pState.id} cluster=${pState.clusterId} r=${pState.r} c=${pState.c}');
-        }
         comp.isLocked = false;
         continue;
       }
 
-      final isPieceSolved = pState.isSolved(rows, cols);
+      // [连通规则] 仅当“邻槽位欧氏距离在吸附阈值内 且 属于边缘长出装配体”时才锁定。
+      final snappedDist = Point(pState.nx, pState.ny)
+          .distanceTo(Point(pState.targetNx(cols), pState.targetNy(rows)));
+      final isPieceSolved =
+          planted.contains(pState.id) && snappedDist <= snapDistLock;
       final wasLocked = comp.isLocked;
-      final tnx = pState.targetNx(cols);
-      final tny = pState.targetNy(rows);
-      final dx = (pState.nx - tnx).abs();
-      final dy = (pState.ny - tny).abs();
       if (isPieceSolved) {
         comp.isLocked = true;
         comp.priority = _solvedPiecePriority;
         comp.isInTray = false;
-        if (!wasLocked || AppLogger.game.isLoggable(Level.FINE)) {
-          AppLogger.game.info('[STUCK-DEBUG] LOCKED id=${pState.id} r=${pState.r} c=${pState.c} cluster=${pState.clusterId} nx=${pState.nx.toStringAsFixed(4)} ny=${pState.ny.toStringAsFixed(4)} target=${tnx.toStringAsFixed(4)},${tny.toStringAsFixed(4)} dxy=${dx.toStringAsFixed(4)},${dy.toStringAsFixed(4)} screen=${comp.position.x.toStringAsFixed(1)},${comp.position.y.toStringAsFixed(1)} zoom=${_zoom.toStringAsFixed(2)} scale=${comp.scale.x.toStringAsFixed(2)} epsPx=${(0.035*boardSize.x*_zoom).toStringAsFixed(1)} piecePx=${pieceSize.x.toStringAsFixed(1)}');
+        comp.scale.setAll(_zoom);
+        // [一致性] 锁定即强制把视觉对齐到正确槽位，确保“锁定 ⟺ 已吸到槽位”。
+        comp.position.setFrom(_normalizedToScreen(pState.nx, pState.ny));
+        if (!wasLocked) {
+          comp.triggerSnapGlow(); // 补绿框（锁定转场）
         }
       } else {
-        if (wasLocked) {
-          AppLogger.game.info('[STUCK-DEBUG] UNLOCKED id=${pState.id} r=${pState.r} c=${pState.c} cluster=${pState.clusterId} nx=${pState.nx.toStringAsFixed(4)} ny=${pState.ny.toStringAsFixed(4)} target=${tnx.toStringAsFixed(4)},${tny.toStringAsFixed(4)} dxy=${dx.toStringAsFixed(4)},${dy.toStringAsFixed(4)}');
-        } else if (AppLogger.game.isLoggable(Level.FINE)) {
-          // 仅 FINE 时打印未锁定细节，避免刷屏
-          AppLogger.game.fine('[STUCK-DEBUG] free id=${pState.id} r=${pState.r} c=${pState.c} cluster=${pState.clusterId} isInTray=${comp.isInTray} dxy=${dx.toStringAsFixed(4)},${dy.toStringAsFixed(4)}');
-        }
         comp.isLocked = false;
         if (comp.isInTray) {
           comp.priority = _trayPiecePriority;
@@ -1438,26 +1464,6 @@ class JigsawPuzzleGame extends FlameGame
     final clusterPieces =
         _pieces.values.where((p) => p.clusterId == piece.clusterId).toList();
     AppLogger.game.info('dragEnd piece=${piece.id} cluster=${piece.clusterId} size=${clusterPieces.length} inTrayArea=$inTrayArea pos=${piece.position.x.toStringAsFixed(1)},${piece.position.y.toStringAsFixed(1)} isTabletop=$isTabletop');
-    // [STUCK-DEBUG] 诊断：记录拖动结束时全盘状态，帮助定位异常吸附
-    {
-      final zoomPxSnap = (PuzzleEngine.calculateSnapThreshold(rows, cols) * boardSize.x * _zoom).toStringAsFixed(1);
-      final zoomPxEps = (0.035 * boardSize.x * _zoom).toStringAsFixed(1);
-      AppLogger.game.info('[STUCK-DEBUG] dragEnd-detail dragged=${piece.id} r=${piece.r} c=${piece.c} zoom=${_zoom.toStringAsFixed(2)} pan=$_panOffset board=${boardSize.x.toStringAsFixed(1)}x${boardSize.y.toStringAsFixed(1)} piece=${pieceSize.x.toStringAsFixed(1)}x${pieceSize.y.toStringAsFixed(1)} snapPx=$zoomPxSnap epsPx=$zoomPxEps trayY=${trayPosition.y.toStringAsFixed(1)}');
-      for (final cp in clusterPieces) {
-        final st = _boardState.pieceById(cp.id);
-        final tnx = cp.c / cols;
-        final tny = cp.r / rows;
-        final outTmp = [0.0, 0.0];
-        _screenToNormalized(cp.position, outTmp);
-        final curNx = outTmp[0];
-        final curNy = outTmp[1];
-        final dist = Point(curNx, curNy).distanceTo(Point(tnx, tny));
-        final snapD = PuzzleEngine.calculateSnapThreshold(rows, cols);
-        AppLogger.game.info('[STUCK-DEBUG]  clusterMember id=${cp.id} r=${cp.r} c=${cp.c} cluster=${cp.clusterId} isInTray=${cp.isInTray} isLocked=${cp.isLocked} isFiltered=${cp.isFilteredOut} screen=${cp.position.x.toStringAsFixed(1)},${cp.position.y.toStringAsFixed(1)} curNxNy=${curNx.toStringAsFixed(4)},${curNy.toStringAsFixed(4)} target=${tnx.toStringAsFixed(4)},${tny.toStringAsFixed(4)} dist=${dist.toStringAsFixed(4)} snapDist=${snapD.toStringAsFixed(4)} distPx=${(dist*boardSize.x*_zoom).toStringAsFixed(1)}');
-        // 同步打印该成员 BoardState 中的 nx/ny（落盘前旧值）
-        AppLogger.game.info('[STUCK-DEBUG]   stateNxNy id=${st.id} state=${st.nx.toStringAsFixed(4)},${st.ny.toStringAsFixed(4)} stateTarget=${st.targetNx(cols).toStringAsFixed(4)},${st.targetNy(rows).toStringAsFixed(4)} stateDist=${Point(st.nx, st.ny).distanceTo(Point(tnx, tny)).toStringAsFixed(4)} isSolved=${st.isSolved(rows, cols)}');
-      }
-    }
 
     // 1. 如果拖回托盘区域且为单块碎片 -> 就近插入托盘槽位并平滑吸附就位，不触发棋盘吸附
     if (!isTabletop && inTrayArea && clusterPieces.length == 1) {
@@ -1504,43 +1510,13 @@ class JigsawPuzzleGame extends FlameGame
 
     final prevState = _boardState;
     AppLogger.game.fine('dragEnd resolveSnap entry piece=${piece.id} onBoard=${onBoardPieceIds.length}');
-    // [STUCK-DEBUG] 打印所有 onBoard 碎片与被拖拽碎片的相对位置，供排查异常吸附
-    {
-      final draggedSt = _boardState.pieceById(piece.id);
-      for (final oid in onBoardPieceIds) {
-        if (oid == piece.id) continue;
-        final other = _boardState.pieceById(oid);
-        final dr = other.r - draggedSt.r;
-        final dc = other.c - draggedSt.c;
-        if ((dr.abs() + dc.abs()) == 1) {
-          final expectedDx = dc / cols;
-          final expectedDy = dr / rows;
-          final actualDx = other.nx - draggedSt.nx;
-          final actualDy = other.ny - draggedSt.ny;
-          final off = Point(actualDx, actualDy).distanceTo(Point(expectedDx, expectedDy));
-          final snapD = PuzzleEngine.calculateSnapThreshold(rows, cols);
-          AppLogger.game.info('[STUCK-DEBUG] neighborCheck dragged=${piece.id} other=$oid r=${other.r} c=${other.c} dr=$dr dc=$dc expected=${expectedDx.toStringAsFixed(4)},${expectedDy.toStringAsFixed(4)} actual=${actualDx.toStringAsFixed(4)},${actualDy.toStringAsFixed(4)} off=${off.toStringAsFixed(4)} snapDist=${snapD.toStringAsFixed(4)} snapPx=${(snapD*boardSize.x*_zoom).toStringAsFixed(1)}');
-        }
-      }
-    }
     final result = PuzzleEngine.resolveSnap(
       state: _boardState,
       draggedPieceId: piece.id,
       onBoardPieceIds: onBoardPieceIds,
+      customSnapDistance: effectiveSnapDistance(),
     );
     AppLogger.game.info('dragEnd resolveSnap result piece=${piece.id} didSnap=${result.didSnap} didMerge=${result.didMerge} completed=${result.isCompleted} solved=${result.state.isSolved} affected=${result.affectedPieceIds.length}');
-    // [STUCK-DEBUG] 打印受影响集合详情
-    if (result.affectedPieceIds.isNotEmpty) {
-      for (final aid in result.affectedPieceIds) {
-        final st = result.state.pieceById(aid);
-        final tnx = st.c / cols;
-        final tny = st.r / rows;
-        final eps = 0.035;
-        final dx = (st.nx - tnx).abs();
-        final dy = (st.ny - tny).abs();
-        AppLogger.game.info('[STUCK-DEBUG] affected id=$aid r=${st.r} c=${st.c} nx=${st.nx.toStringAsFixed(4)} ny=${st.ny.toStringAsFixed(4)} target=${tnx.toStringAsFixed(4)},${tny.toStringAsFixed(4)} dxy=${dx.toStringAsFixed(4)},${dy.toStringAsFixed(4)} isSolved=${st.isSolved(rows, cols)} cluster=${st.clusterId} eps=$eps');
-      }
-    }
 
     if (result.didSnap || result.didMerge || result.isCompleted || _boardState.isSolved) {
       _boardState = result.state;
@@ -1654,20 +1630,6 @@ class JigsawPuzzleGame extends FlameGame
   /// Organizes all unlinked/unplaced floating pieces cleanly back into the tray or scattered table.
   void organizeTray() {
     AppLogger.game.info('organizeTray isTabletop=$isTabletop solved=$solvedCount zoom=${_zoom.toStringAsFixed(2)} pan=$_panOffset board=${boardSize.x.toStringAsFixed(1)}x${boardSize.y.toStringAsFixed(1)}');
-    // [STUCK-DEBUG] 打印扫把判定前全盘详情
-    {
-      AppLogger.game.info('[STUCK-DEBUG] organizeTray-enter rows=$rows cols=$cols snapDist=${PuzzleEngine.calculateSnapThreshold(rows, cols).toStringAsFixed(4)} snapPx=${(PuzzleEngine.calculateSnapThreshold(rows, cols)*boardSize.x*_zoom).toStringAsFixed(1)} epsPx=${(0.035*boardSize.x*_zoom).toStringAsFixed(1)} isBorderFilter=$_borderFilterActive');
-      for (final p in _pieces.values) {
-        final st = _boardState.pieceById(p.id);
-        final tnx = p.c / cols;
-        final tny = p.r / rows;
-        final dx = (st.nx - tnx).abs();
-        final dy = (st.ny - tny).abs();
-        final solved = st.isSolved(rows, cols);
-        final cSize = _pieces.values.where((o) => o.clusterId == p.clusterId).length;
-        AppLogger.game.info('[STUCK-DEBUG]  orgCheck id=${p.id} r=${p.r} c=${p.c} cluster=${p.clusterId} cSize=$cSize isInTray=${p.isInTray} isLocked=${p.isLocked} isFiltered=${p.isFilteredOut} nx=${st.nx.toStringAsFixed(4)} ny=${st.ny.toStringAsFixed(4)} target=${tnx.toStringAsFixed(4)},${tny.toStringAsFixed(4)} dxy=${dx.toStringAsFixed(4)},${dy.toStringAsFixed(4)} isSolved=$solved screen=${p.position.x.toStringAsFixed(1)},${p.position.y.toStringAsFixed(1)} scale=${p.scale.x.toStringAsFixed(2)}');
-      }
-    }
     if (isTabletop) {
       final slots = _getTabletopScatterSlots(totalPieces);
       var slotIdx = 0;
@@ -1739,25 +1701,6 @@ class JigsawPuzzleGame extends FlameGame
     updatePieceVisibility(animateTray: true);
     updatePiecesStateAndPriorities();
     onStateUpdated?.call();
-    // [STUCK-DEBUG] 扫把执行后未被召回的棋盘孤块（很可能是异常粘住的）
-    {
-      for (final p in _pieces.values) {
-        if (!p.isInTray && !p.isLocked && !p.isFilteredOut) {
-          final st = _boardState.pieceById(p.id);
-          final cSize = _pieces.values.where((o) => o.clusterId == p.clusterId).length;
-          final isSolved = st.isSolved(rows, cols);
-          if (!isSolved && cSize == 1) {
-            AppLogger.game.info('[STUCK-DEBUG] organizeTray-leftover BOARD single id=${p.id} r=${p.r} c=${p.c} shouldHaveBeenTrayButRemains isInTray=${p.isInTray} pos=${p.position.x.toStringAsFixed(1)},${p.position.y.toStringAsFixed(1)}');
-          } else if (isSolved) {
-            final tnx = p.c / cols;
-            final tny = p.r / rows;
-            AppLogger.game.info('[STUCK-DEBUG] organizeTray-skipped isSolved id=${p.id} r=${p.r} c=${p.c} nx=${st.nx.toStringAsFixed(4)} target=${tnx.toStringAsFixed(4)},${tny.toStringAsFixed(4)} d=${(st.nx-tnx).abs().toStringAsFixed(4)},${(st.ny-tny).abs().toStringAsFixed(4)}');
-          } else if (cSize > 1) {
-            AppLogger.game.info('[STUCK-DEBUG] organizeTray-skipped cluster id=${p.id} cluster=${p.clusterId} cSize=$cSize r=${p.r} c=${p.c} isLocked=${p.isLocked}');
-          }
-        }
-      }
-    }
   }
 
   /// Serializes current board state into Snapshot JSON string.
@@ -1888,6 +1831,7 @@ class JigsawPuzzleGame extends FlameGame
       state: _boardState,
       draggedPieceId: targetPieceId,
       onBoardPieceIds: onBoardPieceIds,
+      customSnapDistance: effectiveSnapDistance(),
     );
 
     _boardState = result.state;

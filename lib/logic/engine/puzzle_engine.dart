@@ -17,7 +17,7 @@ class PuzzleEngine {
   /// 【选值依据】：
   /// 48% 是经过大量手感测试的黄金手感比例：既能保证玩家拖到目标附近时有清晰痛快的“自动就位吸附感”，
   /// 又不会在密集拖动时误触发旁边不相干的槽位。
-  static const double defaultSnapRatio = 0.48;
+  static const double defaultSnapRatio = 0.40;
 
   /// 生成打散后的初始拼图棋盘状态（Scatter Pieces）。
   ///
@@ -80,6 +80,66 @@ class PuzzleEngine {
     return min(pieceW, pieceH) * ratio;
   }
 
+  /// 判断 [pieceId] 是否处于棋盘边缘。
+  static bool isBorderPiece(int rows, int cols, int r, int c) =>
+      r == 0 || r == rows - 1 || c == 0 || c == cols - 1;
+
+  /// 返回“已就位装配体”所覆盖的碎片 id 集合（连通到棋盘边缘的吸附片）。
+  ///
+  /// 【现实拼图/WebJigex 连通规则】：以 4-连通对“已正确就位（isSolved）”的碎片分连通分量，
+  /// 当某连通分量内含**至少一个边缘碎片**（即该装配体真正触碰并长出棋盘边框）时，
+  /// 该分量的所有成员视为“已植入/不可移动”；否则（空中孤岛）保持游离可拖动。
+  static Set<int> computePlantedPieceIds(PuzzleBoardState state) {
+    final rows = state.rows, cols = state.cols;
+    final snapped = state.pieces.where((p) => p.isSolved(rows, cols)).toList();
+    final byCell = {for (final p in snapped) '${p.r},${p.c}': p.id};
+    const offsets = [( -1, 0), (1, 0), (0, -1), (0, 1)];
+    final planted = <int>{};
+    final visited = <int>{};
+    for (final seed in snapped) {
+      if (visited.contains(seed.id)) continue;
+      // 对一个连通分量做 BFS
+      final component = <int>{};
+      final queue = <int>[seed.id];
+      visited.add(seed.id);
+      var qi = 0;
+      var touchesBorder = false;
+      while (qi < queue.length) {
+        final id = queue[qi++];
+        final cur = state.pieceById(id);
+        component.add(id);
+        if (isBorderPiece(rows, cols, cur.r, cur.c)) touchesBorder = true;
+        for (final (dr, dc) in offsets) {
+          final nid = byCell['${cur.r + dr},${cur.c + dc}'];
+          if (nid != null && visited.add(nid)) queue.add(nid);
+        }
+      }
+      if (touchesBorder) planted.addAll(component);
+    }
+    return planted;
+  }
+
+  /// 判断目标集群是否“可以被吸附”到棋盘槽位（连通到已就位装配体）。
+  ///
+  /// 允许吸附需满足：集群含**边缘碎片**（触边），或集群某成员的目标正交邻格
+  /// 已被“已植入装配体”占据（能顺势接上边框长出的装配体）。孤立内部碎片/岛屿
+  /// 既不在边缘也不邻接已植入装配体 → 拒绝吸附，保持自由拖动（对应 WebJigex 的“无邻居不吸附”）。
+  static bool canSnapCluster(PuzzleBoardState state, Iterable<PieceState> clusterPieces) {
+    final planted = computePlantedPieceIds(state);
+    const offsets = [( -1, 0), (1, 0), (0, -1), (0, 1)];
+    for (final p in clusterPieces) {
+      if (isBorderPiece(state.rows, state.cols, p.r, p.c)) return true;
+      for (final (dr, dc) in offsets) {
+        final nr = p.r + dr, nc = p.c + dc;
+        if (nr < 0 || nr >= state.rows || nc < 0 || nc >= state.cols) continue;
+        for (final q in state.pieces) {
+          if (q.r == nr && q.c == nc && planted.contains(q.id)) return true;
+        }
+      }
+    }
+    return false;
+  }
+
   /// 在玩家松手释放碎片后，执行吸附计算与集群合并（Snap & Cluster Merging）。
   ///
   /// 【核心两阶段吸附判定】：
@@ -123,18 +183,23 @@ class PuzzleEngine {
     final affectedIds = <int>{...clusterPieces.map((p) => p.id)};
 
     // 1. 检查是否吸附到棋盘槽位
+    // [连通规则] 先判定整簇是否可与“已就位装配体（连通到边缘）”接上。
+    // 未连通（孤立内部碎片/岛屿）的集群禁止吸附到槽位，保持自由可拖动 →
+    // 不仅修复“孤立片位正却锁死”，也符合 WebJigex“无邻居不吸附”的手感。
+    final snapAllowed = canSnapCluster(state, clusterPieces);
     for (final piece in clusterPieces) {
       if (state.rotationEnabled && piece.rot % 4 != 0) {
-        AppLogger.engine.info('[STUCK-DEBUG] BoardSnap SKIP rotation piece=${piece.id} r=${piece.r} c=${piece.c} rot=${piece.rot}');
         continue; // 角度未摆正无法吸附进槽位
       }
       final targetNx = piece.targetNx(state.cols);
       final targetNy = piece.targetNy(state.rows);
       final dist = Point(piece.nx, piece.ny).distanceTo(Point(targetNx, targetNy));
-      // [STUCK-DEBUG] 无论是否吸附都打印，排查阈值是否过大
-      AppLogger.engine.info('[STUCK-DEBUG] BoardSnap CHECK piece=${piece.id} r=${piece.r} c=${piece.c} nx=${piece.nx.toStringAsFixed(4)} ny=${piece.ny.toStringAsFixed(4)} target=${targetNx.toStringAsFixed(4)},${targetNy.toStringAsFixed(4)} dist=${dist.toStringAsFixed(4)} snapDist=${snapDist.toStringAsFixed(4)} pieceW=${(1.0/state.cols).toStringAsFixed(4)} pieceH=${(1.0/state.rows).toStringAsFixed(4)} ratio=${(snapDist / (1.0/state.cols)).toStringAsFixed(3)}');
 
       if (dist <= snapDist) {
+        // 集群未与边缘装配体连通 → 拒绝吸附到槽位，保持游离可移动（仍可走阶段二与邻居试合并）
+        if (!snapAllowed) {
+          break;
+        }
         // 计算平移差量并移动整个集群
         final dx = targetNx - piece.nx;
         final dy = targetNy - piece.ny;
@@ -155,13 +220,8 @@ class PuzzleEngine {
             final dx = (p.nx - tnx).abs();
             final dy = (p.ny - tny).abs();
             if (dx <= 0.05 && dy <= 0.05) {
-              if (p.id != piece.id) {
-                AppLogger.engine.info('[STUCK-DEBUG] BoardSnap LOCK-CASCADE id=${p.id} r=${p.r} c=${p.c} nx=${p.nx.toStringAsFixed(4)} target=${tnx.toStringAsFixed(4)},${tny.toStringAsFixed(4)} dxy=${dx.toStringAsFixed(4)},${dy.toStringAsFixed(4)} within 0.05 -> SNAP TO TARGET (may cause false lock)');
-              }
               lockCount++;
               return p.copyWith(nx: tnx, ny: tny);
-            } else {
-              AppLogger.engine.info('[STUCK-DEBUG] BoardSnap NOT-LOCK id=${p.id} r=${p.r} c=${p.c} dxy=${dx.toStringAsFixed(4)},${dy.toStringAsFixed(4)} >0.05 keeps nx=${p.nx.toStringAsFixed(4)}');
             }
           }
           return p;
@@ -199,8 +259,6 @@ class PuzzleEngine {
         final actualDy = pB.ny - pA.ny;
 
         final offsetError = Point(actualDx, actualDy).distanceTo(Point(expectedDx, expectedDy));
-        // [STUCK-DEBUG] 打印每个潜在邻接对的误差，帮助定位放大后误合并
-        AppLogger.engine.info('[STUCK-DEBUG] ClusterMerge TRY pA=${pA.id}(${pA.r},${pA.c}) clusterA=$clusterId nx=${pA.nx.toStringAsFixed(4)} pB=${pB.id}(${pB.r},${pB.c}) clusterB=${pB.clusterId} nx=${pB.nx.toStringAsFixed(4)} dr=$dr dc=$dc expected=${expectedDx.toStringAsFixed(4)},${expectedDy.toStringAsFixed(4)} actual=${actualDx.toStringAsFixed(4)},${actualDy.toStringAsFixed(4)} off=${offsetError.toStringAsFixed(4)} snapDist=${snapDist.toStringAsFixed(4)}');
 
         if (offsetError <= snapDist) {
           final alignDx = actualDx - expectedDx;
@@ -343,12 +401,9 @@ class PuzzleEngine {
             final countB = result.where((p) => p.clusterId == pB.clusterId).length;
             final sourceId = countB >= countA ? pA.clusterId : pB.clusterId;
             final targetId = countB >= countA ? pB.clusterId : pA.clusterId;
-            AppLogger.engine.info('[STUCK-DEBUG] CascadeMerge MERGE pA=${pA.id} cA=$countA pB=${pB.id} cB=$countB dr=$dr dc=$dc expected=${expectedDx.toStringAsFixed(4)},${expectedDy.toStringAsFixed(4)} actual=${actualDx.toStringAsFixed(4)},${actualDy.toStringAsFixed(4)} err=${dxErr.toStringAsFixed(4)},${dyErr.toStringAsFixed(4)} eps=$epsilon src=$sourceId -> tgt=$targetId');
             result = result.map((p) => p.clusterId == sourceId ? p.copyWith(clusterId: targetId) : p).toList();
             changed = true;
             break;
-          } else if (AppLogger.engine.isLoggable(Level.FINE)) {
-            AppLogger.engine.fine('[STUCK-DEBUG] CascadeMerge noMerge pA=${pA.id} pB=${pB.id} err=${dxErr.toStringAsFixed(4)},${dyErr.toStringAsFixed(4)} eps=$epsilon');
           }
         }
         if (changed) break;
