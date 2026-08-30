@@ -53,6 +53,7 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
   final _repo = GameRepository.instance;
   JigsawPuzzleGame? _game;
   ui.Image? _gameImage;
+  bool _gameFadeIn = false;
 
   bool _isSolved = false;
   bool _isPaused = false;
@@ -225,6 +226,14 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
     if (mounted) {
       setState(() {
         _game = game;
+        _gameFadeIn = false;
+      });
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          setState(() {
+            _gameFadeIn = true;
+          });
+        }
       });
     }
   }
@@ -1088,8 +1097,13 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
                           onPointerCancel: _onPointerCancel,
                           onPointerSignal: _onPointerSignal,
                           behavior: HitTestBehavior.translucent,
-                          child: ClipRect(
-                            child: GameWidget(game: _game!),
+                          child: AnimatedOpacity(
+                            opacity: _gameFadeIn ? 1.0 : 0.0,
+                            duration: const Duration(milliseconds: 300),
+                            curve: Curves.easeOutCubic,
+                            child: ClipRect(
+                              child: GameWidget(game: _game!),
+                            ),
                           ),
                         ),
                       )

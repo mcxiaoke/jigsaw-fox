@@ -198,5 +198,37 @@ void main() {
       expect(info, isNotNull, reason: 'Free placement with elapsed >= 5s should be resumable');
       expect(info!.percent, 0);
     });
+
+    test('Free floating pieces on board maintain accurate normalized coords on resume', () async {
+      const cid = 'main:005';
+      final freeFloatingState = PuzzleBoardState(
+        canonicalId: cid,
+        difficultyKey: '3x3',
+        rows: 3,
+        cols: 3,
+        seed: 42,
+        elapsedSeconds: 20,
+        pieces: [
+          // Piece 0 at center (free floating on board, not snapped)
+          const PieceState(id: 0, r: 0, c: 0, nx: 0.42, ny: 0.48, clusterId: 0),
+          // Piece 1 in tray (ny > 1.10)
+          const PieceState(id: 1, r: 0, c: 1, nx: 0.10, ny: 1.45, clusterId: 1),
+          // Remaining pieces
+          ...List.generate(7, (i) => PieceState(id: i + 2, r: (i + 2) ~/ 3, c: (i + 2) % 3, nx: 0.2, ny: 1.5, clusterId: i + 2)),
+        ],
+      );
+
+      await SnapshotStore.instance.save(freeFloatingState);
+      final loaded = await SnapshotStore.instance.load(cid, '3x3');
+      expect(loaded, isNotNull);
+      final p0 = loaded!.pieceById(0);
+      expect(p0.nx, closeTo(0.42, 0.0001));
+      expect(p0.ny, closeTo(0.48, 0.0001));
+      expect(p0.nx >= -0.05 && p0.nx <= 1.05 && p0.ny >= -0.05 && p0.ny <= 1.05, isTrue,
+          reason: 'Floating piece on board is within valid board domain');
+
+      final p1 = loaded.pieceById(1);
+      expect(p1.ny > 1.10, isTrue, reason: 'Piece 1 is properly recognized as in tray');
+    });
   });
 }

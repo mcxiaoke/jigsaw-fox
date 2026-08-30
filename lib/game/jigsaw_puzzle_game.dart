@@ -429,12 +429,15 @@ class JigsawPuzzleGame extends FlameGame
       (isTabletop ? size.y : trayPosition.y) - pieceSize.y - 8.0,
     );
 
+    // 仅针对在棋盘外部/散落区域的游离碎片进行视口安全收拢，处于合法棋盘范围内的碎片随棋盘整体自适应，严禁误 Clamp
     final freeComponents = _pieces.values
-        .where((p) =>
-            !p.isInTray &&
-            !p.isLocked &&
-            p != _holdingPiece &&
-            !p.isDragging)
+        .where((p) {
+          if (p.isInTray || p.isLocked || p == _holdingPiece || p.isDragging) return false;
+          final pState = _boardState.pieceById(p.id);
+          // 若处于合法棋盘归一化空间内，受棋盘矩阵直接保护
+          final isOnBoardDomain = (pState.nx >= -0.05 && pState.nx <= 1.05 && pState.ny >= -0.05 && pState.ny <= 1.05);
+          return !isOnBoardDomain;
+        })
         .toList();
 
     final clusterGroups = <int, List<PuzzlePieceComponent>>{};
@@ -1346,7 +1349,7 @@ class JigsawPuzzleGame extends FlameGame
   /// 2. 棋盘上未归位/自由合并的碎片 -> `_boardUnsolvedPriority`（20，浮于已归位底板碎片上方）
   /// 3. 托盘中的待拼碎片 -> `_trayPiecePriority`（10）
   /// 4. 吸附且已归位的正确碎片 -> `_solvedPiecePriority`（5，贴底渲染且锁定禁止移动）
-  void updatePiecesStateAndPriorities() {
+  void updatePiecesStateAndPriorities({bool triggerGlow = false}) {
     // [连通规则] 计算“已就位装配体（连通到边缘）”的碎片集合，仅这些碎片允许锁定不可移动。
     final planted = PuzzleEngine.computePlantedPieceIds(_boardState);
     // [一致性] 锁定所用的“吸附就位”判定与 resolveSnap 完全相同（到槽位的欧氏距离 ≤ 当前吸附阈值）。
@@ -1376,8 +1379,8 @@ class JigsawPuzzleGame extends FlameGame
         comp.scale.setAll(_zoom);
         // [一致性] 锁定即强制把视觉对齐到正确槽位，确保“锁定 ⟺ 已吸到槽位”。
         comp.position.setFrom(_normalizedToScreen(pState.nx, pState.ny));
-        if (!wasLocked) {
-          comp.triggerSnapGlow(); // 补绿框（锁定转场）
+        if (!wasLocked && triggerGlow) {
+          comp.triggerSnapGlow(); // 仅显式请求时补绿框（避免读档恢复误闪）
         }
       } else {
         comp.isLocked = false;
@@ -1775,7 +1778,8 @@ class JigsawPuzzleGame extends FlameGame
       comp.isInTray = !isOnBoard;
 
       final targetScreenPos = _normalizedToScreen(p.nx, p.ny);
-      comp.animateTo(targetScreenPos);
+      comp.clearActiveEffects();
+      comp.position.setFrom(targetScreenPos);
       if (isOnBoard) {
         comp.scale.setAll(_zoom);
       } else {
