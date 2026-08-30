@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
+import '../../services/app_logger.dart';
 
 /// 任务调度引擎与并发限流器 (Engine Task Queue)
 ///
@@ -57,6 +58,7 @@ class EngineTaskQueue {
     // 1. Single Flight 检查：如果相同 Key 已在处理中，直接复用其 Future
     final inFlight = _inFlightMap[key];
     if (inFlight != null) {
+      AppLogger.imageCache.fine('EngineTaskQueue single-flight hit key=$key');
       return inFlight as Future<T>;
     }
 
@@ -87,12 +89,16 @@ class EngineTaskQueue {
   }
 
   Future<void> _executeTask<T>(_QueuedTask<T> item) async {
+    AppLogger.imageCache.fine('EngineTaskQueue start key=${item.key} running=$_runningCount queued=${_queue.length}');
+    final sw = Stopwatch()..start();
     try {
       final result = await item.task();
+      AppLogger.imageCache.fine('EngineTaskQueue success key=${item.key} ${sw.elapsedMilliseconds}ms');
       if (!item.completer.isCompleted) {
         item.completer.complete(result);
       }
     } catch (e, stack) {
+      AppLogger.imageCache.warning('EngineTaskQueue failed key=${item.key} ${sw.elapsedMilliseconds}ms', e, stack);
       if (!item.completer.isCompleted) {
         item.completer.completeError(e, stack);
       }

@@ -11,6 +11,7 @@ import 'logic/cache/image_cache_manager.dart';
 import 'logic/content/app_content.dart';
 import 'logic/download_manager.dart';
 import 'pages/main_screen.dart';
+import 'services/app_logger.dart';
 import 'services/sound_service.dart';
 
 /// Global Windows WebViewEnvironment instance for InAppWebView
@@ -19,9 +20,14 @@ WebViewEnvironment? globalWebViewEnvironment;
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
+  // 0. 日志系统最先初始化（后续所有模块日志均可落盘）
+  await AppLogger.init();
+  AppLogger.system.info('App launch starting');
+
   // Tune Flutter engine global ImageCache to optimize memory and prevent OOM
   PaintingBinding.instance.imageCache.maximumSize = 500;
   PaintingBinding.instance.imageCache.maximumSizeBytes = 150 * 1024 * 1024; // 150 MB
+  AppLogger.system.info('ImageCache tuned maxSize=500 maxBytes=150MB');
 
   // Initialize WebViewEnvironment on Windows desktop to prevent blank screen and crash
   if (!kIsWeb && defaultTargetPlatform == TargetPlatform.windows) {
@@ -36,17 +42,28 @@ void main() async {
           userDataFolder: envDir.path,
         ),
       );
-      debugPrint('[WebView:Windows:Init] Global WebViewEnvironment initialized successfully.');
+      AppLogger.webview.info('Global WebViewEnvironment initialized dir=${envDir.path}');
     } catch (e, stack) {
-      debugPrint('[WebView:Windows:Error] Failed to initialize WebViewEnvironment: $e\n$stack');
+      AppLogger.webview.severe('Failed to initialize WebViewEnvironment', e, stack);
     }
   }
 
+  final sw = Stopwatch()..start();
   await ImageCacheManager.instance.init();
+  AppLogger.system.info('ImageCacheManager init done ${sw.elapsedMilliseconds}ms');
+  sw.reset();
   await GameRepository.instance.init();
+  AppLogger.system.info('GameRepository init done ${sw.elapsedMilliseconds}ms');
+  sw.reset();
   await DownloadManager.instance.init();
+  AppLogger.system.info('DownloadManager init done ${sw.elapsedMilliseconds}ms');
+  sw.reset();
   await AppContent.instance.init();
+  AppLogger.system.info('AppContent init done ${sw.elapsedMilliseconds}ms');
+  sw.reset();
   await SoundService.I.init();
+  AppLogger.system.info('SoundService init done ${sw.elapsedMilliseconds}ms total=${sw.elapsedMilliseconds}ms');
+  AppLogger.system.info('App launch completed runApp');
   runApp(const JigsawPuzzleApp());
 }
 

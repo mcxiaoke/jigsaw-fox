@@ -302,6 +302,54 @@ void main() {
     }
   });
 
+  test('复现：棋盘上网格相邻的两块自由碎片松手即被自动合并成集群，且扫把无法归位', () async {
+    final img = await _decodePng();
+    final game = JigsawPuzzleGame(
+      image: img,
+      rows: 3,
+      cols: 3,
+      onSolved: () {},
+    );
+    game.onGameResize(Vector2(400, 800));
+    await game.onLoad();
+
+    // 取两块网格相邻的自由碎片 ((0,0) 与 (0,1))，都脱离托盘放到棋盘上，
+    // 归一化相对偏移恰好满足“右邻一格”(1/cols=1/3)，但都不落在自身正确槽位上。
+    final a =
+        game.children.whereType<PuzzlePieceComponent>().firstWhere((p) => p.id == 0);
+    final b =
+        game.children.whereType<PuzzlePieceComponent>().firstWhere((p) => p.id == 1);
+    const anX = 0.50, anY = 0.55;
+    const bnX = anX + 1 / 3; // cols=3 → 1/cols = 1/3，保持网格对齐
+    const bnY = anY;
+
+    for (final (p, nx, ny) in [(a, anX, anY), (b, bnX, bnY)]) {
+      p.isInTray = false;
+      p.scale.setAll(game.zoom);
+      p.position.setFrom(game.normalizedToScreen(nx, ny));
+    }
+
+    // 松手：触发 resolveSnap，两块被并入同一个 clusterId（之后无法拆解）
+    game.handlePieceDragEnd(a);
+    expect(a.clusterId, equals(b.clusterId), reason: '棋盘上的网格邻居被自动合并成集群');
+
+    // 两块都未吸附到正确槽位 → 既不锁定也未回托盘，是“游离在棋盘上的不可拆集群”
+    expect(game.boardState.pieceById(a.id).isSolved(3, 3), isFalse);
+    expect(game.boardState.pieceById(b.id).isSolved(3, 3), isFalse);
+
+    // 即使随后放大到 3 倍，集群依旧保持合并（放大不是触发条件，只是放大后更容易发生）
+    game.zoomAt(Vector2(200, 300), 2.0);
+    expect(game.zoom, closeTo(3.0, 0.01));
+    expect(a.clusterId, equals(b.clusterId));
+
+    // 扫把一键整理：organizeTray 只回托盘 clusterSize==1 的游离碎片，
+    // 该合并集群 (clusterSize==2) 被跳过 → 复现“碎片粘在棋盘上且扫把也归不了位”
+    game.organizeTray();
+    game.organizeTray(); // 连点两次依旧无效
+    expect(a.isInTray, isFalse, reason: '集群碎片未被扫把归位 (organizeTray 跳过 clusterSize>1)');
+    expect(b.isInTray, isFalse, reason: '集群碎片未被扫把归位 (organizeTray 跳过 clusterSize>1)');
+  });
+
   test('已吸附归位的碎片锁定不可移动，且层级 Priority 为底层 (5)', () async {
     final img = await _decodePng();
     final game = JigsawPuzzleGame(

@@ -4,6 +4,7 @@ import 'package:path/path.dart' as p;
 import '../models/canonical_id.dart';
 import '../models/puzzle_level_item.dart';
 import '../network/content_http_client.dart';
+import '../../../services/app_logger.dart';
 
 /// 每日挑战关卡管线 (按月 Zip 下载解压 + 零元数据日期推导 + 客户端时间锁)
 class DailyContentPipeline {
@@ -25,19 +26,26 @@ class DailyContentPipeline {
   }) async {
     final monthDir = Directory(p.join(dailyStorageBaseDir, yyyyMm));
     if (monthDir.existsSync() && monthDir.listSync().isNotEmpty) {
+      AppLogger.daily.fine('ensureMonthReady $yyyyMm already ready files=${monthDir.listSync().length}');
       return true;
     }
 
-    if (zipUrlPattern.isEmpty) return false;
+    if (zipUrlPattern.isEmpty) {
+      AppLogger.daily.warning('ensureMonthReady empty zipUrlPattern for $yyyyMm');
+      return false;
+    }
     final zipUrl = zipUrlPattern.replaceAll('{YYYYMM}', yyyyMm);
+    AppLogger.daily.info('ensureMonthReady $yyyyMm url=${AppLogger.sanitizeUrl(zipUrl)}');
 
     final tempZipPath = p.join(dailyStorageBaseDir, 'temp_${yyyyMm}_${DateTime.now().millisecondsSinceEpoch}.zip');
     final tempExtractDir = Directory(p.join(dailyStorageBaseDir, 'temp_extract_$yyyyMm'));
 
     try {
       // 1. 下载月度 Zip
+      AppLogger.daily.info('Downloading daily zip $yyyyMm');
       final zipFile = await _httpClient.downloadFile(zipUrl, tempZipPath);
       final bytes = await zipFile.readAsBytes();
+      AppLogger.daily.info('Downloaded daily zip $yyyyMm bytes=${bytes.length}');
 
       // 2. 解压到临时目录
       final archive = ZipDecoder().decodeBytes(bytes);
@@ -46,14 +54,17 @@ class DailyContentPipeline {
       }
       tempExtractDir.createSync(recursive: true);
 
+      var extracted = 0;
       for (final file in archive) {
         final filename = p.basename(file.name);
         // 过滤掉 MacOS 隐藏文件和目录项
         if (file.isFile && _dailyFileRegex.hasMatch(filename)) {
           final outFile = File(p.join(tempExtractDir.path, filename));
           await outFile.writeAsBytes(file.content as List<int>, flush: true);
+          extracted++;
         }
       }
+      AppLogger.daily.info('Extracted $extracted files for $yyyyMm to ${AppLogger.sanitizePath(tempExtractDir.path)}');
 
       // 3. 移动/重命名到正式目录
       if (monthDir.existsSync()) {
@@ -65,8 +76,10 @@ class DailyContentPipeline {
       if (zipFile.existsSync()) {
         zipFile.deleteSync();
       }
+      AppLogger.daily.info('ensureMonthReady success $yyyyMm extracted=$extracted');
       return true;
-    } catch (_) {
+    } catch (e, st) {
+      AppLogger.daily.severe('ensureMonthReady failed $yyyyMm url=${AppLogger.sanitizeUrl(zipUrl)}', e, st);
       // 异常清理残留
       if (tempExtractDir.existsSync()) {
         try {

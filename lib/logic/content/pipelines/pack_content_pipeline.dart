@@ -4,6 +4,7 @@ import 'dart:math';
 import 'package:archive/archive.dart';
 import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
+import '../../../services/app_logger.dart';
 import '../models/canonical_id.dart';
 import '../models/puzzle_level_item.dart';
 import '../models/puzzle_pack_item.dart';
@@ -29,8 +30,10 @@ class PackContentPipeline {
     if (!baseDir.existsSync()) {
       baseDir.createSync(recursive: true);
       packsNotifier.value = const [];
+      AppLogger.pack.info('loadAllPacks base dir created empty ${AppLogger.sanitizePath(packsBaseDir)}');
       return const [];
     }
+    AppLogger.pack.fine('loadAllPacks scanning ${AppLogger.sanitizePath(packsBaseDir)}');
 
     final packs = <PuzzlePackItem>[];
     final subDirs = baseDir.listSync().whereType<Directory>();
@@ -47,8 +50,8 @@ class PackContentPipeline {
               ? item.coverPath
               : _findFirstImage(dir.path);
           packs.add(item.copyWith(coverPath: coverPath));
-        } catch (e) {
-          debugPrint('[PackPipeline] Failed to parse pack.json in ${dir.path}: $e');
+        } catch (e, st) {
+          AppLogger.pack.warning('Failed to parse pack.json in ${AppLogger.sanitizePath(dir.path)}', e, st);
         }
       }
     }
@@ -56,13 +59,16 @@ class PackContentPipeline {
     // 按导入时间倒序排列 (最新导入在最前)
     packs.sort((a, b) => b.importedAt.compareTo(a.importedAt));
     packsNotifier.value = List.unmodifiable(packs);
+    AppLogger.pack.info('loadAllPacks done count=${packs.length}');
     return packs;
   }
 
   /// 从本地 ZIP 压缩包导入扩展图包
   Future<PuzzlePackItem> importFromLocalZip(String zipFilePath) async {
+    AppLogger.pack.info('importFromLocalZip ${AppLogger.sanitizePath(zipFilePath)}');
     final zipFile = File(zipFilePath);
     if (!zipFile.existsSync()) {
+      AppLogger.pack.warning('importFromLocalZip not found ${AppLogger.sanitizePath(zipFilePath)}');
       throw Exception('指定的 ZIP 文件不存在: $zipFilePath');
     }
 
@@ -79,7 +85,9 @@ class PackContentPipeline {
 
   /// 从网络下载 URL 导入扩展图包
   Future<PuzzlePackItem> importFromNetworkZip(String zipUrl) async {
+    AppLogger.pack.info('importFromNetworkZip ${AppLogger.sanitizeUrl(zipUrl)}');
     if (zipUrl.isEmpty || !zipUrl.startsWith('http')) {
+      AppLogger.pack.warning('importFromNetworkZip invalid url $zipUrl');
       throw Exception('无效的网络下载 URL: $zipUrl');
     }
 
@@ -102,7 +110,8 @@ class PackContentPipeline {
         downloadedZip.deleteSync();
       }
       return pack;
-    } catch (e) {
+    } catch (e, st) {
+      AppLogger.pack.severe('importFromNetworkZip failed ${AppLogger.sanitizeUrl(zipUrl)}', e, st);
       final tf = File(tempZipPath);
       if (tf.existsSync()) {
         try {
@@ -120,8 +129,10 @@ class PackContentPipeline {
     required String sourceType,
     required String sourceOrigin,
   }) async {
+    AppLogger.pack.info('_processZipBytes title=$defaultTitle source=$sourceType bytes=${bytes.length}');
     final archive = ZipDecoder().decodeBytes(bytes);
     if (archive.isEmpty) {
+      AppLogger.pack.warning('_processZipBytes empty archive title=$defaultTitle');
       throw Exception('压缩包内容为空');
     }
 
@@ -179,8 +190,10 @@ class PackContentPipeline {
     if (validImageFiles.isEmpty) {
       // 若无有效图片，清理目录并抛出异常
       targetDir.deleteSync(recursive: true);
+      AppLogger.pack.warning('_processZipBytes no valid images title=$defaultTitle totalFiles=${archive.length}');
       throw Exception('压缩包内未找到支持的图片文件 (支持 jpg, png, webp)');
     }
+    AppLogger.pack.info('_processZipBytes extracted ${validImageFiles.length} images bytes=$totalBytes packId=$packId');
 
     // 排序图片
     validImageFiles.sort();
@@ -244,14 +257,16 @@ class PackContentPipeline {
   /// 一键整包物理删除 (释放磁盘存储并从索引中移除)
   Future<bool> deletePack(String packId) async {
     final packDir = Directory(p.join(packsBaseDir, packId));
+    AppLogger.pack.info('deletePack $packId dir=${AppLogger.sanitizePath(packDir.path)}');
     try {
       if (packDir.existsSync()) {
         packDir.deleteSync(recursive: true);
       }
       await loadAllPacks();
+      AppLogger.pack.info('deletePack success $packId');
       return true;
-    } catch (e) {
-      debugPrint('[PackPipeline] Failed to delete pack $packId: $e');
+    } catch (e, st) {
+      AppLogger.pack.severe('Failed to delete pack $packId', e, st);
       return false;
     }
   }

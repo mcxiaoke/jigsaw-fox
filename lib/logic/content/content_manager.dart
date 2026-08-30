@@ -1,4 +1,5 @@
 import 'package:path/path.dart' as p;
+import '../../services/app_logger.dart';
 import 'models/puzzle_event_item.dart';
 import 'models/puzzle_level_item.dart';
 import 'models/root_manifest.dart';
@@ -50,44 +51,64 @@ class ContentManager {
 
   /// 1. 初始化所有本地缓存与扩展包 (冷启动快速秒开)
   Future<void> initialize() async {
-    await Future.wait([
-      manifestRouter.resolveManifest(),
-      mainPipeline.initializeFromCache(),
-      eventsPipeline.initializeFromCache(),
-      packPipeline.loadAllPacks(),
-    ]);
+    AppLogger.content.info('ContentManager initialize start');
+    final sw = Stopwatch()..start();
+    try {
+      await Future.wait([
+        manifestRouter.resolveManifest(),
+        mainPipeline.initializeFromCache(),
+        eventsPipeline.initializeFromCache(),
+        packPipeline.loadAllPacks(),
+      ]);
+      AppLogger.content.info('ContentManager initialize done ${sw.elapsedMilliseconds}ms main=${mainPipeline.levels.length} events=${eventsPipeline.visibleEvents.length} packs=${packPipeline.packsNotifier.value.length}');
+    } catch (e, st) {
+      AppLogger.content.severe('ContentManager initialize failed', e, st);
+      rethrow;
+    }
   }
 
   /// 2. 全局网络增量同步
   Future<void> syncAll({DateTime? overrideToday}) async {
+    AppLogger.content.info('syncAll start overrideToday=$overrideToday');
+    final sw = Stopwatch()..start();
     // 1. 获取最新 Root Manifest
     final manifest = await manifestRouter.resolveManifest(forceRefresh: true);
+    AppLogger.content.info('syncAll manifest resolved version=${manifest.schemaVersion} main=${AppLogger.sanitizeUrl(manifest.mainModule.url)} events=${AppLogger.sanitizeUrl(manifest.eventsModule.url)}');
 
     // 2. 并发同步各模块元数据
-    await Future.wait([
-      // 同步首页关卡
-      mainPipeline.syncWithRemote(
-        remoteUrl: manifest.mainModule.url,
-        remoteVersion: manifest.mainModule.version,
-      ),
-      // 同步活动列表 (自动触发 Auto-GC)
-      eventsPipeline.syncWithRemote(
-        remoteUrl: manifest.eventsModule.url,
-      ),
-      // 预备当月每日挑战
-      () async {
-        final currentMonth = manifest.dailyModule.currentMonth.isNotEmpty
-            ? manifest.dailyModule.currentMonth
-            : _formatCurrentMonth(overrideToday ?? DateTime.now());
-        if (manifest.dailyModule.zipUrlPattern.isNotEmpty) {
-          await dailyPipeline.ensureMonthReady(
-            yyyyMm: currentMonth,
-            zipUrlPattern: manifest.dailyModule.zipUrlPattern,
-            overrideToday: overrideToday,
-          );
-        }
-      }(),
-    ]);
+    try {
+      await Future.wait([
+        // 同步首页关卡
+        mainPipeline.syncWithRemote(
+          remoteUrl: manifest.mainModule.url,
+          remoteVersion: manifest.mainModule.version,
+        ).then((v) => AppLogger.content.info('main sync done hasNew=$v levels=${mainPipeline.levels.length}')),
+        // 同步活动列表 (自动触发 Auto-GC)
+        eventsPipeline.syncWithRemote(
+          remoteUrl: manifest.eventsModule.url,
+        ).then((v) => AppLogger.content.info('events sync done $v events=${eventsPipeline.visibleEvents.length}')),
+        // 预备当月每日挑战
+        () async {
+          final currentMonth = manifest.dailyModule.currentMonth.isNotEmpty
+              ? manifest.dailyModule.currentMonth
+              : _formatCurrentMonth(overrideToday ?? DateTime.now());
+          if (manifest.dailyModule.zipUrlPattern.isNotEmpty) {
+            final ok = await dailyPipeline.ensureMonthReady(
+              yyyyMm: currentMonth,
+              zipUrlPattern: manifest.dailyModule.zipUrlPattern,
+              overrideToday: overrideToday,
+            );
+            AppLogger.content.info('daily ensureMonthReady $currentMonth ok=$ok levels=${dailyPipeline.getLevelsForMonth(currentMonth, overrideToday: overrideToday).length}');
+          } else {
+            AppLogger.content.fine('daily zipUrlPattern empty skip month $currentMonth');
+          }
+        }(),
+      ]);
+      AppLogger.content.info('syncAll done ${sw.elapsedMilliseconds}ms');
+    } catch (e, st) {
+      AppLogger.content.severe('syncAll failed ${sw.elapsedMilliseconds}ms', e, st);
+      rethrow;
+    }
   }
 
   // --- 首页 Main 模块便捷代理 ---

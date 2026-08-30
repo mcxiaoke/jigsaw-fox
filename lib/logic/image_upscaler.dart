@@ -2,6 +2,7 @@ import 'dart:isolate';
 import 'dart:math' as math;
 import 'dart:typed_data';
 import 'package:image/image.dart' as img;
+import '../services/app_logger.dart';
 
 /// 高性能非 AI 图像保边降噪、空间插值与自适应超分辨率引擎
 class ImageUpscaler {
@@ -43,7 +44,10 @@ class ImageUpscaler {
     bool adaptiveSharpness = true,
     bool outputPng = true,
   }) async {
-    return Isolate.run(() {
+    AppLogger.upscaler.info('upscaleBytes start bytes=${bytes.length} scale=$scale denoise=$enableDenoise sharpen=$enableSharpen');
+    final sw = Stopwatch()..start();
+    try {
+      final result = await Isolate.run(() {
       final src = img.decodeImage(bytes);
       if (src == null) {
         throw Exception('图片解码失败，无法进行超分辨率放大');
@@ -68,6 +72,12 @@ class ImageUpscaler {
         return Uint8List.fromList(img.encodeJpg(processed, quality: 95));
       }
     });
+      AppLogger.upscaler.info('upscaleBytes done ${sw.elapsedMilliseconds}ms out=${result.length} bytes');
+      return result;
+    } catch (e, st) {
+      AppLogger.upscaler.severe('upscaleBytes failed', e, st);
+      rethrow;
+    }
   }
 
   /// 图像处理管线：[温和保边降噪] -> [高质量 Cubic 空间插值] -> [自适应门控 CAS 锐化]

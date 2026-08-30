@@ -4,6 +4,7 @@ import 'package:flame_audio/flame_audio.dart';
 import 'package:flutter/widgets.dart';
 
 import '../data/game_repository.dart';
+import 'app_logger.dart';
 
 /// 音效事件枚举，对应 `assets/audio/*.wav` 的语义映射
 ///
@@ -116,9 +117,9 @@ class SoundService {
     try {
       await FlameAudio.audioCache.loadAll(allAssets);
       _initialized = true;
-      debugPrint('[SoundService] preloaded ${allAssets.length} wav assets');
+      AppLogger.sound.info('preloaded ${allAssets.length} wav assets');
     } catch (e, st) {
-      debugPrint('[SoundService] preload failed: $e\n$st');
+      AppLogger.sound.warning('preload failed', e, st);
       _initialized = true;
     }
   }
@@ -152,8 +153,11 @@ class SoundService {
 
     final file = _resolveFile(sfx);
     final vol = volume ?? _volumeFor(sfx);
+    if (AppLogger.sound.isLoggable(AppLogger.sound.level)) {
+      AppLogger.sound.fine('play $file vol=$vol sfx=$sfx');
+    }
     FlameAudio.play(file, volume: vol).then((_) {}, onError: (Object e, StackTrace st) {
-      debugPrint('[SoundService] play $file failed: $e');
+      AppLogger.sound.warning('play $file failed', e, st);
     });
   }
 

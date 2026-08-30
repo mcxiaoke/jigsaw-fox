@@ -5,6 +5,7 @@ import 'dart:ui' as ui;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/painting.dart';
 
+import '../../services/app_logger.dart';
 import 'image_cache_manager.dart';
 
 @immutable
@@ -114,8 +115,8 @@ class AppCachedImageProvider extends ImageProvider<AppImageKey> {
           return ui.TargetImageSize(width: intrinsicWidth, height: intrinsicHeight);
         },
       );
-    } catch (e) {
-      debugPrint('[AppCachedImageProvider:Error] Failed to load image: ${key.filePath}, error: $e');
+    } catch (e, st) {
+      AppLogger.imageCache.severe('Failed to load image ${AppLogger.sanitizePath(key.filePath)}', e, st);
       rethrow;
     }
   }

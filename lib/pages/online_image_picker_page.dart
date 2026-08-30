@@ -7,6 +7,7 @@ import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:phosphoricons_flutter/phosphoricons_flutter.dart';
 
 import '../data/models/downloaded_image_item.dart';
+import '../services/app_logger.dart';
 import '../logic/download_manager.dart';
 import '../main.dart';
 import '../widgets/downloaded_drawer_sheet.dart';
@@ -59,7 +60,7 @@ class _OnlineImagePickerPageState extends State<OnlineImagePickerPage> {
     super.initState();
     _currentSite = widget.initialSite;
     DownloadManager.instance.init();
-    debugPrint('[WebView:Init] Platform: ${defaultTargetPlatform.name}, InitialSite: ${_currentSite.label} (${_currentSite.url})');
+    AppLogger.webview.info('[WebView:Init] Platform: ${defaultTargetPlatform.name}, InitialSite: ${_currentSite.label} (${_currentSite.url})');
   }
 
   @override
@@ -84,7 +85,7 @@ class _OnlineImagePickerPageState extends State<OnlineImagePickerPage> {
 
   void _switchSite(GallerySite site) {
     if (_currentSite == site) return;
-    debugPrint('[WebView:SiteSwitch] Switching from ${_currentSite.label} to ${site.label} (${site.url})');
+    AppLogger.webview.info('[WebView:SiteSwitch] Switching from ${_currentSite.label} to ${site.label} (${site.url})');
     setState(() {
       _currentSite = site;
       _loadingProgress = 0.1;
@@ -111,7 +112,7 @@ class _OnlineImagePickerPageState extends State<OnlineImagePickerPage> {
   /// Bypasses anti-scraping Cloudflare 403 by executing fetch inside the webview's authenticated session.
   Future<Uint8List?> _fetchImageBytesInsideWebView(String targetUrl) async {
     if (_webViewController == null) return null;
-    debugPrint('[WebView:InAppFetch:Start] Executing authenticated in-webview fetch for: $targetUrl');
+    AppLogger.webview.info('[WebView:InAppFetch:Start] Executing authenticated in-webview fetch for: $targetUrl');
     final escapedUrl = targetUrl.replaceAll("'", "\\'");
     final jsCode = '''
       (async function() {
@@ -152,15 +153,15 @@ class _OnlineImagePickerPageState extends State<OnlineImagePickerPage> {
           if (commaIdx != -1) {
             final base64Data = str.substring(commaIdx + 1);
             final bytes = base64Decode(base64Data);
-            debugPrint('[WebView:InAppFetch:Success] Decoded ${bytes.length} bytes from in-webview fetch.');
+            AppLogger.webview.info('[WebView:InAppFetch:Success] Decoded ${bytes.length} bytes from in-webview fetch.');
             return bytes;
           }
         } else {
-          debugPrint('[WebView:InAppFetch:Warning] JS returned non-image result: $str');
+          AppLogger.webview.warning('[WebView:InAppFetch:Warning] JS returned non-image result: $str');
         }
       }
     } catch (e) {
-      debugPrint('[WebView:InAppFetch:Error] In-webview fetch error: $e');
+      AppLogger.webview.severe('[WebView:InAppFetch:Error] In-webview fetch error: $e');
     }
     return null;
   }
@@ -297,10 +298,10 @@ class _OnlineImagePickerPageState extends State<OnlineImagePickerPage> {
     try {
       final result = await _webViewController!.evaluateJavascript(source: js);
       final raw = result?.toString().trim() ?? '';
-      debugPrint('[WebView:Sniff:Result] Sniffed URL: $raw');
+      AppLogger.webview.info('[WebView:Sniff:Result] Sniffed URL: $raw');
       return raw;
     } catch (e) {
-      debugPrint('[WebView:Sniff:Error] Sniff execution failed: $e');
+      AppLogger.webview.severe('[WebView:Sniff:Error] Sniff execution failed: $e');
       return '';
     }
   }
@@ -310,10 +311,10 @@ class _OnlineImagePickerPageState extends State<OnlineImagePickerPage> {
     final currentWebUrl = (await _webViewController?.getUrl())?.toString() ?? _currentSite.url;
     final targetUrl = _upgradeImageUrlToHighRes(rawUrl, _currentSite.label);
 
-    debugPrint('[WebView:DownloadAction] Raw: $rawUrl -> Target: $targetUrl (fromInterception: $isFromInterception)');
+    AppLogger.webview.info('[WebView:DownloadAction] Raw: $rawUrl -> Target: $targetUrl (fromInterception: $isFromInterception)');
 
     if (DownloadManager.instance.isDownloaded(targetUrl) || DownloadManager.instance.isDownloaded(rawUrl)) {
-      debugPrint('[WebView:DownloadAction] Image already in download cache.');
+      AppLogger.webview.info('[WebView:DownloadAction] Image already in download cache.');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('该图片已在下载箱中')),
@@ -343,13 +344,13 @@ class _OnlineImagePickerPageState extends State<OnlineImagePickerPage> {
         directBytes: fetchedBytes,
       );
 
-      debugPrint('[WebView:DownloadAction:Success] Successfully added to drawer: ${item.id} (${item.width}x${item.height})');
+      AppLogger.webview.info('[WebView:DownloadAction:Success] Successfully added to drawer: ${item.id} (${item.width}x${item.height})');
 
       if (mounted) {
         _triggerDownloadBanner(item);
       }
     } catch (e) {
-      debugPrint('[WebView:DownloadAction:Error] Download failed: $e');
+      AppLogger.webview.severe('[WebView:DownloadAction:Error] Download failed: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('下载图片失败: $e')),
@@ -362,13 +363,13 @@ class _OnlineImagePickerPageState extends State<OnlineImagePickerPage> {
   Future<void> _extractCurrentImage() async {
     if (_isExtracting) return;
     setState(() => _isExtracting = true);
-    debugPrint('[WebView:Extract:Start] Triggered image extraction button');
+    AppLogger.webview.info('[WebView:Extract:Start] Triggered image extraction button');
 
     try {
       final detectedUrl = await _sniffBestHighResImageUrl();
 
       if (detectedUrl.isEmpty || detectedUrl == 'null') {
-        debugPrint('[WebView:Extract:NotFound] No suitable image detected on current page.');
+        AppLogger.webview.warning('[WebView:Extract:NotFound] No suitable image detected on current page.');
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('未在当前页面检测到高清大图，请点击进入照片详情页后再试')),
@@ -390,7 +391,7 @@ class _OnlineImagePickerPageState extends State<OnlineImagePickerPage> {
       onPopInvokedWithResult: (didPop, result) async {
         if (didPop) return;
         if (_canGoBack && _webViewController != null) {
-          debugPrint('[WebView:PopScope] User pressed system back -> Navigating back inside webview');
+          AppLogger.webview.info('[WebView:PopScope] User pressed system back -> Navigating back inside webview');
           await _webViewController!.goBack();
           _updateHistoryState();
         }
@@ -400,7 +401,7 @@ class _OnlineImagePickerPageState extends State<OnlineImagePickerPage> {
           leading: IconButton(
             icon: const Icon(PhosphorIconsBold.x, size: 20),
             onPressed: () {
-              debugPrint('[WebView:Action] User clicked Close (X) button');
+              AppLogger.webview.info('[WebView:Action] User clicked Close (X) button');
               Navigator.of(context).pop();
             },
             tooltip: '关闭在线选图',
@@ -424,7 +425,7 @@ class _OnlineImagePickerPageState extends State<OnlineImagePickerPage> {
               ),
               onPressed: _canGoBack
                   ? () async {
-                      debugPrint('[WebView:Action] User clicked In-Page Back');
+                      AppLogger.webview.info('[WebView:Action] User clicked In-Page Back');
                       await _webViewController?.goBack();
                       _updateHistoryState();
                     }
@@ -438,7 +439,7 @@ class _OnlineImagePickerPageState extends State<OnlineImagePickerPage> {
               constraints: const BoxConstraints(minWidth: 34, minHeight: 34),
               icon: const Icon(PhosphorIconsRegular.arrowClockwise, size: 17),
               onPressed: () {
-                debugPrint('[WebView:Action] User clicked reload.');
+                AppLogger.webview.info('[WebView:Action] User clicked reload.');
                 _webViewController?.reload();
               },
               tooltip: '刷新',
@@ -520,10 +521,10 @@ class _OnlineImagePickerPageState extends State<OnlineImagePickerPage> {
               ),
               onWebViewCreated: (controller) {
                 _webViewController = controller;
-                debugPrint('[WebView:Created] InAppWebViewController initialized successfully.');
+                AppLogger.webview.info('[WebView:Created] InAppWebViewController initialized successfully.');
               },
               onLoadStart: (controller, url) {
-                debugPrint('[WebView:LoadStart] URL: $url');
+                AppLogger.webview.info('[WebView:LoadStart] URL: $url');
                 if (mounted) {
                   setState(() => _loadingProgress = 0.1);
                 }
@@ -531,7 +532,7 @@ class _OnlineImagePickerPageState extends State<OnlineImagePickerPage> {
               },
               onProgressChanged: (controller, progress) {
                 if (progress % 25 == 0 || progress == 100) {
-                  debugPrint('[WebView:Progress] $progress%');
+                  AppLogger.webview.fine('[WebView:Progress] $progress%');
                 }
                 if (mounted) {
                   setState(() => _loadingProgress = progress / 100.0);
@@ -539,7 +540,7 @@ class _OnlineImagePickerPageState extends State<OnlineImagePickerPage> {
                 _updateHistoryState();
               },
               onLoadStop: (controller, url) async {
-                debugPrint('[WebView:LoadStop] Finished loading: $url');
+                AppLogger.webview.info('[WebView:LoadStop] Finished loading: $url');
                 if (mounted) {
                   setState(() => _loadingProgress = 1.0);
                 }
@@ -560,15 +561,15 @@ class _OnlineImagePickerPageState extends State<OnlineImagePickerPage> {
                 ''');
               },
               onReceivedError: (controller, request, error) {
-                debugPrint('[WebView:Error] Type: ${error.type}, Description: ${error.description}, FailingURL: ${request.url}');
+                AppLogger.webview.severe('[WebView:Error] Type: ${error.type}, Description: ${error.description}, FailingURL: ${request.url}');
               },
               onReceivedHttpError: (controller, request, errorResponse) {
-                debugPrint('[WebView:HttpError] Status: ${errorResponse.statusCode}, Reason: ${errorResponse.reasonPhrase}, URL: ${request.url}');
+                AppLogger.webview.severe('[WebView:HttpError] Status: ${errorResponse.statusCode}, Reason: ${errorResponse.reasonPhrase}, URL: ${request.url}');
               },
               shouldOverrideUrlLoading: (controller, navigationAction) async {
                 final uri = navigationAction.request.url;
                 final urlStr = uri?.toString() ?? '';
-                debugPrint('[WebView:Navigation] URL: $urlStr, isMainFrame: ${navigationAction.isForMainFrame}');
+                AppLogger.webview.fine('[WebView:Navigation] URL: $urlStr, isMainFrame: ${navigationAction.isForMainFrame}');
 
                 if (urlStr.isEmpty) {
                   return NavigationActionPolicy.ALLOW;
@@ -591,7 +592,7 @@ class _OnlineImagePickerPageState extends State<OnlineImagePickerPage> {
                     (lower.contains('images.pexels.com/photos/') && isImageFile && navigationAction.isForMainFrame);
 
                 if (isDirectDownload) {
-                  debugPrint('[WebView:Navigation:Intercept] Direct download intercepted: $urlStr');
+                  AppLogger.webview.fine('[WebView:Navigation:Intercept] Direct download intercepted: $urlStr');
                   _handleDownload(rawUrl: urlStr, isFromInterception: true);
                   return NavigationActionPolicy.CANCEL;
                 }
@@ -601,7 +602,7 @@ class _OnlineImagePickerPageState extends State<OnlineImagePickerPage> {
               },
               onCreateWindow: (controller, createWindowAction) async {
                 final targetUrl = createWindowAction.request.url;
-                debugPrint('[WebView:CreateWindow] Target URL: $targetUrl');
+                AppLogger.webview.info('[WebView:CreateWindow] Target URL: $targetUrl');
                 if (targetUrl != null) {
                   controller.loadUrl(urlRequest: URLRequest(url: targetUrl));
                 }
@@ -609,7 +610,7 @@ class _OnlineImagePickerPageState extends State<OnlineImagePickerPage> {
               },
               onDownloadStartRequest: (controller, downloadStartRequest) async {
                 final url = downloadStartRequest.url.toString();
-                debugPrint('[WebView:DownloadRequest] Intercepted onDownloadStartRequest: $url (MIME: ${downloadStartRequest.mimeType})');
+                AppLogger.webview.info('[WebView:DownloadRequest] Intercepted onDownloadStartRequest: $url (MIME: ${downloadStartRequest.mimeType})');
                 await _handleDownload(rawUrl: url, isFromInterception: true);
               },
             ),

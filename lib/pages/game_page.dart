@@ -11,6 +11,7 @@ import 'package:phosphoricons_flutter/phosphoricons_flutter.dart';
 import '../data/game_repository.dart';
 import '../game/jigsaw_puzzle_game.dart';
 import '../logic/puzzle_model.dart';
+import '../services/app_logger.dart';
 import '../services/sound_service.dart';
 import '../widgets/choose_background_sheet.dart';
 import 'how_to_play_page.dart';
@@ -144,8 +145,8 @@ class _GamePageState extends State<GamePage> {
         if (map['elapsedSeconds'] is int) {
           _seconds = map['elapsedSeconds'] as int;
         }
-      } catch (e) {
-        debugPrint('Failed to parse initialSnapshotJson elapsedSeconds: $e');
+      } catch (e, st) {
+        AppLogger.game.warning('Failed to parse initialSnapshotJson elapsedSeconds', e, st);
       }
     }
 

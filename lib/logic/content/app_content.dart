@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
+import '../../services/app_logger.dart';
 import 'content_manager.dart';
 import 'pipelines/pack_content_pipeline.dart';
 
@@ -34,7 +35,8 @@ class AppContent {
 
   Future<void> init({List<String>? bootstrapUrls}) async {
     if (_isInitialized) return;
-
+    AppLogger.content.info('AppContent init start bootstrap=${bootstrapUrls ?? defaultBootstrapUrls}');
+    final sw = Stopwatch()..start();
     final supportDir = await getApplicationSupportDirectory();
     final documentsDir = await getApplicationDocumentsDirectory();
 
@@ -46,6 +48,7 @@ class AppContent {
 
     // 1. 本地快速初始化 (秒开)
     await _manager!.initialize();
+    AppLogger.content.info('AppContent local initialize done ${sw.elapsedMilliseconds}ms supportDir=${supportDir.path}');
     _isInitialized = true;
 
     // 2. 异步后台网络增量同步
@@ -53,21 +56,27 @@ class AppContent {
   }
 
   Future<void> syncAll() async {
+    AppLogger.content.info('syncAll start');
+    final sw = Stopwatch()..start();
     try {
       await _manager?.syncAll();
       contentUpdateNotifier.value++;
-    } catch (e) {
-      debugPrint('[AppContent] Sync failed: $e');
+      AppLogger.content.info('syncAll success ${sw.elapsedMilliseconds}ms notifier=${contentUpdateNotifier.value}');
+    } catch (e, st) {
+      AppLogger.content.severe('Sync failed', e, st);
     }
   }
 
   void _backgroundSync() {
+    AppLogger.content.info('backgroundSync scheduled');
     Future.microtask(() async {
+      final sw = Stopwatch()..start();
       try {
         await _manager?.syncAll();
         contentUpdateNotifier.value++;
-      } catch (e) {
-        debugPrint('[AppContent] Background sync failed: $e');
+        AppLogger.content.info('Background sync success ${sw.elapsedMilliseconds}ms');
+      } catch (e, st) {
+        AppLogger.content.severe('Background sync failed', e, st);
       }
     });
   }

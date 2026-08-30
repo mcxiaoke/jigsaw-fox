@@ -9,6 +9,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../data/models/downloaded_image_item.dart';
+import '../services/app_logger.dart';
 import 'cache/image_cache_manager.dart';
 
 /// Singleton manager for batch downloaded and locally imported images (Material Box / 素材库)
@@ -49,10 +50,10 @@ class DownloadManager {
         }).toList();
 
         itemsNotifier.value = list;
-        debugPrint('[DownloadManager:Init] Loaded ${list.length} cached images.');
+        AppLogger.download.info('Loaded ${list.length} cached images');
       }
-    } catch (e) {
-      debugPrint('[DownloadManager:Init] Failed to load cache: $e');
+    } catch (e, st) {
+      AppLogger.download.severe('Failed to load cache', e, st);
     }
   }
 
@@ -61,8 +62,8 @@ class DownloadManager {
       final prefs = await SharedPreferences.getInstance();
       final jsonList = itemsNotifier.value.map((e) => e.toJson()).toList();
       await prefs.setString(_storageKey, jsonEncode(jsonList));
-    } catch (e) {
-      debugPrint('[DownloadManager:Storage] Save failed: $e');
+    } catch (e, st) {
+      AppLogger.download.warning('Save to storage failed', e, st);
     }
   }
 
@@ -100,7 +101,7 @@ class DownloadManager {
         codec.dispose();
 
         if (width < 100 || height < 100) {
-          debugPrint('[DownloadManager:ImportLocal] Skipped tiny image: ${file.path} (${width}x$height)');
+          AppLogger.download.warning('Skipped tiny image ${AppLogger.sanitizePath(file.path)} ${width}x$height');
           continue;
         }
 
@@ -122,15 +123,15 @@ class DownloadManager {
         );
 
         newlyAdded.add(item);
-      } catch (e) {
-        debugPrint('[DownloadManager:ImportLocal] Error importing file ${file.path}: $e');
+      } catch (e, st) {
+        AppLogger.download.warning('Error importing file ${AppLogger.sanitizePath(file.path)}', e, st);
       }
     }
 
     if (newlyAdded.isNotEmpty) {
       itemsNotifier.value = [...newlyAdded, ...itemsNotifier.value];
       await _saveToStorage();
-      debugPrint('[DownloadManager:ImportLocal] Successfully imported ${newlyAdded.length} local images.');
+      AppLogger.download.info('Successfully imported ${newlyAdded.length} local images total=${itemsNotifier.value.length}');
 
       // Background pre-warm thumbnail caches for newly imported images
       for (final item in newlyAdded) {
@@ -152,14 +153,14 @@ class DownloadManager {
     void Function(double progress)? onProgress,
   }) async {
     await init();
-    debugPrint('[DownloadManager:Start] Platform: $sourcePlatform, URL: $sourceUrl, DirectBytes: ${directBytes != null ? "${directBytes.length} bytes" : "false"}');
+    AppLogger.download.info('Start platform=$sourcePlatform url=${AppLogger.sanitizeUrl(sourceUrl)} directBytes=${directBytes != null ? "${directBytes.length} bytes" : "false"}');
 
     // Check duplicate
     final existing = itemsNotifier.value.where((item) => item.sourceUrl == sourceUrl);
     if (existing.isNotEmpty) {
       final item = existing.first;
       if (File(item.localPath).existsSync()) {
-        debugPrint('[DownloadManager:CacheHit] Returning existing file: ${item.localPath}');
+        AppLogger.download.info('CacheHit returning existing file ${AppLogger.sanitizePath(item.localPath)}');
         return item;
       }
     }
@@ -180,7 +181,7 @@ class DownloadManager {
       rawBytes = directBytes;
       await targetFile.writeAsBytes(rawBytes);
       if (onProgress != null) onProgress(1.0);
-      debugPrint('[DownloadManager:DirectSave] Written ${rawBytes.length} bytes to $filePath');
+      AppLogger.download.info('DirectSave written ${rawBytes.length} bytes to ${AppLogger.sanitizePath(filePath)}');
     } else {
       final headers = <String, dynamic>{
         'Accept': '*/*',
@@ -191,7 +192,7 @@ class DownloadManager {
 
       Response<List<int>> response;
       try {
-        debugPrint('[DownloadManager:Dio] Requesting URL: $sourceUrl');
+        AppLogger.download.info('Dio requesting ${AppLogger.sanitizeUrl(sourceUrl)}');
         response = await _dio.get<List<int>>(
           sourceUrl,
           options: Options(
@@ -205,10 +206,10 @@ class DownloadManager {
           },
         );
       } on DioException catch (dioErr) {
-        debugPrint('[DownloadManager:DioError] Status: ${dioErr.response?.statusCode}, Error: $dioErr');
+        AppLogger.download.warning('DioError status=${dioErr.response?.statusCode} url=${AppLogger.sanitizeUrl(sourceUrl)}', dioErr);
         // If 403 or error occurred, retry once with desktop browser headers and referer
         if (dioErr.response?.statusCode == 403 || dioErr.response?.statusCode == 401) {
-          debugPrint('[DownloadManager:DioRetry] Retrying with desktop headers...');
+          AppLogger.download.info('DioRetry with desktop headers url=${AppLogger.sanitizeUrl(sourceUrl)}');
           final retryHeaders = <String, dynamic>{
             'Accept': 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8',
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
@@ -229,7 +230,7 @@ class DownloadManager {
       }
       rawBytes = Uint8List.fromList(data);
       await targetFile.writeAsBytes(rawBytes);
-      debugPrint('[DownloadManager:DioSuccess] Downloaded ${rawBytes.length} bytes to $filePath');
+      AppLogger.download.info('DioSuccess downloaded ${rawBytes.length} bytes to ${AppLogger.sanitizePath(filePath)}');
     }
 
     // Parse and strictly validate image dimensions
@@ -242,17 +243,19 @@ class DownloadManager {
       height = frame.image.height;
       frame.image.dispose();
       codec.dispose();
-      debugPrint('[DownloadManager:Metadata] Parsed resolution: ${width}x$height');
+      AppLogger.download.info('Metadata parsed resolution ${width}x$height');
 
       // Reject tiny placeholder/icon images
       if (width < 200 || height < 200) {
         if (targetFile.existsSync()) targetFile.deleteSync();
-        debugPrint('[DownloadManager:ValidationError] Rejected image due to tiny resolution: ${width}x$height');
+        AppLogger.download.warning('ValidationError rejected tiny resolution ${width}x$height');
         throw Exception('图片分辨率过小 (${width}x$height)，并非有效的高清拼图素材');
       }
-    } catch (e) {
-      if (targetFile.existsSync()) targetFile.deleteSync();
-      debugPrint('[DownloadManager:MetadataError] Could not decode valid image: $e');
+    } catch (e, st) {
+      if (targetFile.existsSync()) {
+        try { targetFile.deleteSync(); } catch (_) {}
+      }
+      AppLogger.download.severe('MetadataError could not decode valid image', e, st);
       throw Exception('下载数据不是有效图片文件: $e');
     }
 
@@ -269,7 +272,7 @@ class DownloadManager {
 
     itemsNotifier.value = [item, ...itemsNotifier.value];
     await _saveToStorage();
-    debugPrint('[DownloadManager:Complete] Added item $id (${width}x$height, ${rawBytes.length} bytes). Total cached: ${itemsNotifier.value.length}');
+    AppLogger.download.info('Complete added item $id ${width}x$height ${rawBytes.length} bytes total=${itemsNotifier.value.length}');
 
     // Background pre-warm thumbnail for the downloaded image
     ImageCacheManager.instance.prewarmThumbnail(filePath);
@@ -289,13 +292,15 @@ class DownloadManager {
           f.deleteSync();
         }
         await ImageCacheManager.instance.removeThumbnailForSource(item.localPath);
-      } catch (e) {
-        debugPrint('[DownloadManager:Delete] Error deleting file: $e');
+      } catch (e, st) {
+        AppLogger.download.warning('Delete error id=$id', e, st);
       }
       list.removeAt(idx);
       itemsNotifier.value = list;
       await _saveToStorage();
-      debugPrint('[DownloadManager:Delete] Removed item $id');
+      AppLogger.download.info('Removed item $id remaining=${list.length}');
+    } else {
+      AppLogger.download.warning('Delete not found id=$id');
     }
   }
 
@@ -313,6 +318,6 @@ class DownloadManager {
     }
     itemsNotifier.value = [];
     await _saveToStorage();
-    debugPrint('[DownloadManager:ClearAll] All downloaded images cleared.');
+    AppLogger.download.info('All downloaded images cleared');
   }
 }

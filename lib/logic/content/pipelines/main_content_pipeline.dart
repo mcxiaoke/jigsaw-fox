@@ -3,6 +3,7 @@ import 'dart:io';
 import '../models/canonical_id.dart';
 import '../models/puzzle_level_item.dart';
 import '../network/content_http_client.dart';
+import '../../../services/app_logger.dart';
 
 /// 首页主线关卡管线 (多标签筛选 + 增量版本同步 + 按需懒加载)
 class MainContentPipeline {
@@ -57,6 +58,7 @@ class MainContentPipeline {
         if (json is Map<String, dynamic>) {
           _localVersion = (json['version'] as num?)?.toInt() ?? 0;
           final rawLevels = json['levels'] as List<dynamic>? ?? [];
+          var loaded = 0;
           for (final raw in rawLevels) {
             if (raw is Map<String, dynamic>) {
               final level = _parseLevelItem(raw);
@@ -68,13 +70,19 @@ class MainContentPipeline {
                   imagePathOrUrl: isLocal ? localFile.path : level.imagePathOrUrl,
                   isLocalFile: isLocal,
                 );
+                loaded++;
               }
             }
           }
+          AppLogger.mainPipe.info('initializeFromCache version=$_localVersion loaded=$loaded file=${AppLogger.sanitizePath(cacheFilePath)}');
+        } else {
+          AppLogger.mainPipe.warning('initializeFromCache unexpected json type ${json.runtimeType}');
         }
+      } else {
+        AppLogger.mainPipe.fine('initializeFromCache no cache file ${AppLogger.sanitizePath(cacheFilePath)}');
       }
-    } catch (_) {
-      // 容错：缓存损坏不抛出，等待后续网络拉取自愈
+    } catch (e, st) {
+      AppLogger.mainPipe.warning('initializeFromCache failed', e, st);
     }
   }
 
@@ -83,9 +91,14 @@ class MainContentPipeline {
     required String remoteUrl,
     required int remoteVersion,
   }) async {
-    if (remoteUrl.isEmpty) return false;
+    AppLogger.mainPipe.info('syncWithRemote remoteVersion=$remoteVersion localVersion=$_localVersion url=${AppLogger.sanitizeUrl(remoteUrl)} existing=${_levelsMap.length}');
+    if (remoteUrl.isEmpty) {
+      AppLogger.mainPipe.warning('syncWithRemote empty url skip');
+      return false;
+    }
     // 版本未变且已有数据，无需重复拉取
     if (remoteVersion <= _localVersion && _levelsMap.isNotEmpty) {
+      AppLogger.mainPipe.fine('syncWithRemote skip version not newer');
       return false;
     }
 
@@ -124,9 +137,10 @@ class MainContentPipeline {
 
       _localVersion = newVersion;
       await _persistToCache();
+      AppLogger.mainPipe.info('syncWithRemote done newVersion=$newVersion hasNew=$hasNewItems total=${_levelsMap.length}');
       return hasNewItems;
-    } catch (_) {
-      // 网络或解析异常时安全保留当前内存数据
+    } catch (e, st) {
+      AppLogger.mainPipe.warning('syncWithRemote failed url=${AppLogger.sanitizeUrl(remoteUrl)}', e, st);
       return false;
     }
   }
@@ -134,6 +148,7 @@ class MainContentPipeline {
   /// 确保指定关卡的图片已下载至本地磁盘 (按需懒加载)
   Future<PuzzleLevelItem> ensureLevelImageDownloaded(PuzzleLevelItem level) async {
     if (level.isLocalFile && File(level.imagePathOrUrl).existsSync()) {
+      AppLogger.mainPipe.fine('ensureDownloaded already local ${level.id}');
       return level;
     }
 
@@ -142,14 +157,21 @@ class MainContentPipeline {
     if (localFile.existsSync()) {
       final updated = level.copyWith(imagePathOrUrl: localPath, isLocalFile: true);
       _levelsMap[level.id] = updated;
+      AppLogger.mainPipe.fine('ensureDownloaded hit local file ${level.id} -> ${AppLogger.sanitizePath(localPath)}');
       return updated;
     }
 
-    // 从网络下载
-    final downloaded = await _httpClient.downloadFile(level.imagePathOrUrl, localPath);
-    final updated = level.copyWith(imagePathOrUrl: downloaded.path, isLocalFile: true);
-    _levelsMap[level.id] = updated;
-    return updated;
+    AppLogger.mainPipe.info('ensureDownloaded downloading ${level.id} from ${AppLogger.sanitizeUrl(level.imagePathOrUrl)}');
+    try {
+      final downloaded = await _httpClient.downloadFile(level.imagePathOrUrl, localPath);
+      final updated = level.copyWith(imagePathOrUrl: downloaded.path, isLocalFile: true);
+      _levelsMap[level.id] = updated;
+      AppLogger.mainPipe.info('ensureDownloaded done ${level.id} -> ${AppLogger.sanitizePath(downloaded.path)}');
+      return updated;
+    } catch (e, st) {
+      AppLogger.mainPipe.severe('ensureDownloaded failed ${level.id}', e, st);
+      rethrow;
+    }
   }
 
   /// 解析单条服务端 main.json 中的 level 数据项
@@ -196,6 +218,9 @@ class MainContentPipeline {
         'levels': _levelsMap.values.map((l) => {'url': l.imagePathOrUrl, 'order': l.order, 'tags': l.tags}).toList(),
       };
       await file.writeAsString(jsonEncode(payload), flush: true);
-    } catch (_) {}
+      AppLogger.mainPipe.fine('Persisted cache version=$_localVersion count=${_levelsMap.length}');
+    } catch (e, st) {
+      AppLogger.mainPipe.warning('Persist cache failed', e, st);
+    }
   }
 }

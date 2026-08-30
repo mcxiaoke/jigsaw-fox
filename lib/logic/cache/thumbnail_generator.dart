@@ -4,6 +4,8 @@ import 'dart:math';
 import 'package:flutter/foundation.dart';
 import 'package:image/image.dart' as img;
 
+import '../../services/app_logger.dart';
+
 /// 传递至后台 Isolate 的缩略图处理参数负载
 class ThumbnailTaskParams {
   const ThumbnailTaskParams({
@@ -40,8 +42,8 @@ class ThumbnailGenerator {
 
     try {
       return await compute(_processThumbnailToBytesIsolate, params);
-    } catch (e) {
-      debugPrint('[ThumbnailGenerator:Error] Failed to generate thumbnail bytes: $e');
+    } catch (e, st) {
+      AppLogger.thumbnail.severe('Failed to generate thumbnail bytes path=${AppLogger.sanitizePath(params.sourceFilePath ?? '')}', e, st);
       return null;
     }
   }
@@ -60,8 +62,8 @@ class ThumbnailGenerator {
 
     try {
       return await compute(_processThumbnailToBytesIsolate, params);
-    } catch (e) {
-      debugPrint('[ThumbnailGenerator:Error] Failed to generate from bytes: $e');
+    } catch (e, st) {
+      AppLogger.thumbnail.severe('Failed to generate from bytes len=${rawBytes.length}', e, st);
       return null;
     }
   }
@@ -82,8 +84,8 @@ class ThumbnailGenerator {
 
     try {
       return await compute(_processThumbnailToFileIsolate, params);
-    } catch (e) {
-      debugPrint('[ThumbnailGenerator:Error] Failed to generate thumbnail file: $e');
+    } catch (e, st) {
+      AppLogger.thumbnail.severe('Failed to generate thumbnail file src=${AppLogger.sanitizePath(sourceFilePath)} dst=${AppLogger.sanitizePath(targetFilePath)}', e, st);
       return false;
     }
   }

@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../logic/image_source.dart';
 import '../logic/puzzle_model.dart';
+import '../services/app_logger.dart';
 import 'bing_daily_data.dart';
 import 'models/custom_puzzle_item.dart';
 import 'models/daily_challenge.dart';
@@ -80,10 +81,13 @@ class GameRepository {
 
   /// Initializes persistent store and generates predefined levels, daily challenge series, and UGC presets.
   Future<void> init() async {
+    AppLogger.repo.info('init start');
+    final sw = Stopwatch()..start();
     _prefs = await SharedPreferences.getInstance();
     _initLevels();
     _initDailyChallenges();
     _initCustomPuzzles();
+    AppLogger.repo.info('init done ${sw.elapsedMilliseconds}ms levels=${_levels.length} daily=${_dailyChallenges.length} custom=${_customPuzzles.length}');
   }
 
   void _initLevels() {
@@ -118,7 +122,9 @@ class GameRepository {
           final json = jsonDecode(savedStr) as Map<String, dynamic>;
           list.add(LevelItem.fromJson(json));
           continue;
-        } catch (_) {}
+        } catch (e, st) {
+          AppLogger.repo.warning('Failed to parse level $i saved json', e, st);
+        }
       }
 
       // Default level state (Level 1 is unlocked initially)
@@ -136,6 +142,7 @@ class GameRepository {
       );
     }
     _levels = list;
+    AppLogger.repo.info('initLevels ${list.length} levels completed=${list.where((l) => l.isCompleted).length} unlocked=${list.where((l) => l.isUnlocked).length}');
   }
 
   void _initDailyChallenges() {
@@ -155,7 +162,9 @@ class GameRepository {
           }
           list.add(daily);
           continue;
-        } catch (_) {}
+        } catch (e, st) {
+          AppLogger.repo.warning('Failed to parse daily ${item.dateStr}', e, st);
+        }
       }
 
       final diff = PuzzleDifficulty.presets.firstWhere(
@@ -176,6 +185,7 @@ class GameRepository {
       );
     }
     _dailyChallenges = list;
+    AppLogger.repo.info('initDaily ${list.length} daily challenges');
   }
 
   void _initCustomPuzzles() {
@@ -187,8 +197,11 @@ class GameRepository {
             .map((e) => CustomPuzzleItem.fromJson(e as Map<String, dynamic>))
             .toList();
         customPuzzlesNotifier.value = List.unmodifiable(_customPuzzles);
+        AppLogger.repo.info('initCustom loaded ${_customPuzzles.length} from prefs');
         return;
-      } catch (_) {}
+      } catch (e, st) {
+        AppLogger.repo.warning('Failed to parse custom list', e, st);
+      }
     }
 
     // Default preset samples for "My Puzzles"
@@ -224,15 +237,21 @@ class GameRepository {
     ];
     _saveCustomPuzzles();
     customPuzzlesNotifier.value = List.unmodifiable(_customPuzzles);
+    AppLogger.repo.info('initCustom created default ${_customPuzzles.length} samples');
   }
 
   Future<void> _saveCustomPuzzles() async {
-    final jsonList = _customPuzzles.map((e) => e.toJson()).toList();
-    await _prefs?.setString(_keyCustomList, jsonEncode(jsonList));
+    try {
+      final jsonList = _customPuzzles.map((e) => e.toJson()).toList();
+      await _prefs?.setString(_keyCustomList, jsonEncode(jsonList));
+    } catch (e, st) {
+      AppLogger.repo.severe('Failed to save custom puzzles', e, st);
+    }
   }
 
   /// Adds a new user custom puzzle.
   Future<void> addCustomPuzzle(CustomPuzzleItem item) async {
+    AppLogger.repo.info('addCustomPuzzle id=${item.id} title=${item.title} isLocal=${item.isLocalFile}');
     _customPuzzles.insert(0, item);
     customPuzzlesNotifier.value = List.unmodifiable(_customPuzzles);
     await _saveCustomPuzzles();
@@ -243,17 +262,23 @@ class GameRepository {
     final idx = _customPuzzles.indexWhere((p) => p.id == id);
     if (idx != -1) {
       final item = _customPuzzles[idx];
+      AppLogger.repo.info('deleteCustomPuzzle id=$id path=${AppLogger.sanitizePath(item.imagePathOrUrl)} isLocal=${item.isLocalFile}');
       if (item.isLocalFile && !item.imagePathOrUrl.startsWith('assets/')) {
         try {
           final file = File(item.imagePathOrUrl);
           if (await file.exists()) {
             await file.delete();
+            AppLogger.repo.info('Deleted local file ${AppLogger.sanitizePath(item.imagePathOrUrl)}');
           }
-        } catch (_) {}
+        } catch (e, st) {
+          AppLogger.repo.warning('Failed to delete local file ${AppLogger.sanitizePath(item.imagePathOrUrl)}', e, st);
+        }
       }
       _customPuzzles.removeAt(idx);
       customPuzzlesNotifier.value = List.unmodifiable(_customPuzzles);
       await _saveCustomPuzzles();
+    } else {
+      AppLogger.repo.warning('deleteCustomPuzzle not found id=$id');
     }
   }
 
@@ -268,7 +293,11 @@ class GameRepository {
     int timeSeconds = 0,
   }) async {
     final idx = levelIndex - 1;
-    if (idx < 0 || idx >= _levels.length) return;
+    if (idx < 0 || idx >= _levels.length) {
+      AppLogger.repo.warning('updateLevelProgress invalid index $levelIndex len=${_levels.length}');
+      return;
+    }
+    AppLogger.repo.info('updateLevelProgress level=$levelIndex progress=$progressPercent% completed=$isCompleted pieceCount=$completedPieceCount stars=$stars time=${timeSeconds}s');
 
     var current = _levels[idx];
     final newStars = isCompleted ? (stars > current.stars ? stars : current.stars) : current.stars;
@@ -309,6 +338,7 @@ class GameRepository {
 
     if (isCompleted) {
       await _prefs?.setInt(_keyTotalCompleted, totalCompletedLevels + 1);
+      AppLogger.repo.info('Level $levelIndex completed totalCompleted=${totalCompletedLevels + 1}');
     }
   }
 
@@ -321,8 +351,12 @@ class GameRepository {
     int? completedPieceCount,
     int timeSeconds = 0,
   }) async {
+    AppLogger.repo.info('updateDailyProgress date=$dateStr progress=$progressPercent% completed=$isCompleted pieceCount=$completedPieceCount time=${timeSeconds}s');
     final idx = _dailyChallenges.indexWhere((d) => d.date == dateStr);
-    if (idx == -1) return;
+    if (idx == -1) {
+      AppLogger.repo.warning('updateDailyProgress not found date=$dateStr');
+      return;
+    }
 
     var current = _dailyChallenges[idx];
     final newBestTime = isCompleted
@@ -360,8 +394,12 @@ class GameRepository {
     int? completedPieceCount,
     int timeSeconds = 0,
   }) async {
+    AppLogger.repo.info('updateCustomProgress id=$id progress=$progressPercent% completed=$isCompleted pieceCount=$completedPieceCount time=${timeSeconds}s');
     final idx = _customPuzzles.indexWhere((p) => p.id == id);
-    if (idx == -1) return;
+    if (idx == -1) {
+      AppLogger.repo.warning('updateCustomProgress not found id=$id');
+      return;
+    }
 
     var current = _customPuzzles[idx];
     final newBestTime = isCompleted
@@ -393,16 +431,24 @@ class GameRepository {
 
   /// Adds statistics for snapped piece and play duration.
   Future<void> recordSnapStats({int pieceCount = 1, int durationSeconds = 0}) async {
-    if (pieceCount > 0) {
-      await _prefs?.setInt(_keyTotalPiecesSnapped, totalPiecesSnapped + pieceCount);
-    }
-    if (durationSeconds > 0) {
-      await _prefs?.setInt(_keyTotalPlayTimeSeconds, totalPlayTimeSeconds + durationSeconds);
+    try {
+      if (pieceCount > 0) {
+        await _prefs?.setInt(_keyTotalPiecesSnapped, totalPiecesSnapped + pieceCount);
+      }
+      if (durationSeconds > 0) {
+        await _prefs?.setInt(_keyTotalPlayTimeSeconds, totalPlayTimeSeconds + durationSeconds);
+      }
+      if (pieceCount > 0 || durationSeconds > 0) {
+        AppLogger.repo.fine('recordSnapStats pieceCount=$pieceCount duration=${durationSeconds}s totalSnapped=${totalPiecesSnapped + pieceCount}');
+      }
+    } catch (e, st) {
+      AppLogger.repo.warning('recordSnapStats failed', e, st);
     }
   }
 
   /// Resets all local progress for testing/replay.
   Future<void> resetAllData() async {
+    AppLogger.repo.warning('resetAllData clearing all prefs and reinitializing');
     await _prefs?.clear();
     _initLevels();
     _initDailyChallenges();

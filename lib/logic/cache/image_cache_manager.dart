@@ -5,6 +5,7 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
 
+import '../../services/app_logger.dart';
 import 'engine_task_queue.dart';
 import 'memory_cache.dart';
 import 'thumbnail_generator.dart';
@@ -60,9 +61,9 @@ class ImageCacheManager {
       await _rebuildDiskKeyIndexAsync();
 
       _isInitialized = true;
-      debugPrint('[ImageCacheManager:Init] Initialized successfully. Indexed ${_diskKeyIndex.length} cached thumbnails. Concurrency: ${_taskQueue.maxConcurrency}');
-    } catch (e) {
-      debugPrint('[ImageCacheManager:Error] Failed to initialize: $e');
+      AppLogger.imageCache.info('Initialized indexed=${_diskKeyIndex.length} concurrency=${_taskQueue.maxConcurrency} dir=${_cacheDir?.path}');
+    } catch (e, st) {
+      AppLogger.imageCache.severe('Failed to initialize', e, st);
     }
   }
 
@@ -80,8 +81,8 @@ class ImageCacheManager {
           }
         }
       }
-    } catch (e) {
-      debugPrint('[ImageCacheManager:Error] Failed to scan disk cache: $e');
+    } catch (e, st) {
+      AppLogger.imageCache.warning('Failed to scan disk cache', e, st);
     }
   }
 
@@ -175,8 +176,8 @@ class ImageCacheManager {
             }
             await targetFile.writeAsBytes(generatedBytes, flush: true);
             _diskKeyIndex.add(cacheKey);
-          } catch (e) {
-            debugPrint('[ImageCacheManager:Warn] Failed to write thumbnail file: $e');
+          } catch (e, st) {
+            AppLogger.imageCache.warning('Failed to write thumbnail file key=$cacheKey', e, st);
           }
 
           // 写入 L1 内存缓存
@@ -288,9 +289,9 @@ class ImageCacheManager {
             await entity.delete();
           }
         }
-        debugPrint('[ImageCacheManager:Cleared] Thumbnail cache cleared.');
-      } catch (e) {
-        debugPrint('[ImageCacheManager:Error] Failed to clear cache: $e');
+        AppLogger.imageCache.info('Thumbnail cache cleared');
+      } catch (e, st) {
+        AppLogger.imageCache.severe('Failed to clear cache', e, st);
       }
     }
   }

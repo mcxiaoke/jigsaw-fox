@@ -6,6 +6,7 @@ import '../models/canonical_id.dart';
 import '../models/puzzle_event_item.dart';
 import '../models/puzzle_level_item.dart';
 import '../network/content_http_client.dart';
+import '../../../services/app_logger.dart';
 
 /// 活动中心管线 (Zip 整包 / Array 列表双载荷 + 状态机生命周期 + Auto-GC 垃圾回收)
 class EventsContentPipeline {
@@ -41,27 +42,41 @@ class EventsContentPipeline {
         final text = await file.readAsString();
         final json = jsonDecode(text);
         if (json is List<dynamic>) {
+          var loaded = 0;
           for (final raw in json) {
             if (raw is Map<String, dynamic>) {
               final item = PuzzleEventItem.fromJson(raw);
               final isDownloaded = _isEventLocalDownloaded(item);
               _eventsMap[item.id] = item.copyWith(isLocalDownloaded: isDownloaded);
+              loaded++;
             }
           }
+          AppLogger.events.info('initializeFromCache loaded=$loaded file=${AppLogger.sanitizePath(cacheFilePath)}');
         }
+      } else {
+        AppLogger.events.fine('initializeFromCache no cache ${AppLogger.sanitizePath(cacheFilePath)}');
       }
-    } catch (_) {}
+    } catch (e, st) {
+      AppLogger.events.warning('initializeFromCache failed', e, st);
+    }
   }
 
   /// 同步远端活动列表并执行 Auto-GC 自动垃圾清理
   Future<bool> syncWithRemote({required String remoteUrl}) async {
-    if (remoteUrl.isEmpty) return false;
-
+    if (remoteUrl.isEmpty) {
+      AppLogger.events.warning('syncWithRemote empty url');
+      return false;
+    }
+    AppLogger.events.info('syncWithRemote url=${AppLogger.sanitizeUrl(remoteUrl)}');
     try {
       final json = await _httpClient.fetchJson(remoteUrl);
-      if (json is! List<dynamic>) return false;
+      if (json is! List<dynamic>) {
+        AppLogger.events.warning('syncWithRemote unexpected type ${json.runtimeType}');
+        return false;
+      }
 
       final updatedEvents = <PuzzleEventItem>[];
+      var skipped = 0;
       for (final raw in json) {
         if (raw is Map<String, dynamic>) {
           try {
@@ -70,19 +85,23 @@ class EventsContentPipeline {
             final updatedItem = item.copyWith(isLocalDownloaded: isDownloaded);
             _eventsMap[item.id] = updatedItem;
             updatedEvents.add(updatedItem);
-          } catch (_) {
-            // 跳过单条格式异常的活动
+          } catch (e, st) {
+            skipped++;
+            AppLogger.events.warning('syncWithRemote skip malformed event $raw', e, st);
           }
         }
       }
 
       // 触发 Auto-GC 垃圾回收：自动清理 disabled 活动的本地沙盒目录
-      await performAutoGc();
+      final gcCount = await performAutoGc();
+      if (gcCount > 0) AppLogger.events.info('Auto-GC deleted $gcCount disabled events');
 
       // 持久化到缓存
       await _persistToCache();
+      AppLogger.events.info('syncWithRemote done events=${_eventsMap.length} updated=${updatedEvents.length} skipped=$skipped gc=$gcCount');
       return true;
-    } catch (_) {
+    } catch (e, st) {
+      AppLogger.events.warning('syncWithRemote failed', e, st);
       return false;
     }
   }
@@ -97,7 +116,10 @@ class EventsContentPipeline {
           try {
             eventDir.deleteSync(recursive: true);
             deletedCount++;
-          } catch (_) {}
+            AppLogger.events.info('Auto-GC deleted ${event.id}');
+          } catch (e, st) {
+            AppLogger.events.warning('Auto-GC failed ${event.id}', e, st);
+          }
         }
       }
     }
@@ -107,11 +129,16 @@ class EventsContentPipeline {
   /// 确保活动的关卡资源已就绪 (若为 Zip 模式则自动下载并解压)
   Future<bool> ensureEventDownloaded(PuzzleEventItem event) async {
     if (event.isLocalDownloaded && _isEventLocalDownloaded(event)) {
+      AppLogger.events.fine('ensureEventDownloaded already ready ${event.id}');
       return true;
     }
 
     if (event.isZipType) {
-      if (event.zipUrl == null || event.zipUrl!.isEmpty) return false;
+      if (event.zipUrl == null || event.zipUrl!.isEmpty) {
+        AppLogger.events.warning('ensureEventDownloaded empty zipUrl ${event.id}');
+        return false;
+      }
+      AppLogger.events.info('ensureEventDownloaded zip ${event.id} url=${AppLogger.sanitizeUrl(event.zipUrl!)}');
       final tempZipPath = p.join(eventsStorageBaseDir, 'temp_${event.id}_${DateTime.now().millisecondsSinceEpoch}.zip');
       final targetDir = Directory(p.join(eventsStorageBaseDir, event.id));
       final tempExtractDir = Directory(p.join(eventsStorageBaseDir, 'temp_extract_${event.id}'));
@@ -149,8 +176,10 @@ class EventsContentPipeline {
 
         _eventsMap[event.id] = event.copyWith(isLocalDownloaded: true);
         await _persistToCache();
+        AppLogger.events.info('ensureEventDownloaded success ${event.id}');
         return true;
-      } catch (_) {
+      } catch (e, st) {
+        AppLogger.events.severe('ensureEventDownloaded failed ${event.id}', e, st);
         if (tempExtractDir.existsSync()) {
           try {
             tempExtractDir.deleteSync(recursive: true);
@@ -232,6 +261,9 @@ class EventsContentPipeline {
       }
       final payload = _eventsMap.values.map((e) => e.toJson()).toList();
       await file.writeAsString(jsonEncode(payload), flush: true);
-    } catch (_) {}
+      AppLogger.events.fine('Persisted events cache count=${_eventsMap.length}');
+    } catch (e, st) {
+      AppLogger.events.warning('Persist events cache failed', e, st);
+    }
   }
 }

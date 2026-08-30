@@ -9,6 +9,7 @@ import 'package:flutter/painting.dart'
 
 import '../logic/geometry/piece_shape.dart';
 import '../logic/rendering/linen_texture_manager.dart';
+import '../services/app_logger.dart';
 import 'jigsaw_puzzle_game.dart';
 
 /// 拼图碎片渲染与交互组件（基于 Flame 游戏引擎）。
