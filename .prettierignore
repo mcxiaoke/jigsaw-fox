@@ -1,0 +1,3 @@
+# 阻止 Prettier（Antigravity / Trae / CLI）格式化设计文档
+# 避免 \~ \_ ~~ <br /> 等 Prettier Markdown 规范化污染（见 2026-08-30 复发事件）
+docs/

@@ -15,3 +15,4 @@
 - 未经用户明确允许，禁止 `git commit` ，任何情况下都禁止 `git push`
 - commit msg使用英文，commit可以用临时文件或改用 -m 多行参数
 - 关键代码变更的改动概要记入 `docs/CHANGES-YYYYMMDD.md` 顶部
+- 禁止对 `markdown` 文档运行任何格式化工具
