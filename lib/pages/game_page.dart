@@ -25,6 +25,8 @@ class GamePage extends StatefulWidget {
     this.dailyDateStr,
     this.customId,
     this.initialSnapshotJson,
+    this.canonicalId,
+    this.packTitle,
   });
 
   final Uint8List imageBytes;
@@ -33,12 +35,15 @@ class GamePage extends StatefulWidget {
   final String? dailyDateStr;
   final String? customId;
   final String? initialSnapshotJson;
+  /// 通用扩展包/活动等使用的全局唯一主键，优先级高于 levelIndex/daily/customId
+  final String? canonicalId;
+  final String? packTitle;
 
   @override
   State<GamePage> createState() => _GamePageState();
 }
 
-class _GamePageState extends State<GamePage> {
+class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
   final _repo = GameRepository.instance;
   JigsawPuzzleGame? _game;
   ui.Image? _gameImage;
@@ -64,13 +69,30 @@ class _GamePageState extends State<GamePage> {
   Vector2 _basePan = Vector2.zero();
   final FocusNode _focusNode = FocusNode();
 
+  Timer? _saveDebounce;
+  static const Duration _saveDebounceDuration = Duration(milliseconds: 800);
+  bool _isSaving = false;
+
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _selectedBackground = _repo.selectedBackground;
     _loadHeaderColor();
     _startTimer();
     _loadImage();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    super.didChangeAppLifecycleState(state);
+    if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.hidden ||
+        state == AppLifecycleState.detached ||
+        state == AppLifecycleState.inactive) {
+      AppLogger.game.info('GamePage lifecycle $state -> flush save');
+      _flushSave();
+    }
   }
 
   /// 解析背景贴图资产取其近似平均色，与主题 primaryContainer 混合作为顶部导航条背景色，
@@ -160,7 +182,7 @@ class _GamePageState extends State<GamePage> {
       onPieceSnapped: _onPieceSnapped,
       onProgressChanged: (count) {
         if (mounted) setState(() => _solvedPieces = count);
-        _autoSaveProgress();
+        _scheduleSave(immediate: false);
       },
       onStateUpdated: () {
         if (mounted) {
@@ -170,6 +192,8 @@ class _GamePageState extends State<GamePage> {
             }
           });
         }
+        // 自由摆放等非吸附位移也需要保存
+        _scheduleSave(immediate: false);
       },
     );
 
@@ -188,31 +212,81 @@ class _GamePageState extends State<GamePage> {
     _repo.recordSnapStats(pieceCount: 1);
   }
 
-  void _autoSaveProgress() {
+  void _scheduleSave({bool immediate = false}) {
     if (_game == null || _isSolved) return;
-    final total = _totalPieces;
-    final percent = total > 0 ? (_solvedPieces * 100 ~/ total) : 0;
-    final snapshot = _game!.exportSnapshotJson(elapsedSeconds: _seconds);
+    if (immediate) {
+      _saveDebounce?.cancel();
+      _doSave();
+      return;
+    }
+    _saveDebounce?.cancel();
+    _saveDebounce = Timer(_saveDebounceDuration, _doSave);
+  }
 
-    if (widget.levelIndex != null) {
-      _repo.updateLevelProgress(
+  void _flushSave() {
+    _saveDebounce?.cancel();
+    _doSave();
+  }
+
+  void _doSave() {
+    if (_game == null || _isSolved) return;
+    if (_isSaving) {
+      // 若正在保存，稍后重试
+      _saveDebounce?.cancel();
+      _saveDebounce = Timer(const Duration(milliseconds: 300), _doSave);
+      return;
+    }
+    _isSaving = true;
+    final total = _totalPieces;
+    // solvedPieces 可能滞后，以棋盘实时计算为准
+    final liveSolved = _game!.solvedCount;
+    if (liveSolved != _solvedPieces && mounted) {
+      _solvedPieces = liveSolved;
+    }
+    final percent = total > 0 ? (liveSolved * 100 ~/ total) : 0;
+    String snapshot;
+    try {
+      snapshot = _game!.exportSnapshotJson(elapsedSeconds: _seconds);
+    } catch (e, st) {
+      AppLogger.game.warning('exportSnapshot failed', e, st);
+      _isSaving = false;
+      return;
+    }
+
+    Future<void> fut;
+    if (widget.canonicalId != null && widget.canonicalId!.isNotEmpty) {
+      fut = _repo.updateGenericProgress(
+        canonicalId: widget.canonicalId!,
+        progressPercent: percent,
+        snapshotJson: snapshot,
+        difficultyHint: _effectiveDifficulty ?? widget.difficulty,
+      );
+    } else if (widget.levelIndex != null) {
+      fut = _repo.updateLevelProgress(
         levelIndex: widget.levelIndex!,
         progressPercent: percent,
         snapshotJson: snapshot,
       );
     } else if (widget.dailyDateStr != null) {
-      _repo.updateDailyProgress(
+      fut = _repo.updateDailyProgress(
         dateStr: widget.dailyDateStr!,
         progressPercent: percent,
         snapshotJson: snapshot,
       );
     } else if (widget.customId != null) {
-      _repo.updateCustomProgress(
+      fut = _repo.updateCustomProgress(
         id: widget.customId!,
         progressPercent: percent,
         snapshotJson: snapshot,
       );
+    } else {
+      _isSaving = false;
+      return;
     }
+
+    fut.whenComplete(() {
+      _isSaving = false;
+    });
   }
 
   int _calculateStars() {
@@ -228,6 +302,7 @@ class _GamePageState extends State<GamePage> {
   void _handleSolved() {
     if (_isSolved) return;
     _timer?.cancel();
+    _saveDebounce?.cancel();
 
     if (_repo.hapticEnabled) {
       HapticFeedback.heavyImpact();
@@ -246,7 +321,16 @@ class _GamePageState extends State<GamePage> {
     final completedCount = _totalPieces;
     final stars = _calculateStars();
 
-    if (widget.levelIndex != null) {
+    if (widget.canonicalId != null && widget.canonicalId!.isNotEmpty) {
+      _repo.updateGenericProgress(
+        canonicalId: widget.canonicalId!,
+        progressPercent: 100,
+        isCompleted: true,
+        completedPieceCount: completedCount,
+        timeSeconds: _seconds,
+        difficultyHint: _effectiveDifficulty ?? widget.difficulty,
+      );
+    } else if (widget.levelIndex != null) {
       _repo.updateLevelProgress(
         levelIndex: widget.levelIndex!,
         progressPercent: 100,
@@ -283,6 +367,9 @@ class _GamePageState extends State<GamePage> {
   }
 
   String get _pageTitle {
+    if (widget.packTitle != null && widget.packTitle!.isNotEmpty) {
+      return widget.packTitle!;
+    }
     if (widget.levelIndex != null) {
       return '第 ${widget.levelIndex} 关';
     } else if (widget.dailyDateStr != null) {
@@ -315,13 +402,19 @@ class _GamePageState extends State<GamePage> {
     final imgBytes = bytes.buffer.asUint8List();
 
     if (!mounted) return;
+    // 尝试从文件级快照读取（新链路优先）
+    String? snapJson = nextLevel.savedSnapshotJson;
+    try {
+      final s = await _repo.loadLevelSnapshotJson(nextIndex, nextLevel.difficulty);
+      if (s != null) snapJson = s;
+    } catch (_) {}
     Navigator.of(context).pushReplacement(
       MaterialPageRoute<void>(
         builder: (_) => GamePage(
           imageBytes: imgBytes,
           difficulty: nextLevel.difficulty,
           levelIndex: nextLevel.index,
-          initialSnapshotJson: nextLevel.savedSnapshotJson,
+          initialSnapshotJson: snapJson,
         ),
       ),
     );
@@ -569,6 +662,14 @@ class _GamePageState extends State<GamePage> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _saveDebounce?.cancel();
+    // 最后机会保存（若未通关）
+    if (!_isSolved) {
+      try {
+        _doSave();
+      } catch (_) {}
+    }
     _timer?.cancel();
     _focusNode.dispose();
     _gameImage?.dispose();
@@ -599,7 +700,7 @@ class _GamePageState extends State<GamePage> {
         tooltip: '返回',
         onPressed: () {
           SoundService.I.play(Sfx.tap);
-          _autoSaveProgress();
+          _flushSave();
           Navigator.of(context).pop();
         },
       ),
@@ -746,9 +847,17 @@ class _GamePageState extends State<GamePage> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFFE2E6EA),
-      appBar: _buildAppBar(),
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop) return;
+        SoundService.I.play(Sfx.tap);
+        _flushSave();
+        if (context.mounted) Navigator.of(context).pop(result);
+      },
+      child: Scaffold(
+        backgroundColor: const Color(0xFFE2E6EA),
+        appBar: _buildAppBar(),
       body: Stack(
         children: [
           // 1. Full-Screen Seamless Tiled Background
@@ -946,6 +1055,7 @@ class _GamePageState extends State<GamePage> {
               ),
           ],
         ),
+      ),
     );
   }
 }

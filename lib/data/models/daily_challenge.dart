@@ -42,6 +42,7 @@ class DailyChallengeItem {
     int? progressPercent,
     int? bestTimeSeconds,
     String? savedSnapshotJson,
+    bool clearSnapshot = false,
     List<int>? completedPieceCounts,
   }) {
     return DailyChallengeItem(
@@ -55,7 +56,7 @@ class DailyChallengeItem {
       isCompleted: isCompleted ?? this.isCompleted,
       progressPercent: progressPercent ?? this.progressPercent,
       bestTimeSeconds: bestTimeSeconds ?? this.bestTimeSeconds,
-      savedSnapshotJson: savedSnapshotJson ?? this.savedSnapshotJson,
+      savedSnapshotJson: clearSnapshot ? null : (savedSnapshotJson ?? this.savedSnapshotJson),
       completedPieceCounts: completedPieceCounts ?? this.completedPieceCounts,
     );
   }

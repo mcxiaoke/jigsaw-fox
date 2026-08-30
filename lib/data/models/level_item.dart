@@ -42,6 +42,7 @@ class LevelItem {
     int? stars,
     int? bestTimeSeconds,
     String? savedSnapshotJson,
+    bool clearSnapshot = false,
     List<int>? completedPieceCounts,
   }) {
     return LevelItem(
@@ -55,7 +56,7 @@ class LevelItem {
       progressPercent: progressPercent ?? this.progressPercent,
       stars: stars ?? this.stars,
       bestTimeSeconds: bestTimeSeconds ?? this.bestTimeSeconds,
-      savedSnapshotJson: savedSnapshotJson ?? this.savedSnapshotJson,
+      savedSnapshotJson: clearSnapshot ? null : (savedSnapshotJson ?? this.savedSnapshotJson),
       completedPieceCounts: completedPieceCounts ?? this.completedPieceCounts,
     );
   }

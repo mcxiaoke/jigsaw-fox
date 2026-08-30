@@ -4,13 +4,19 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'package:path/path.dart' as p;
+import 'package:path_provider/path_provider.dart';
+
 import '../logic/image_source.dart';
+import '../logic/models/puzzle_state.dart';
 import '../logic/puzzle_model.dart';
 import '../services/app_logger.dart';
 import 'bing_daily_data.dart';
 import 'models/custom_puzzle_item.dart';
 import 'models/daily_challenge.dart';
 import 'models/level_item.dart';
+import 'progress_store.dart';
+import 'snapshot_store.dart';
 
 /// Central game data repository managing main levels, daily challenges, UGC custom puzzles, and persistent state.
 class GameRepository {
@@ -84,11 +90,24 @@ class GameRepository {
     AppLogger.repo.info('init start');
     final sw = Stopwatch()..start();
     _prefs = await SharedPreferences.getInstance();
+    // 初始化新一代文件级快照与轻量进度索引（无迁移，直接可用）
+    try {
+      await SnapshotStore.instance.init();
+      await ProgressStore.instance.init();
+    } catch (e, st) {
+      AppLogger.repo.warning('Snapshot/Progress init failed', e, st);
+    }
     _initLevels();
     _initDailyChallenges();
     _initCustomPuzzles();
     AppLogger.repo.info('init done ${sw.elapsedMilliseconds}ms levels=${_levels.length} daily=${_dailyChallenges.length} custom=${_customPuzzles.length}');
   }
+
+  // --- CanonicalId helpers ---
+  static String canonicalForLevel(int index) => 'main:${index.toString().padLeft(3, '0')}';
+  static String canonicalForDaily(String dateStr) => 'daily:${dateStr.replaceAll('-', '')}';
+  static String canonicalForCustom(String id) => 'ugc:$id';
+  static String canonicalForPack(String packId, String fileName) => 'pack:$packId:$fileName';
 
   void _initLevels() {
     final list = <LevelItem>[];
@@ -274,6 +293,11 @@ class GameRepository {
           AppLogger.repo.warning('Failed to delete local file ${AppLogger.sanitizePath(item.imagePathOrUrl)}', e, st);
         }
       }
+      // 清理该自制对应的全部难度快照
+      try {
+        await SnapshotStore.instance.deleteAllFor(canonicalForCustom(id));
+        await ProgressStore.instance.clearAllSnapshots(canonicalForCustom(id));
+      } catch (_) {}
       _customPuzzles.removeAt(idx);
       customPuzzlesNotifier.value = List.unmodifiable(_customPuzzles);
       await _saveCustomPuzzles();
@@ -312,17 +336,85 @@ class GameRepository {
       updatedCompletedCounts.add(completedPieceCount);
     }
 
+    // 使用显式 clearSnapshot 语义修复旧 copyWith 失效问题
+    final shouldClear = isCompleted || (snapshotJson == null && progressPercent == 0);
     _levels[idx] = current.copyWith(
       progressPercent: progressPercent,
       isCompleted: isCompleted || current.isCompleted || updatedCompletedCounts.isNotEmpty,
       stars: newStars,
       bestTimeSeconds: newBestTime,
-      savedSnapshotJson: isCompleted ? null : snapshotJson,
+      savedSnapshotJson: snapshotJson,
+      clearSnapshot: shouldClear,
       completedPieceCounts: updatedCompletedCounts.toList(),
     );
 
-    // Save current level
+    // Save current level (保留旧字段以便调试，但新快照以文件为主)
     await _prefs?.setString('$_keyLevelsPrefix$levelIndex', jsonEncode(_levels[idx].toJson()));
+
+    // 同步到新一代文件级快照与轻量索引
+    final canonicalId = canonicalForLevel(levelIndex);
+    try {
+      if (snapshotJson != null && !isCompleted) {
+        final map = jsonDecode(snapshotJson) as Map<String, dynamic>;
+        final state = PuzzleBoardState.fromJson(map);
+        final enriched = state.copyWith(
+          canonicalId: canonicalId,
+          difficultyKey: state.effectiveDifficultyKey,
+          updatedAt: DateTime.now(),
+          createdAt: state.createdAt ?? DateTime.now(),
+        );
+        await SnapshotStore.instance.save(enriched);
+        await ProgressStore.instance.updateProgress(
+          canonicalId: canonicalId,
+          progressPercent: progressPercent,
+          hasSnapshot: true,
+          activeDifficultyKey: enriched.effectiveDifficultyKey,
+          snapshotKeys: [enriched.effectiveDifficultyKey],
+        );
+      } else if (shouldClear) {
+        // 清档或通关：删除该难度文件（若能从 completedPieceCount 推断则删对应难度，否则清全部）
+        if (completedPieceCount != null) {
+          // 尝试按 pieceCount 找到对应难度Key（遍历 presets 兜底）
+          final diff = PuzzleDifficulty.presets.firstWhere(
+            (d) => d.pieceCount == completedPieceCount,
+            orElse: () => current.difficulty,
+          );
+          await SnapshotStore.instance.delete(canonicalId, SnapshotStore.difficultyKeyFor(diff));
+          await ProgressStore.instance.clearSnapshot(canonicalId, SnapshotStore.difficultyKeyFor(diff));
+        } else if (snapshotJson == null && !isCompleted) {
+          // 放弃进度：若当前有 activeDifficultyKey 则删之
+          final prog = await ProgressStore.instance.load(canonicalId);
+          if (prog.activeDifficultyKey.isNotEmpty) {
+            await SnapshotStore.instance.delete(canonicalId, prog.activeDifficultyKey);
+            await ProgressStore.instance.clearSnapshot(canonicalId, prog.activeDifficultyKey);
+          } else {
+            await SnapshotStore.instance.deleteAllFor(canonicalId);
+            await ProgressStore.instance.clearAllSnapshots(canonicalId);
+          }
+        } else {
+          await SnapshotStore.instance.deleteAllFor(canonicalId);
+          await ProgressStore.instance.clearAllSnapshots(canonicalId);
+        }
+      } else if (!isCompleted && progressPercent > 0) {
+        await ProgressStore.instance.updateProgress(
+          canonicalId: canonicalId,
+          progressPercent: progressPercent,
+        );
+      }
+
+      if (isCompleted && completedPieceCount != null) {
+        await ProgressStore.instance.updateProgress(
+          canonicalId: canonicalId,
+          isCompleted: true,
+          completedPieceCount: completedPieceCount,
+          stars: newStars,
+          bestTimeSeconds: newBestTime,
+          hasSnapshot: false,
+        );
+      }
+    } catch (e, st) {
+      AppLogger.repo.warning('updateLevelProgress snapshot sync failed level=$levelIndex', e, st);
+    }
 
     // Unlock next level if completed
     if (isCompleted && levelIndex < _levels.length) {
@@ -340,6 +432,19 @@ class GameRepository {
       await _prefs?.setInt(_keyTotalCompleted, totalCompletedLevels + 1);
       AppLogger.repo.info('Level $levelIndex completed totalCompleted=${totalCompletedLevels + 1}');
     }
+  }
+
+  /// 读取文件级快照（新链路）
+  Future<PuzzleBoardState?> loadLevelSnapshot(int levelIndex, PuzzleDifficulty difficulty) async {
+    return SnapshotStore.instance.load(canonicalForLevel(levelIndex), SnapshotStore.difficultyKeyFor(difficulty));
+  }
+
+  Future<bool> hasLevelSnapshot(int levelIndex, PuzzleDifficulty difficulty) async {
+    return SnapshotStore.instance.hasSnapshot(canonicalForLevel(levelIndex), SnapshotStore.difficultyKeyFor(difficulty));
+  }
+
+  Future<String?> loadLevelSnapshotJson(int levelIndex, PuzzleDifficulty difficulty) async {
+    return SnapshotStore.instance.loadJsonString(canonicalForLevel(levelIndex), SnapshotStore.difficultyKeyFor(difficulty));
   }
 
   /// Updates daily challenge state.
@@ -370,19 +475,65 @@ class GameRepository {
       updatedCompletedCounts.add(completedPieceCount);
     }
 
+    final shouldClear = isCompleted || (snapshotJson == null && progressPercent == 0);
     _dailyChallenges[idx] = current.copyWith(
       progressPercent: progressPercent,
       isCompleted: isCompleted || current.isCompleted || updatedCompletedCounts.isNotEmpty,
       bestTimeSeconds: newBestTime,
-      savedSnapshotJson: isCompleted ? null : snapshotJson,
+      savedSnapshotJson: snapshotJson,
+      clearSnapshot: shouldClear,
       completedPieceCounts: updatedCompletedCounts.toList(),
     );
 
     await _prefs?.setString('$_keyDailyPrefix$dateStr', jsonEncode(_dailyChallenges[idx].toJson()));
 
+    final canonicalId = canonicalForDaily(dateStr);
+    try {
+      if (snapshotJson != null && !isCompleted) {
+        final state = PuzzleBoardState.fromJson(jsonDecode(snapshotJson) as Map<String, dynamic>);
+        final enriched = state.copyWith(canonicalId: canonicalId, difficultyKey: state.effectiveDifficultyKey, updatedAt: DateTime.now(), createdAt: state.createdAt ?? DateTime.now());
+        await SnapshotStore.instance.save(enriched);
+        await ProgressStore.instance.updateProgress(canonicalId: canonicalId, progressPercent: progressPercent, hasSnapshot: true, activeDifficultyKey: enriched.effectiveDifficultyKey, snapshotKeys: [enriched.effectiveDifficultyKey]);
+      } else if (shouldClear) {
+        if (completedPieceCount != null) {
+          final diff = PuzzleDifficulty.presets.firstWhere((d) => d.pieceCount == completedPieceCount, orElse: () => current.difficulty);
+          await SnapshotStore.instance.delete(canonicalId, SnapshotStore.difficultyKeyFor(diff));
+          await ProgressStore.instance.clearSnapshot(canonicalId, SnapshotStore.difficultyKeyFor(diff));
+        } else if (snapshotJson == null && !isCompleted) {
+          final prog = await ProgressStore.instance.load(canonicalId);
+          if (prog.activeDifficultyKey.isNotEmpty) {
+            await SnapshotStore.instance.delete(canonicalId, prog.activeDifficultyKey);
+            await ProgressStore.instance.clearSnapshot(canonicalId, prog.activeDifficultyKey);
+          } else {
+            await SnapshotStore.instance.deleteAllFor(canonicalId);
+            await ProgressStore.instance.clearAllSnapshots(canonicalId);
+          }
+        } else {
+          await SnapshotStore.instance.deleteAllFor(canonicalId);
+          await ProgressStore.instance.clearAllSnapshots(canonicalId);
+        }
+      } else if (!isCompleted && progressPercent > 0) {
+        await ProgressStore.instance.updateProgress(canonicalId: canonicalId, progressPercent: progressPercent);
+      }
+
+      if (isCompleted && completedPieceCount != null) {
+        await ProgressStore.instance.updateProgress(canonicalId: canonicalId, isCompleted: true, completedPieceCount: completedPieceCount, bestTimeSeconds: newBestTime, hasSnapshot: false);
+      }
+    } catch (e, st) {
+      AppLogger.repo.warning('updateDailyProgress snapshot sync failed date=$dateStr', e, st);
+    }
+
     if (isCompleted) {
       await _prefs?.setInt(_keyTotalCompleted, totalCompletedLevels + 1);
     }
+  }
+
+  Future<PuzzleBoardState?> loadDailySnapshot(String dateStr, PuzzleDifficulty difficulty) async {
+    return SnapshotStore.instance.load(canonicalForDaily(dateStr), SnapshotStore.difficultyKeyFor(difficulty));
+  }
+
+  Future<String?> loadDailySnapshotJson(String dateStr, PuzzleDifficulty difficulty) async {
+    return SnapshotStore.instance.loadJsonString(canonicalForDaily(dateStr), SnapshotStore.difficultyKeyFor(difficulty));
   }
 
   /// Updates custom puzzle progress.
@@ -413,21 +564,120 @@ class GameRepository {
       updatedCompletedCounts.add(completedPieceCount);
     }
 
+    final shouldClear = isCompleted || (snapshotJson == null && progressPercent == 0);
     _customPuzzles[idx] = current.copyWith(
       progressPercent: progressPercent,
       isCompleted: isCompleted || current.isCompleted || updatedCompletedCounts.isNotEmpty,
       bestTimeSeconds: newBestTime,
-      savedSnapshotJson: isCompleted ? null : snapshotJson,
+      savedSnapshotJson: snapshotJson,
+      clearSnapshot: shouldClear,
       completedPieceCounts: updatedCompletedCounts.toList(),
     );
 
     customPuzzlesNotifier.value = List.unmodifiable(_customPuzzles);
     await _saveCustomPuzzles();
 
+    final canonicalId = canonicalForCustom(id);
+    try {
+      if (snapshotJson != null && !isCompleted) {
+        final state = PuzzleBoardState.fromJson(jsonDecode(snapshotJson) as Map<String, dynamic>);
+        final enriched = state.copyWith(canonicalId: canonicalId, difficultyKey: state.effectiveDifficultyKey, updatedAt: DateTime.now(), createdAt: state.createdAt ?? DateTime.now());
+        await SnapshotStore.instance.save(enriched);
+        await ProgressStore.instance.updateProgress(canonicalId: canonicalId, progressPercent: progressPercent, hasSnapshot: true, activeDifficultyKey: enriched.effectiveDifficultyKey, snapshotKeys: [enriched.effectiveDifficultyKey]);
+      } else if (shouldClear) {
+        if (completedPieceCount != null) {
+          final diff = PuzzleDifficulty.presets.firstWhere((d) => d.pieceCount == completedPieceCount, orElse: () => current.difficulty);
+          await SnapshotStore.instance.delete(canonicalId, SnapshotStore.difficultyKeyFor(diff));
+          await ProgressStore.instance.clearSnapshot(canonicalId, SnapshotStore.difficultyKeyFor(diff));
+        } else if (snapshotJson == null && !isCompleted) {
+          final prog = await ProgressStore.instance.load(canonicalId);
+          if (prog.activeDifficultyKey.isNotEmpty) {
+            await SnapshotStore.instance.delete(canonicalId, prog.activeDifficultyKey);
+            await ProgressStore.instance.clearSnapshot(canonicalId, prog.activeDifficultyKey);
+          } else {
+            await SnapshotStore.instance.deleteAllFor(canonicalId);
+            await ProgressStore.instance.clearAllSnapshots(canonicalId);
+          }
+        } else {
+          await SnapshotStore.instance.deleteAllFor(canonicalId);
+          await ProgressStore.instance.clearAllSnapshots(canonicalId);
+        }
+      } else if (!isCompleted && progressPercent > 0) {
+        await ProgressStore.instance.updateProgress(canonicalId: canonicalId, progressPercent: progressPercent);
+      }
+
+      if (isCompleted && completedPieceCount != null) {
+        await ProgressStore.instance.updateProgress(canonicalId: canonicalId, isCompleted: true, completedPieceCount: completedPieceCount, bestTimeSeconds: newBestTime, hasSnapshot: false);
+      }
+    } catch (e, st) {
+      AppLogger.repo.warning('updateCustomProgress snapshot sync failed id=$id', e, st);
+    }
+
     if (isCompleted) {
       await _prefs?.setInt(_keyTotalCompleted, totalCompletedLevels + 1);
     }
   }
+
+  Future<PuzzleBoardState?> loadCustomSnapshot(String id, PuzzleDifficulty difficulty) async {
+    return SnapshotStore.instance.load(canonicalForCustom(id), SnapshotStore.difficultyKeyFor(difficulty));
+  }
+
+  Future<String?> loadCustomSnapshotJson(String id, PuzzleDifficulty difficulty) async {
+    return SnapshotStore.instance.loadJsonString(canonicalForCustom(id), SnapshotStore.difficultyKeyFor(difficulty));
+  }
+
+  // --- 通用 pack/event 入口（新增） ---
+
+  Future<void> updateGenericProgress({
+    required String canonicalId,
+    required int progressPercent,
+    String? snapshotJson,
+    bool isCompleted = false,
+    int? completedPieceCount,
+    int timeSeconds = 0,
+    PuzzleDifficulty? difficultyHint,
+  }) async {
+    try {
+      if (snapshotJson != null && !isCompleted) {
+        final state = PuzzleBoardState.fromJson(jsonDecode(snapshotJson) as Map<String, dynamic>);
+        final enriched = state.copyWith(canonicalId: canonicalId, difficultyKey: state.effectiveDifficultyKey, updatedAt: DateTime.now(), createdAt: state.createdAt ?? DateTime.now());
+        await SnapshotStore.instance.save(enriched);
+        await ProgressStore.instance.updateProgress(canonicalId: canonicalId, progressPercent: progressPercent, hasSnapshot: true, activeDifficultyKey: enriched.effectiveDifficultyKey, snapshotKeys: [enriched.effectiveDifficultyKey]);
+      } else if (isCompleted || (snapshotJson == null && progressPercent == 0)) {
+        if (completedPieceCount != null && difficultyHint != null) {
+          await SnapshotStore.instance.delete(canonicalId, SnapshotStore.difficultyKeyFor(difficultyHint));
+          await ProgressStore.instance.clearSnapshot(canonicalId, SnapshotStore.difficultyKeyFor(difficultyHint));
+        } else if (snapshotJson == null && !isCompleted) {
+          final prog = await ProgressStore.instance.load(canonicalId);
+          if (prog.activeDifficultyKey.isNotEmpty) {
+            await SnapshotStore.instance.delete(canonicalId, prog.activeDifficultyKey);
+            await ProgressStore.instance.clearSnapshot(canonicalId, prog.activeDifficultyKey);
+          } else {
+            await SnapshotStore.instance.deleteAllFor(canonicalId);
+            await ProgressStore.instance.clearAllSnapshots(canonicalId);
+          }
+        } else {
+          await SnapshotStore.instance.deleteAllFor(canonicalId);
+          await ProgressStore.instance.clearAllSnapshots(canonicalId);
+        }
+      } else if (!isCompleted && progressPercent > 0) {
+        await ProgressStore.instance.updateProgress(canonicalId: canonicalId, progressPercent: progressPercent);
+      }
+
+      if (isCompleted) {
+        await ProgressStore.instance.updateProgress(canonicalId: canonicalId, isCompleted: true, completedPieceCount: completedPieceCount, bestTimeSeconds: timeSeconds, hasSnapshot: false);
+        await _prefs?.setInt(_keyTotalCompleted, totalCompletedLevels + 1);
+      }
+    } catch (e, st) {
+      AppLogger.repo.warning('updateGenericProgress failed cid=$canonicalId', e, st);
+    }
+  }
+
+  Future<PuzzleBoardState?> loadGenericSnapshot(String canonicalId, PuzzleDifficulty difficulty) =>
+      SnapshotStore.instance.load(canonicalId, SnapshotStore.difficultyKeyFor(difficulty));
+
+  Future<String?> loadGenericSnapshotJson(String canonicalId, PuzzleDifficulty difficulty) =>
+      SnapshotStore.instance.loadJsonString(canonicalId, SnapshotStore.difficultyKeyFor(difficulty));
 
   /// Adds statistics for snapped piece and play duration.
   Future<void> recordSnapStats({int pieceCount = 1, int durationSeconds = 0}) async {
@@ -448,8 +698,23 @@ class GameRepository {
 
   /// Resets all local progress for testing/replay.
   Future<void> resetAllData() async {
-    AppLogger.repo.warning('resetAllData clearing all prefs and reinitializing');
+    AppLogger.repo.warning('resetAllData clearing all prefs and snapshots and reinitializing');
     await _prefs?.clear();
+    try {
+      await SnapshotStore.instance.init();
+      await ProgressStore.instance.init();
+    } catch (_) {}
+    try {
+      final d = await getApplicationSupportDirectory();
+      final dir = Directory(p.join(d.path, 'snapshots'));
+      if (await dir.exists()) {
+        await for (final e in dir.list()) {
+          try {
+            if (e is File && e.path.endsWith('.snapshot')) await e.delete();
+          } catch (_) {}
+        }
+      }
+    } catch (_) {}
     _initLevels();
     _initDailyChallenges();
     _initCustomPuzzles();

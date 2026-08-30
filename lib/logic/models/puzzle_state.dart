@@ -8,6 +8,7 @@ class PieceState {
     required this.ny,
     required this.clusterId,
     this.rot = 0,
+    this.extra = const {},
   });
 
   /// Unique piece index (0 <= id < rows * cols).
@@ -33,6 +34,9 @@ class PieceState {
   /// Discrete orientation (0 = 0°, 1 = 90°, 2 = 180°, 3 = 270° clockwise).
   final int rot;
 
+  /// 未来扩展保留字段：未知键透传，用于前瞻兼容（旧版本读新快照不丢字段）。
+  final Map<String, dynamic> extra;
+
   /// Target normalized X coordinate on the board.
   double targetNx(int cols) => c / cols;
 
@@ -56,6 +60,7 @@ class PieceState {
     double? ny,
     int? clusterId,
     int? rot,
+    Map<String, dynamic>? extra,
   }) {
     return PieceState(
       id: id ?? this.id,
@@ -65,20 +70,33 @@ class PieceState {
       ny: ny ?? this.ny,
       clusterId: clusterId ?? this.clusterId,
       rot: rot ?? this.rot,
+      extra: extra ?? this.extra,
     );
   }
 
-  Map<String, dynamic> toJson() => {
-        'id': id,
-        'r': r,
-        'c': c,
-        'nx': nx,
-        'ny': ny,
-        'g': clusterId,
-        'rot': rot,
-      };
+  Map<String, dynamic> toJson() {
+    final m = <String, dynamic>{
+      'id': id,
+      'r': r,
+      'c': c,
+      'nx': nx,
+      'ny': ny,
+      'g': clusterId,
+      'rot': rot,
+    };
+    // 透传未来字段
+    extra.forEach((k, v) {
+      if (!m.containsKey(k)) m[k] = v;
+    });
+    return m;
+  }
 
   factory PieceState.fromJson(Map<String, dynamic> json) {
+    const known = {'id', 'r', 'c', 'nx', 'ny', 'g', 'clusterId', 'rot'};
+    final extra = <String, dynamic>{};
+    for (final e in json.entries) {
+      if (!known.contains(e.key)) extra[e.key] = e.value;
+    }
     return PieceState(
       id: json['id'] as int,
       r: json['r'] as int,
@@ -87,6 +105,7 @@ class PieceState {
       ny: (json['ny'] as num).toDouble(),
       clusterId: (json['g'] ?? json['clusterId']) as int,
       rot: (json['rot'] ?? 0) as int,
+      extra: extra,
     );
   }
 
@@ -112,7 +131,14 @@ class PieceState {
 }
 
 /// Immutable snapshot of the puzzle board.
+///
+/// v3 前瞻性设计：`version` 显式版本号 + 未知字段透传 `extra`，新增字段均为可选
+/// 且带默认值，旧版本读新快照时未知键进入 `extra` 并在下次 `toJson` 原样回写，
+/// 做到“旧读新不丢、新读旧兼容”。
 class PuzzleBoardState {
+  static const int currentVersion = 3;
+  static const int minSupportedVersion = 2;
+
   const PuzzleBoardState({
     required this.rows,
     required this.cols,
@@ -122,6 +148,13 @@ class PuzzleBoardState {
     this.elapsedSeconds = 0,
     this.hintsUsed = 0,
     this.levelId = 'default_level',
+    this.version = currentVersion,
+    this.canonicalId = 'default_level',
+    this.difficultyKey = '',
+    this.aspectLabel,
+    this.createdAt,
+    this.updatedAt,
+    this.extra = const {},
   });
 
   final int rows;
@@ -132,6 +165,24 @@ class PuzzleBoardState {
   final int elapsedSeconds;
   final int hintsUsed;
   final String levelId;
+
+  /// 显式版本号，当前 3，兼容 2
+  final int version;
+
+  /// 全局唯一关卡主键，如 main:042 / daily:20260827 / pack:xxx:file / ugc:xxx
+  final String canonicalId;
+
+  /// 难度键，如 10x10，与 rows*cols 强绑定
+  final String difficultyKey;
+
+  /// 宽高比标签，如 square1x1 / portrait3x4
+  final String? aspectLabel;
+
+  final DateTime? createdAt;
+  final DateTime? updatedAt;
+
+  /// 未来新增字段的透传容器：所有未知顶层键在此回写时原样保留
+  final Map<String, dynamic> extra;
 
   int get totalPieces => rows * cols;
 
@@ -196,6 +247,12 @@ class PuzzleBoardState {
         .toSet();
   }
 
+  String get effectiveDifficultyKey =>
+      difficultyKey.isNotEmpty ? difficultyKey : '${rows}x$cols';
+
+  String get effectiveCanonicalId =>
+      canonicalId.isNotEmpty ? canonicalId : levelId;
+
   PuzzleBoardState copyWith({
     int? rows,
     int? cols,
@@ -205,6 +262,13 @@ class PuzzleBoardState {
     int? elapsedSeconds,
     int? hintsUsed,
     String? levelId,
+    int? version,
+    String? canonicalId,
+    String? difficultyKey,
+    String? aspectLabel,
+    DateTime? createdAt,
+    DateTime? updatedAt,
+    Map<String, dynamic>? extra,
   }) {
     return PuzzleBoardState(
       rows: rows ?? this.rows,
@@ -215,25 +279,73 @@ class PuzzleBoardState {
       elapsedSeconds: elapsedSeconds ?? this.elapsedSeconds,
       hintsUsed: hintsUsed ?? this.hintsUsed,
       levelId: levelId ?? this.levelId,
+      version: version ?? this.version,
+      canonicalId: canonicalId ?? this.canonicalId,
+      difficultyKey: difficultyKey ?? this.difficultyKey,
+      aspectLabel: aspectLabel ?? this.aspectLabel,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+      extra: extra ?? this.extra,
     );
   }
 
-  Map<String, dynamic> toJson() => {
-        'version': 2,
-        'levelId': levelId,
-        'seed': seed,
-        'rows': rows,
-        'cols': cols,
-        'rotationEnabled': rotationEnabled,
-        'elapsedSeconds': elapsedSeconds,
-        'hintsUsed': hintsUsed,
-        'pieces': pieces.map((p) => p.toJson()).toList(),
-      };
+  Map<String, dynamic> toJson() {
+    final m = <String, dynamic>{
+      'version': version,
+      'canonicalId': effectiveCanonicalId,
+      'difficultyKey': effectiveDifficultyKey,
+      'levelId': levelId,
+      'seed': seed,
+      'rows': rows,
+      'cols': cols,
+      'rotationEnabled': rotationEnabled,
+      'elapsedSeconds': elapsedSeconds,
+      'hintsUsed': hintsUsed,
+      'pieces': pieces.map((p) => p.toJson()).toList(),
+    };
+    if (aspectLabel != null) m['aspectLabel'] = aspectLabel;
+    if (createdAt != null) m['createdAt'] = createdAt!.toIso8601String();
+    if (updatedAt != null) m['updatedAt'] = updatedAt!.toIso8601String();
+    // 透传未知字段（不覆盖已知键）
+    extra.forEach((k, v) {
+      if (!m.containsKey(k)) m[k] = v;
+    });
+    return m;
+  }
 
   factory PuzzleBoardState.fromJson(Map<String, dynamic> json) {
+    const known = {
+      'version',
+      'canonicalId',
+      'difficultyKey',
+      'levelId',
+      'seed',
+      'rows',
+      'cols',
+      'rotationEnabled',
+      'elapsedSeconds',
+      'hintsUsed',
+      'pieces',
+      'aspectLabel',
+      'createdAt',
+      'updatedAt',
+    };
+    final extra = <String, dynamic>{};
+    for (final e in json.entries) {
+      if (!known.contains(e.key)) extra[e.key] = e.value;
+    }
     final pieceList = (json['pieces'] as List<dynamic>)
         .map((e) => PieceState.fromJson(e as Map<String, dynamic>))
         .toList();
+
+    // 兼容 v2：无 version/canonicalId/difficultyKey
+    final ver = (json['version'] as int?) ?? 2;
+    final cid = (json['canonicalId'] as String?) ??
+        (json['levelId'] as String? ?? 'default_level');
+    final dkey = (json['difficultyKey'] as String?) ??
+        (json['rows'] != null && json['cols'] != null
+            ? '${json['rows']}x${json['cols']}'
+            : '');
 
     return PuzzleBoardState(
       rows: json['rows'] as int,
@@ -243,7 +355,18 @@ class PuzzleBoardState {
       pieces: pieceList,
       elapsedSeconds: (json['elapsedSeconds'] ?? 0) as int,
       hintsUsed: (json['hintsUsed'] ?? 0) as int,
-      levelId: (json['levelId'] ?? 'default_level') as String,
+      levelId: (json['levelId'] ?? cid) as String,
+      version: ver,
+      canonicalId: cid,
+      difficultyKey: dkey,
+      aspectLabel: json['aspectLabel'] as String?,
+      createdAt: json['createdAt'] != null
+          ? DateTime.tryParse(json['createdAt'] as String)
+          : null,
+      updatedAt: json['updatedAt'] != null
+          ? DateTime.tryParse(json['updatedAt'] as String)
+          : null,
+      extra: extra,
     );
   }
 }

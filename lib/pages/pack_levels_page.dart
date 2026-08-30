@@ -1,6 +1,9 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:phosphoricons_flutter/phosphoricons_flutter.dart';
+import '../data/game_repository.dart';
+import '../data/resume_helper.dart';
+import '../data/snapshot_store.dart';
 import '../logic/content/app_content.dart';
 import '../logic/content/models/puzzle_level_item.dart';
 import '../logic/content/models/puzzle_pack_item.dart';
@@ -78,39 +81,83 @@ class _PackLevelsPageState extends State<PackLevelsPage> {
     }
   }
 
+  static const _defaultDiff = PuzzleDifficulty(label: '4 × 4 (16 块)', rows: 4, cols: 4, recommended: true);
+
   Future<void> _openLevel(PuzzleLevelItem level) async {
     final imageFile = File(level.imagePathOrUrl);
     if (!imageFile.existsSync()) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('关卡图片文件不存在')),
-      );
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('关卡图片文件不存在')));
       return;
     }
-
     final bytes = await imageFile.readAsBytes();
     if (!mounted) return;
-
+    final canonicalId = level.id;
+    final resumeResult = await ResumeHelper.maybeShowResumeDialog(
+      context: context,
+      canonicalId: canonicalId,
+      fallbackDifficulty: _defaultDiff,
+      isCompleted: false,
+      title: '${widget.pack.title} · 第 ${level.order} 关',
+      imageBytes: bytes,
+    );
+    if (resumeResult != null) {
+      if (resumeResult == 'cancelled') {
+        if (mounted) setState(() {});
+        return;
+      }
+      if (resumeResult.startsWith('continue:')) {
+        final k = resumeResult.substring('continue:'.length);
+        final diff = await _diffForKey(k, _defaultDiff);
+        final jsonStr = await SnapshotStore.instance.loadJsonString(canonicalId, k);
+        if (!mounted) return;
+        await Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => GamePage(imageBytes: bytes, difficulty: diff, canonicalId: canonicalId, packTitle: '${widget.pack.title} · 第 ${level.order} 关', initialSnapshotJson: jsonStr)));
+        if (mounted) setState(() {});
+        return;
+      } else if (resumeResult.startsWith('restart:')) {
+        final k = resumeResult.substring('restart:'.length);
+        await ResumeHelper.clearResume(canonicalId, k);
+        final diff = await _diffForKey(k, _defaultDiff);
+        if (!mounted) return;
+        await Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => GamePage(imageBytes: bytes, difficulty: diff, canonicalId: canonicalId, packTitle: '${widget.pack.title} · 第 ${level.order} 关', initialSnapshotJson: null)));
+        if (mounted) setState(() {});
+        return;
+      }
+    }
+    if (!mounted) return;
+    final progress = await ResumeHelper.loadProgress(canonicalId);
     await ChooseDifficultySheet.show(
       context: context,
       imageBytes: bytes,
-      initialDifficulty: const PuzzleDifficulty(label: '4 × 4 (16 块)', rows: 4, cols: 4, recommended: true),
-      completedPieceCounts: const {},
+      initialDifficulty: _defaultDiff,
+      completedPieceCounts: progress.completedPieceCounts.toSet(),
       isUnlocked: true,
       title: '${widget.pack.title} · 第 ${level.order} 关',
       sourcePlatform: widget.pack.displaySource,
+      savedProgressPercent: progress.hasSnapshot ? progress.progressPercent : null,
+      onResetProgress: () async {
+        final prog = await ResumeHelper.loadProgress(canonicalId);
+        if (prog.activeDifficultyKey.isNotEmpty) {
+          await ResumeHelper.clearResume(canonicalId, prog.activeDifficultyKey);
+        }
+        await GameRepository.instance.updateGenericProgress(canonicalId: canonicalId, progressPercent: 0, snapshotJson: null);
+        if (!mounted) return;
+        await Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => GamePage(imageBytes: bytes, difficulty: _defaultDiff, canonicalId: canonicalId, packTitle: '${widget.pack.title} · 第 ${level.order} 关', initialSnapshotJson: null)));
+        if (mounted) setState(() {});
+      },
       onStart: (diff) async {
-        await Navigator.of(context).push(
-          MaterialPageRoute<void>(
-            builder: (_) => GamePage(
-              imageBytes: bytes,
-              difficulty: diff,
-              levelIndex: level.order,
-            ),
-          ),
-        );
+        final dkey = SnapshotStore.difficultyKeyFor(diff);
+        final snapJson = await SnapshotStore.instance.loadJsonString(canonicalId, dkey);
+        await Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => GamePage(imageBytes: bytes, difficulty: diff, canonicalId: canonicalId, packTitle: '${widget.pack.title} · 第 ${level.order} 关', initialSnapshotJson: snapJson)));
         if (mounted) setState(() {});
       },
     );
+  }
+
+  Future<PuzzleDifficulty> _diffForKey(String k, PuzzleDifficulty fallback) async {
+    for (final d in PuzzleDifficulty.presets) {
+      if (SnapshotStore.difficultyKeyFor(d) == k) return d;
+    }
+    return fallback;
   }
 
   @override
