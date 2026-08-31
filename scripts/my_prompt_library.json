@@ -1,0 +1,627 @@
+{
+  "version": "3.0",
+  "_comment": "v3.0 restructured after visual review of v2.0 output. v2.0 problems: no focal subject (only 'dense/busy'), too many并列 nouns per prompt (model crammed them all in -> cluttered, e.g. four cats), and low-saturation atmosphere words. v3.0 adopts the gpt-image-2 template: ONE clear main subject + 3-4 secondary elements pinned to quadrants + medium-scale readable detail + style dimension.",
+  "model_hint": "z-image-turbo-fp8 (Apache 2.0, 9 steps, CFG 1.1)",
+  "critical_note": "CFG is near 1.0 on distilled Turbo models, so NEGATIVE prompts barely work. All constraints are written positively. Never use the words 'jigsaw puzzle' or 'puzzle pieces' in a prompt - some models then draw cut lines into the artwork.",
+  "generation": {
+    "steps": 9,
+    "cfg": 1.1,
+    "sampler": "res_multistep",
+    "scheduler": "simple"
+  },
+  "ratios": {
+    "1:1": {
+      "width": 1024,
+      "height": 1024
+    },
+    "2:3": {
+      "width": 896,
+      "height": 1344
+    },
+    "3:2": {
+      "width": 1344,
+      "height": 896
+    }
+  },
+  "quality_suffix": "clean uncluttered composition with one clear focal point, the main subject sharp and easy to identify, medium-scale readable details instead of microscopic texture, vibrant saturated colors, harmonious palette, strong visual hierarchy, meaningful detail continuing into all four edges and corners, attractive polished lighting, no empty corners, no repetitive micro patterns",
+  "modifiers": {
+    "lighting": [
+      "golden hour light",
+      "soft overcast light",
+      "dappled sunlight",
+      "dramatic side light",
+      "warm interior light",
+      "cool morning light",
+      "raking low sunlight",
+      "diffused window light",
+      "hazy soft light",
+      "crisp bright daylight"
+    ],
+    "viewpoint": [
+      "eye-level view",
+      "slightly elevated view",
+      "close-up view",
+      "wide-angle view",
+      "three-quarter view",
+      "low angle view",
+      "high angle view",
+      "flat lay view"
+    ],
+    "style": [
+      "cinematic storybook realism",
+      "layered paper-cut collage illustration",
+      "watercolor and ink illustration",
+      "isometric miniature diorama",
+      "retro-futurist screen print poster",
+      "rich classical oil painting",
+      "polished 3D rendered illustration",
+      "art nouveau decorative illustration"
+    ],
+    "atmosphere": [
+      "rich saturated color grading",
+      "warm golden sunlight palette",
+      "vivid jewel-tone colors",
+      "fresh bright daylight tones",
+      "high contrast bold colors",
+      "candy-bright pastel palette",
+      "earthy warm tones with vivid accents",
+      "teal and warm amber contrast"
+    ]
+  },
+  "tags": [
+    {
+      "id": "Animals",
+      "zh": "动物",
+      "tier": "B",
+      "quota": 100,
+      "ratios": [
+        "1:1",
+        "2:3",
+        "3:2"
+      ],
+      "extra": "a single animal as the clear focal subject in its habitat",
+      "subjects": [
+        "one adult elephant as the clear central subject, with acacia trees at the upper left, dry grass tufts across the lower edge, distant hills along the horizon, and dust motes catching the light",
+        "a single tiger as the focal subject, with bamboo stalks framing the left edge, dappled foliage in the upper right, a rocky outcrop at lower right, and deep forest depth behind",
+        "one red fox as the clear focal point, with autumn ferns in the lower left, fallen leaves scattered along the bottom, a mossy stone at right, and warm woodland depth behind",
+        "a lone stag as the central subject, with pine trunks at the left edge, mist drifting across the middle ground, rocky ground detail in the foreground, and forest layers behind",
+        "one giraffe as the focal subject, with acacia branches filling the upper right, dry scrub in the lower left, a distant plain along the bottom, and warm sky gradient above",
+        "a single snow leopard as the clear subject, with granite boulders in the lower left, scree slopes at right, pale lichen detail on the rocks, and distant peaks behind",
+        "one wolf as the focal point, with conifer branches at the upper left, snow-dusted rock in the foreground, a frozen stream along the bottom edge, and blue mountain layers behind",
+        "a lone bison as the central subject, with prairie wildflowers in the lower left, sagebrush at right, a wooden fence line along the middle ground, and rolling hills behind",
+        "one sea lion as the focal subject, with kelp fronds at the left edge, tide pool rocks in the lower right, foam along the bottom, and open water above",
+        "a single rhinoceros as the clear subject, with acacia scrub in the upper right, cracked earth across the lower edge, scattered stones in the foreground, and hazy hills behind",
+        "one capuchin monkey as the focal point, with a thick vine crossing the upper left, bromeliads clustered at right, blurred canopy depth behind, and dappled light throughout",
+        "a lone zebra as the central subject, with acacia trees at the upper right, dry grass across the lower edge, watering hole reflections in the foreground, and distant plains behind"
+      ]
+    },
+    {
+      "id": "Pets",
+      "zh": "宠物",
+      "tier": "B",
+      "quota": 100,
+      "ratios": [
+        "1:1",
+        "3:2"
+      ],
+      "extra": "exactly one pet as the clear focal subject in a lived-in setting",
+      "subjects": [
+        "one ginger cat as the clear central subject, with potted plants at the upper left, a woven rug across the lower edge, a bookshelf at right, and warm window light throughout",
+        "a single golden retriever as the focal subject, with flower beds in the lower left, garden tools leaning at right, a stone path along the bottom, and green foliage behind",
+        "one rabbit as the clear focal point, with straw scattered in the lower left, a wooden hutch frame at right, leafy greens in the foreground, and soft garden blur behind",
+        "a lone hamster as the central subject, with stacked books at the upper left, pencils across the lower edge, a glass jar at right, and a warm desk surface throughout",
+        "one border collie as the focal subject, with heather in the lower left, a dry stone wall along the middle ground, grass tufts at the bottom edge, and rolling hills behind",
+        "a single kitten as the clear focal point, with folded fabric in the lower left, an old trunk at right, dust motes in a light shaft, and attic shadows behind",
+        "one parrot as the central subject, with a perch branch at the left edge, hanging herbs in the upper right, copper pans along the bottom, and warm kitchen depth behind",
+        "a lone tabby cat as the focal subject, with tomato stakes at the upper left, garden netting across the background, soil rows in the foreground, and leafy greens at right",
+        "one pug as the clear focal point, with knitted throws in the lower left, cushions stacked at right, a side table along the upper edge, and cozy interior light throughout",
+        "a single guinea pig as the central subject, with hay scattered in the foreground, a cardboard tunnel at left, leafy greens at right, and soft garden light behind",
+        "one puppy as the clear focal subject, with a woven basket at the left edge, boots along the bottom, tiled floor across the foreground, and a doorway behind",
+        "a lone cat as the focal point, with yarn baskets in the lower left, a sewing box at right, fabric scraps across the bottom edge, and warm indoor light throughout"
+      ]
+    },
+    {
+      "id": "Nature",
+      "zh": "自然",
+      "tier": "A",
+      "quota": 140,
+      "ratios": [
+        "1:1",
+        "2:3",
+        "3:2"
+      ],
+      "extra": "",
+      "subjects": [
+        "an ancient moss-covered tree trunk as the clear central subject, with ferns in the lower left, hanging vines in the upper right, toadstools along the bottom edge, and layered canopy depth behind",
+        "a large fern frond as the focal subject, with mossy stones in the lower left, fallen leaves across the bottom, a small stream at right, and soft forest depth behind",
+        "one gnarled old root system as the central subject, with lichen-covered rocks at the lower right, blueberry bushes in the upper left, pine needles on the ground, and forest depth behind",
+        "a single flowering magnolia branch as the focal point, with blossom clusters at the upper right, a weathered wall at left, fallen petals along the bottom, and soft garden blur behind",
+        "one giant water lily as the clear central subject, with lily pads spreading to the left edge, a dragonfly at the upper right, water ripples across the bottom, and reeds behind",
+        "a towering cactus as the focal subject, with desert scrub in the lower left, cracked earth across the bottom, distant mesas along the horizon, and warm sky above",
+        "one mossy boulder as the central subject, with ferns clustered at the lower right, a shallow stream at left, overhanging branches above, and dappled forest light throughout",
+        "a single birch trunk as the focal point, with bracken in the lower left, fungi on the bark at right, grass along the bottom edge, and pale woodland depth behind",
+        "one cluster of tall bamboo as the clear central subject, with fallen leaves across the bottom, smaller shoots at the left edge, light shafts through the upper right, and soft green depth behind",
+        "a large river stone as the focal subject, with rapids foam at the lower left, submerged pebbles across the bottom, mossy banks at right, and flowing water behind",
+        "one flowering rhododendron as the central subject, with rock outcrops in the lower left, pine branches above, alpine grass along the bottom, and misty slopes behind",
+        "a single twisted vine as the focal point, with heart-shaped leaves at the upper left, a stone wall across the middle ground, ivy detail at the right edge, and garden depth behind"
+      ]
+    },
+    {
+      "id": "Landscapes",
+      "zh": "风景",
+      "tier": "A",
+      "quota": 140,
+      "ratios": [
+        "3:2",
+        "2:3",
+        "1:1"
+      ],
+      "extra": "",
+      "subjects": [
+        "a stone farmhouse as the clear focal subject, with terraced rice fields stepping down at the left, cypress trees at the upper right, irrigation channels across the foreground, and misty hills behind",
+        "one winding river as the focal subject, with moraine rocks in the lower left, alpine flowers across the bottom, a glacier tongue at the upper right, and layered peaks behind",
+        "a red rock mesa as the clear central subject, with a river bend at the lower left, scrub vegetation along the bottom, canyon walls at right, and hazy strata behind",
+        "one lone cypress tree as the focal point, with lavender rows across the foreground, dry stone walls at the left edge, a distant farmhouse at right, and warm hills behind",
+        "a wooden footbridge as the clear central subject, with a stream in the lower left, wildflowers along the bottom, willow branches at the upper right, and meadow depth behind",
+        "one volcanic peak as the focal subject, with basalt columns in the foreground, moss patches at the left edge, steam vents at right, and scree slopes below",
+        "a lighthouse as the clear focal point, with cliff rocks in the lower left, breaking surf along the bottom, wildflowers at the right edge, and open sea behind",
+        "one winding mountain road as the central subject, with switchback curves at the left, pine forest across the middle ground, rocky scree in the foreground, and distant summits behind",
+        "a lakeside boathouse as the clear focal subject, with still water reflections in the foreground, reeds at the lower left, forested slopes at right, and mountain layers behind",
+        "one covered bridge as the focal point, with a stream in the lower left, autumn foliage at the upper right, stone abutments across the bottom, and wooded hills behind",
+        "a terraced vineyard as the clear central subject, with vine rows across the foreground, a cypress lane at the left edge, a stone villa at the upper right, and rolling hills behind",
+        "one desert arch as the focal subject, with sandstone fins at the left, scrub brush across the bottom, layered buttes in the distance, and warm sky above"
+      ]
+    },
+    {
+      "id": "Flowers",
+      "zh": "花卉",
+      "tier": "A",
+      "quota": 140,
+      "ratios": [
+        "1:1",
+        "2:3"
+      ],
+      "extra": "",
+      "subjects": [
+        "a single fully opened peony as the clear focal subject, with unopened buds at the upper right, broad leaves in the lower left, dew drops on the petals, and soft garden blur behind",
+        "one sunflower as the central subject, with a bee on the seed head, smaller blooms at the left edge, leafy stems across the bottom, and a warm field blur behind",
+        "a clustered hydrangea head as the clear focal point, with serrated leaves in the lower left, rain droplets at the upper right, a stone edge along the bottom, and foliage depth behind",
+        "one purple iris as the focal subject, with sword leaves at the left edge, a garden path across the bottom, companion blooms at the upper right, and soft green blur behind",
+        "a single water lily as the clear central subject, with lily pads in the lower left, a koi fish at the right, water ripples across the bottom, and pond reflections behind",
+        "one rose bloom as the focal point, with thorny stems at the lower right, dew on the petals, companion buds at the upper left, and dark foliage depth behind",
+        "a tall hollyhock spike as the clear central subject, with a cottage wall at the left, scattered petals along the bottom, companion flowers at right, and warm garden light throughout",
+        "one tulip as the focal subject, with soil furrows across the bottom, companion blooms at the upper right, a windmill in the distance, and a soft sky gradient above",
+        "a single orchid spray as the clear focal point, with aerial roots at the left edge, moss on the mount at right, glass reflections above, and greenhouse depth behind",
+        "one protea bloom as the central subject, with leathery leaves in the lower left, dried grasses at right, a wooden surface across the bottom, and warm studio light throughout",
+        "a clustered dahlia as the clear focal subject, with bud stems at the upper left, garden foliage across the bottom, a watering can at the right edge, and soft blur behind",
+        "one cherry blossom branch as the focal point, with dense blossom at the upper right, visible bark texture at left, fallen petals along the bottom, and soft sky behind"
+      ]
+    },
+    {
+      "id": "Ocean",
+      "zh": "海洋",
+      "tier": "C",
+      "quota": 50,
+      "ratios": [
+        "3:2",
+        "1:1"
+      ],
+      "extra": "one clear focal subject with dense reef or shore detail filling every corner",
+      "avoid": [
+        "empty open water",
+        "blank horizon",
+        "plain sky"
+      ],
+      "subjects": [
+        "a large brain coral colony as the clear focal subject, with schooling fish at the upper left, anemones in the lower right, tube sponges along the bottom edge, and reef depth behind",
+        "one starfish as the focal point, with barnacle-covered rocks in the lower left, mussel clusters at right, seaweed fronds across the bottom, and shallow water above",
+        "a breaking wave curl as the clear central subject, with foam texture across the bottom, wet sand in the foreground, scattered shells at the lower right, and spray above",
+        "one kelp stalk as the focal subject, with fish schooling at the left edge, a rocky seabed across the bottom, light shafts from above, and blue-green depth behind",
+        "a moored fishing boat as the clear focal point, with coiled ropes in the lower left, netting draped at right, crate stacks along the dock, and harbour buildings behind",
+        "one weathered pier piling as the central subject, with encrusted mussels at the lower left, hanging rope at right, water reflections across the bottom, and pilings receding behind",
+        "a single nautilus shell as the focal subject, with pebbles in the lower left, driftwood at the upper right, dune grass along the bottom, and soft beach blur behind",
+        "one tide pool as the clear central subject, with a sea anemone at the left, small fish at the upper right, rippled sand across the bottom, and wet rocks around",
+        "a coral-encrusted anchor as the focal point, with soft coral at the lower left, fish at the right edge, sand ripples across the bottom, and blue water depth behind",
+        "one giant clam as the clear central subject, with reef fish at the upper left, coral rubble across the bottom, feather stars at right, and filtered light above",
+        "a lighthouse rock base as the focal subject, with crashing foam in the lower left, kelp at the right edge, wet stone texture across the bottom, and spray above",
+        "one lobster trap as the clear focal point, with coiled rope in the lower left, buoy floats at the upper right, a wooden dock across the bottom, and harbour detail behind"
+      ]
+    },
+    {
+      "id": "Birds",
+      "zh": "鸟类",
+      "tier": "B",
+      "quota": 100,
+      "ratios": [
+        "1:1",
+        "2:3",
+        "3:2"
+      ],
+      "extra": "exactly one bird as the clear focal subject in a detailed setting",
+      "subjects": [
+        "a single barn owl as the focal subject, with a stone window frame at the left, straw scattered in the lower right, weathered timber across the bottom, and dark barn interior behind",
+        "one scarlet macaw as the clear focal point, with a thick branch at the lower left, bromeliads at the upper right, tangled vines across the top, and green canopy depth behind",
+        "a lone flamingo as the central subject, with shallow water reflections in the foreground, algae patterns at the lower left, reed stems at right, and mud flat colors throughout",
+        "one hummingbird as the focal subject, with a trumpet flower in the lower left, buds at the upper right, leaf detail along the bottom, and soft garden blur behind",
+        "a single kingfisher as the clear focal point, with a mossy branch at the left edge, riffled water across the bottom, pebbles in the foreground, and stream depth behind",
+        "one peacock as the central subject, with tail feathers spreading across the right, stonework in the lower left, ivy along the top edge, and garden depth behind",
+        "a lone heron as the focal point, with cattails in the lower left, lily pads across the bottom, still water reflections at right, and reed bed depth behind",
+        "one eagle as the clear focal subject, with a cliff face at the left, twisted nest branches in the foreground, lichen detail on the rock, and distant ridges behind",
+        "a single puffin as the central subject, with clifftop grass in the lower left, sea foam across the bottom, rocky ledges at right, and open water behind",
+        "one toucan as the focal point, with a fruit-bearing branch at the upper right, broad leaves in the lower left, canopy shadows behind, and dappled light throughout",
+        "a lone swan as the clear focal subject, with reed beds at the left edge, water ripples across the bottom, willow branches above, and pond reflections throughout",
+        "one woodpecker as the focal point, with bark texture filling the left, wood chips at the lower right, ivy along the bottom, and soft forest depth behind"
+      ]
+    },
+    {
+      "id": "Cities",
+      "zh": "城市",
+      "tier": "A",
+      "quota": 140,
+      "ratios": [
+        "3:2",
+        "2:3",
+        "1:1"
+      ],
+      "extra": "",
+      "subjects": [
+        "a flower-boxed corner cafe as the clear focal subject, with cobbles across the foreground, hanging signs at the upper left, a bicycle at right, and narrow old town facades behind",
+        "one neon-lit market stall as the focal point, with lanterns strung across the top, produce crates in the lower left, steam at the upper right, and crowded stalls behind",
+        "a single fountain as the clear central subject, with outdoor cafe tables in the lower left, awnings at the upper right, cobblestone patterns across the bottom, and square facades behind",
+        "one canal bridge as the focal subject, with moored boats in the lower left, iron railings along the foreground, waterside facades at right, and reflections across the bottom",
+        "a lone tram as the clear focal point, with wet street reflections across the bottom, umbrellas at the upper left, lit shopfronts at right, and rainy city depth behind",
+        "one ornate subway entrance as the central subject, with tiled pillars at the left, a street lamp at the upper right, poster panels along the wall, and city traffic behind",
+        "a covered shopping arcade as the clear focal subject, with vaulted glass above, mosaic floor across the bottom, kiosk stalls at the left edge, and ironwork detail throughout",
+        "one red telephone box as the focal point, with paving stones across the foreground, a stone wall at the upper left, climbing ivy at right, and a quiet street behind",
+        "a single clock tower as the clear central subject, with rooftops spreading across the bottom, chimneys at the left edge, laundry lines at the upper right, and hazy city depth behind",
+        "one street food cart as the focal subject, with steam rising at the upper left, stools in the lower right, hanging bulbs across the top, and market stalls behind",
+        "a grand train station hall as the clear focal point, with a departure board at the upper left, travelers silhouetted across the middle, tiled floor in the foreground, and arched windows above",
+        "one canal-side house as the central subject, with flower boxes at the lower left, moored bicycles at right, water reflections across the bottom, and stepped gables behind"
+      ]
+    },
+    {
+      "id": "Architecture",
+      "zh": "建筑",
+      "tier": "A",
+      "quota": 140,
+      "ratios": [
+        "2:3",
+        "1:1",
+        "3:2"
+      ],
+      "extra": "",
+      "subjects": [
+        "a gothic cathedral portal as the clear focal subject, with carved saints in the arch, gargoyles at the upper left, a rose window above, and weathered stonework across the bottom",
+        "one half-timbered Tudor house as the focal point, with exposed beams across the facade, leaded glass windows at the upper right, flower boxes along the bottom, and a cobbled street in front",
+        "a Moroccan riad archway as the clear central subject, with zellige tilework across the wall, a fountain in the lower left, potted plants at right, and shaded courtyard depth behind",
+        "one stone castle gatehouse as the focal subject, with crenellations across the top, ivy climbing at the left edge, a drawbridge in the foreground, and moat water along the bottom",
+        "a Venetian palazzo facade as the clear focal point, with arched balconies at the upper right, shuttered windows across the middle, canal water along the bottom, and reflections throughout",
+        "one pagoda as the central subject, with layered eaves across the top, carved brackets at the left, hanging bells at the upper right, and garden foliage along the bottom",
+        "a Barcelona modernist balcony as the clear focal subject, with organic stone curves at the left, mosaic detail across the railing, wrought iron at the upper right, and warm facade behind",
+        "one wooden stave church as the focal point, with shingled roofs across the top, carved dragon heads at the eaves, moss on the timbers, and grass along the bottom",
+        "a Roman aqueduct as the clear central subject, with repeating arches across the middle ground, masonry joints visible, scrub at the lower left, and a dusty plain behind",
+        "one mosque dome as the focal subject, with geometric tilework across the drum, arched windows at the lower left, a minaret at right, and sky above",
+        "a Chinese courtyard gate as the clear focal point, with lattice windows at the left, carved door panels in the center, stone drums at the bottom, and tiled eaves above",
+        "one Himalayan monastery as the central subject, with stacked roofs across the middle, prayer flags at the upper left, a stone stair in the foreground, and mountain slopes behind"
+      ]
+    },
+    {
+      "id": "Food",
+      "zh": "美食",
+      "tier": "A",
+      "quota": 140,
+      "ratios": [
+        "1:1",
+        "3:2"
+      ],
+      "extra": "",
+      "subjects": [
+        "a wheel of aged cheese as the clear focal subject, with bread loaves at the upper left, olive bowls in the lower right, herb sprigs across the board, and a linen cloth along the bottom",
+        "one layer cake as the focal point, with berries on top, a cake stand beneath, pastry crumbs in the lower left, and a marble counter along the bottom",
+        "a bowl of ramen as the clear central subject, with a soft-boiled egg at the left, nori sheets at the upper right, chopsticks across the bowl, and scallions scattered on top",
+        "one loaf of crusty bread as the focal subject, with a bread knife at the lower right, flour dusting across the board, olive oil at the upper left, and a linen cloth beneath",
+        "a stack of pancakes as the clear focal point, with berries at the top, syrup dripping down the side, a coffee cup at the upper right, and linen across the bottom",
+        "one fish fillet as the central subject, with lemon wedges at the lower left, herb sprigs across the top, cracked pepper on the surface, and a slate board beneath",
+        "a bowl of borscht as the clear focal subject, with a swirl of cream in the center, dill at the upper right, rye bread at the left edge, and a linen napkin along the bottom",
+        "one apple pie as the focal point, with lattice crust across the top, a pie dish beneath, scattered flour at the lower left, and a wooden table along the bottom",
+        "a cheese board as the clear central subject, with grapes at the upper left, honeycomb at the right, crackers across the board, and a slate surface beneath",
+        "one taco trio as the focal subject, with cilantro on top, lime wedges at the lower right, salsa bowls at the upper left, and a wooden board along the bottom",
+        "a roast chicken as the clear focal point, with roasted vegetables around, herbs across the top, a carving knife at the lower right, and an iron pan beneath",
+        "one chocolate tart as the central subject, with cacao nibs scattered at the left, gold leaf flecks on top, a fork at the lower right, and a dark marble surface beneath"
+      ]
+    },
+    {
+      "id": "Art",
+      "zh": "艺术",
+      "tier": "A",
+      "quota": 140,
+      "ratios": [
+        "1:1",
+        "2:3",
+        "3:2"
+      ],
+      "extra": "",
+      "subjects": [
+        "a botanical study of one flowering plant as the focal subject, with labeled seed pods at the lower left, root detail at the bottom, aged paper texture throughout, and faded ink borders",
+        "one harbor scene as the clear central subject, with sailing boats at the left, figures on the dock at the lower right, rigging lines above, and painterly sky behind",
+        "a single pottery vessel as the focal point, with fruit arranged in the lower left, a pewter jug at right, drapery across the bottom, and dark oil-painting background behind",
+        "one medieval village square as the clear focal subject, with timbered houses at the left, market stalls across the middle, a well at the lower right, and soft watercolor washes throughout",
+        "an illuminated letter as the central subject, with vine borders curling at the corners, gold leaf across the panel, small figures at the lower right, and parchment texture throughout",
+        "one art nouveau poster figure as the focal point, with flowing organic lines across the background, floral motifs at the corners, decorative borders, and flat color blocks throughout",
+        "a persian miniature garden as the clear focal subject, with patterned borders across the edges, figures at the lower left, cypress trees at right, and dense decorative detail throughout",
+        "one mountainscape as the focal point, with mist bands across the middle ground, pine silhouettes in the foreground, a distant pagoda at the upper right, and ink wash textures throughout",
+        "a still life of one pewter tankard as the clear central subject, with glassware at the left, fruit in the lower right, drapery across the bottom, and chiaroscuro lighting throughout",
+        "one folk art tree of life as the focal subject, with birds in the branches, flowers across the border, symmetrical leaves, and flat decorative color throughout",
+        "a frescoed architectural panel as the clear focal point, with figures at the lower left, painted columns at right, gilded frames above, and aged plaster texture throughout",
+        "one ukiyo-e wave as the central subject, with a distant boat at the upper left, foam claws across the top, layered blue tones, and flat woodblock printing texture throughout"
+      ]
+    },
+    {
+      "id": "Fantasy",
+      "zh": "奇幻",
+      "tier": "B",
+      "quota": 100,
+      "ratios": [
+        "1:1",
+        "2:3",
+        "3:2"
+      ],
+      "extra": "",
+      "subjects": [
+        "an open spellbook as the clear focal subject, with candle flames at the upper left, crystal vials in the lower right, scattered scrolls along the bottom, and dark study shelves behind",
+        "one coiled dragon as the focal point, with treasure coins across the bottom, goblets at the lower left, armor pieces at right, and cave depth behind",
+        "a lantern-lit treehouse as the clear central subject, with rope bridges at the left, carved walkways across the middle, hanging lanterns above, and forest canopy depth behind",
+        "one giant glowing mushroom as the focal subject, with smaller toadstools in the lower left, floating spores above, moss across the bottom, and twilight forest behind",
+        "an alchemist's alembic as the clear focal point, with glass tubing at the left, herb bundles at the upper right, parchment notes along the bottom, and candlelight throughout",
+        "one floating island as the central subject, with a waterfall at the left edge, overgrown ruins across the top, dangling vines along the bottom, and clouds behind",
+        "a forge anvil as the clear focal subject, with glowing embers in the lower left, hanging tools at right, sparks above, and stone masonry behind",
+        "one crystal ball as the focal point, with a carved stand beneath, tarot cards at the lower right, velvet drapery at the left edge, and candlelight throughout",
+        "a potion shelf as the clear central subject, with labeled bottles across the middle, dried herbs hanging above, a brass scale at the lower right, and warm shop light throughout",
+        "one wizard's hat as the focal subject, with a staff leaning at the left, star embroidery across the brim, scattered scrolls along the bottom, and study shadows behind",
+        "a treasure chest as the clear focal point, with spilled coins in the foreground, necklaces draped at the right, gem clusters at the upper left, and torchlight throughout",
+        "one enchanted doorway as the central subject, with glowing runes across the frame, ivy at the lower left, mist along the bottom, and forest depth behind"
+      ]
+    },
+    {
+      "id": "Space",
+      "zh": "太空",
+      "tier": "C",
+      "quota": 50,
+      "ratios": [
+        "3:2",
+        "1:1"
+      ],
+      "extra": "one clear focal subject with dense star field or instrument detail filling all edges",
+      "avoid": [
+        "empty black void",
+        "lone planet on black"
+      ],
+      "subjects": [
+        "a ringed gas giant as the clear focal subject, with banded storms across the planet, a moon at the upper left, star field filling the corners, and nebula clouds behind",
+        "one astronaut as the focal point, with cratered regolith across the bottom, Earth rising at the upper right, helmet reflections, and a star-filled sky above",
+        "a control console as the clear central subject, with cable bundles at the left, monitor panels across the top, switch rows along the bottom, and cabin structure behind",
+        "one nebula core as the focal subject, with dust filaments across the corners, embedded star clusters at the lower left, glowing gas streams, and deep field stars throughout",
+        "a rover as the clear focal point, with wheel tracks across the bottom, rock samples at the lower right, an antenna at the upper left, and dusty terrain behind",
+        "one comet as the central subject, with a dust plume streaming at the right, ice fissures across the surface, background stars filling the corners, and sun glow at the left",
+        "a space station module as the clear focal subject, with solar panels at the left edge, radiator fins at right, Earth limb across the bottom, and star field above",
+        "one observatory dome as the focal point, with a telescope silhouette inside, control screens at the lower left, cable runs along the floor, and a night sky above",
+        "a terraforming dome as the clear central subject, with crop rows across the bottom, irrigation pipes at the left, habitat modules at the upper right, and dusty sky behind",
+        "one planet surface as the focal subject, with canyon cracks across the middle, boulders in the foreground, an atmospheric haze band above, and a second moon at the upper left",
+        "a launch gantry as the clear focal point, with exhaust flames in the lower left, steel trusses across the frame, fuel lines at right, and dawn sky behind",
+        "one alien landscape as the central subject, with crystalline spires at the left, twin suns at the upper right, mineral streaks across the ground, and hazy mountains behind"
+      ]
+    },
+    {
+      "id": "Transportation",
+      "zh": "交通",
+      "tier": "A",
+      "quota": 140,
+      "ratios": [
+        "3:2",
+        "1:1"
+      ],
+      "extra": "",
+      "subjects": [
+        "a steam locomotive front as the clear focal subject, with a cowcatcher across the bottom, riveted boiler detail, a signal post at the upper left, and platform edge in the foreground",
+        "one vintage car as the focal point, with chrome trim at the left edge, a garage wall behind, tool shelves at the upper right, and an oil-stained floor along the bottom",
+        "a fishing trawler as the clear central subject, with net piles in the lower left, winch drums at right, gulls above, and harbour water along the bottom",
+        "one bicycle as the focal subject, with a pegboard wall of tools behind, a workbench along the bottom, spare wheels at the left edge, and warm workshop light throughout",
+        "a cockpit instrument panel as the clear focal point, with switch rows across the bottom, dial clusters at the left, a control yoke in the foreground, and window light above",
+        "one suspension bridge tower as the central subject, with cable stays across the top, steel trusses below, water along the bottom, and a hazy skyline behind",
+        "a hot air balloon as the clear focal subject, with a patchwork canopy across the top, a wicker basket in the foreground, burner flames at the upper right, and distant balloons behind",
+        "one cable car as the focal point, with a mountain slope in the lower left, pulley gears at the right edge, a cable line across the top, and alpine depth behind",
+        "a subway train front as the clear central subject, with tunnel lights at the upper left, rail tracks across the bottom, a platform edge at right, and tiled tunnel walls behind",
+        "one cargo ship as the focal subject, with stacked containers across the deck, a crane at the upper right, mooring lines along the bottom, and harbour water in the foreground",
+        "a vintage motorcycle as the clear focal point, with a leather saddle in the foreground, chrome exhaust at the right, cobblestones along the bottom, and a garage wall behind",
+        "one tram interior as the central subject, with wooden benches at the left, hanging straps across the top, brass fittings at the right, and windows along the upper edge"
+      ]
+    },
+    {
+      "id": "People",
+      "zh": "人物",
+      "tier": "B",
+      "quota": 100,
+      "ratios": [
+        "3:2",
+        "1:1"
+      ],
+      "extra": "a small group as the focal subject in a crowded detailed setting, faces not the focus",
+      "subjects": [
+        "a market vendor stall as the clear focal subject, with produce crates in the lower left, hanging fabrics across the top, shoppers silhouetted at right, and market depth behind",
+        "one parade float as the focal point, with costumed figures on top, banners at the upper left, confetti across the frame, and spectator crowds along the bottom",
+        "a craftsman's workbench as the clear central subject, with hand tools hanging above, wood shavings across the bench, a half-finished piece in the foreground, and workshop depth behind",
+        "one restaurant pass as the focal subject, with stacked plates at the left, steam above, hanging pans across the top, and cooks working in the background",
+        "a fishing wharf as the clear focal point, with net menders in the lower left, moored boats at right, crate stacks along the bottom, and harbour buildings behind",
+        "one dance floor as the central subject, with paper lanterns across the top, couples in the middle, a wooden floor in the foreground, and decoration strings at the edges",
+        "a library reading room as the clear focal subject, with bookshelves across the back, desk lamps at the left, readers silhouetted at the right, and warm light throughout",
+        "one harvest field as the focal point, with pickers across the middle ground, crate stacks in the lower left, a cart at the right, and field rows receding behind",
+        "a tea house counter as the clear central subject, with teapots in the foreground, steam above, hanging menus at the upper right, and patrons along the back",
+        "one climbing wall as the focal subject, with colorful holds across the surface, a climber in the middle, chalk dust at the lower left, and safety mats along the bottom",
+        "a street barber corner as the clear focal point, with a mirrored station at the left, tools on the counter, a chair in the foreground, and passersby behind",
+        "one train platform as the central subject, with luggage in the foreground, a departure board at the upper left, travelers silhouetted at right, and canopy structure above"
+      ]
+    },
+    {
+      "id": "Sports",
+      "zh": "运动",
+      "tier": "B",
+      "quota": 100,
+      "ratios": [
+        "3:2",
+        "1:1"
+      ],
+      "extra": "",
+      "subjects": [
+        "a climbing wall as the clear focal subject, with colorful holds across the surface, ropes hanging at the left, chalk bags in the lower right, and mats along the bottom",
+        "one tennis court as the focal point, with a net across the middle, ball hoppers at the lower left, a racket leaning at right, and court lines receding behind",
+        "a ski slope as the clear central subject, with moguls across the foreground, pine trees at the left edge, a chairlift cable above, and mountain layers behind",
+        "one racing bicycle as the focal subject, with cobblestones across the bottom, spectators along the left edge, team banners above, and a street scene behind",
+        "a boxing gym as the clear focal point, with a heavy bag in the center, speed bag at the upper right, wall mirrors at left, and worn floorboards across the bottom",
+        "one marina dock as the central subject, with sailboat masts across the top, coiled ropes in the foreground, fenders at the right edge, and water along the bottom",
+        "a skate ramp as the clear focal subject, with a board mid-air above, grind rails at the left, graffiti across the back wall, and concrete ground below",
+        "one golf green as the focal point, with a flagstick at the upper right, a sand bunker in the lower left, rough grass around, and tree lines behind",
+        "a swimming pool as the clear central subject, with lane ropes across the water, starting blocks in the foreground, a scoreboard at the upper right, and deck tiles below",
+        "one dojo interior as the focal subject, with a training dummy at the left, weapon racks across the back, mats along the bottom, and banners above",
+        "a stadium stand as the clear focal point, with tiered seating across the frame, flags at the upper left, banners along the front, and crowd texture throughout",
+        "one archery target as the central subject, with arrows clustered in the center, a bow leaning at the lower left, grass across the bottom, and a field backdrop behind"
+      ]
+    },
+    {
+      "id": "Seasons",
+      "zh": "四季",
+      "tier": "A",
+      "quota": 140,
+      "ratios": [
+        "3:2",
+        "1:1",
+        "2:3"
+      ],
+      "extra": "",
+      "subjects": [
+        "a leaf-covered park bench as the clear focal subject, with fallen leaves across the foreground, a lantern at the upper left, tree trunks at right, and a path receding behind",
+        "one blossoming apple tree as the focal point, with long grass across the bottom, beehives at the lower right, a fence line at the left, and spring light throughout",
+        "a summer rose arch as the clear central subject, with a stone path across the bottom, a watering can in the lower left, foliage at the right edge, and garden depth behind",
+        "one Christmas market stall as the focal subject, with garlands across the top, gift boxes in the lower left, lanterns at the right, and snowy figures behind",
+        "a harvest wheat sheaf as the clear focal point, with pumpkins in the lower left, wooden crates at right, an autumn hedgerow behind, and warm field light throughout",
+        "one bluebell carpet as the central subject, with fern fronds at the left, a fallen log across the middle, tree trunks above, and soft woodland light throughout",
+        "a vineyard row as the clear focal subject, with grape clusters in the foreground, trellis wires across the frame, soil furrows at the bottom, and sunlit hills behind",
+        "one snowy village street as the focal point, with sleds in the lower left, wreaths on the doors, footprints across the snow, and stacked firewood at right",
+        "a spring vegetable patch as the clear central subject, with seedling trays in the foreground, cloches at the upper right, a watering can at the left, and rain barrels behind",
+        "one autumn orchard ladder as the focal subject, with windfall apples across the bottom, crates at the lower left, branches above, and warm orchard light throughout",
+        "a lakeside summer dock as the clear focal point, with reeds in the lower left, a rowboat at right, a picnic basket in the foreground, and sunlit water behind",
+        "one pumpkin patch as the central subject, with hay bales at the upper left, corn stalks at the right edge, soil rows across the bottom, and autumn sky above"
+      ]
+    },
+    {
+      "id": "Holidays",
+      "zh": "节日",
+      "tier": "A",
+      "quota": 140,
+      "ratios": [
+        "1:1",
+        "3:2",
+        "2:3"
+      ],
+      "extra": "",
+      "subjects": [
+        "a decorated Christmas tree as the clear focal subject, with wrapped gifts across the bottom, ornaments at the left, tinsel strands above, and a fireplace at the right edge",
+        "one Halloween porch as the focal point, with carved pumpkins in the lower left, cobwebs across the upper right, a wreath on the door, and fallen leaves along the steps",
+        "an Easter table as the clear central subject, with painted eggs in the foreground, a woven nest at the left, spring blooms at the upper right, and a linen cloth along the bottom",
+        "one Diwali doorway as the focal subject, with a rangoli pattern across the bottom, oil lamps at the lower left, marigold garlands above, and warm wall light throughout",
+        "a New Year's Eve square as the clear focal point, with fireworks across the top, confetti in the foreground, string lights at the left edge, and a crowd silhouette below",
+        "one Thanksgiving table as the central subject, with a roast in the center, gourds at the lower left, corn stalks at the right, and candles along the back",
+        "a Lunar New Year stall as the clear focal subject, with red lanterns across the top, firecracker strings at the right, banners at the upper left, and market goods in the foreground",
+        "one carnival float as the focal point, with feathered panels across the front, sequin detail throughout, a masked figure at the upper right, and parade flags above",
+        "a midsummer wreath as the clear central subject, with wildflowers woven throughout, ribbons at the bottom, a wooden table beneath, and garden greenery behind",
+        "one harvest table as the focal subject, with a cornucopia in the center, grapes at the lower right, squash at the left, and candles along the back",
+        "a birthday table as the clear focal point, with a layered cake in the center, streamers across the top, party hats at the lower left, and wrapped gifts at right",
+        "one lantern festival scene as the central subject, with floating lanterns across the sky, water reflections below, paper craft detail in the foreground, and warm glow throughout"
+      ]
+    },
+    {
+      "id": "Abstract",
+      "zh": "抽象",
+      "tier": "C",
+      "quota": 50,
+      "ratios": [
+        "1:1"
+      ],
+      "extra": "one organic non-repeating texture with a clear focal area of highest density",
+      "avoid": [
+        "grids",
+        "stripes",
+        "regular tiling",
+        "checkerboard",
+        "uniform noise"
+      ],
+      "subjects": [
+        "a swirl of marbled ink as the clear focal subject, with irregular veins spreading outward, pigment pools at the lower left, feathered edges at the corners, and varied density throughout",
+        "one splash of iridescent paint as the focal point, with droplets scattered outward, cracked paint texture at the right, layered pigment at the bottom, and color shifts across the corners",
+        "a macro of weathered bark as the clear central subject, with deep grooves running diagonally, lichen patches at the upper right, color variation across the surface, and irregular edges",
+        "one rusted metal surface as the focal subject, with flaking paint at the left, pitting across the center, oxidation blooms at the corners, and layered color throughout",
+        "a macro of rock strata as the clear focal point, with mineral bands running across, crystal pockets at the upper left, fracture lines at the right, and color transitions at the edges",
+        "one flowing acrylic pour as the central subject, with organic cells clustered in the center, lacing patterns at the edges, varied pigment density, and iridescent sheen throughout",
+        "a macro of soap foam as the clear focal subject, with bubbles of varied size, color fringes at the edges, a dense cluster in the center, and reflections throughout",
+        "one cracked mud surface as the focal point, with irregular polygons spreading out, mineral stains at the lower right, curled edges, and earthy color variation throughout",
+        "a molten glass streak as the clear central subject, with trapped bubbles in the center, swirl lines at the edges, iridescent layering, and color transitions at the corners",
+        "one fossil ammonite surface as the focal subject, with suture lines radiating outward, mineral matrix at the corners, crystal pockets at the left, and varied tone throughout",
+        "a macro of woven fibers as the clear focal point, with irregular twists across the surface, a dense knot in the center, color variation at the edges, and depth shadows throughout",
+        "one oil-on-water pattern as the central subject, with a dense swirl in the middle, feathered rainbow edges, thin film bands at the corners, and iridescent color throughout"
+      ]
+    },
+    {
+      "id": "Cartoon",
+      "zh": "卡通",
+      "tier": "C",
+      "quota": 50,
+      "ratios": [
+        "3:2",
+        "1:1"
+      ],
+      "extra": "one clear focal subject with a fully rendered detailed background",
+      "avoid": [
+        "flat empty background",
+        "solid color backdrop"
+      ],
+      "subjects": [
+        "a treehouse as the clear focal subject, with rope bridges at the left, lanterns strung across, carved walkways below, and dense forest canopy behind",
+        "one pirate ship as the focal point, with billowing sails across the top, barrels in the lower left, coiled rope at right, and ocean waves along the bottom",
+        "a bakery storefront as the clear central subject, with bread loaves in the window, awning stripes above, crates in the foreground, and cobblestone street below",
+        "one fantasy market stall as the focal subject, with lanterns across the top, potion bottles at the left, hanging banners above, and crowded stalls behind",
+        "a cartoon train as the clear focal point, with a ticket booth at the left, timetable boards above, travelers along the platform, and steam across the top",
+        "one greenhouse as the central subject, with dense potted plants throughout, watering cans in the lower left, a potting bench at right, and glass panes above",
+        "a flying airship as the clear focal subject, with rigging lines across the frame, cargo crates in the foreground, clouds at the corners, and a propeller at the right",
+        "one castle courtyard as the focal point, with pennants across the top, a carriage at the lower left, market stalls at right, and cobblestones along the bottom",
+        "a cozy kitchen as the clear central subject, with hanging pans across the top, a bread oven at the right, ingredient jars at the left, and a checkered floor below",
+        "one underwater coral house as the focal subject, with kelp gardens at the left, fish swimming across, bubble streams above, and sandy ground below",
+        "a woodland animal burrow as the clear focal point, with a carved door in the center, flower boxes at the lower left, a stone path below, and foliage throughout",
+        "one whimsical windmill as the central subject, with turning blades across the top, a flower garden in the foreground, a stream at the right, and rolling hills behind"
+      ]
+    },
+    {
+      "id": "Others",
+      "zh": "其他",
+      "tier": "A",
+      "quota": 80,
+      "ratios": [
+        "1:1",
+        "3:2"
+      ],
+      "extra": "",
+      "subjects": [
+        "a workbench as the clear focal subject, with hand tools in the foreground, a pegboard wall of implements behind, a vise at the right, and shavings along the bottom",
+        "one apothecary cabinet as the focal point, with labeled bottles across the shelves, dried herbs at the upper left, a brass scale at the right, and drawer pulls throughout",
+        "a collector's desk as the clear central subject, with mineral specimens in the foreground, a magnifier at the left, specimen trays at right, and cabinet drawers behind",
+        "one haberdashery shelf as the focal subject, with thread spools in rows, buttons in the lower left, ribbon spools at right, and lace trim along the bottom",
+        "a potter's wheel as the clear focal point, with a clay vessel in the center, tools at the left, glaze jars at the upper right, and wet clay on the surface",
+        "one antique map as the central subject, with a compass rose at the lower left, rhumb lines across the surface, sea creatures at the right, and aged paper edges throughout",
+        "a wall of clocks as the clear focal subject, with pendulums in the foreground, exposed gears at the left, Roman dials at the right, and brass fittings throughout",
+        "one butterfly display as the focal point, with pinned specimens in rows, labeled drawers below, a magnifier at the lower right, and glass case reflections throughout",
+        "a cobbler's bench as the clear central subject, with leather pieces across the surface, wooden lasts at the left, thread spools at the right, and a half-finished shoe in front",
+        "one stamp collector's desk as the focal subject, with album pages across the surface, sorted sheets at the left, tweezers at the right, and a magnifier in front",
+        "a cartographer's table as the clear focal point, with rolled charts at the left, brass dividers in the center, ink pots at the upper right, and parchment across the surface",
+        "one musician's corner as the central subject, with a guitar in the foreground, sheet music on a stand, cable coils at the lower right, and a case behind"
+      ]
+    }
+  ]
+}
