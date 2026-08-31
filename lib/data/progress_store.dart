@@ -322,12 +322,21 @@ class ProgressStore {
       );
     }
 
+    final nextStars = (isCompleted == true && stars != null)
+        ? math.max(cur.stars, stars)
+        : (stars ?? cur.stars);
+    final nextBestTime = (isCompleted == true && bestTimeSeconds != null)
+        ? (cur.bestTimeSeconds == 0 || bestTimeSeconds < cur.bestTimeSeconds
+            ? bestTimeSeconds
+            : cur.bestTimeSeconds)
+        : (bestTimeSeconds ?? cur.bestTimeSeconds);
+
     final next = cur.copyWith(
       progressPercent: progressPercent ?? cur.progressPercent,
       isCompleted: isCompleted ?? cur.isCompleted,
       completedPieceCounts: updatedCounts.toList(),
-      stars: stars ?? cur.stars,
-      bestTimeSeconds: bestTimeSeconds ?? cur.bestTimeSeconds,
+      stars: nextStars,
+      bestTimeSeconds: nextBestTime,
       activeDifficultyKey: activeDifficultyKey ?? cur.activeDifficultyKey,
       snapshotKeys: snapshotKeys ?? cur.snapshotKeys,
       hasSnapshot: hasSnapshot ?? cur.hasSnapshot,

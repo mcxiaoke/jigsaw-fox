@@ -27,14 +27,17 @@ class BingDailyItem {
   int get pieceCount => defaultRows * defaultCols;
 }
 
-final List<BingDailyItem> kBingDaily30Days = _generateMonthDaily(2026, 8);
-final List<BingDailyItem> kBingDailyJuly = _generateMonthDaily(2026, 7);
-
-/// 包含 8 月与 7 月的多月份每日挑战完整数据集 (按日期倒序排列)
-final List<BingDailyItem> kBingDailyAll = [
-  ...kBingDaily30Days,
-  ...kBingDailyJuly,
-];
+/// 动态生成当前月及前 2 个月的每日挑战数据集 (按日期倒序排列)
+/// 确保无论何时打开 app，当前月份的每日挑战均可用
+List<BingDailyItem> get kBingDailyAll {
+  final now = DateTime.now();
+  final all = <BingDailyItem>[];
+  for (var offset = 0; offset <= 2; offset++) {
+    final date = DateTime(now.year, now.month - offset, 1);
+    all.addAll(_generateMonthDaily(date.year, date.month));
+  }
+  return all;
+}
 
 List<BingDailyItem> _generateMonthDaily(int year, int month) {
   final daysInMonth = DateTime(year, month + 1, 0).day;

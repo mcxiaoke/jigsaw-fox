@@ -269,16 +269,15 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
     _saveDebounce = Timer(_saveDebounceDuration, _doSave);
   }
 
-  void _flushSave() {
+  Future<void> _flushSave() async {
     _saveDebounce?.cancel();
-    _doSave();
+    await _doSave();
   }
 
   /// 同步兜底（用于 dispose / lifecycle 同步落盘，避免 fire-and-forget 丢失）
   void _flushSync() {
     _saveDebounce?.cancel();
     if (_game == null || _isSolved) return;
-    if (_isSaving) return;
     try {
       final total = _totalPieces;
       final liveSolved = _game!.solvedCount;
@@ -311,12 +310,12 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
     return '';
   }
 
-  void _doSave() {
+  Future<void> _doSave() async {
     if (_game == null || _isSolved) return;
     if (_isSaving) {
       // 若正在保存，稍后重试（但 dispose 已取消 debounce，不会逃逸）
       _saveDebounce?.cancel();
-      _saveDebounce = Timer(const Duration(milliseconds: 300), _doSave);
+      _saveDebounce = Timer(const Duration(milliseconds: 300), () => _doSave());
       return;
     }
     _isSaving = true;
@@ -326,7 +325,7 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
       _solvedPieces = liveSolved;
     }
     final percent = total > 0 ? (liveSolved * 100 ~/ total) : 0;
-    // 过滤“点进去即退”的无意义残局，避免“只要点进去就有记录”
+    // 过滤"点进去即退"的无意义残局，避免"只要点进去就有记录"
     final boardForCheck = _game!.boardState;
     final isTrivial = percent == 0 && boardForCheck.hintsUsed == 0 && _seconds < 5 && boardForCheck.pieces.every((p) => p.clusterId == p.id);
     if (isTrivial) {
@@ -342,40 +341,40 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
       return;
     }
 
-    Future<void> fut;
-    if (widget.canonicalId != null && widget.canonicalId!.isNotEmpty) {
-      fut = _repo.updateGenericProgress(
-        canonicalId: widget.canonicalId!,
-        progressPercent: percent,
-        snapshotJson: snapshot,
-        difficultyHint: _effectiveDifficulty ?? widget.difficulty,
-      );
-    } else if (widget.levelIndex != null) {
-      fut = _repo.updateLevelProgress(
-        levelIndex: widget.levelIndex!,
-        progressPercent: percent,
-        snapshotJson: snapshot,
-      );
-    } else if (widget.dailyDateStr != null) {
-      fut = _repo.updateDailyProgress(
-        dateStr: widget.dailyDateStr!,
-        progressPercent: percent,
-        snapshotJson: snapshot,
-      );
-    } else if (widget.customId != null) {
-      fut = _repo.updateCustomProgress(
-        id: widget.customId!,
-        progressPercent: percent,
-        snapshotJson: snapshot,
-      );
-    } else {
+    try {
+      if (widget.canonicalId != null && widget.canonicalId!.isNotEmpty) {
+        await _repo.updateGenericProgress(
+          canonicalId: widget.canonicalId!,
+          progressPercent: percent,
+          snapshotJson: snapshot,
+          difficultyHint: _effectiveDifficulty ?? widget.difficulty,
+        );
+      } else if (widget.levelIndex != null) {
+        await _repo.updateLevelProgress(
+          levelIndex: widget.levelIndex!,
+          progressPercent: percent,
+          snapshotJson: snapshot,
+        );
+      } else if (widget.dailyDateStr != null) {
+        await _repo.updateDailyProgress(
+          dateStr: widget.dailyDateStr!,
+          progressPercent: percent,
+          snapshotJson: snapshot,
+        );
+      } else if (widget.customId != null) {
+        await _repo.updateCustomProgress(
+          id: widget.customId!,
+          progressPercent: percent,
+          snapshotJson: snapshot,
+        );
+      } else {
+        return;
+      }
+    } catch (e, st) {
+      AppLogger.game.warning('doSave updateProgress failed', e, st);
+    } finally {
       _isSaving = false;
-      return;
     }
-
-    fut.whenComplete(() {
-      _isSaving = false;
-    });
   }
 
   int _calculateStars() {
@@ -436,7 +435,7 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
 
     // 2. 同步更新 GameRepository 关卡状态与内存列表
     if (widget.canonicalId != null && widget.canonicalId!.isNotEmpty) {
-      _repo.updateGenericProgress(
+      await _repo.updateGenericProgress(
         canonicalId: widget.canonicalId!,
         progressPercent: 100,
         isCompleted: true,
@@ -446,7 +445,7 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
         difficultyHint: _effectiveDifficulty ?? widget.difficulty,
       );
     } else if (widget.levelIndex != null) {
-      _repo.updateLevelProgress(
+      await _repo.updateLevelProgress(
         levelIndex: widget.levelIndex!,
         progressPercent: 100,
         isCompleted: true,
@@ -456,7 +455,7 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
         timeSeconds: _seconds,
       );
     } else if (widget.dailyDateStr != null) {
-      _repo.updateDailyProgress(
+      await _repo.updateDailyProgress(
         dateStr: widget.dailyDateStr!,
         progressPercent: 100,
         isCompleted: true,
@@ -465,7 +464,7 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
         timeSeconds: _seconds,
       );
     } else if (widget.customId != null) {
-      _repo.updateCustomProgress(
+      await _repo.updateCustomProgress(
         id: widget.customId!,
         progressPercent: 100,
         isCompleted: true,
@@ -916,10 +915,10 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
       leading: IconButton(
         icon: Icon(PhosphorIconsBold.arrowLeft, color: _headerIconColor),
         tooltip: '返回',
-        onPressed: () {
+        onPressed: () async {
           SoundService.I.play(Sfx.tap);
-          _flushSave();
-          Navigator.of(context).pop();
+          await _flushSave();
+          if (mounted) Navigator.of(context).pop();
         },
       ),
       title: Text(
@@ -1064,10 +1063,10 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
   Widget build(BuildContext context) {
     return PopScope(
       canPop: false,
-      onPopInvokedWithResult: (didPop, result) {
+      onPopInvokedWithResult: (didPop, result) async {
         if (didPop) return;
         SoundService.I.play(Sfx.tap);
-        _flushSave();
+        await _flushSave();
         if (context.mounted) Navigator.of(context).pop(result);
       },
       child: Scaffold(

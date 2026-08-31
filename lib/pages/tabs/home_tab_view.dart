@@ -144,7 +144,8 @@ class _HomeTabViewState extends State<HomeTabView> {
     final allLevels = _repo.levels;
     final filteredLevels = _getFilteredLevels(allLevels);
     final now = DateTime.now();
-    final todayDaily = _repo.dailyChallenges.firstWhere((d) => d.dayNumber == now.day, orElse: () => _repo.dailyChallenges.first);
+    final todayStr = '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
+    final todayDaily = _repo.dailyChallenges.firstWhere((d) => d.date == todayStr, orElse: () => _repo.dailyChallenges.first);
     return RefreshIndicator(
       onRefresh: () async => setState(() {}),
       child: CustomScrollView(

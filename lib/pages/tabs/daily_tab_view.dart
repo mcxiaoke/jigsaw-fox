@@ -87,11 +87,14 @@ class _DailyTabViewState extends State<DailyTabView> {
   int _calculateStreak(List<DailyChallengeItem> dailyList) {
     var streak = 0;
     final now = DateTime.now();
-    for (var d = now.day; d >= 1; d--) {
-      final match = dailyList.firstWhere((item) => item.dayNumber == d, orElse: () => dailyList.first);
+    for (var offset = 0; offset < 365; offset++) {
+      final date = now.subtract(Duration(days: offset));
+      final dateStr = '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
+      final match = dailyList.firstWhere((item) => item.date == dateStr, orElse: () => dailyList.first);
+      if (match.date != dateStr) break;
       if (match.isCompleted) {
         streak++;
-      } else if (d != now.day) {
+      } else if (offset > 0) {
         break;
       }
     }
