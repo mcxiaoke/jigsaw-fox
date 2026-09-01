@@ -3,19 +3,19 @@ import 'package:phosphoricons_flutter/phosphoricons_flutter.dart';
 
 import '../data/game_repository.dart';
 import '../services/sound_service.dart';
+import '../theme/app_palette.dart';
+import '../theme/app_text_styles.dart';
 import '../widgets/choose_background_sheet.dart';
+import '../widgets/game_toast.dart';
 import 'how_to_play_page.dart';
 
 /// Full-screen Game Settings page with grouped settings cards.
 class SettingsPage extends StatefulWidget {
   const SettingsPage({super.key});
 
-  /// Navigates to [SettingsPage] as a standard full-screen route.
   static Future<void> open(BuildContext context) {
     return Navigator.of(context).push(
-      MaterialPageRoute<void>(
-        builder: (_) => const SettingsPage(),
-      ),
+      MaterialPageRoute<void>(builder: (_) => const SettingsPage()),
     );
   }
 
@@ -28,17 +28,25 @@ class _SettingsPageState extends State<SettingsPage> {
 
   @override
   Widget build(BuildContext context) {
+    final palette = AppPalette.of(context);
+    final styles = AppTextStyles.of(context);
+
     return Scaffold(
+      backgroundColor: palette.surface,
       appBar: AppBar(
+        backgroundColor: palette.surface,
+        foregroundColor: palette.primaryText,
+        elevation: 0.5,
+        scrolledUnderElevation: 0.5,
+        centerTitle: false,
         title: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Image.asset('assets/icons/setting.png', width: 24, height: 24),
+            Icon(PhosphorIconsFill.gearSix, color: palette.brand, size: 24),
             const SizedBox(width: 8),
-            const Text('游戏设置', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 19)),
+            Text('游戏设置', style: styles.h3.copyWith(fontSize: 19)),
           ],
         ),
-        centerTitle: false,
       ),
       body: Center(
         child: ConstrainedBox(
@@ -47,12 +55,13 @@ class _SettingsPageState extends State<SettingsPage> {
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
             children: [
               // Group 1: Audio & Haptics
-              _buildSectionHeader('音效与交互'),
+              _buildSectionHeader('音效与交互', palette, styles),
               _buildCardContainer([
                 SwitchListTile(
-                  title: const Text('拼图吸附音效', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14.5)),
-                  subtitle: const Text('碎片对齐磁吸时播放清脆音效'),
-                  secondary: const Icon(PhosphorIconsBold.speakerHigh, color: Color(0xFF2E7D32)),
+                  title: Text('拼图吸附音效', style: styles.bodyBold),
+                  subtitle: Text('碎片对齐磁吸时播放清脆音效', style: styles.caption),
+                  secondary: Icon(PhosphorIconsBold.speakerHigh, color: palette.brand),
+                  activeThumbColor: palette.brand,
                   value: _repo.soundEnabled,
                   onChanged: (v) {
                     if (v) {
@@ -65,29 +74,31 @@ class _SettingsPageState extends State<SettingsPage> {
                     setState(() {});
                   },
                 ),
-                const Divider(height: 1, indent: 56),
+                Divider(height: 1, indent: 56, color: palette.divider),
                 SwitchListTile(
-                  title: const Text('触感震动反馈', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14.5)),
-                  subtitle: const Text('拼图吸附与操作时的触觉微震'),
-                  secondary: const Icon(PhosphorIconsBold.vibrate, color: Color(0xFF2E7D32)),
+                  title: Text('触感震动反馈', style: styles.bodyBold),
+                  subtitle: Text('拼图吸附与操作时的触觉微震', style: styles.caption),
+                  secondary: Icon(PhosphorIconsBold.vibrate, color: palette.brand),
+                  activeThumbColor: palette.brand,
                   value: _repo.hapticEnabled,
                   onChanged: (v) => setState(() => _repo.hapticEnabled = v),
                 ),
-                const Divider(height: 1, indent: 56),
+                Divider(height: 1, indent: 56, color: palette.divider),
                 SwitchListTile(
-                  title: const Text('选关切图网格预览', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14.5)),
-                  subtitle: const Text('在难度选择预览图上叠加异形切线'),
-                  secondary: const Icon(PhosphorIconsBold.gridFour, color: Color(0xFF2E7D32)),
+                  title: Text('选关切图网格预览', style: styles.bodyBold),
+                  subtitle: Text('在难度选择预览图上叠加异形切线', style: styles.caption),
+                  secondary: Icon(PhosphorIconsBold.gridFour, color: palette.brand),
+                  activeThumbColor: palette.brand,
                   value: _repo.gridPreviewEnabled,
                   onChanged: (v) => setState(() => _repo.gridPreviewEnabled = v),
                 ),
-                const Divider(height: 1, indent: 56),
+                Divider(height: 1, indent: 56, color: palette.divider),
                 ListTile(
-                  leading: const Icon(PhosphorIconsBold.squaresFour, color: Color(0xFF2E7D32)),
-                  title: const Text('碎片初始排布模式', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14.5)),
+                  leading: Icon(PhosphorIconsBold.squaresFour, color: palette.brand),
+                  title: Text('碎片初始排布模式', style: styles.bodyBold),
                   subtitle: Text(_repo.pieceScatterMode == 'tabletop'
                       ? '桌面环形散落（推荐宽屏/平板）'
-                      : '底部托盘收纳（默认/推荐手机）'),
+                      : '底部托盘收纳（默认/推荐手机）', style: styles.caption),
                   trailing: SegmentedButton<String>(
                     showSelectedIcon: false,
                     segments: const [
@@ -100,18 +111,18 @@ class _SettingsPageState extends State<SettingsPage> {
                     },
                   ),
                 ),
-              ]),
+              ], palette),
 
               const SizedBox(height: 18),
 
               // Group 2: Appearance & Background
-              _buildSectionHeader('外观与背景'),
+              _buildSectionHeader('外观与背景', palette, styles),
               _buildCardContainer([
                 ListTile(
-                  leading: const Icon(PhosphorIconsBold.image, color: Color(0xFF0288D1)),
-                  title: const Text('默认壁纸背景', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14.5)),
-                  subtitle: const Text('选择拼图对局时的全屏桌面背景'),
-                  trailing: const Icon(PhosphorIconsBold.caretRight, size: 18),
+                  leading: Icon(PhosphorIconsBold.image, color: palette.info),
+                  title: Text('默认壁纸背景', style: styles.bodyBold),
+                  subtitle: Text('选择拼图对局时的全屏桌面背景', style: styles.caption),
+                  trailing: Icon(PhosphorIconsBold.caretRight, size: 18, color: palette.secondaryText),
                   onTap: () {
                     ChooseBackgroundSheet.show(
                       context: context,
@@ -122,36 +133,37 @@ class _SettingsPageState extends State<SettingsPage> {
                     );
                   },
                 ),
-              ]),
+              ], palette),
 
               const SizedBox(height: 18),
 
-              // Group 3: Help & Guide (Main Entry)
-              _buildSectionHeader('玩法与帮助'),
+              // Group 3: Help & Guide
+              _buildSectionHeader('玩法与帮助', palette, styles),
               _buildCardContainer([
                 ListTile(
-                  leading: const Icon(PhosphorIconsBold.question, color: Color(0xFF2E7D32)),
-                  title: const Text('玩法技巧与操作指引', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14.5)),
-                  subtitle: const Text('手势操作、组队拖拽、底图透视、整理工具说明'),
-                  trailing: const Icon(PhosphorIconsBold.caretRight, size: 18),
+                  leading: Icon(PhosphorIconsBold.question, color: palette.success),
+                  title: Text('玩法技巧与操作指引', style: styles.bodyBold),
+                  subtitle: Text('手势操作、组队拖拽、底图透视、整理工具说明', style: styles.caption),
+                  trailing: Icon(PhosphorIconsBold.caretRight, size: 18, color: palette.secondaryText),
                   onTap: () => HowToPlayPage.open(context),
                 ),
-              ]),
+              ], palette),
 
               const SizedBox(height: 18),
 
               // Group 4: Data Management
-              _buildSectionHeader('数据管理'),
+              _buildSectionHeader('数据管理', palette, styles),
               _buildCardContainer([
                 ListTile(
-                  leading: const Icon(PhosphorIconsBold.trashSimple, color: Colors.redAccent),
-                  title: const Text('重置所有游戏数据', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14.5, color: Colors.redAccent)),
-                  subtitle: const Text('清除所有关卡记录、每日挑战与自制拼图'),
-                  trailing: const Icon(PhosphorIconsBold.caretRight, size: 18, color: Colors.redAccent),
+                  leading: Icon(PhosphorIconsBold.trashSimple, color: palette.error),
+                  title: Text('重置所有游戏数据', style: styles.bodyBold.copyWith(color: palette.error)),
+                  subtitle: Text('清除所有关卡记录、每日挑战与自制拼图', style: styles.caption),
+                  trailing: Icon(PhosphorIconsBold.caretRight, size: 18, color: palette.error),
                   onTap: () async {
                     final ok = await showDialog<bool>(
                       context: context,
                       builder: (ctx) => AlertDialog(
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                         title: const Text('确认重置全部数据？'),
                         content: const Text('该操作不可逆，将清除所有主线关卡进度、每日挑战与自制拼图记录。'),
                         actions: [
@@ -161,7 +173,7 @@ class _SettingsPageState extends State<SettingsPage> {
                           ),
                           FilledButton(
                             onPressed: () => Navigator.pop(ctx, true),
-                            style: FilledButton.styleFrom(backgroundColor: Colors.red),
+                            style: FilledButton.styleFrom(backgroundColor: palette.error),
                             child: const Text('确定重置'),
                           ),
                         ],
@@ -171,31 +183,42 @@ class _SettingsPageState extends State<SettingsPage> {
                       await _repo.resetAllData();
                       if (context.mounted) {
                         setState(() {});
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('所有游戏数据已重置为初始状态')),
+                        GameToast.show(
+                          context,
+                          icon: PhosphorIconsFill.trashSimple,
+                          message: '所有游戏数据已重置为初始状态',
+                          type: GameToastType.warning,
                         );
                       }
                     }
                   },
                 ),
-              ]),
+              ], palette),
 
               const SizedBox(height: 24),
 
-              // App Footer Info
+              // App Footer
               Center(
                 child: Column(
                   children: [
-                    Image.asset('assets/icons/puzzle_piece_3d.png', width: 32, height: 32),
+                    Container(
+                      width: 48,
+                      height: 48,
+                      decoration: BoxDecoration(
+                        color: palette.brand.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      child: Icon(PhosphorIconsFill.puzzlePiece, color: palette.brand, size: 28),
+                    ),
                     const SizedBox(height: 6),
-                    const Text(
+                    Text(
                       '异形拼图 Jigsaw Puzzle',
-                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.black54),
+                      style: styles.captionBold.copyWith(color: palette.secondaryText),
                     ),
                     const SizedBox(height: 2),
-                    const Text(
+                    Text(
                       '版本 1.0.0',
-                      style: TextStyle(fontSize: 11.5, color: Colors.black38),
+                      style: styles.caption.copyWith(color: palette.disabledText),
                     ),
                   ],
                 ),
@@ -208,23 +231,26 @@ class _SettingsPageState extends State<SettingsPage> {
     );
   }
 
-  Widget _buildSectionHeader(String title) {
+  Widget _buildSectionHeader(String title, AppPalette palette, AppTextStyles styles) {
     return Padding(
       padding: const EdgeInsets.only(left: 4, bottom: 8),
       child: Text(
         title,
-        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13.5, color: Colors.black54),
+        style: styles.captionBold.copyWith(
+          color: palette.secondaryText,
+          letterSpacing: 0.5,
+        ),
       ),
     );
   }
 
-  Widget _buildCardContainer(List<Widget> children) {
-    return Material(
-      color: Colors.white,
+  Widget _buildCardContainer(List<Widget> children, AppPalette palette) {
+    return Container(
       clipBehavior: Clip.antiAlias,
-      shape: RoundedRectangleBorder(
+      decoration: BoxDecoration(
+        color: palette.surfaceContainer,
         borderRadius: BorderRadius.circular(16),
-        side: const BorderSide(color: Colors.black12, width: 0.8),
+        border: Border.all(color: palette.divider, width: 1),
       ),
       child: Column(
         children: children,

@@ -9,17 +9,17 @@ import '../services/achievement_service.dart';
 import '../services/achievement_store.dart';
 import '../services/economy_service.dart';
 import '../services/sound_service.dart';
+import '../theme/app_palette.dart';
+import '../theme/app_text_styles.dart';
+import '../widgets/game_toast.dart';
 
-/// 全屏成就勋章与游戏数据统计页面（数据驱动，v3.3.1 设计）
+/// 全屏成就勋章与游戏数据统计页面（品牌化重设计）
 class AchievementsPage extends StatefulWidget {
   const AchievementsPage({super.key});
 
-  /// Navigates to [AchievementsPage] as a standard full-screen route.
   static Future<void> open(BuildContext context) {
     return Navigator.of(context).push(
-      MaterialPageRoute<void>(
-        builder: (_) => const AchievementsPage(),
-      ),
+      MaterialPageRoute<void>(builder: (_) => const AchievementsPage()),
     );
   }
 
@@ -87,12 +87,11 @@ class _AchievementsPageState extends State<AchievementsPage> {
     final ok = await _achService.claimReward(def.id);
     if (ok && mounted) {
       SoundService.I.play(Sfx.coinsFly);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('成功领取成就奖励：+${def.coinReward} 金币！💰'),
-          duration: const Duration(seconds: 2),
-          behavior: SnackBarBehavior.floating,
-        ),
+      GameToast.show(
+        context,
+        icon: Icons.monetization_on,
+        message: '成功领取成就奖励：+${def.coinReward} 金币！',
+        type: GameToastType.success,
       );
       _loadAsyncStats();
     }
@@ -100,6 +99,8 @@ class _AchievementsPageState extends State<AchievementsPage> {
 
   @override
   Widget build(BuildContext context) {
+    final palette = AppPalette.of(context);
+    final styles = AppTextStyles.of(context);
     final completed = _totalSolved;
     final snapped = _repo.totalPiecesSnapped;
     final timeSec = _repo.totalPlayTimeSeconds;
@@ -109,28 +110,37 @@ class _AchievementsPageState extends State<AchievementsPage> {
     final unlockedCount = allDefs.where((a) => _store.isUnlocked(a.id)).length;
 
     return Scaffold(
+      backgroundColor: palette.surface,
       appBar: AppBar(
+        backgroundColor: palette.surface,
+        foregroundColor: palette.primaryText,
+        elevation: 0.5,
+        scrolledUnderElevation: 0.5,
+        centerTitle: false,
         title: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Image.asset('assets/icons/trophy_3d.png', width: 24, height: 24),
+            Icon(PhosphorIconsFill.trophy, color: palette.brand, size: 24),
             const SizedBox(width: 8),
-            const Text('成就与统计', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 19)),
+            Text('成就与统计', style: styles.h3.copyWith(fontSize: 19)),
           ],
         ),
-        centerTitle: false,
         actions: [
           Container(
             margin: const EdgeInsets.only(right: 16),
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
             decoration: BoxDecoration(
-              color: Colors.amber.withValues(alpha: 0.15),
+              color: palette.brand.withValues(alpha: 0.12),
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: Colors.amber.shade300),
+              border: Border.all(color: palette.brand.withValues(alpha: 0.35)),
             ),
             child: Text(
               '$unlockedCount / ${allDefs.length} 已解锁',
-              style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.orange, fontSize: 12.5),
+              style: TextStyle(
+                fontWeight: FontWeight.w700,
+                color: palette.brand,
+                fontSize: 12.5,
+              ),
             ),
           ),
         ],
@@ -141,16 +151,11 @@ class _AchievementsPageState extends State<AchievementsPage> {
           child: ListView(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
             children: [
-              // 1. Stats Dashboard Header
-              const Padding(
-                padding: EdgeInsets.only(bottom: 10, left: 4),
-                child: Text(
-                  '数据统计看板',
-                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Colors.black87),
-                ),
-              ),
+              // Section header
+              _SectionHeader(title: '数据统计看板', palette: palette, styles: styles),
+              const SizedBox(height: 10),
 
-              // 2. Stats Grid
+              // Stats Grid
               LayoutBuilder(
                 builder: (context, constraints) {
                   final isWide = constraints.maxWidth >= 500;
@@ -163,74 +168,94 @@ class _AchievementsPageState extends State<AchievementsPage> {
                     shrinkWrap: true,
                     physics: const NeverScrollableScrollPhysics(),
                     children: [
-                      _buildStatCard(
-                        '关卡累积星星',
-                        '$_totalStars',
-                        PhosphorIconsFill.star,
-                        Colors.amber.shade800,
-                        imageAsset: 'assets/icons/star_3d.png',
+                      _StatCard(
+                        label: '关卡累积星星',
+                        value: '$_totalStars',
+                        icon: PhosphorIconsFill.star,
+                        color: palette.gold,
+                        palette: palette,
+                        styles: styles,
                       ),
-                      _buildStatCard(
-                        '3星拼图数',
-                        '$_distinct3Star 张',
-                        PhosphorIconsFill.trophy,
-                        const Color(0xFFE65100),
-                        imageAsset: 'assets/icons/trophy_3d.png',
+                      _StatCard(
+                        label: '3星拼图数',
+                        value: '$_distinct3Star 张',
+                        icon: PhosphorIconsFill.trophy,
+                        color: palette.brand,
+                        palette: palette,
+                        styles: styles,
                       ),
-                      _buildStatCard(
-                        '已通关图数',
-                        '$completed 张',
-                        PhosphorIconsBold.checkCircle,
-                        const Color(0xFF2E7D32),
+                      _StatCard(
+                        label: '已通关图数',
+                        value: '$completed 张',
+                        icon: PhosphorIconsBold.checkCircle,
+                        color: palette.success,
+                        palette: palette,
+                        styles: styles,
                       ),
-                      _buildStatCard(
-                        '拥有金币',
-                        '$coins 💰',
-                        PhosphorIconsFill.coins,
-                        const Color(0xFFF57F17),
+                      _StatCard(
+                        label: '拥有金币',
+                        value: '$coins',
+                        icon: PhosphorIconsFill.coins,
+                        color: palette.gold,
+                        palette: palette,
+                        styles: styles,
                       ),
-                      _buildStatCard(
-                        '已拼碎片',
-                        '$snapped',
-                        PhosphorIconsFill.puzzlePiece,
-                        const Color(0xFF0288D1),
+                      _StatCard(
+                        label: '已拼碎片',
+                        value: '$snapped',
+                        icon: PhosphorIconsFill.puzzlePiece,
+                        color: palette.info,
+                        palette: palette,
+                        styles: styles,
                       ),
-                      _buildStatCard(
-                        '总游玩时长',
-                        _formatDuration(timeSec),
-                        PhosphorIconsBold.timer,
-                        const Color(0xFF7B1FA2),
+                      _StatCard(
+                        label: '总游玩时长',
+                        value: _formatDuration(timeSec),
+                        icon: PhosphorIconsBold.timer,
+                        color: const Color(0xFFA56BC0),
+                        palette: palette,
+                        styles: styles,
                       ),
                     ],
                   );
                 },
               ),
 
-              const SizedBox(height: 20),
+              const SizedBox(height: 24),
 
-              // 3. Badges Section Header
+              // Achievements section header
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  const Text(
-                    '成就勋章墙',
-                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Colors.black87),
-                  ),
+                  _SectionHeader(title: '成就勋章墙', palette: palette, styles: styles),
                   Text(
                     '共 ${allDefs.length} 项成就',
-                    style: const TextStyle(fontSize: 12, color: Colors.black54),
+                    style: styles.caption,
                   ),
                 ],
               ),
-              const SizedBox(height: 10),
+              const SizedBox(height: 12),
 
-              // 4. Badges List (Data Driven)
+              // Achievements list
               if (_loading)
-                const Center(child: Padding(padding: EdgeInsets.all(24), child: CircularProgressIndicator()))
+                Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(24),
+                    child: CircularProgressIndicator(
+                      color: palette.brand,
+                    ),
+                  ),
+                )
               else
                 for (final def in allDefs) ...[
-                  _buildAchievementCard(def),
-                  const SizedBox(height: 8),
+                  _AchievementCard(
+                    def: def,
+                    store: _store,
+                    palette: palette,
+                    styles: styles,
+                    onClaim: () => _claimReward(def),
+                  ),
+                  const SizedBox(height: 10),
                 ],
               const SizedBox(height: 24),
             ],
@@ -239,92 +264,148 @@ class _AchievementsPageState extends State<AchievementsPage> {
       ),
     );
   }
+}
 
-  Widget _buildStatCard(
-    String label,
-    String value,
-    IconData icon,
-    Color color, {
-    String? imageAsset,
-  }) {
-    return Material(
-      color: Colors.white,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
-        side: BorderSide(color: color.withValues(alpha: 0.25)),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Row(
-              children: [
-                if (imageAsset != null)
-                  Image.asset(imageAsset, width: 20, height: 20)
-                else
-                  Icon(icon, color: color, size: 20),
-                const Spacer(),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: color.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Text(
-                    label,
-                    style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: color),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 6),
-            Text(
-              value,
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                color: color,
-              ),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-          ],
-        ),
+// ── Section Header ──────────────────────────
+class _SectionHeader extends StatelessWidget {
+  const _SectionHeader({required this.title, required this.palette, required this.styles});
+  final String title;
+  final AppPalette palette;
+  final AppTextStyles styles;
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      title,
+      style: styles.captionBold.copyWith(
+        color: palette.secondaryText,
+        letterSpacing: 0.5,
       ),
     );
   }
+}
 
-  Widget _buildAchievementCard(AchievementDefinition def) {
-    final isUnlocked = _store.isUnlocked(def.id);
-    final isClaimed = _store.isClaimed(def.id);
+// ── Stat Card ───────────────────────────────
+class _StatCard extends StatelessWidget {
+  const _StatCard({
+    required this.label,
+    required this.value,
+    required this.icon,
+    required this.color,
+    required this.palette,
+    required this.styles,
+  });
+
+  final String label;
+  final String value;
+  final IconData icon;
+  final Color color;
+  final AppPalette palette;
+  final AppTextStyles styles;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 14),
+      decoration: BoxDecoration(
+        color: palette.surfaceContainer,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: color.withValues(alpha: 0.2), width: 1),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Row(
+            children: [
+              Icon(icon, color: color, size: 20),
+              const Spacer(),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(
+                  color: color.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
+                  label,
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    color: color,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Text(
+            value,
+            style: styles.monoSmall.copyWith(color: color),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Achievement Card ──────────────────────
+class _AchievementCard extends StatelessWidget {
+  const _AchievementCard({
+    required this.def,
+    required this.store,
+    required this.palette,
+    required this.styles,
+    required this.onClaim,
+  });
+
+  final AchievementDefinition def;
+  final AchievementStore store;
+  final AppPalette palette;
+  final AppTextStyles styles;
+  final VoidCallback onClaim;
+
+  @override
+  Widget build(BuildContext context) {
+    final isUnlocked = store.isUnlocked(def.id);
+    final isClaimed = store.isClaimed(def.id);
     final current = def.type == AchievementType.derived
-        ? (allDefsExcludingMaster().where((a) => _store.isUnlocked(a.id)).length)
-        : _store.getCounter(def.metricKey);
+        ? (AchievementService.allAchievements.where((a) => a.id != 'master_all' && store.isUnlocked(a.id)).length)
+        : store.getCounter(def.metricKey);
     final progress = (current / def.target).clamp(0.0, 1.0);
 
-    return Material(
-      color: isUnlocked ? Colors.white : Colors.white.withValues(alpha: 0.85),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(14),
-        side: BorderSide(
-          color: isUnlocked ? (isClaimed ? const Color(0xFFC8E6C9) : Colors.amber.shade400) : Colors.black12,
-          width: isUnlocked ? 1.4 : 0.8,
+    return Container(
+      decoration: BoxDecoration(
+        color: palette.surfaceContainer,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: isUnlocked
+              ? (isClaimed ? palette.success.withValues(alpha: 0.3) : palette.brand.withValues(alpha: 0.4))
+              : palette.divider,
+          width: isUnlocked ? 1.4 : 1,
         ),
       ),
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         child: Row(
           children: [
-            CircleAvatar(
-              radius: 22,
-              backgroundColor: isUnlocked ? Colors.amber.shade50 : Colors.grey.shade100,
+            // Icon
+            Container(
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(
+                color: isUnlocked
+                    ? palette.brand.withValues(alpha: 0.12)
+                    : palette.divider.withValues(alpha: 0.3),
+                borderRadius: BorderRadius.circular(12),
+              ),
               child: isUnlocked
-                  ? Image.asset('assets/icons/trophy_3d.png', width: 28, height: 28)
-                  : Image.asset('assets/icons/lock_3d.png', width: 22, height: 22),
+                  ? Icon(PhosphorIconsFill.trophy, color: palette.brand, size: 24)
+                  : Icon(PhosphorIconsFill.lockKey, color: palette.disabledText, size: 20),
             ),
             const SizedBox(width: 14),
+            // Content
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -334,55 +415,61 @@ class _AchievementsPageState extends State<AchievementsPage> {
                     children: [
                       Text(
                         def.title,
-                        style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 14,
-                          color: isUnlocked ? Colors.black87 : Colors.black54,
+                        style: styles.bodyBold.copyWith(
+                          color: isUnlocked ? palette.primaryText : palette.disabledText,
                         ),
                       ),
                       if (isUnlocked)
-                        if (isClaimed)
-                          const Row(
-                            children: [
-                              Icon(PhosphorIconsFill.checkCircle, color: Color(0xFF2E7D32), size: 15),
-                              SizedBox(width: 3),
-                              Text(
-                                '已领取',
-                                style: TextStyle(
-                                  fontSize: 11.5,
-                                  color: Color(0xFF2E7D32),
-                                  fontWeight: FontWeight.bold,
+                        isClaimed
+                            ? Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(PhosphorIconsFill.checkCircle, color: palette.success, size: 15),
+                                  const SizedBox(width: 3),
+                                  Text(
+                                    '已领取',
+                                    style: styles.captionBold.copyWith(color: palette.success),
+                                  ),
+                                ],
+                              )
+                            : GestureDetector(
+                                onTap: onClaim,
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                                  decoration: BoxDecoration(
+                                    gradient: AppPalette.brandGradient,
+                                    borderRadius: BorderRadius.circular(10),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: palette.brand.withValues(alpha: 0.25),
+                                        blurRadius: 8,
+                                        offset: const Offset(0, 2),
+                                      ),
+                                    ],
+                                  ),
+                                  child: Text(
+                                    '领 +${def.coinReward} 🪙',
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w800,
+                                      color: palette.surface,
+                                    ),
+                                  ),
                                 ),
-                              ),
-                            ],
-                          )
-                        else
-                          FilledButton.tonal(
-                            onPressed: () => _claimReward(def),
-                            style: FilledButton.styleFrom(
-                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 0),
-                              visualDensity: VisualDensity.compact,
-                              backgroundColor: Colors.amber.shade100,
-                              foregroundColor: const Color(0xFF795548),
-                            ),
-                            child: Text(
-                              '领 +${def.coinReward} 💰',
-                              style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
-                            ),
-                          )
+                              )
                       else
                         Text(
                           def.metricKey == 'play_seconds'
                               ? '${(current ~/ 60)}/${(def.target ~/ 60)}分'
                               : '$current/${def.target}',
-                          style: const TextStyle(fontSize: 11.5, color: Colors.black45, fontWeight: FontWeight.w500),
+                          style: styles.caption.copyWith(color: palette.disabledText),
                         ),
                     ],
                   ),
-                  const SizedBox(height: 3),
+                  const SizedBox(height: 4),
                   Text(
                     def.description,
-                    style: const TextStyle(fontSize: 12, color: Colors.black54),
+                    style: styles.caption,
                   ),
                   if (!isUnlocked) ...[
                     const SizedBox(height: 8),
@@ -391,8 +478,16 @@ class _AchievementsPageState extends State<AchievementsPage> {
                       child: LinearProgressIndicator(
                         value: progress,
                         minHeight: 5,
-                        backgroundColor: Colors.grey.shade200,
-                        valueColor: const AlwaysStoppedAnimation<Color>(Color(0xFF2E7D32)),
+                        backgroundColor: palette.divider,
+                        valueColor: AlwaysStoppedAnimation<Color>(palette.success),
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      '${(progress * 100).toInt()}%',
+                      style: styles.caption.copyWith(
+                        fontSize: 10,
+                        color: palette.secondaryText,
                       ),
                     ),
                   ],
@@ -403,9 +498,5 @@ class _AchievementsPageState extends State<AchievementsPage> {
         ),
       ),
     );
-  }
-
-  List<AchievementDefinition> allDefsExcludingMaster() {
-    return AchievementService.allAchievements.where((a) => a.id != 'master_all').toList();
   }
 }

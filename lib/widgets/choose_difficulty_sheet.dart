@@ -11,6 +11,9 @@ import '../logic/geometry/piece_shape.dart';
 import '../logic/puzzle_model.dart';
 import '../services/sound_service.dart';
 import '../services/unlock_service.dart';
+import '../theme/app_palette.dart';
+import '../theme/app_text_styles.dart';
+import 'game_toast.dart';
 
 /// Custom painter rendering dynamic jigsaw grid preview lines over selected puzzle image.
 class _JigsawOverlayPainter extends CustomPainter {
@@ -116,23 +119,22 @@ class ChooseDifficultySheet extends StatefulWidget {
     String? sourcePlatform,
     String? sourceUrl,
   }) {
-    return showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (_) => ChooseDifficultySheet(
-        imageBytes: imageBytes,
-        initialDifficulty: initialDifficulty,
-        title: title,
-        onStart: onStart,
-        completedPieceCounts: completedPieceCounts,
-        isUnlocked: isUnlocked,
-        lockedMessage: lockedMessage,
-        onDelete: onDelete,
-        savedProgressPercent: savedProgressPercent,
-        onResetProgress: onResetProgress,
-        sourcePlatform: sourcePlatform,
-        sourceUrl: sourceUrl,
+    return Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => ChooseDifficultySheet(
+          imageBytes: imageBytes,
+          initialDifficulty: initialDifficulty,
+          title: title,
+          onStart: onStart,
+          completedPieceCounts: completedPieceCounts,
+          isUnlocked: isUnlocked,
+          lockedMessage: lockedMessage,
+          onDelete: onDelete,
+          savedProgressPercent: savedProgressPercent,
+          onResetProgress: onResetProgress,
+          sourcePlatform: sourcePlatform,
+          sourceUrl: sourceUrl,
+        ),
       ),
     );
   }
@@ -231,15 +233,16 @@ class _ChooseDifficultySheetState extends State<ChooseDifficultySheet> {
   }
 
   Future<void> _confirmDelete() async {
+    final palette = AppPalette.of(context);
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Row(
+        title: Row(
           children: [
-            Icon(PhosphorIconsBold.trash, color: Colors.redAccent),
-            SizedBox(width: 8),
-            Text('删除自制拼图'),
+            Icon(PhosphorIconsBold.trash, color: palette.error),
+            const SizedBox(width: 8),
+            const Text('删除自制拼图'),
           ],
         ),
         content: Text('确定要永久删除「${widget.title}」吗？删除后不可恢复。'),
@@ -249,7 +252,7 @@ class _ChooseDifficultySheetState extends State<ChooseDifficultySheet> {
             child: const Text('取消'),
           ),
           FilledButton(
-            style: FilledButton.styleFrom(backgroundColor: Colors.redAccent),
+            style: FilledButton.styleFrom(backgroundColor: palette.error),
             onPressed: () => Navigator.of(ctx).pop(true),
             child: const Text('确定删除'),
           ),
@@ -264,6 +267,7 @@ class _ChooseDifficultySheetState extends State<ChooseDifficultySheet> {
   }
 
   Future<void> _handleStart(PuzzleDifficulty diff) async {
+    final palette = AppPalette.of(context);
     // 针对 2:3/3:2 矩形 L2（54块）断层弹窗二次确认
     if (diff.pieceCount == 54 && _aspectRatio != PuzzleAspectRatio.square1x1) {
       final prefs = await SharedPreferences.getInstance();
@@ -275,11 +279,11 @@ class _ChooseDifficultySheetState extends State<ChooseDifficultySheet> {
           builder: (ctx) => StatefulBuilder(
             builder: (ctx, setDialogState) => AlertDialog(
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-              title: const Row(
+              title: Row(
                 children: [
-                  Icon(PhosphorIconsBold.info, color: Colors.orange),
-                  SizedBox(width: 8),
-                  Text('难度提示'),
+                  Icon(PhosphorIconsBold.info, color: palette.warning),
+                  const SizedBox(width: 8),
+                  const Text('难度提示'),
                 ],
               ),
               content: Column(
@@ -305,7 +309,7 @@ class _ChooseDifficultySheetState extends State<ChooseDifficultySheet> {
                   child: const Text('换个难度'),
                 ),
                 FilledButton(
-                  style: FilledButton.styleFrom(backgroundColor: const Color(0xFF2E7D32)),
+                  style: FilledButton.styleFrom(backgroundColor: palette.brand),
                   onPressed: () => Navigator.of(ctx).pop(true),
                   child: const Text('立即挑战'),
                 ),
@@ -331,6 +335,8 @@ class _ChooseDifficultySheetState extends State<ChooseDifficultySheet> {
 
   @override
   Widget build(BuildContext context) {
+    final palette = AppPalette.of(context);
+    final styles = AppTextStyles.of(context);
     final theme = Theme.of(context);
     final effectiveDiff = _effectiveDifficulty;
     final currentTiers = _currentTiers;
@@ -348,103 +354,73 @@ class _ChooseDifficultySheetState extends State<ChooseDifficultySheet> {
     final isTierUnlocked = unlockStatus?.isUnlocked ?? true;
     final isFullyPlayable = widget.isUnlocked && isTierUnlocked;
 
-    return Container(
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+    return Scaffold(
+      backgroundColor: palette.surface,
+      appBar: AppBar(
+        backgroundColor: palette.surface,
+        foregroundColor: palette.primaryText,
+        elevation: 0.5,
+        scrolledUnderElevation: 0.5,
+        leading: IconButton(
+          icon: Icon(PhosphorIconsBold.x, size: 22, color: palette.secondaryText),
+          onPressed: () => Navigator.of(context).pop(),
+        ),
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              '选择难度',
+              style: styles.h3.copyWith(fontSize: 18),
+            ),
+            if (widget.sourcePlatform != null && widget.sourceUrl != null)
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                    decoration: BoxDecoration(
+                      color: palette.info.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(6),
+                      border: Border.all(color: palette.info.withValues(alpha: 0.3), width: 0.8),
+                    ),
+                    child: Text(
+                      widget.sourcePlatform!,
+                      style: TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.bold,
+                        color: palette.info,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      widget.sourceUrl!,
+                      style: styles.caption.copyWith(color: palette.disabledText),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              ),
+          ],
+        ),
+        actions: [
+          if (widget.onDelete != null)
+            IconButton(
+              icon: Icon(PhosphorIconsBold.trash, color: palette.error, size: 20),
+              tooltip: '删除此自制拼图',
+              onPressed: _confirmDelete,
+            ),
+        ],
       ),
-      child: SafeArea(
+      body: SafeArea(
         top: false,
         child: SingleChildScrollView(
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-            // Drag handle
-            Center(
-              child: Container(
-                margin: const EdgeInsets.only(top: 12, bottom: 4),
-                width: 40,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: Colors.grey.shade300,
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-            ),
-
-            // Header: Title + Close & Delete
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 8, 12, 0),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          widget.title,
-                          style: theme.textTheme.titleLarge?.copyWith(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 18,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        if (widget.sourcePlatform != null && widget.sourceUrl != null) ...[
-                          const SizedBox(height: 2),
-                          Row(
-                            children: [
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                decoration: BoxDecoration(
-                                  color: Colors.teal.shade50,
-                                  borderRadius: BorderRadius.circular(6),
-                                  border: Border.all(color: Colors.teal.shade200, width: 0.8),
-                                ),
-                                child: Text(
-                                  widget.sourcePlatform!,
-                                  style: TextStyle(
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.bold,
-                                    color: Colors.teal.shade800,
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              Expanded(
-                                child: Text(
-                                  widget.sourceUrl!,
-                                  style: TextStyle(
-                                    fontSize: 11,
-                                    color: Colors.grey.shade600,
-                                  ),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
-                      ],
-                    ),
-                  ),
-                  if (widget.onDelete != null)
-                    IconButton(
-                      icon: const Icon(PhosphorIconsBold.trash, color: Colors.redAccent, size: 20),
-                      tooltip: '删除此自制拼图',
-                      onPressed: _confirmDelete,
-                    ),
-                  IconButton(
-                    icon: const Icon(PhosphorIconsBold.x, size: 20),
-                    onPressed: () => Navigator.of(context).pop(),
-                  ),
-                ],
-              ),
-            ),
-
-            const SizedBox(height: 12),
-
             // Puzzle Image Preview Card with Grid Overlay
             Center(
               child: ClipRRect(
@@ -452,7 +428,7 @@ class _ChooseDifficultySheetState extends State<ChooseDifficultySheet> {
                 child: Container(
                   width: 280,
                   height: 180,
-                  color: const Color(0xFFF0F0F0),
+                  color: palette.surfaceContainer,
                   child: Stack(
                     fit: StackFit.expand,
                     children: [
@@ -514,23 +490,23 @@ class _ChooseDifficultySheetState extends State<ChooseDifficultySheet> {
             // Locked banner if overall level is locked
             if (!widget.isUnlocked)
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
+                padding: const EdgeInsets.symmetric(horizontal: 0, vertical: 4),
                 child: Container(
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                   decoration: BoxDecoration(
-                    color: Colors.amber.withValues(alpha: 0.15),
+                    color: palette.warning.withValues(alpha: 0.12),
                     borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: Colors.amber.shade400),
+                    border: Border.all(color: palette.warning.withValues(alpha: 0.4)),
                   ),
                   child: Row(
                     children: [
-                      const Icon(PhosphorIconsFill.lockSimple, color: Colors.orange, size: 18),
+                      Icon(PhosphorIconsFill.lockSimple, color: palette.warning, size: 18),
                       const SizedBox(width: 8),
                       Expanded(
                         child: Text(
                           widget.lockedMessage ?? '此关卡尚未解锁，请先通关前序关卡',
-                          style: const TextStyle(
-                            color: Color(0xFFE65100),
+                          style: TextStyle(
+                            color: palette.warning,
                             fontSize: 12.5,
                             fontWeight: FontWeight.bold,
                           ),
@@ -542,23 +518,23 @@ class _ChooseDifficultySheetState extends State<ChooseDifficultySheet> {
               )
             else if (!isTierUnlocked && unlockStatus != null)
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
+                padding: const EdgeInsets.symmetric(horizontal: 0, vertical: 4),
                 child: Container(
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                   decoration: BoxDecoration(
-                    color: Colors.orange.shade50,
+                    color: palette.warning.withValues(alpha: 0.12),
                     borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: Colors.orange.shade300),
+                    border: Border.all(color: palette.warning.withValues(alpha: 0.3)),
                   ),
                   child: Row(
                     children: [
-                      const Icon(PhosphorIconsFill.lockSimple, color: Colors.deepOrange, size: 18),
+                      Icon(PhosphorIconsFill.lockSimple, color: palette.warning, size: 18),
                       const SizedBox(width: 8),
                       Expanded(
                         child: Text(
                           unlockStatus.reason,
-                          style: const TextStyle(
-                            color: Color(0xFFD84315),
+                          style: TextStyle(
+                            color: palette.warning,
                             fontSize: 12.5,
                             fontWeight: FontWeight.bold,
                           ),
@@ -573,7 +549,7 @@ class _ChooseDifficultySheetState extends State<ChooseDifficultySheet> {
 
             // Difficulty & Aspect Ratio Info Header
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
+              padding: const EdgeInsets.symmetric(horizontal: 0),
               child: Wrap(
                 alignment: WrapAlignment.center,
                 crossAxisAlignment: WrapCrossAlignment.center,
@@ -583,31 +559,31 @@ class _ChooseDifficultySheetState extends State<ChooseDifficultySheet> {
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                     decoration: BoxDecoration(
-                      color: const Color(0xFFE3F2FD),
+                      color: palette.info.withValues(alpha: 0.12),
                       borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: const Color(0xFF90CAF9)),
+                      border: Border.all(color: palette.info.withValues(alpha: 0.3)),
                     ),
                     child: Text(
                       _aspectRatio.label,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 11.5,
                         fontWeight: FontWeight.bold,
-                        color: Color(0xFF0D47A1),
+                        color: palette.info,
                       ),
                     ),
                   ),
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                     decoration: BoxDecoration(
-                      color: const Color(0xFFE8F5E9),
+                      color: palette.brand.withValues(alpha: 0.12),
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: Text(
                       selectedTier.tag,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 11.5,
                         fontWeight: FontWeight.bold,
-                        color: Color(0xFF1B5E20),
+                        color: palette.brand,
                       ),
                     ),
                   ),
@@ -615,7 +591,7 @@ class _ChooseDifficultySheetState extends State<ChooseDifficultySheet> {
                     '${effectiveDiff.cols} × ${effectiveDiff.rows} (${effectiveDiff.pieceCount} 块)',
                     style: theme.textTheme.titleMedium?.copyWith(
                       fontWeight: FontWeight.bold,
-                      color: Colors.black87,
+                      color: palette.primaryText,
                       fontSize: 14.5,
                     ),
                   ),
@@ -623,21 +599,21 @@ class _ChooseDifficultySheetState extends State<ChooseDifficultySheet> {
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                       decoration: BoxDecoration(
-                        color: const Color(0xFFE8F5E9),
+                        color: palette.success.withValues(alpha: 0.12),
                         borderRadius: BorderRadius.circular(10),
-                        border: Border.all(color: const Color(0xFF81C784)),
+                        border: Border.all(color: palette.success.withValues(alpha: 0.4)),
                       ),
-                      child: const Row(
+                      child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Icon(PhosphorIconsFill.checkCircle, size: 12, color: Color(0xFF2E7D32)),
-                          SizedBox(width: 2),
+                          Icon(PhosphorIconsFill.checkCircle, size: 12, color: palette.success),
+                          const SizedBox(width: 2),
                           Text(
                             '已通关',
                             style: TextStyle(
                               fontSize: 10.5,
                               fontWeight: FontWeight.bold,
-                              color: Color(0xFF2E7D32),
+                              color: palette.success,
                             ),
                           ),
                         ],
@@ -649,14 +625,15 @@ class _ChooseDifficultySheetState extends State<ChooseDifficultySheet> {
             const SizedBox(height: 4),
             Text(
               '⏱️ 预计耗时：${selectedTier.estimatedMinutes}',
-              style: const TextStyle(fontSize: 12, color: Colors.black54, fontWeight: FontWeight.w500),
+              style: TextStyle(fontSize: 12, color: palette.secondaryText, fontWeight: FontWeight.w500),
+              textAlign: TextAlign.center,
             ),
             const SizedBox(height: 14),
 
             // Horizontal scroll of 7 difficulty tiers
             SingleChildScrollView(
               scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.symmetric(horizontal: 20),
+              padding: const EdgeInsets.symmetric(horizontal: 0),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
@@ -676,7 +653,7 @@ class _ChooseDifficultySheetState extends State<ChooseDifficultySheet> {
 
             // Big Start CTA Button with Saved Progress Detection
             Padding(
-              padding: const EdgeInsets.fromLTRB(24, 0, 24, 20),
+              padding: const EdgeInsets.fromLTRB(0, 0, 0, 20),
               child: Builder(
                 builder: (context) {
                   final hasSavedProgress = widget.savedProgressPercent != null && widget.savedProgressPercent! > 0;
@@ -691,21 +668,21 @@ class _ChooseDifficultySheetState extends State<ChooseDifficultySheet> {
                           child: Container(
                             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
                             decoration: BoxDecoration(
-                              color: const Color(0xFFE8F5E9),
+                              color: palette.success.withValues(alpha: 0.12),
                               borderRadius: BorderRadius.circular(12),
-                              border: Border.all(color: const Color(0xFF81C784)),
+                              border: Border.all(color: palette.success.withValues(alpha: 0.4)),
                             ),
                             child: Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                const Icon(PhosphorIconsBold.clockCounterClockwise, size: 16, color: Color(0xFF2E7D32)),
+                                Icon(PhosphorIconsBold.clockCounterClockwise, size: 16, color: palette.success),
                                 const SizedBox(width: 6),
                                 Text(
                                   '⚡ 检测到未完成存档 (已拼 ${widget.savedProgressPercent}%)',
-                                  style: const TextStyle(
+                                  style: TextStyle(
                                     fontSize: 12.5,
                                     fontWeight: FontWeight.bold,
-                                    color: Color(0xFF2E7D32),
+                                    color: palette.success,
                                   ),
                                 ),
                               ],
@@ -721,7 +698,8 @@ class _ChooseDifficultySheetState extends State<ChooseDifficultySheet> {
                               ? () => _handleStart(effectiveDiff)
                               : null,
                           style: FilledButton.styleFrom(
-                            backgroundColor: isFullyPlayable ? const Color(0xFF2E7D32) : Colors.grey.shade400,
+                            backgroundColor: isFullyPlayable ? palette.brand : palette.divider,
+                            foregroundColor: palette.surface,
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(26),
                             ),
@@ -731,7 +709,7 @@ class _ChooseDifficultySheetState extends State<ChooseDifficultySheet> {
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
                               if (!isFullyPlayable) ...[
-                                const Icon(PhosphorIconsFill.lockSimple, size: 18, color: Colors.white70),
+                                Icon(PhosphorIconsFill.lockSimple, size: 18, color: palette.surface.withValues(alpha: 0.6)),
                                 const SizedBox(width: 6),
                               ],
                               Text(
@@ -742,10 +720,10 @@ class _ChooseDifficultySheetState extends State<ChooseDifficultySheet> {
                                         : (hasSavedProgress && isMatchingSavedDiff
                                             ? '继续游玩 (进度 ${widget.savedProgressPercent}%)'
                                             : (isEffectivePassed ? '重玩此难度' : '开始'))),
-                                style: const TextStyle(
+                                style: TextStyle(
                                   fontSize: 16,
                                   fontWeight: FontWeight.bold,
-                                  color: Colors.white,
+                                  color: palette.surface,
                                 ),
                               ),
                             ],
@@ -759,10 +737,10 @@ class _ChooseDifficultySheetState extends State<ChooseDifficultySheet> {
                             widget.onResetProgress?.call();
                             Navigator.of(context).pop();
                           },
-                          icon: const Icon(PhosphorIconsBold.arrowCounterClockwise, size: 16, color: Colors.grey),
-                          label: const Text(
+                          icon: Icon(PhosphorIconsBold.arrowCounterClockwise, size: 16, color: palette.secondaryText),
+                          label: Text(
                             '放弃进度并重新开始',
-                            style: TextStyle(fontSize: 13, color: Colors.grey),
+                            style: TextStyle(fontSize: 13, color: palette.secondaryText),
                           ),
                         ),
                       ],
@@ -781,6 +759,7 @@ class _ChooseDifficultySheetState extends State<ChooseDifficultySheet> {
   Widget _buildPieceOption(DifficultyTier tier, {required bool isSelected, bool isLocked = false}) {
     final opt = tier.difficulty;
     final isPassed = widget.completedPieceCounts.contains(opt.pieceCount);
+    final palette = AppPalette.of(context);
 
     Color bgColor;
     Border? border;
@@ -789,53 +768,51 @@ class _ChooseDifficultySheetState extends State<ChooseDifficultySheet> {
     Color textColor;
 
     if (isSelected) {
-      bgColor = isLocked ? Colors.orange.shade700 : const Color(0xFF2E7D32);
-      border = Border.all(color: isLocked ? Colors.orange.shade900 : const Color(0xFF1B5E20), width: 2.5);
+      bgColor = isLocked ? palette.warning : palette.brand;
+      border = Border.all(color: isLocked ? palette.warning : palette.brand, width: 2.5);
       shadows = [
         BoxShadow(
-          color: (isLocked ? Colors.orange : const Color(0xFF2E7D32)).withValues(alpha: 0.35),
+          color: (isLocked ? palette.warning : palette.brand).withValues(alpha: 0.35),
           blurRadius: 8,
           offset: const Offset(0, 3),
         ),
       ];
-      iconColor = Colors.white;
-      textColor = Colors.white;
+      iconColor = palette.surface;
+      textColor = palette.surface;
     } else if (isLocked) {
-      bgColor = const Color(0xFFEEEEEE);
-      border = Border.all(color: Colors.grey.shade400, width: 1);
+      bgColor = palette.surfaceContainer;
+      border = Border.all(color: palette.divider, width: 1);
       shadows = null;
-      iconColor = Colors.grey;
-      textColor = Colors.grey.shade700;
+      iconColor = palette.disabledText;
+      textColor = palette.secondaryText;
     } else if (isPassed) {
-      bgColor = const Color(0xFFE8F5E9);
-      border = Border.all(color: const Color(0xFFA5D6A7), width: 1.5);
+      bgColor = palette.success.withValues(alpha: 0.12);
+      border = Border.all(color: palette.success.withValues(alpha: 0.4), width: 1.5);
       shadows = null;
-      iconColor = const Color(0xFF2E7D32);
-      textColor = const Color(0xFF1B5E20);
+      iconColor = palette.success;
+      textColor = palette.success;
     } else {
-      bgColor = const Color(0xFFF4F6F8);
-      border = Border.all(color: const Color(0xFFE0E0E0), width: 1);
+      bgColor = palette.surfaceContainer;
+      border = Border.all(color: palette.divider, width: 1);
       shadows = null;
-      iconColor = Colors.black54;
-      textColor = Colors.black87;
+      iconColor = palette.secondaryText;
+      textColor = palette.primaryText;
     }
 
     return InkWell(
       onTap: () {
         SoundService.I.play(Sfx.tap);
         if (isLocked) {
-          // 设计 §7.2：点击锁定档位 Toast 提示差距，且不可选中
           final status = _tierUnlockStatuses[tier.difficulty.tierIndex];
           final gap = (status?.targetRequired ?? 0) - (status?.currentProgress ?? 0);
           final msg = gap > 0
               ? '再获得 $gap 张 3 星图即可解锁 ${tier.tag}'
               : '该档位尚未解锁';
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(msg),
-              duration: const Duration(seconds: 2),
-              behavior: SnackBarBehavior.floating,
-            ),
+          GameToast.show(
+            context,
+            icon: PhosphorIconsFill.lockSimple,
+            message: msg,
+            type: GameToastType.warning,
           );
           return;
         }
@@ -877,7 +854,7 @@ class _ChooseDifficultySheetState extends State<ChooseDifficultySheet> {
                   tier.tag,
                   style: TextStyle(
                     fontSize: 9.0,
-                    color: isSelected ? Colors.white70 : Colors.black45,
+                    color: isSelected ? palette.surface.withValues(alpha: 0.7) : palette.disabledText,
                     fontWeight: FontWeight.w500,
                   ),
                   maxLines: 1,
@@ -892,7 +869,7 @@ class _ChooseDifficultySheetState extends State<ChooseDifficultySheet> {
                 child: Icon(
                   PhosphorIconsFill.checkCircle,
                   size: 13,
-                  color: isSelected ? const Color(0xFFFFD54F) : const Color(0xFF2E7D32),
+                  color: isSelected ? palette.gold : palette.success,
                 ),
               ),
           ],
