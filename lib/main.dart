@@ -93,54 +93,83 @@ class JigsawPuzzleApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // 由种子色一次性生成整套 Material 3 配色，主题内不写死任何具体色值
+    // 品牌锚点：琥珀金 #D4963C 作为种子色，暗色模式默认
     final scheme = ColorScheme.fromSeed(
-      seedColor: const Color(0xFF2E7D32),
-      brightness: Brightness.light,
+      seedColor: const Color(0xFFD4963C),
+      brightness: Brightness.dark,
     );
     return MaterialApp(
       title: '异形拼图 Jigsaw Puzzle',
       debugShowCheckedModeBanner: false,
       scrollBehavior: const AppScrollBehavior(),
       theme: ThemeData(
+        brightness: Brightness.dark,
         colorScheme: scheme,
         useMaterial3: true,
         fontFamilyFallback: const ['Microsoft YaHei', 'PingFang SC', 'sans-serif'],
-        // 全局浅色背景由 fromSeed 生成（surfaceContainerLow）
-        scaffoldBackgroundColor: scheme.surfaceContainerLow,
-        // AppBar：背景 = primaryContainer，前景 = onPrimaryContainer
+        // 全局暗色背景
+        scaffoldBackgroundColor: const Color(0xFF1A1D24),
+        // AppBar：暗色半透明 + 品牌色前景
         appBarTheme: AppBarTheme(
-          backgroundColor: scheme.primaryContainer,
-          foregroundColor: scheme.onPrimaryContainer,
+          backgroundColor: const Color(0xFF1A1D24).withValues(alpha: 0.95),
+          foregroundColor: const Color(0xFFE8EAEE),
           elevation: 0.5,
           scrolledUnderElevation: 0.5,
           centerTitle: false,
-        ),
-        // 主按钮默认即 scheme.primary/onPrimary，这里仅统一圆角
-        filledButtonTheme: FilledButtonThemeData(
-          style: FilledButton.styleFrom(
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          titleTextStyle: const TextStyle(
+            fontSize: 19,
+            fontWeight: FontWeight.bold,
+            color: Color(0xFFE8EAEE),
           ),
         ),
-        // 分段按钮选中态 = 主题 primary
+        // 主按钮统一圆角
+        filledButtonTheme: FilledButtonThemeData(
+          style: FilledButton.styleFrom(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 24),
+          ),
+        ),
+        // 分段按钮选中态 = 品牌色
         segmentedButtonTheme: SegmentedButtonThemeData(
           style: SegmentedButton.styleFrom(
             selectedBackgroundColor: scheme.primary,
             selectedForegroundColor: scheme.onPrimary,
+            backgroundColor: const Color(0xFF252A33),
+            foregroundColor: const Color(0xFF9CA3AF),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
             visualDensity: VisualDensity.compact,
           ),
         ),
-        // 开关选中态 = 主题 primary
+        // 开关选中态 = 品牌色
         switchTheme: SwitchThemeData(
           trackColor: WidgetStateProperty.resolveWith(
-            (states) => states.contains(WidgetState.selected) ? scheme.primary : null,
+            (states) => states.contains(WidgetState.selected)
+                ? scheme.primary
+                : const Color(0xFF3A3F4A),
           ),
           trackOutlineColor: WidgetStateProperty.resolveWith(
-            (states) => states.contains(WidgetState.selected) ? scheme.primary : null,
+            (states) => states.contains(WidgetState.selected)
+                ? scheme.primary
+                : const Color(0xFF3A3F4A),
           ),
           thumbColor: WidgetStateProperty.resolveWith(
-            (states) => states.contains(WidgetState.selected) ? scheme.onPrimary : null,
+            (states) => states.contains(WidgetState.selected)
+                ? scheme.onPrimary
+                : const Color(0xFF9CA3AF),
           ),
+        ),
+        // 卡片主题
+        cardTheme: const CardThemeData(
+          color: Color(0xFF252A33),
+          elevation: 0,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.all(Radius.circular(24))),
+          margin: EdgeInsets.zero,
+        ),
+        // 分割线
+        dividerTheme: const DividerThemeData(
+          color: Color(0xFF2E3440),
+          thickness: 1,
+          space: 1,
         ),
       ),
       home: const MainScreen(),
