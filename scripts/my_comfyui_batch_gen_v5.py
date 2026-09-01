@@ -29,11 +29,11 @@ Design notes:
   * Ctrl+C finishes the in-flight image, then exits cleanly. Nothing is lost.
 
 Usage:
-    python scripts/comfyui_batch_gen.py --list-tags
-    python scripts/comfyui_batch_gen.py --workflow wf_api.json --dry-run --dry-run-count 5
-    python scripts/comfyui_batch_gen.py --workflow wf_api.json --comfyui-root D:/ComfyUI --out D:/jigsaw_raw
-    python scripts/comfyui_batch_gen.py --workflow wf_api.json --tags Nature,Flowers --per-tag 20
-    python scripts/comfyui_batch_gen.py --workflow wf_api.json --resume --out D:/jigsaw_raw
+    python scripts/my_comfyui_batch_gen_v5.py --list-tags
+    python scripts/my_comfyui_batch_gen_v5.py --workflow wf_api.json --dry-run --dry-run-count 5
+    python scripts/my_comfyui_batch_gen_v5.py --workflow wf_api.json --comfyui-root D:/ComfyUI --out D:/jigsaw_raw
+    python scripts/my_comfyui_batch_gen_v5.py --workflow wf_api.json --tags Nature,Flowers --per-tag 20
+    python scripts/my_comfyui_batch_gen_v5.py --workflow wf_api.json --resume --out D:/jigsaw_raw
 """
 
 from __future__ import annotations
@@ -130,6 +130,12 @@ class ComfyClient:
         self._request(
             "POST", "/free", {"unload_models": unload_models, "free_memory": True}
         )
+
+    def interrupt(self) -> None:
+        """Stop the currently executing prompt. Called before a retry so a
+        timed-out job does not keep running in the queue and leave orphan
+        files in the ComfyUI output dir."""
+        self._request("POST", "/interrupt")
 
     def alive(self, probe_timeout: float = 5.0) -> bool:
         """Lightweight liveness probe. False means the HTTP server stopped answering,
@@ -238,8 +244,15 @@ def detect_nodes(workflow: dict) -> dict:
         "output": _find(
             workflow, OUTPUT_CLASSES, ("save", "output"), ("filename_prefix",)
         ),
+        # optional: shift node (ModelSamplingAuraFlow etc.)
+        "shift": _find(
+            workflow,
+            {"ModelSamplingAuraFlow", "ModelSamplingSD3"},
+            ("shift",),
+            ("shift",),
+        ),
     }
-    missing = [k for k, v in found.items() if v is None]
+    missing = [k for k, v in found.items() if v is None and k != "shift"]
     if missing:
         raise ComfyError(
             "could not locate node(s): "
@@ -260,6 +273,7 @@ def inject_workflow(
     out_prefix: str,
     steps: int | None,
     cfg: float | None,
+    shift: float | None = None,
 ) -> dict:
     wf = json.loads(json.dumps(template))
     wf[node_ids["prompt"]]["inputs"]["text"] = prompt
@@ -272,6 +286,10 @@ def inject_workflow(
         seed_inputs["steps"] = steps
     if cfg is not None and "cfg" in seed_inputs:
         seed_inputs["cfg"] = cfg
+    if shift is not None and node_ids.get("shift"):
+        shift_inputs = wf[node_ids["shift"]]["inputs"]
+        if "shift" in shift_inputs:
+            shift_inputs["shift"] = shift
     return wf
 
 
@@ -379,10 +397,19 @@ def build_jobs(
             # --- TEMPLATE POOL (pure catalog) ---
             cat_subject = cat_subjects[i % n_subjects]
             template = rng.choice(tag_templates)
-            if cat_env:
-                env_fg = cat_env[i % len(cat_env)]
-                env_mid = cat_env[(i + 1) % len(cat_env)]
-                env_bg = cat_env[(i + 2) % len(cat_env)]
+            # Env selection: prefer the subject's affinity group (env_groups +
+            # subject_env_group, e.g. polar bear -> arctic pool), else the tag
+            # pool. rng.sample instead of i%n rotation so cards of the same
+            # subject vary instead of cycling the same triplets.
+            env_pool = None
+            env_groups = tag.get("env_groups") or {}
+            group = (tag.get("subject_env_group") or {}).get(cat_subject)
+            if group:
+                env_pool = env_groups.get(group)
+            if not env_pool or len(env_pool) < 3:
+                env_pool = cat_env if len(cat_env) >= 3 else None
+            if env_pool:
+                env_fg, env_mid, env_bg = rng.sample(env_pool, 3)
             else:
                 env_fg = "natural elements"
                 env_mid = "textured surfaces"
@@ -395,7 +422,18 @@ def build_jobs(
                 env_bg=env_bg,
                 detail=detail,
             )
+            # Templates without a {detail} slot silently drop the texture
+            # descriptor (scene/special groups) — append it so every prompt
+            # carries one.
+            if "{detail}" not in template:
+                prompt_body = prompt_body + ", " + detail
             parts = [prompt_body]
+            # Quality prefix sits right after the subject: Qwen weights early
+            # tokens higher, and the old tail-only suffix let these core
+            # constraints get truncated on long prompts.
+            q_prefix = tag.get("quality_prefix") or lib.get("quality_prefix") or ""
+            if q_prefix:
+                parts.append(q_prefix)
             parts.append(rng.choice(lib["modifiers"]["lighting"]))
             vp = lib["modifiers"]["viewpoint"]
             deny = set(tag.get("viewpoint_deny") or [])
@@ -404,11 +442,20 @@ def build_jobs(
             optics = tag.get("optics") or []
             if optics:
                 parts.append(rng.choice(optics))
-            pool = pools.get(tag.get("style_pool", "photo")) or pools.get("photo")
+            style_name = tag.get("style_pool", "photo")
+            # photo_subjects: tag-level opt-out for tags on the illust pool
+            # whose subjects are real photographable textures (Abstract).
+            if cat_subject in (tag.get("photo_subjects") or []):
+                style_name = "photo"
+            pool = pools.get(style_name) or pools.get("photo")
             if pool:
                 parts.append(rng.choice(pool))
             parts.append(rng.choice(lib["modifiers"]["atmosphere"]))
-            parts.append(lib["quality_suffix"])
+            q_tail = tag.get("quality_tail") or lib.get("quality_tail") or ""
+            if not q_tail:
+                q_tail = lib.get("quality_suffix", "")
+            if q_tail:
+                parts.append(q_tail)
             prompt = ", ".join(p.strip() for p in parts if p.strip())
 
             dim = ratios[ratio]
@@ -433,7 +480,9 @@ def build_jobs(
                         height=int(dim["height"]),
                     )
                 )
-    if batch_per_tag and batch_per_tag > 1:
+    # Interleaving is disabled when reseed>1: consecutive jobs must share one
+    # prompt to hit ComfyUI's conditioning cache (12.2s vs 16.2s measured).
+    if batch_per_tag and batch_per_tag > 1 and reseed <= 1:
         tag_order = {t["id"]: i for i, t in enumerate(lib["tags"])}
         jobs.sort(
             key=lambda j: (j.index // batch_per_tag, tag_order.get(j.tag, 999), j.index)
@@ -555,6 +604,12 @@ def parse_args(argv=None):
         type=float,
         help="override CFG scale (Z-Image Turbo official: 1.0; >1.0 risks "
         "oversaturation/distortion). Valid range: 1.0-2.0",
+    )
+    p.add_argument(
+        "--shift",
+        type=float,
+        help="ModelSamplingAuraFlow shift override. Default is dynamic by "
+        "longest side: <=1024 -> 3.0, <=1344 -> 3.5, above -> 4.0",
     )
     p.add_argument(
         "--poll", type=float, default=1.0, help="history poll interval in seconds"
@@ -724,6 +779,16 @@ def main(argv=None) -> int:
         print("[fatal] no jobs produced, check --tags spelling")
         return 2
 
+    # Long prompts risk the tail constraints being dropped by the text
+    # encoder; surface it instead of silently generating weaker images.
+    long_prompts = [j for j in jobs if len(j.prompt) > 700]
+    if long_prompts:
+        print(
+            f"[warn] {len(long_prompts)}/{len(jobs)} prompts exceed 700 chars "
+            f"(tail constraints may be dropped); longest = "
+            f"{max(len(j.prompt) for j in long_prompts)}"
+        )
+
     steps = (
         args.steps if args.steps is not None else lib.get("generation", {}).get("steps")
     )
@@ -804,6 +869,14 @@ def main(argv=None) -> int:
         f"hang probe at {args.stuck_timeout:.0f}s, abort after {args.max_stuck} hangs\n"
     )
 
+    def default_shift(w: int, h: int) -> float:
+        m = max(w, h)
+        if m <= 1024:
+            return 3.0
+        if m <= 1344:
+            return 3.5
+        return 4.0
+
     for pos, job in enumerate(jobs, start=1):
         if _stop_requested:
             break
@@ -821,6 +894,7 @@ def main(argv=None) -> int:
             f"{STAGING_SUBDIR}/{job.tag}_{job.index:04d}",
             steps,
             cfg,
+            args.shift if args.shift is not None else default_shift(job.width, job.height),
         )
         t0 = time.time()
         ok = False
@@ -832,6 +906,28 @@ def main(argv=None) -> int:
                 history = wait_for_image(
                     client, pid, args.timeout, args.stuck_timeout, args.poll
                 )
+                # A finished history entry is not necessarily a success:
+                # node errors (OOM, VAE decode failure) land here with empty
+                # outputs. Surface the real error instead of a misleading
+                # "no image file found (check --comfyui-root)".
+                h_status = (history or {}).get("status") or {}
+                if h_status.get("status_str") == "error":
+                    err_detail = ""
+                    for msg in h_status.get("messages") or []:
+                        if (
+                            isinstance(msg, list)
+                            and msg
+                            and msg[0] == "execution_error"
+                            and isinstance(msg[1], dict)
+                        ):
+                            err_detail = "{}: {}".format(
+                                msg[1].get("node_type", "?"),
+                                msg[1].get("exception_message", ""),
+                            )
+                            break
+                    raise ComfyError(
+                        f"ComfyUI execution error ({err_detail or 'unknown node'})"
+                    )
                 images = collect_images(history)
                 filename = relocate(comfy_root, images, out_dir, job)
                 if not filename:
@@ -852,6 +948,13 @@ def main(argv=None) -> int:
                     print(
                         f"[retry] {job.key} attempt {attempt + 1}/{args.retries}: {last_err[:160]}"
                     )
+                    # Interrupt the possibly-still-running job before queuing
+                    # the retry, or the first attempt may finish later and
+                    # leave an orphan file in the ComfyUI output dir.
+                    try:
+                        client.interrupt()
+                    except ComfyError:
+                        pass
                     time.sleep(3)
                     try:
                         client.free()
@@ -920,8 +1023,10 @@ def main(argv=None) -> int:
                 pass
             print(f"[maint] deep VRAM clean after {stats.done} images")
 
-        if stats.done % 10 == 0 or not ok:
-            save_progress(progress_path, progress)
+        # Persist after every image: the file is ~100 bytes, and a driver hang
+        # or power loss between saves would otherwise waste up to 9 finished
+        # images on restart (they get regenerated).
+        save_progress(progress_path, progress)
 
     save_progress(progress_path, progress)
     print("\n[done] summary")
