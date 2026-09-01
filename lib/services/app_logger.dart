@@ -289,7 +289,7 @@ class AppLogger {
           if (len < _maxFileBytes) {
             _currentFile = candidate;
             _currentFileIndex = 0;
-            _sink?.close();
+            await _sink?.close();
             _sink = null;
             return;
           } else {

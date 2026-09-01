@@ -369,6 +369,13 @@ class PuzzleEngine {
     double epsilon = 0.035,
   }) {
     var result = List<PieceState>.from(pieces);
+
+    // Pre-compute cluster sizes (incrementally updated on each merge)
+    final clusterSizes = <int, int>{};
+    for (final p in result) {
+      clusterSizes[p.clusterId] = (clusterSizes[p.clusterId] ?? 0) + 1;
+    }
+
     var changed = true;
 
     while (changed) {
@@ -397,11 +404,19 @@ class PuzzleEngine {
           final dxErr = (actualDx - expectedDx).abs();
           final dyErr = (actualDy - expectedDy).abs();
           if (dxErr <= epsilon && dyErr <= epsilon) {
-            final countA = result.where((p) => p.clusterId == pA.clusterId).length;
-            final countB = result.where((p) => p.clusterId == pB.clusterId).length;
+            final countA = clusterSizes[pA.clusterId] ?? 0;
+            final countB = clusterSizes[pB.clusterId] ?? 0;
             final sourceId = countB >= countA ? pA.clusterId : pB.clusterId;
             final targetId = countB >= countA ? pB.clusterId : pA.clusterId;
-            result = result.map((p) => p.clusterId == sourceId ? p.copyWith(clusterId: targetId) : p).toList();
+            // In-place cluster ID remap (no new list allocation)
+            for (var k = 0; k < result.length; k++) {
+              if (result[k].clusterId == sourceId) {
+                result[k] = result[k].copyWith(clusterId: targetId);
+              }
+            }
+            // Update cluster sizes incrementally
+            clusterSizes[targetId] = (clusterSizes[targetId] ?? 0) + (clusterSizes[sourceId] ?? 0);
+            clusterSizes.remove(sourceId);
             changed = true;
             break;
           }
@@ -471,9 +486,10 @@ class PuzzleEngine {
     }
 
     // 2. 策略优先级排序：角块 (Corner) > 边块 (Border) > 内部块 (Center)
+    final edgeLayout = EdgeLayout(rows: state.rows, cols: state.cols, seed: state.seed);
     unplaced.sort((a, b) {
-      final aEdges = EdgeLayout(rows: state.rows, cols: state.cols, seed: state.seed).edgesFor(a.r, a.c);
-      final bEdges = EdgeLayout(rows: state.rows, cols: state.cols, seed: state.seed).edgesFor(b.r, b.c);
+      final aEdges = edgeLayout.edgesFor(a.r, a.c);
+      final bEdges = edgeLayout.edgesFor(b.r, b.c);
       if (aEdges.isCorner && !bEdges.isCorner) return -1;
       if (!aEdges.isCorner && bEdges.isCorner) return 1;
       if (aEdges.isBorder && !bEdges.isBorder) return -1;

@@ -58,6 +58,7 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
   bool _isSolved = false;
   bool _isPaused = false;
   int _seconds = 0;
+  final _secondsNotifier = ValueNotifier<int>(0);
   Timer? _timer;
   DateTime? _hintPauseUntil;
   int _solvedPieces = 0;
@@ -173,7 +174,8 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
           // 提示动画时停期间不累加用时
           return;
         }
-        setState(() => _seconds++);
+        _seconds++;
+        _secondsNotifier.value = _seconds;
       }
     });
   }
@@ -188,6 +190,7 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
         final map = jsonDecode(widget.initialSnapshotJson!) as Map<String, dynamic>;
         if (map['elapsedSeconds'] is int) {
           _seconds = map['elapsedSeconds'] as int;
+          _secondsNotifier.value = _seconds;
         }
         if (map['rows'] is int && map['cols'] is int) {
           final r = map['rows'] as int;
@@ -665,7 +668,11 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
                     Column(
                       children: [
                         const Text('总用时', style: TextStyle(fontSize: 12, color: Colors.black54)),
-                        Text(_timeString, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                        ValueListenableBuilder<int>(
+                          valueListenable: _secondsNotifier,
+                          builder: (context, _, _) => Text(_timeString,
+                              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                        ),
                       ],
                     ),
                     Column(
@@ -802,11 +809,9 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
         );
 
         _game!.setZoomAndPan(newZoom, newPan);
-        if (mounted) setState(() {});
       }
     } else if ((event.buttons & kMiddleMouseButton) != 0 && _game != null) {
       _game!.panBy(Vector2(event.delta.dx, event.delta.dy));
-      if (mounted) setState(() {});
     } else if (_game != null &&
         _game!.zoom > 1.0 &&
         _pointerPositions.length == 1 &&
@@ -815,16 +820,6 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
       // 放大状态下，鼠标左键或单指按住空白区域拖动 -> 实时平移棋盘画布
       // 使用 Listener 原生 pointer delta 直接驱动，避免 Flame PanDetector 与 DragCallbacks 的手势竞技场冲突
       _game!.panBy(Vector2(event.delta.dx, event.delta.dy));
-      if (mounted) setState(() {});
-    }
-  }
-
-  void _onPointerHover(PointerHoverEvent event) {
-    // 鼠标松开后光标吸附移动：高频实时更新位置与缩放，保证绝对跟手
-    if (_game?.holdingPiece != null) {
-      _game!.updateHoldingPiecePosition(
-        Vector2(event.localPosition.dx, event.localPosition.dy),
-      );
     }
   }
 
@@ -867,11 +862,9 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
             ? -event.scrollDelta.dx
             : -event.scrollDelta.dy;
         _game!.scrollTray(delta * 0.8);
-        if (mounted) setState(() {});
       } else if (isCtrl || event.scrollDelta.dy.abs() > 0) {
         final zoomDelta = -event.scrollDelta.dy * 0.003;
         _game!.zoomAt(Vector2(mousePos.dx, mousePos.dy), zoomDelta);
-        if (mounted) setState(() {});
       }
     }
   }
@@ -888,6 +881,7 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
       } catch (_) {}
     }
     _timer?.cancel();
+    _secondsNotifier.dispose();
     _focusNode.dispose();
     _gameImage?.dispose();
     // 恢复浅色主题的默认系统状态栏/导航栏样式（浅底 + 深色图标）
@@ -1107,7 +1101,6 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
                         child: Listener(
                           onPointerDown: _onPointerDown,
                           onPointerMove: _onPointerMove,
-                          onPointerHover: _onPointerHover,
                           onPointerUp: _onPointerUp,
                           onPointerCancel: _onPointerCancel,
                           onPointerSignal: _onPointerSignal,
@@ -1185,48 +1178,53 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
               ),
 
             // 5. Floating Zoom Level Badge and Reset Button when zoomed
-            if (_game != null && _game!.zoom > 1.02)
-              Positioned(
-                top: 12,
-                right: 12,
-                child: Material(
-                  color: Colors.black.withValues(alpha: 0.68),
-                  borderRadius: BorderRadius.circular(16),
-                  child: InkWell(
-                    borderRadius: BorderRadius.circular(16),
-                    onTap: () {
-                      _game?.resetZoom();
-                      setState(() {});
-                    },
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Icon(PhosphorIconsBold.magnifyingGlassPlus, color: Colors.white, size: 16),
-                          const SizedBox(width: 4),
-                          Text(
-                            '${(_game!.zoom * 100).toInt()}%',
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 12,
-                              fontWeight: FontWeight.bold,
-                            ),
+            if (_game != null)
+              ValueListenableBuilder<double>(
+                valueListenable: _game!.zoomNotifier,
+                builder: (context, zoom, _) {
+                  if (zoom <= 1.02) return const SizedBox.shrink();
+                  return Positioned(
+                    top: 12,
+                    right: 12,
+                    child: Material(
+                      color: Colors.black.withValues(alpha: 0.68),
+                      borderRadius: BorderRadius.circular(16),
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(16),
+                        onTap: () {
+                          _game?.resetZoom();
+                        },
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(PhosphorIconsBold.magnifyingGlassPlus, color: Colors.white, size: 16),
+                              const SizedBox(width: 4),
+                              Text(
+                                '${(zoom * 100).toInt()}%',
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              const SizedBox(width: 6),
+                              const Text(
+                                '重置',
+                                style: TextStyle(
+                                  color: Colors.amberAccent,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ],
                           ),
-                          const SizedBox(width: 6),
-                          const Text(
-                            '重置',
-                            style: TextStyle(
-                              color: Colors.amberAccent,
-                              fontSize: 12,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ],
+                        ),
                       ),
                     ),
-                  ),
-                ),
+                  );
+                },
               ),
 
             // 6. Floating Victory Banner when solved and dialog closed

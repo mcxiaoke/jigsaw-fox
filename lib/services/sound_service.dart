@@ -1,6 +1,7 @@
 import 'dart:math';
 
 import 'package:flame_audio/flame_audio.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 
 import '../data/game_repository.dart';
@@ -173,7 +174,7 @@ class SoundService {
 
   /// 提取本次播放的顶层 UI 调用方（方法+行号），帮助把“某音效”与“触发操作”对上。
   String _caller() {
-    if (!_logCaller) return '';
+    if (!kDebugMode || !_logCaller) return '';
     final trace = StackTrace.current.toString().split('\n');
     // 跳过本文件内部帧，取第一个业务调用帧（形如 "  #1      lib/x.dart:123:45"）
     for (String line in trace) {

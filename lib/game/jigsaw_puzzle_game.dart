@@ -6,6 +6,7 @@ import 'package:flame/components.dart';
 import 'package:flame/events.dart';
 import 'package:flame/game.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/scheduler.dart';
 
 import 'package:flutter/painting.dart'
     show Color, Paint, PaintingStyle, RRect, Radius, decodeImageFromList;
@@ -160,6 +161,7 @@ class JigsawPuzzleGame extends FlameGame
 
   double _zoom = 1.0;
   double get zoom => _zoom;
+  final zoomNotifier = ValueNotifier<double>(1.0);
   double _maxZoom = 3.0;
   double get maxZoom => _maxZoom;
   final Vector2 _panOffset = Vector2.zero();
@@ -370,7 +372,7 @@ class JigsawPuzzleGame extends FlameGame
   /// 当游戏视口大小变化（如 Windows 窗口拉伸/缩放）时，全量同步更新底板、托盘及所有碎片的物理尺寸与坐标
   void _syncResizeTransform() {
     // 窗口物理尺寸改变时，缩放与平移复位为基准尺寸
-    _zoom = 1.0;
+    _setZoom(1.0);
     _panOffset.setZero();
 
     // 1. 同步托盘背景组件
@@ -1177,6 +1179,23 @@ class JigsawPuzzleGame extends FlameGame
     }
   }
 
+  /// 单一 zoom 写入入口：同步字段与对外通知，保证所有内部重置路径（窗口尺寸变化、
+  /// 重开游戏）都收敛到徽标刷新，避免页面侧逐个手势点补写 notifier。
+  void _setZoom(double v) {
+    if (_zoom == v) return;
+    _zoom = v;
+    // onGameResize 在 Flame build 阶段（LayoutBuilder）调用 _syncResizeTransform，
+    // 此时同步写 ValueNotifier 会触发 "setState() called during build" 断言（debug 红屏）。
+    // idle 阶段（手势路径）同步通知无感知延迟；非 idle 阶段推迟到帧末。
+    if (SchedulerBinding.instance.schedulerPhase == SchedulerPhase.idle) {
+      zoomNotifier.value = v;
+    } else {
+      SchedulerBinding.instance.addPostFrameCallback((_) {
+        zoomNotifier.value = _zoom;
+      });
+    }
+  }
+
   /// Zooms in or out centered at the specified screen [focalPoint].
   void zoomAt(Vector2 focalPoint, double deltaScale) {
     final oldZoom = _zoom;
@@ -1187,7 +1206,7 @@ class JigsawPuzzleGame extends FlameGame
     final curTopLeft = boardTopLeft + _panOffset;
     final newTopLeft = focalPoint - (focalPoint - curTopLeft) * scaleRatio;
 
-    _zoom = newZoom;
+    _setZoom(newZoom);
     _panOffset.setFrom(newTopLeft - boardTopLeft);
     _clampPanOffset();
 
@@ -1198,7 +1217,7 @@ class JigsawPuzzleGame extends FlameGame
   /// Sets zoom and pan directly (e.g. from pinch-to-zoom).
   void setZoomAndPan(double newZoom, Vector2 newPan) {
     final oldZoom = _zoom;
-    _zoom = newZoom.clamp(1.0, _maxZoom);
+    _setZoom(newZoom.clamp(1.0, _maxZoom));
     _panOffset.setFrom(newPan);
     _clampPanOffset();
     _updateBoardTransform();
@@ -1217,7 +1236,7 @@ class JigsawPuzzleGame extends FlameGame
   /// Resets zoom to 1.0 and centers the board.
   void resetZoom() {
     AppLogger.game.info('resetZoom from $_zoom pan=$_panOffset');
-    _zoom = 1.0;
+    _setZoom(1.0);
     _panOffset.setZero();
     _updateBoardTransform();
   }
@@ -1275,7 +1294,7 @@ class JigsawPuzzleGame extends FlameGame
     _tabletopScatterSlots = null;
     _isSolved = false;
     _borderFilterActive = false;
-    _zoom = 1.0;
+    _setZoom(1.0);
     _panOffset.setZero();
     _trayScrollX = 0.0;
     undoManager.clear();
@@ -1577,6 +1596,16 @@ class JigsawPuzzleGame extends FlameGame
 
   /// 根据当前边缘筛选状态 [_borderFilterActive]，更新所有碎片的可见性并重排托盘
   void updatePieceVisibility({bool animateTray = true}) {
+    // 边缘筛选：预计算"含边缘或已归位碎片"的集群集合，避免对每片 O(n) 全量扫描
+    final borderOrSolvedClusters = <int>{};
+    if (_borderFilterActive) {
+      for (final o in _pieces.values) {
+        if (edgeLayout.edgesFor(o.r, o.c).isBorder ||
+            _boardState.pieceById(o.id).isSolved(rows, cols)) {
+          borderOrSolvedClusters.add(o.clusterId);
+        }
+      }
+    }
     for (final p in _pieces.values) {
       final isBorder = edgeLayout.edgesFor(p.r, p.c).isBorder;
       final statePiece = _boardState.pieceById(p.id);
@@ -1588,12 +1617,8 @@ class JigsawPuzzleGame extends FlameGame
         // 2. 边缘碎片（包含至少一条平直外框）可见；
         // 3. 与边缘碎片或已归位碎片合并在同一集群的碎片可见；
         // 4. 其他单纯未拼的内部碎片隐藏。
-        final clusterPieces =
-            _pieces.values.where((o) => o.clusterId == p.clusterId);
-        final clusterHasBorderOrSolved = clusterPieces.any((o) =>
-            edgeLayout.edgesFor(o.r, o.c).isBorder ||
-            _boardState.pieceById(o.id).isSolved(rows, cols));
-
+        final clusterHasBorderOrSolved =
+            borderOrSolvedClusters.contains(p.clusterId);
         p.isFilteredOut = !(isSolved || isBorder || clusterHasBorderOrSolved);
       } else {
         p.isFilteredOut = false;
