@@ -13,9 +13,12 @@ import '../../logic/content/app_content.dart';
 import '../../logic/content/models/puzzle_pack_item.dart';
 import '../../logic/download_manager.dart';
 import '../../logic/image_source.dart';
+import '../../theme/app_palette.dart';
+import '../../theme/app_text_styles.dart';
 import '../../widgets/app_cached_image.dart';
 import '../../widgets/choose_difficulty_sheet.dart';
 import '../../widgets/downloaded_drawer_sheet.dart';
+import '../../widgets/game_toast.dart';
 import '../crop_puzzle_page.dart';
 import '../game_page.dart';
 import '../import_pack_page.dart';
@@ -58,12 +61,22 @@ class _MyPuzzlesTabViewState extends State<MyPuzzlesTabView> {
         }
       } else {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('已成功导入 ${imported.length} 张图片到素材库'), action: SnackBarAction(label: '查看素材库', textColor: const Color(0xFF81C784), onPressed: () { DownloadedDrawerSheet.show(context); }), duration: const Duration(seconds: 4)));
+          GameToast.show(
+            context,
+            icon: PhosphorIconsFill.archive,
+            message: '已成功导入 ${imported.length} 张图片到素材库',
+            type: GameToastType.success,
+          );
         }
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('选择图片失败: $e')));
+        GameToast.show(
+          context,
+          icon: Icons.error_outline,
+          message: '选择图片失败: $e',
+          type: GameToastType.error,
+        );
       }
     } finally {
       if (mounted) setState(() => _loading = false);
@@ -126,7 +139,12 @@ class _MyPuzzlesTabViewState extends State<MyPuzzlesTabView> {
         await _repo.deleteCustomPuzzle(item.id);
         if (mounted) {
           setState(() {});
-          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('已删除自制拼图')));
+          GameToast.show(
+            context,
+            icon: PhosphorIconsFill.trashSimple,
+            message: '已删除自制拼图',
+            type: GameToastType.warning,
+          );
         }
       },
       onResetProgress: () async {
@@ -152,13 +170,18 @@ class _MyPuzzlesTabViewState extends State<MyPuzzlesTabView> {
 
   @override
   Widget build(BuildContext context) {
+    final palette = AppPalette.of(context);
+    final styles = AppTextStyles.of(context);
+
     return ValueListenableBuilder<List<CustomPuzzleItem>>(
       valueListenable: _repo.customPuzzlesNotifier,
       builder: (context, customList, _) {
         return RefreshIndicator(
           onRefresh: () async => setState(() {}),
+          color: palette.brand,
           child: CustomScrollView(
             slivers: [
+              // Action Cards Row 1
               SliverToBoxAdapter(
                 child: Padding(
                   padding: const EdgeInsets.fromLTRB(16, 10, 16, 8),
@@ -166,17 +189,35 @@ class _MyPuzzlesTabViewState extends State<MyPuzzlesTabView> {
                     children: [
                       Row(
                         children: [
-                          Expanded(child: _buildTopActionCard(title: '相册选图', subtitle: '批量导入', iconWidget: _loading ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(color: Color(0xFF2E7D32), strokeWidth: 2)) : Image.asset('assets/icons/camera_3d.png', width: 20, height: 20), gradientColors: const [Color(0xFFE8F5E9), Color(0xFFC8E6C9)], borderColor: const Color(0xFF81C784), textColor: const Color(0xFF1B5E20), onTap: _loading ? null : _createFromGallery)),
+                          Expanded(child: _buildTopActionCard(
+                            title: '相册选图',
+                            subtitle: '批量导入',
+                            icon: _loading ? SizedBox(width: 14, height: 14, child: CircularProgressIndicator(color: palette.brand, strokeWidth: 2)) : Icon(PhosphorIconsFill.camera, color: palette.brand, size: 20),
+                            palette: palette, styles: styles,
+                            onTap: _loading ? null : _createFromGallery,
+                          )),
                           const SizedBox(width: 8),
-                          Expanded(child: _buildTopActionCard(title: '导入关卡包', subtitle: 'ZIP 扩展包', iconWidget: const Icon(PhosphorIconsFill.downloadSimple, color: Color(0xFF00796B), size: 18), gradientColors: const [Color(0xFFE0F2F1), Color(0xFFB2DFDB)], borderColor: const Color(0xFF80CBC4), textColor: const Color(0xFF004D40), onTap: () async { final pack = await ImportPackPage.push(context); if (pack != null && mounted) { setState(() {}); } })),
+                          Expanded(child: _buildTopActionCard(
+                            title: '导入关卡包',
+                            subtitle: 'ZIP 扩展包',
+                            icon: Icon(PhosphorIconsFill.downloadSimple, color: palette.info, size: 18),
+                            palette: palette, styles: styles,
+                            onTap: () async { final pack = await ImportPackPage.push(context); if (pack != null && mounted) { setState(() {}); } },
+                          )),
                         ],
                       ),
                       const SizedBox(height: 8),
                       Row(
                         children: [
-                          Expanded(child: ValueListenableBuilder(valueListenable: DownloadManager.instance.itemsNotifier, builder: (context, materialItems, _) { return _buildTopActionCard(title: '素材库', subtitle: '${materialItems.length} 张素材', iconWidget: const Icon(PhosphorIconsFill.archive, color: Color(0xFFE65100), size: 18), gradientColors: const [Color(0xFFFFF3E0), Color(0xFFFFE0B2)], borderColor: const Color(0xFFFFB74D), textColor: const Color(0xFFE65100), onTap: () async { await DownloadedDrawerSheet.show(context); }); })),
+                          Expanded(child: ValueListenableBuilder(valueListenable: DownloadManager.instance.itemsNotifier, builder: (context, materialItems, _) { return _buildTopActionCard(title: '素材库', subtitle: '${materialItems.length} 张素材', icon: Icon(PhosphorIconsFill.archive, color: palette.warning, size: 18), palette: palette, styles: styles, onTap: () async { await DownloadedDrawerSheet.show(context); }); })),
                           const SizedBox(width: 8),
-                          Expanded(child: _buildTopActionCard(title: '在线搜图', subtitle: '海量图库', iconWidget: const Icon(PhosphorIconsFill.globeHemisphereWest, color: Color(0xFF0277BD), size: 18), gradientColors: const [Color(0xFFE1F5FE), Color(0xFFB3E5FC)], borderColor: const Color(0xFF4FC3F7), textColor: const Color(0xFF01579B), onTap: () async { await OnlineImagePickerPage.push(context); })),
+                          Expanded(child: _buildTopActionCard(
+                            title: '在线搜图',
+                            subtitle: '海量图库',
+                            icon: Icon(PhosphorIconsFill.globeHemisphereWest, color: palette.success, size: 18),
+                            palette: palette, styles: styles,
+                            onTap: () async { await OnlineImagePickerPage.push(context); },
+                          )),
                         ],
                       ),
                     ],
@@ -195,9 +236,9 @@ class _MyPuzzlesTabViewState extends State<MyPuzzlesTabView> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [const Text('已导入扩展包', style: TextStyle(fontSize: 16.5, fontWeight: FontWeight.bold)), Text('${packs.length} 个扩展包', style: const TextStyle(fontSize: 12.5, color: Colors.black54))]),
+                          Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [Text('已导入扩展包', style: styles.h3.copyWith(fontSize: 16.5)), Text('${packs.length} 个扩展包', style: styles.caption)]),
                           const SizedBox(height: 10),
-                          ListView.separated(shrinkWrap: true, physics: const NeverScrollableScrollPhysics(), itemCount: packs.length, separatorBuilder: (ctx, i) => const SizedBox(height: 14), itemBuilder: (ctx, idx) { final pack = packs[idx]; return _buildLargePackCard(pack); }),
+                          ListView.separated(shrinkWrap: true, physics: const NeverScrollableScrollPhysics(), itemCount: packs.length, separatorBuilder: (ctx, i) => const SizedBox(height: 14), itemBuilder: (ctx, idx) { final pack = packs[idx]; return _buildLargePackCard(pack, palette, styles); }),
                           const SizedBox(height: 6),
                         ],
                       ),
@@ -205,13 +246,13 @@ class _MyPuzzlesTabViewState extends State<MyPuzzlesTabView> {
                   );
                 },
               ),
-              SliverToBoxAdapter(child: Padding(padding: const EdgeInsets.fromLTRB(16, 12, 16, 10), child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [const Text('自制关卡', style: TextStyle(fontSize: 16.5, fontWeight: FontWeight.bold)), Text('共 ${customList.length} 个关卡', style: const TextStyle(fontSize: 12.5, color: Colors.black54))]))),
+              SliverToBoxAdapter(child: Padding(padding: const EdgeInsets.fromLTRB(16, 12, 16, 10), child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [Text('自制关卡', style: styles.h3.copyWith(fontSize: 16.5)), Text('共 ${customList.length} 个关卡', style: styles.caption)]))),
               if (customList.isEmpty)
-                const SliverToBoxAdapter(child: Padding(padding: EdgeInsets.symmetric(vertical: 48), child: Center(child: Column(children: [Icon(PhosphorIconsRegular.images, size: 48, color: Colors.grey), SizedBox(height: 10), Text('还没有自制拼图，点击上方「相册选图」或「素材库」开始制作吧！', style: TextStyle(color: Colors.grey))]))))
+                SliverToBoxAdapter(child: Padding(padding: const EdgeInsets.symmetric(vertical: 48), child: Center(child: Column(children: [Icon(PhosphorIconsRegular.images, size: 48, color: palette.disabledText), const SizedBox(height: 10), Text('还没有自制拼图，点击上方「相册选图」或「素材库」开始制作吧！', style: styles.caption)]))))
               else
                 SliverPadding(
                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-                  sliver: SliverGrid(gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(maxCrossAxisExtent: 220, crossAxisSpacing: 14, mainAxisSpacing: 14, childAspectRatio: 1.0), delegate: SliverChildBuilderDelegate((context, index) { final item = customList[index]; return _buildCustomGridCard(item); }, childCount: customList.length)),
+                  sliver: SliverGrid(gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(maxCrossAxisExtent: 220, crossAxisSpacing: 14, mainAxisSpacing: 14, childAspectRatio: 1.0), delegate: SliverChildBuilderDelegate((context, index) { final item = customList[index]; return _buildCustomGridCard(item, palette, styles); }, childCount: customList.length)),
                 ),
               const SliverToBoxAdapter(child: SizedBox(height: 28)),
             ],
@@ -221,23 +262,26 @@ class _MyPuzzlesTabViewState extends State<MyPuzzlesTabView> {
     );
   }
 
-  Widget _buildCustomGridCard(CustomPuzzleItem item) {
+  Widget _buildCustomGridCard(CustomPuzzleItem item, AppPalette palette, AppTextStyles styles) {
     final isNetwork = item.displaySource == '网络';
     return InkWell(
       onTap: () => _openCustom(item),
       borderRadius: BorderRadius.circular(18),
       child: Container(
-        decoration: BoxDecoration(borderRadius: BorderRadius.circular(18), boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 6, offset: Offset(0, 2))]),
+        decoration: BoxDecoration(borderRadius: BorderRadius.circular(18), border: Border.all(color: palette.divider, width: 1)),
         clipBehavior: Clip.antiAlias,
         child: Stack(
           fit: StackFit.expand,
           children: [
             _buildThumbnail(item),
-            Container(decoration: const BoxDecoration(gradient: LinearGradient(colors: [Colors.black45, Colors.transparent, Colors.black54], begin: Alignment.topCenter, end: Alignment.bottomCenter))),
-            Positioned(left: 10, top: 10, child: Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3), decoration: BoxDecoration(color: (isNetwork ? const Color(0xFF0277BD) : const Color(0xFF2E7D32)).withValues(alpha: 0.85), borderRadius: BorderRadius.circular(10)), child: Row(mainAxisSize: MainAxisSize.min, children: [Icon(isNetwork ? PhosphorIconsRegular.globe : PhosphorIconsRegular.image, color: Colors.white, size: 11), const SizedBox(width: 4), Text(item.displaySource, style: const TextStyle(color: Colors.white, fontSize: 10.5, fontWeight: FontWeight.bold))]))),
-            Positioned(top: 10, right: 10, child: Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3), decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.92), borderRadius: BorderRadius.circular(12), boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 4)]), child: Row(mainAxisSize: MainAxisSize.min, children: [if (item.progressPercent > 0 && !item.isCompleted) ...[Text('${item.progressPercent}%', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF2E7D32)))] else ...[const Icon(PhosphorIconsFill.puzzlePiece, size: 12, color: Colors.black54), const SizedBox(width: 3), Text('${item.difficulty.pieceCount}', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.black87))]]))),
-            if (item.isCompleted) const Center(child: CircleAvatar(backgroundColor: Color(0xCC2E7D32), radius: 20, child: Icon(PhosphorIconsBold.check, color: Colors.white, size: 24))) else if (item.progressPercent == 0) Center(child: Container(padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8), decoration: BoxDecoration(color: const Color(0xFF2E7D32), borderRadius: BorderRadius.circular(20), boxShadow: const [BoxShadow(color: Colors.black38, blurRadius: 6)]), child: const Row(mainAxisSize: MainAxisSize.min, children: [Icon(PhosphorIconsFill.play, color: Colors.white, size: 14), SizedBox(width: 4), Text('开始', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13))]))),
-            if (item.progressPercent > 0 && !item.isCompleted) Positioned(left: 10, right: 10, bottom: 10, child: ClipRRect(borderRadius: BorderRadius.circular(4), child: LinearProgressIndicator(value: item.progressPercent / 100.0, minHeight: 4, backgroundColor: Colors.white38, valueColor: const AlwaysStoppedAnimation<Color>(Color(0xFF81C784))))),
+            Container(decoration: BoxDecoration(gradient: LinearGradient(colors: [Colors.black.withValues(alpha: 0.35), Colors.transparent, Colors.black.withValues(alpha: 0.45)], begin: Alignment.topCenter, end: Alignment.bottomCenter))),
+            Positioned(left: 10, top: 10, child: Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3), decoration: BoxDecoration(color: (isNetwork ? palette.info : palette.brand).withValues(alpha: 0.85), borderRadius: BorderRadius.circular(10)), child: Row(mainAxisSize: MainAxisSize.min, children: [Icon(isNetwork ? PhosphorIconsRegular.globe : PhosphorIconsRegular.image, color: Colors.white, size: 11), const SizedBox(width: 4), Text(item.displaySource, style: const TextStyle(color: Colors.white, fontSize: 10.5, fontWeight: FontWeight.bold))]))),
+            Positioned(top: 10, right: 10, child: Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3), decoration: BoxDecoration(color: palette.surface.withValues(alpha: 0.92), borderRadius: BorderRadius.circular(12)), child: Row(mainAxisSize: MainAxisSize.min, children: [if (item.progressPercent > 0 && !item.isCompleted) ...[Text('${item.progressPercent}%', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: palette.brand))] else ...[Icon(PhosphorIconsFill.puzzlePiece, size: 12, color: palette.secondaryText), const SizedBox(width: 3), Text('${item.difficulty.pieceCount}', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: palette.primaryText))]]))),
+            if (item.isCompleted)
+              Center(child: Container(width: 40, height: 40, decoration: BoxDecoration(color: palette.success.withValues(alpha: 0.8), shape: BoxShape.circle), child: Icon(PhosphorIconsBold.check, color: palette.surface, size: 24)))
+            else if (item.progressPercent == 0)
+              Center(child: Container(padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8), decoration: BoxDecoration(color: palette.brand, borderRadius: BorderRadius.circular(20), boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.3), blurRadius: 6)]), child: Row(mainAxisSize: MainAxisSize.min, children: [Icon(PhosphorIconsFill.play, color: palette.surface, size: 14), const SizedBox(width: 4), Text('开始', style: TextStyle(color: palette.surface, fontWeight: FontWeight.bold, fontSize: 13))]))),
+            if (item.progressPercent > 0 && !item.isCompleted) Positioned(left: 10, right: 10, bottom: 10, child: ClipRRect(borderRadius: BorderRadius.circular(4), child: LinearProgressIndicator(value: item.progressPercent / 100.0, minHeight: 4, backgroundColor: Colors.white.withValues(alpha: 0.3), valueColor: AlwaysStoppedAnimation<Color>(palette.success)))),
           ],
         ),
       ),
@@ -248,9 +292,9 @@ class _MyPuzzlesTabViewState extends State<MyPuzzlesTabView> {
     return AppCachedImage(imagePathOrUrl: item.imagePathOrUrl, fit: BoxFit.cover, targetWidth: 360, targetHeight: 360, errorWidget: Image.asset(assetSamples[0], fit: BoxFit.cover));
   }
 
-  Widget _buildLargePackCard(PuzzlePackItem pack) {
+  Widget _buildLargePackCard(PuzzlePackItem pack, AppPalette palette, AppTextStyles styles) {
     return Container(
-      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(20), border: Border.all(color: const Color(0xFFE5E7EB), width: 1), boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 8, offset: Offset(0, 3))]),
+      decoration: BoxDecoration(color: palette.surfaceContainer, borderRadius: BorderRadius.circular(20), border: Border.all(color: palette.divider, width: 1)),
       clipBehavior: Clip.antiAlias,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -258,8 +302,8 @@ class _MyPuzzlesTabViewState extends State<MyPuzzlesTabView> {
           Stack(
             children: [
               SizedBox(height: 140, width: double.infinity, child: AppCachedImage(imagePathOrUrl: pack.coverPath, fit: BoxFit.cover, targetWidth: 600, targetHeight: 300)),
-              Positioned.fill(child: Container(decoration: const BoxDecoration(gradient: LinearGradient(colors: [Colors.black45, Colors.transparent, Colors.black54], begin: Alignment.topCenter, end: Alignment.bottomCenter, stops: [0.0, 0.45, 1.0])))),
-              Positioned(left: 12, top: 12, child: Container(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4), decoration: BoxDecoration(color: const Color(0xFF2E7D32), borderRadius: BorderRadius.circular(12)), child: const Row(mainAxisSize: MainAxisSize.min, children: [Icon(PhosphorIconsFill.package, color: Colors.white, size: 13), SizedBox(width: 4), Text('扩展合辑', style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold))]))),
+              Positioned.fill(child: Container(decoration: BoxDecoration(gradient: LinearGradient(colors: [Colors.black.withValues(alpha: 0.35), Colors.transparent, Colors.black.withValues(alpha: 0.45)], begin: Alignment.topCenter, end: Alignment.bottomCenter, stops: [0.0, 0.45, 1.0])))),
+              Positioned(left: 12, top: 12, child: Container(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4), decoration: BoxDecoration(color: palette.brand, borderRadius: BorderRadius.circular(12)), child: Row(mainAxisSize: MainAxisSize.min, children: [Icon(PhosphorIconsFill.package, color: palette.surface, size: 13), const SizedBox(width: 4), Text('扩展合辑', style: TextStyle(color: palette.surface, fontSize: 11, fontWeight: FontWeight.bold))]))),
               Positioned(right: 12, top: 12, child: Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4), decoration: BoxDecoration(color: Colors.black.withValues(alpha: 0.65), borderRadius: BorderRadius.circular(10)), child: Text('${pack.displaySource} • ${pack.displayFileSize}', style: const TextStyle(color: Colors.white70, fontSize: 10.5)))),
               Positioned(left: 14, right: 14, bottom: 12, child: Text(pack.title, style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold, shadows: [Shadow(color: Colors.black54, blurRadius: 4)]), maxLines: 1, overflow: TextOverflow.ellipsis)),
             ],
@@ -268,9 +312,9 @@ class _MyPuzzlesTabViewState extends State<MyPuzzlesTabView> {
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 14),
             child: Row(
               children: [
-                Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(pack.description.isNotEmpty ? pack.description : '精选拼图扩展关卡合辑', style: const TextStyle(color: Colors.black54, fontSize: 12, height: 1.3), maxLines: 2, overflow: TextOverflow.ellipsis), const SizedBox(height: 6), Container(padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2), decoration: BoxDecoration(color: const Color(0xFFE8F5E9), borderRadius: BorderRadius.circular(6)), child: Text('共 ${pack.levelCount} 关', style: const TextStyle(fontSize: 11, color: Color(0xFF2E7D32), fontWeight: FontWeight.bold)))])),
+                Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(pack.description.isNotEmpty ? pack.description : '精选拼图扩展关卡合辑', style: styles.caption.copyWith(height: 1.3), maxLines: 2, overflow: TextOverflow.ellipsis), const SizedBox(height: 6), Container(padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2), decoration: BoxDecoration(color: palette.brand.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(6)), child: Text('共 ${pack.levelCount} 关', style: TextStyle(fontSize: 11, color: palette.brand, fontWeight: FontWeight.bold)))])),
                 const SizedBox(width: 12),
-                ElevatedButton.icon(icon: const Icon(PhosphorIconsBold.play, size: 14), label: const Text('进入挑战'), style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF2E7D32), foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)), padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10)), onPressed: () => PackLevelsPage.push(context, pack)),
+                ElevatedButton.icon(icon: const Icon(PhosphorIconsBold.play, size: 14), label: const Text('进入挑战'), style: ElevatedButton.styleFrom(backgroundColor: palette.brand, foregroundColor: palette.surface, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)), padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10)), onPressed: () => PackLevelsPage.push(context, pack)),
               ],
             ),
           ),
@@ -279,7 +323,7 @@ class _MyPuzzlesTabViewState extends State<MyPuzzlesTabView> {
     );
   }
 
-  Widget _buildTopActionCard({required String title, required String subtitle, required Widget iconWidget, required List<Color> gradientColors, required Color borderColor, required Color textColor, required VoidCallback? onTap}) {
+  Widget _buildTopActionCard({required String title, required String subtitle, required Widget icon, required AppPalette palette, required AppTextStyles styles, required VoidCallback? onTap}) {
     return Material(
       color: Colors.transparent,
       child: InkWell(
@@ -287,13 +331,17 @@ class _MyPuzzlesTabViewState extends State<MyPuzzlesTabView> {
         borderRadius: BorderRadius.circular(16),
         child: Container(
           height: 66,
-          decoration: BoxDecoration(gradient: LinearGradient(colors: gradientColors, begin: Alignment.topLeft, end: Alignment.bottomRight), borderRadius: BorderRadius.circular(16), border: Border.all(color: borderColor, width: 1.2), boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 4, offset: Offset(0, 1.5))]),
+          decoration: BoxDecoration(
+            color: palette.surfaceContainer,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: palette.divider, width: 1),
+          ),
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
           child: Row(
             children: [
-              CircleAvatar(radius: 17, backgroundColor: Colors.white.withValues(alpha: 0.85), child: iconWidget),
+              Container(width: 34, height: 34, decoration: BoxDecoration(color: palette.brand.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(10)), child: Center(child: icon)),
               const SizedBox(width: 7),
-              Expanded(child: Column(mainAxisAlignment: MainAxisAlignment.center, crossAxisAlignment: CrossAxisAlignment.start, children: [Text(title, style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: textColor), maxLines: 1, overflow: TextOverflow.ellipsis), const SizedBox(height: 1), Text(subtitle, style: const TextStyle(fontSize: 10, color: Colors.black54), maxLines: 1, overflow: TextOverflow.ellipsis)])),
+              Expanded(child: Column(mainAxisAlignment: MainAxisAlignment.center, crossAxisAlignment: CrossAxisAlignment.start, children: [Text(title, style: styles.bodyBold.copyWith(fontSize: 13), maxLines: 1, overflow: TextOverflow.ellipsis), const SizedBox(height: 1), Text(subtitle, style: styles.caption.copyWith(fontSize: 10), maxLines: 1, overflow: TextOverflow.ellipsis)])),
             ],
           ),
         ),

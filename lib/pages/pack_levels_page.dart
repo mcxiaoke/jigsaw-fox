@@ -8,16 +8,16 @@ import '../logic/content/app_content.dart';
 import '../logic/content/models/puzzle_level_item.dart';
 import '../logic/content/models/puzzle_pack_item.dart';
 import '../logic/puzzle_model.dart';
+import '../theme/app_palette.dart';
+import '../theme/app_text_styles.dart';
 import '../widgets/app_cached_image.dart';
 import '../widgets/choose_difficulty_sheet.dart';
+import '../widgets/game_toast.dart';
 import 'game_page.dart';
 
 /// 图包专属关卡列表页 (展示图包封面信息、关卡网格与一键物理删除)
 class PackLevelsPage extends StatefulWidget {
-  const PackLevelsPage({
-    super.key,
-    required this.pack,
-  });
+  const PackLevelsPage({super.key, required this.pack});
 
   final PuzzlePackItem pack;
 
@@ -45,9 +45,11 @@ class _PackLevelsPageState extends State<PackLevelsPage> {
   }
 
   Future<void> _confirmDeletePack() async {
+    final palette = AppPalette.of(context);
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: Text('删除「${widget.pack.title}」图包'),
         content: Text('确定要删除此扩展图包吗？\n将同时清理包内 ${_levels.length} 个关卡并释放 ${widget.pack.displayFileSize} 存储空间。'),
         actions: [
@@ -56,7 +58,7 @@ class _PackLevelsPageState extends State<PackLevelsPage> {
             child: const Text('取消'),
           ),
           FilledButton(
-            style: FilledButton.styleFrom(backgroundColor: Colors.red.shade700),
+            style: FilledButton.styleFrom(backgroundColor: palette.error),
             onPressed: () => Navigator.of(ctx).pop(true),
             child: const Text('确认删除'),
           ),
@@ -68,14 +70,10 @@ class _PackLevelsPageState extends State<PackLevelsPage> {
       final success = await AppContent.instance.packs.deletePack(widget.pack.id);
       if (mounted) {
         if (success) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('已成功删除《${widget.pack.title}》')),
-          );
+          GameToast.show(context, icon: PhosphorIconsFill.trashSimple, message: '已成功删除《${widget.pack.title}》', type: GameToastType.success);
           Navigator.of(context).pop();
         } else {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('删除失败，请重试')),
-          );
+          GameToast.show(context, icon: Icons.error_outline, message: '删除失败，请重试', type: GameToastType.error);
         }
       }
     }
@@ -86,7 +84,7 @@ class _PackLevelsPageState extends State<PackLevelsPage> {
   Future<void> _openLevel(PuzzleLevelItem level) async {
     final imageFile = File(level.imagePathOrUrl);
     if (!imageFile.existsSync()) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('关卡图片文件不存在')));
+      GameToast.show(context, icon: Icons.error_outline, message: '关卡图片文件不存在', type: GameToastType.error);
       return;
     }
     final bytes = await imageFile.readAsBytes();
@@ -164,16 +162,23 @@ class _PackLevelsPageState extends State<PackLevelsPage> {
 
   @override
   Widget build(BuildContext context) {
+    final palette = AppPalette.of(context);
+    final styles = AppTextStyles.of(context);
     final pack = widget.pack;
 
     return Scaffold(
+      backgroundColor: palette.surface,
       appBar: AppBar(
-        title: Text(pack.title, style: const TextStyle(fontWeight: FontWeight.bold)),
+        backgroundColor: palette.surface,
+        foregroundColor: palette.primaryText,
+        elevation: 0.5,
+        scrolledUnderElevation: 0.5,
+        title: Text(pack.title, style: styles.h3),
         centerTitle: true,
         actions: [
           IconButton(
             tooltip: '删除此图包',
-            icon: const Icon(PhosphorIconsRegular.trash, color: Colors.redAccent),
+            icon: Icon(PhosphorIconsRegular.trash, color: palette.error),
             onPressed: _confirmDeletePack,
           ),
         ],
@@ -187,46 +192,29 @@ class _PackLevelsPageState extends State<PackLevelsPage> {
               child: Container(
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(18),
-                  color: Colors.white,
-                  boxShadow: const [
-                    BoxShadow(color: Colors.black12, blurRadius: 6, offset: Offset(0, 2)),
-                  ],
+                  color: palette.surfaceContainer,
+                  border: Border.all(color: palette.divider, width: 1),
                 ),
                 padding: const EdgeInsets.all(14),
                 child: Row(
                   children: [
-                    // 封面缩略
                     ClipRRect(
                       borderRadius: BorderRadius.circular(12),
                       child: SizedBox(
                         width: 80,
                         height: 80,
-                        child: AppCachedImage(
-                          imagePathOrUrl: pack.coverPath,
-                          fit: BoxFit.cover,
-                        ),
+                        child: AppCachedImage(imagePathOrUrl: pack.coverPath, fit: BoxFit.cover),
                       ),
                     ),
                     const SizedBox(width: 14),
-                    // 信息描述
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(
-                            pack.title,
-                            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
+                          Text(pack.title, style: styles.h3.copyWith(fontSize: 16), maxLines: 1, overflow: TextOverflow.ellipsis),
                           if (pack.description.isNotEmpty) ...[
                             const SizedBox(height: 2),
-                            Text(
-                              pack.description,
-                              style: const TextStyle(fontSize: 12, color: Colors.black54),
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                            ),
+                            Text(pack.description, style: styles.caption, maxLines: 2, overflow: TextOverflow.ellipsis),
                           ],
                           const SizedBox(height: 6),
                           Row(
@@ -234,28 +222,15 @@ class _PackLevelsPageState extends State<PackLevelsPage> {
                               Container(
                                 padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                                 decoration: BoxDecoration(
-                                  color: const Color(0xFFE8F5E9),
+                                  color: palette.brand.withValues(alpha: 0.12),
                                   borderRadius: BorderRadius.circular(6),
                                 ),
-                                child: Text(
-                                  '${pack.levelCount} 关卡',
-                                  style: const TextStyle(
-                                    fontSize: 11,
-                                    color: Color(0xFF2E7D32),
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
+                                child: Text('${pack.levelCount} 关卡', style: TextStyle(fontSize: 11, color: palette.brand, fontWeight: FontWeight.bold)),
                               ),
                               const SizedBox(width: 6),
-                              Text(
-                                pack.displayFileSize,
-                                style: const TextStyle(fontSize: 11, color: Colors.black45),
-                              ),
+                              Text(pack.displayFileSize, style: styles.caption.copyWith(fontSize: 11)),
                               const SizedBox(width: 6),
-                              Text(
-                                '• ${pack.displaySource}',
-                                style: const TextStyle(fontSize: 11, color: Colors.black45),
-                              ),
+                              Text('• ${pack.displaySource}', style: styles.caption.copyWith(fontSize: 11)),
                             ],
                           ),
                         ],
@@ -269,11 +244,11 @@ class _PackLevelsPageState extends State<PackLevelsPage> {
 
           // 关卡 Grid
           if (_levels.isEmpty)
-            const SliverToBoxAdapter(
+            SliverToBoxAdapter(
               child: Center(
                 child: Padding(
-                  padding: EdgeInsets.symmetric(vertical: 40),
-                  child: Text('此图包中暂无关卡图片', style: TextStyle(color: Colors.grey)),
+                  padding: const EdgeInsets.symmetric(vertical: 40),
+                  child: Text('此图包中暂无关卡图片', style: styles.caption.copyWith(color: palette.disabledText)),
                 ),
               ),
             )
@@ -290,7 +265,7 @@ class _PackLevelsPageState extends State<PackLevelsPage> {
                 delegate: SliverChildBuilderDelegate(
                   (context, index) {
                     final level = _levels[index];
-                    return _buildLevelCard(level);
+                    return _buildLevelCard(level, palette);
                   },
                   childCount: _levels.length,
                 ),
@@ -303,7 +278,7 @@ class _PackLevelsPageState extends State<PackLevelsPage> {
     );
   }
 
-  Widget _buildLevelCard(PuzzleLevelItem level) {
+  Widget _buildLevelCard(PuzzleLevelItem level, AppPalette palette) {
     final isCompleted = level.isCompleted;
 
     return InkWell(
@@ -312,9 +287,7 @@ class _PackLevelsPageState extends State<PackLevelsPage> {
       child: Container(
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(16),
-          boxShadow: const [
-            BoxShadow(color: Colors.black12, blurRadius: 4, offset: Offset(0, 1.5)),
-          ],
+          border: Border.all(color: palette.divider, width: 1),
         ),
         clipBehavior: Clip.antiAlias,
         child: Stack(
@@ -326,17 +299,15 @@ class _PackLevelsPageState extends State<PackLevelsPage> {
               targetWidth: 360,
               targetHeight: 360,
             ),
-            // 渐变遮罩
             Container(
-              decoration: const BoxDecoration(
+              decoration: BoxDecoration(
                 gradient: LinearGradient(
-                  colors: [Colors.black45, Colors.transparent, Colors.black45],
+                  colors: [Colors.black.withValues(alpha: 0.3), Colors.transparent, Colors.black.withValues(alpha: 0.3)],
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
                 ),
               ),
             ),
-            // 左上角关卡编号
             Positioned(
               left: 8,
               top: 8,
@@ -346,23 +317,19 @@ class _PackLevelsPageState extends State<PackLevelsPage> {
                   color: Colors.black.withValues(alpha: 0.65),
                   borderRadius: BorderRadius.circular(8),
                 ),
-                child: Text(
-                  '#${level.order}',
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 11,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
+                child: Text('#${level.order}', style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
               ),
             ),
-            // 已通关完成打勾
             if (isCompleted)
-              const Center(
-                child: CircleAvatar(
-                  backgroundColor: Color(0xCC2E7D32),
-                  radius: 18,
-                  child: Icon(PhosphorIconsBold.check, color: Colors.white, size: 22),
+              Center(
+                child: Container(
+                  width: 36,
+                  height: 36,
+                  decoration: BoxDecoration(
+                    color: palette.success.withValues(alpha: 0.8),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(PhosphorIconsBold.check, color: palette.surface, size: 22),
                 ),
               ),
           ],

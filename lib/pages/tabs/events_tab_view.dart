@@ -3,6 +3,8 @@ import 'package:phosphoricons_flutter/phosphoricons_flutter.dart';
 
 import '../../logic/content/app_content.dart';
 import '../../logic/content/models/puzzle_event_item.dart';
+import '../../theme/app_palette.dart';
+import '../../theme/app_text_styles.dart';
 import '../../widgets/app_cached_image.dart';
 import '../event_levels_page.dart';
 
@@ -35,10 +37,13 @@ class _EventsTabViewState extends State<EventsTabView> {
 
   @override
   Widget build(BuildContext context) {
+    final palette = AppPalette.of(context);
+    final styles = AppTextStyles.of(context);
     final events = _content.isInitialized ? _content.manager.getVisibleEvents() : <PuzzleEventItem>[];
 
     return RefreshIndicator(
       onRefresh: () async => await _content.syncAll(),
+      color: palette.brand,
       child: events.isEmpty
           ? LayoutBuilder(
               builder: (context, constraints) => SingleChildScrollView(
@@ -49,13 +54,17 @@ class _EventsTabViewState extends State<EventsTabView> {
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        const Icon(PhosphorIconsRegular.calendarBlank, size: 54, color: Colors.black26),
+                        Icon(PhosphorIconsRegular.calendarBlank, size: 54, color: palette.disabledText),
                         const SizedBox(height: 16),
-                        const Text('暂无正在进行的活动', style: TextStyle(color: Colors.black54, fontSize: 15)),
+                        Text('暂无正在进行的活动', style: styles.body.copyWith(color: palette.secondaryText)),
                         const SizedBox(height: 12),
                         ElevatedButton.icon(
                           icon: const Icon(PhosphorIconsRegular.arrowClockwise, size: 16),
                           label: const Text('刷新同步'),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: palette.brand,
+                            foregroundColor: palette.surface,
+                          ),
                           onPressed: () async => await _content.syncAll(),
                         ),
                       ],
@@ -79,7 +88,7 @@ class _EventsTabViewState extends State<EventsTabView> {
                   itemCount: events.length,
                   itemBuilder: (context, index) {
                     final event = events[index];
-                    return _buildEventCard(context, event);
+                    return _buildEventCard(context, event, palette, styles);
                   },
                 );
               },
@@ -87,18 +96,12 @@ class _EventsTabViewState extends State<EventsTabView> {
     );
   }
 
-  Widget _buildEventCard(BuildContext context, PuzzleEventItem event) {
+  Widget _buildEventCard(BuildContext context, PuzzleEventItem event, AppPalette palette, AppTextStyles styles) {
     return Container(
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: palette.surfaceContainer,
         borderRadius: BorderRadius.circular(20),
-        boxShadow: const [
-          BoxShadow(
-            color: Colors.black12,
-            blurRadius: 10,
-            offset: Offset(0, 4),
-          ),
-        ],
+        border: Border.all(color: palette.divider, width: 1),
       ),
       clipBehavior: Clip.antiAlias,
       child: InkWell(
@@ -122,9 +125,9 @@ class _EventsTabViewState extends State<EventsTabView> {
                 ),
                 Positioned.fill(
                   child: Container(
-                    decoration: const BoxDecoration(
+                    decoration: BoxDecoration(
                       gradient: LinearGradient(
-                        colors: [Colors.black54, Colors.transparent, Color(0xBD000000)],
+                        colors: [Colors.black.withValues(alpha: 0.35), Colors.transparent, const Color(0xBD000000)],
                         begin: Alignment.topCenter,
                         end: Alignment.bottomCenter,
                       ),
@@ -138,7 +141,7 @@ class _EventsTabViewState extends State<EventsTabView> {
                   child: Container(
                     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                     decoration: BoxDecoration(
-                      color: event.isActive ? const Color(0xFF2E7D32) : Colors.black54,
+                      color: event.isActive ? palette.brand : Colors.black54,
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: Row(
@@ -158,7 +161,7 @@ class _EventsTabViewState extends State<EventsTabView> {
                     ),
                   ),
                 ),
-                // Top-right Type Badge (Zip / Array)
+                // Top-right Type Badge
                 Positioned(
                   right: 12,
                   top: 12,
@@ -203,7 +206,7 @@ class _EventsTabViewState extends State<EventsTabView> {
                     Expanded(
                       child: Text(
                         event.desc.isNotEmpty ? event.desc : '精彩专题拼图挑战',
-                        style: const TextStyle(color: Colors.black54, fontSize: 12, height: 1.3),
+                        style: styles.caption.copyWith(height: 1.3),
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
                       ),
@@ -213,8 +216,8 @@ class _EventsTabViewState extends State<EventsTabView> {
                       icon: const Icon(PhosphorIconsBold.play, size: 14),
                       label: const Text('进入挑战'),
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF2E7D32),
-                        foregroundColor: Colors.white,
+                        backgroundColor: palette.brand,
+                        foregroundColor: palette.surface,
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
                         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                       ),

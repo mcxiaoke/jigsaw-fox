@@ -7,6 +7,8 @@ import '../../data/models/daily_challenge.dart';
 import '../../data/resume_helper.dart';
 import '../../data/snapshot_store.dart';
 import '../../logic/image_source.dart';
+import '../../theme/app_palette.dart';
+import '../../theme/app_text_styles.dart';
 import '../../widgets/app_cached_image.dart';
 import '../../widgets/choose_difficulty_sheet.dart';
 import '../game_page.dart';
@@ -114,6 +116,8 @@ class _DailyTabViewState extends State<DailyTabView> {
 
   @override
   Widget build(BuildContext context) {
+    final palette = AppPalette.of(context);
+    final styles = AppTextStyles.of(context);
     final dailyList = _repo.dailyChallenges;
     final now = DateTime.now();
     final todayStr = '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
@@ -131,17 +135,28 @@ class _DailyTabViewState extends State<DailyTabView> {
     }
     return RefreshIndicator(
       onRefresh: () async => setState(() {}),
+      color: palette.brand,
       child: CustomScrollView(
         slivers: [
+          // Today's Challenge Banner
           SliverToBoxAdapter(
             child: Padding(
               padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
-              child: Card(
-                elevation: 3,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
+              child: Container(
+                decoration: BoxDecoration(
+                  color: palette.surfaceContainer,
+                  borderRadius: BorderRadius.circular(22),
+                  border: Border.all(color: palette.brand.withValues(alpha: 0.2), width: 1),
+                  boxShadow: [
+                    BoxShadow(
+                      color: palette.brand.withValues(alpha: 0.08),
+                      blurRadius: 12,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
+                ),
                 clipBehavior: Clip.antiAlias,
                 child: Container(
-                  color: Colors.white,
                   padding: const EdgeInsets.all(16),
                   child: Row(
                     children: [
@@ -151,19 +166,31 @@ class _DailyTabViewState extends State<DailyTabView> {
                           children: [
                             Row(
                               children: [
-                                Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2), decoration: BoxDecoration(color: const Color(0xFFE8F5E9), borderRadius: BorderRadius.circular(8)), child: const Text('TODAY', style: TextStyle(color: Color(0xFF1B5E20), fontSize: 11, fontWeight: FontWeight.bold))),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: palette.brand.withValues(alpha: 0.12),
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: Text('TODAY', style: TextStyle(color: palette.brand, fontSize: 11, fontWeight: FontWeight.bold)),
+                                ),
                                 const SizedBox(width: 6),
-                                Text('${now.month} 月 ${now.day} 日', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Colors.black54)),
+                                Text('${now.month} 月 ${now.day} 日', style: styles.caption.copyWith(color: palette.secondaryText)),
                               ],
                             ),
                             const SizedBox(height: 8),
-                            Text('${now.month}月${now.day}日 · 今日挑战', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.black87), maxLines: 1, overflow: TextOverflow.ellipsis),
+                            Text('${now.month}月${now.day}日 · 今日挑战', style: styles.h2.copyWith(color: palette.primaryText), maxLines: 1, overflow: TextOverflow.ellipsis),
                             const SizedBox(height: 14),
                             FilledButton.icon(
                               onPressed: () => _openDaily(todayItem),
                               icon: Icon(todayItem.isCompleted ? PhosphorIconsBold.arrowsClockwise : PhosphorIconsFill.play, size: 18),
                               label: Text(todayItem.isCompleted ? '已通关 (重玩)' : (todayItem.progressPercent > 0 ? '继续挑战' : '开始挑战'), style: const TextStyle(fontWeight: FontWeight.bold)),
-                              style: FilledButton.styleFrom(backgroundColor: const Color(0xFF2E7D32), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)), padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8)),
+                              style: FilledButton.styleFrom(
+                                backgroundColor: palette.brand,
+                                foregroundColor: palette.surface,
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                                padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
+                              ),
                             ),
                           ],
                         ),
@@ -179,20 +206,26 @@ class _DailyTabViewState extends State<DailyTabView> {
               ),
             ),
           ),
+
+          // Stats Bar
           SliverToBoxAdapter(
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
               child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16), boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 4)]),
+                decoration: BoxDecoration(
+                  color: palette.surfaceContainer,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: palette.divider, width: 1),
+                ),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Row(children: [Image.asset('assets/icons/trophy_3d.png', width: 22, height: 22), const SizedBox(width: 6), Text('每日总进度: $totalCompletedCount/${visibleDailyList.length}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13.5))]),
+                    Row(children: [Icon(PhosphorIconsFill.trophy, color: palette.brand, size: 20), const SizedBox(width: 6), Text('每日总进度: $totalCompletedCount/${visibleDailyList.length}', style: styles.bodyBold)]),
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
-                      decoration: BoxDecoration(color: Colors.orange.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(12)),
-                      child: Row(mainAxisSize: MainAxisSize.min, children: [Image.asset('assets/icons/fire_3d.png', width: 18, height: 18), const SizedBox(width: 4), Text('连胜 $streak 天', style: const TextStyle(color: Colors.deepOrange, fontWeight: FontWeight.bold, fontSize: 12))]),
+                      decoration: BoxDecoration(color: palette.warning.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(12)),
+                      child: Row(mainAxisSize: MainAxisSize.min, children: [Icon(PhosphorIconsFill.fire, color: palette.warning, size: 16), const SizedBox(width: 4), Text('连胜 $streak 天', style: TextStyle(color: palette.warning, fontWeight: FontWeight.bold, fontSize: 12))]),
                     ),
                   ],
                 ),
@@ -201,14 +234,14 @@ class _DailyTabViewState extends State<DailyTabView> {
           ),
           const SliverToBoxAdapter(child: SizedBox(height: 8)),
           for (final entry in monthGroups.entries) ...[
-            SliverToBoxAdapter(child: _buildMonthHeader(entry.key, entry.value)),
+            SliverToBoxAdapter(child: _buildMonthHeader(entry.key, entry.value, palette, styles)),
             SliverPadding(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
               sliver: SliverGrid(
                 gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(maxCrossAxisExtent: 220, crossAxisSpacing: 14, mainAxisSpacing: 14, childAspectRatio: 1.0),
                 delegate: SliverChildBuilderDelegate((context, index) {
                   final item = entry.value[index];
-                  return _buildDailyCard(item);
+                  return _buildDailyCard(item, palette, styles);
                 }, childCount: entry.value.length),
               ),
             ),
@@ -220,7 +253,7 @@ class _DailyTabViewState extends State<DailyTabView> {
     );
   }
 
-  Widget _buildMonthHeader(String monthKey, List<DailyChallengeItem> monthItems) {
+  Widget _buildMonthHeader(String monthKey, List<DailyChallengeItem> monthItems, AppPalette palette, AppTextStyles styles) {
     final parts = monthKey.split('-');
     final year = parts.isNotEmpty ? parts[0] : '';
     final month = parts.length > 1 ? int.tryParse(parts[1]) ?? 1 : 1;
@@ -231,30 +264,30 @@ class _DailyTabViewState extends State<DailyTabView> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Row(children: [Container(width: 4, height: 16, decoration: BoxDecoration(color: const Color(0xFF2E7D32), borderRadius: BorderRadius.circular(2))), const SizedBox(width: 8), Text(headerTitle, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.black87))]),
-          Container(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3), decoration: BoxDecoration(color: Colors.grey.shade100, borderRadius: BorderRadius.circular(10)), child: Text('已完成 $completedCount/${monthItems.length}', style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600, color: Colors.grey.shade700))),
+          Row(children: [Container(width: 4, height: 16, decoration: BoxDecoration(color: palette.brand, borderRadius: BorderRadius.circular(2))), const SizedBox(width: 8), Text(headerTitle, style: styles.h3.copyWith(fontSize: 16))]),
+          Container(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3), decoration: BoxDecoration(color: palette.surfaceContainer, borderRadius: BorderRadius.circular(10), border: Border.all(color: palette.divider, width: 0.8)), child: Text('已完成 $completedCount/${monthItems.length}', style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600, color: palette.secondaryText))),
         ],
       ),
     );
   }
 
-  Widget _buildDailyCard(DailyChallengeItem item) {
+  Widget _buildDailyCard(DailyChallengeItem item, AppPalette palette, AppTextStyles styles) {
     return InkWell(
       onTap: () => _openDaily(item),
       borderRadius: BorderRadius.circular(18),
       child: Container(
-        decoration: BoxDecoration(borderRadius: BorderRadius.circular(18), boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 6, offset: Offset(0, 2))]),
+        decoration: BoxDecoration(borderRadius: BorderRadius.circular(18), border: Border.all(color: palette.divider, width: 1)),
         clipBehavior: Clip.antiAlias,
         child: Stack(
           fit: StackFit.expand,
           children: [
             AppCachedImage(imagePathOrUrl: item.assetPath, fit: BoxFit.cover, targetWidth: 360, targetHeight: 360, errorWidget: Image.asset(assetSamples[0], fit: BoxFit.cover)),
-            Container(decoration: const BoxDecoration(gradient: LinearGradient(colors: [Colors.black45, Colors.transparent], begin: Alignment.topCenter, end: Alignment.center))),
-            Positioned(top: 10, left: 10, child: Container(width: 34, height: 34, decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.94), shape: BoxShape.circle, boxShadow: const [BoxShadow(color: Colors.black26, blurRadius: 4)]), alignment: Alignment.center, child: Text('${item.dayNumber}', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.black87)))),
+            Container(decoration: BoxDecoration(gradient: LinearGradient(colors: [Colors.black.withValues(alpha: 0.35), Colors.transparent], begin: Alignment.topCenter, end: Alignment.center))),
+            Positioned(top: 10, left: 10, child: Container(width: 34, height: 34, decoration: BoxDecoration(color: palette.surface.withValues(alpha: 0.94), shape: BoxShape.circle), alignment: Alignment.center, child: Text('${item.dayNumber}', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: palette.primaryText)))),
             if (item.isCompleted)
-              Positioned(top: 10, right: 10, child: Container(padding: const EdgeInsets.all(5), decoration: const BoxDecoration(color: Color(0xFF2E7D32), shape: BoxShape.circle), child: const Icon(PhosphorIconsBold.check, color: Colors.white, size: 14)))
+              Positioned(top: 10, right: 10, child: Container(padding: const EdgeInsets.all(5), decoration: BoxDecoration(color: palette.success, shape: BoxShape.circle), child: Icon(PhosphorIconsBold.check, color: palette.surface, size: 14)))
             else if (item.progressPercent > 0)
-              Positioned(top: 10, right: 10, child: Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3), decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.92), borderRadius: BorderRadius.circular(12)), child: Text('${item.progressPercent}%', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF2E7D32))))),
+              Positioned(top: 10, right: 10, child: Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3), decoration: BoxDecoration(color: palette.surface.withValues(alpha: 0.92), borderRadius: BorderRadius.circular(12)), child: Text('${item.progressPercent}%', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: palette.brand)))),
           ],
         ),
       ),
