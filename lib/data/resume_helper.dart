@@ -93,9 +93,9 @@ class ResumeHelper {
       context: context,
       title: title,
       imageBytes: imageBytes,
-      difficulties: [info.dkey],
-      snapshots: {info.dkey: info.snapshot},
-      progressPercents: {info.dkey: info.percent},
+      difficultyKey: info.dkey,
+      snapshot: info.snapshot,
+      progressPercent: info.percent,
     );
     return result ?? 'cancelled';
   }

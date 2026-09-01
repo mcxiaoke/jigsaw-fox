@@ -150,14 +150,7 @@ class SnapshotStore {
         rethrow;
       }
 
-      // 清理同关卡其它难度的旧快照，保证磁盘上单关卡只保留 1 份最新残局（P1-4）
-      final oldKeys = await listDifficultyKeys(cid);
-      for (final k in oldKeys) {
-        if (k != dkey) {
-          await delete(cid, k);
-        }
-      }
-
+      // 方案 A：save 专注做单文件高效原子落盘，移出热路径全目录扫描（P1-6）
       AppLogger.repo.info('SnapshotStore.save ok cid=$cid dkey=$dkey bytes=${jsonStr.length} ${sw.elapsedMilliseconds}ms file=${AppLogger.sanitizePath(file.path)}');
     } catch (e, st) {
       AppLogger.repo.severe('SnapshotStore.save failed cid=$cid dkey=$dkey', e, st);
@@ -170,11 +163,14 @@ class SnapshotStore {
 
   /// 同步保存（用于 dispose / lifecycle 同步兜底，避免 fire-and-forget 丢失）
   void saveSync(PuzzleBoardState state) {
-    if (!_initialized || _snapshotsDir == null) {
+    Directory targetDir;
+    if (_initialized && _snapshotsDir != null) {
+      targetDir = _snapshotsDir!;
+    } else {
       try {
         final support = Directory.systemTemp;
-        _snapshotsDir = Directory(p.join(support.path, 'jigsaw_snapshots'));
-        if (!_snapshotsDir!.existsSync()) _snapshotsDir!.createSync(recursive: true);
+        targetDir = Directory(p.join(support.path, 'jigsaw_snapshots'));
+        if (!targetDir.existsSync()) targetDir.createSync(recursive: true);
       } catch (_) {
         return;
       }
@@ -182,7 +178,7 @@ class SnapshotStore {
     final cid = state.effectiveCanonicalId;
     final dkey = state.effectiveDifficultyKey;
     if (cid.isEmpty || dkey.isEmpty) return;
-    final file = _fileFor(cid, dkey);
+    final file = File(p.join(targetDir.path, _safeFileName(cid, dkey)));
     final toSave = state.copyWith(
       version: PuzzleBoardState.currentVersion,
       canonicalId: cid,

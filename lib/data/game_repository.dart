@@ -79,6 +79,8 @@ class GameRepository {
       _prefs?.getString(_keySelectedBackground) ?? kBackgroundAssets[0];
   set selectedBackground(String v) => _prefs?.setString(_keySelectedBackground, v);
 
+  /// 累计通关数（历史累加字段，全库已统一以 ProgressStore.instance.getTotalSolved() 去重图数为 SSOT）
+  @Deprecated('Use ProgressStore.instance.getTotalSolved() for distinct solved count')
   int get totalCompletedLevels => _prefs?.getInt(_keyTotalCompleted) ?? 0;
   int get totalPiecesSnapped => _prefs?.getInt(_keyTotalPiecesSnapped) ?? 0;
   int get totalPlayTimeSeconds => _prefs?.getInt(_keyTotalPlayTimeSeconds) ?? 0;
@@ -440,8 +442,7 @@ class GameRepository {
     }
 
     if (isCompleted) {
-      await _prefs?.setInt(_keyTotalCompleted, totalCompletedLevels + 1);
-      AppLogger.repo.info('Level $levelIndex completed totalCompleted=${totalCompletedLevels + 1}');
+      AppLogger.repo.info('Level $levelIndex completed');
     }
   }
 
@@ -539,7 +540,7 @@ class GameRepository {
     }
 
     if (isCompleted) {
-      await _prefs?.setInt(_keyTotalCompleted, totalCompletedLevels + 1);
+      AppLogger.repo.info('Daily $dateStr completed');
     }
   }
 
@@ -633,7 +634,7 @@ class GameRepository {
     }
 
     if (isCompleted) {
-      await _prefs?.setInt(_keyTotalCompleted, totalCompletedLevels + 1);
+      AppLogger.repo.info('Custom $id completed');
     }
   }
 
@@ -689,7 +690,7 @@ class GameRepository {
 
       if (isCompleted) {
         await ProgressStore.instance.updateProgress(canonicalId: canonicalId, isCompleted: true, completedPieceCount: completedPieceCount, bestTimeSeconds: timeSeconds, hasSnapshot: false);
-        await _prefs?.setInt(_keyTotalCompleted, totalCompletedLevels + 1);
+        AppLogger.repo.info('Generic $canonicalId completed');
       }
     } catch (e, st) {
       AppLogger.repo.warning('updateGenericProgress failed cid=$canonicalId', e, st);

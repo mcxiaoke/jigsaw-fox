@@ -1,9 +1,10 @@
-import 'economy_service.dart';
 import 'dart:async';
 
 import 'achievement_store.dart';
 import 'app_logger.dart';
+import 'economy_service.dart';
 import 'sound_service.dart';
+import '../data/progress_store.dart';
 
 /// 成就类型
 enum AchievementType {
@@ -47,11 +48,11 @@ class AchievementService {
 
   /// 全部 25 项成就定义（Dart const 静态表）
   static const List<AchievementDefinition> allAchievements = [
-    // 1. 通关局数
+    // 1. 通关图数
     AchievementDefinition(
       id: 'first_win',
       title: '初露锋芒',
-      description: '完成第一局拼图',
+      description: '通关首张拼图',
       type: AchievementType.accumulative,
       target: 1,
       metricKey: 'total_solved',
@@ -60,7 +61,7 @@ class AchievementService {
     AchievementDefinition(
       id: 'win_10',
       title: '熟能生巧',
-      description: '累计完成 10 局拼图',
+      description: '累计通关 10 张拼图',
       type: AchievementType.accumulative,
       target: 10,
       metricKey: 'total_solved',
@@ -69,7 +70,7 @@ class AchievementService {
     AchievementDefinition(
       id: 'win_50',
       title: '拼图达人',
-      description: '累计完成 50 局拼图',
+      description: '累计通关 50 张拼图',
       type: AchievementType.accumulative,
       target: 50,
       metricKey: 'total_solved',
@@ -78,7 +79,7 @@ class AchievementService {
     AchievementDefinition(
       id: 'win_100',
       title: '拼图大师',
-      description: '累计完成 100 局拼图',
+      description: '累计通关 100 张拼图',
       type: AchievementType.accumulative,
       target: 100,
       metricKey: 'total_solved',
@@ -361,8 +362,17 @@ class AchievementService {
   }) async {
     await _store.init();
 
-    // 1. 局数累加
-    await _store.incrementCounter('total_solved', 1);
+    // 1. 通关图数同步（选型 1：以 ProgressStore.getTotalSolved 去重图数为 SSOT）
+    try {
+      final totalSolved = await ProgressStore.instance.getTotalSolved();
+      if (totalSolved > 0) {
+        await _store.setCounter('total_solved', totalSolved);
+      } else {
+        await _store.incrementCounter('total_solved', 1);
+      }
+    } catch (_) {
+      await _store.incrementCounter('total_solved', 1);
+    }
 
     // 3. 3 星评级（按 canonicalId 去重：同一张图多档刷 3 星只计 1 次，设计 §8.3）
     if (stars >= 3 && canonicalId.isNotEmpty) {

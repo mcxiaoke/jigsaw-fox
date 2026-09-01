@@ -21,7 +21,7 @@ void main() {
       await ProgressStore.instance.init();
     });
 
-    test('SnapshotStore atomic save, load, and single-difficulty retention', () async {
+    test('SnapshotStore atomic save, load, and explicit delete', () async {
       const cid = 'main:001';
       final state1 = PuzzleBoardState(
         canonicalId: cid,
@@ -44,7 +44,7 @@ void main() {
       expect(loaded1!.rows, 2);
       expect(loaded1.cols, 2);
 
-      // 再次保存 3x3，验证同关卡只留最新残局（2x2 应被清理）
+      // 方案 A：save 专注做单文件高效原子落盘（移出热路径自动强删）
       final state2 = PuzzleBoardState(
         canonicalId: cid,
         difficultyKey: '3x3',
@@ -58,16 +58,18 @@ void main() {
       );
       await SnapshotStore.instance.save(state2);
 
+      final loaded2 = await SnapshotStore.instance.load(cid, '3x3');
+      expect(loaded2, isNotNull);
+      expect(loaded2!.rows, 3);
+
+      // 显式清理旧难度快照
+      await SnapshotStore.instance.delete(cid, '2x2');
       final keys = await SnapshotStore.instance.listDifficultyKeys(cid);
       expect(keys, contains('3x3'));
       expect(keys, isNot(contains('2x2')));
 
       final oldSnapshot = await SnapshotStore.instance.load(cid, '2x2');
       expect(oldSnapshot, isNull);
-
-      final newSnapshot = await SnapshotStore.instance.load(cid, '3x3');
-      expect(newSnapshot, isNotNull);
-      expect(newSnapshot!.rows, 3);
     });
 
     test('ProgressStore reconcile self-heals when file missing', () async {

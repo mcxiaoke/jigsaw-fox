@@ -67,7 +67,7 @@ class _AchievementsPageState extends State<AchievementsPage> {
       setState(() {
         _distinct3Star = d3;
         _totalStars = ts > 0 ? ts : _repo.levels.fold<int>(0, (sum, l) => sum + l.stars);
-        _totalSolved = sv > 0 ? sv : _repo.totalCompletedLevels;
+        _totalSolved = sv;
         _loading = false;
       });
     }
@@ -178,8 +178,8 @@ class _AchievementsPageState extends State<AchievementsPage> {
                         imageAsset: 'assets/icons/trophy_3d.png',
                       ),
                       _buildStatCard(
-                        '完成局数',
-                        '$completed',
+                        '已通关图数',
+                        '$completed 张',
                         PhosphorIconsBold.checkCircle,
                         const Color(0xFF2E7D32),
                       ),

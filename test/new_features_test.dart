@@ -136,7 +136,7 @@ void main() {
       expect(find.text('成就与统计'), findsOneWidget);
       expect(find.text('数据统计看板'), findsOneWidget);
       expect(find.text('关卡累积星星'), findsOneWidget);
-      expect(find.text('完成局数'), findsOneWidget);
+      expect(find.text('已通关图数'), findsOneWidget);
       expect(find.text('已拼碎片'), findsOneWidget);
       expect(find.text('总游玩时长'), findsOneWidget);
       expect(find.text('成就勋章墙'), findsOneWidget);
