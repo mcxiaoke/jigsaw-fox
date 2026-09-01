@@ -54,9 +54,11 @@ class _EventsTabViewState extends State<EventsTabView> {
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Icon(PhosphorIconsRegular.calendarBlank, size: 54, color: palette.disabledText),
-                        const SizedBox(height: 16),
-                        Text('暂无正在进行的活动', style: styles.body.copyWith(color: palette.secondaryText)),
+                        const Text('🦊', style: TextStyle(fontSize: 48)),
+                        const SizedBox(height: 8),
+                        Text('小狐狸没找到正在进行的活动', style: styles.body.copyWith(color: palette.secondaryText)),
+                        const SizedBox(height: 4),
+                        Text('下拉刷新或稍后再来看看吧', style: styles.caption),
                         const SizedBox(height: 12),
                         ElevatedButton.icon(
                           icon: const Icon(PhosphorIconsRegular.arrowClockwise, size: 16),

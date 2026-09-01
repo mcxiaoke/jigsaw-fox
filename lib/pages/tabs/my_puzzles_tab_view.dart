@@ -248,7 +248,7 @@ class _MyPuzzlesTabViewState extends State<MyPuzzlesTabView> {
               ),
               SliverToBoxAdapter(child: Padding(padding: const EdgeInsets.fromLTRB(16, 12, 16, 10), child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [Text('自制关卡', style: styles.h3.copyWith(fontSize: 16.5)), Text('共 ${customList.length} 个关卡', style: styles.caption)]))),
               if (customList.isEmpty)
-                SliverToBoxAdapter(child: Padding(padding: const EdgeInsets.symmetric(vertical: 48), child: Center(child: Column(children: [Icon(PhosphorIconsRegular.images, size: 48, color: palette.disabledText), const SizedBox(height: 10), Text('还没有自制拼图，点击上方「相册选图」或「素材库」开始制作吧！', style: styles.caption)]))))
+                SliverToBoxAdapter(child: Padding(padding: const EdgeInsets.symmetric(vertical: 48), child: Center(child: Column(children: [const Text('🦊', style: TextStyle(fontSize: 44)), const SizedBox(height: 8), Text('小狐狸抱着空篮子等你制作拼图', style: styles.caption.copyWith(fontSize: 14)), const SizedBox(height: 4), Text('点击上方「相册选图」或「素材库」开始制作吧！', style: styles.caption)]))))
               else
                 SliverPadding(
                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),

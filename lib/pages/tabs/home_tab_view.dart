@@ -192,10 +192,10 @@ class _HomeTabViewState extends State<HomeTabView> {
                 child: Center(
                   child: Column(
                     children: [
-                      Icon(PhosphorIconsRegular.empty, size: 48, color: palette.disabledText),
-                      const SizedBox(height: 12),
+                      const Text('🦊', style: TextStyle(fontSize: 44)),
+                      const SizedBox(height: 8),
                       Text(
-                        '暂无符合该筛选条件的关卡',
+                        '小狐狸没找到符合该条件的关卡',
                         style: styles.caption.copyWith(fontSize: 14),
                       ),
                     ],
