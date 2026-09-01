@@ -13,6 +13,8 @@ import '../data/models/custom_puzzle_item.dart';
 import '../logic/cache/image_cache_manager.dart';
 import '../logic/image_upscaler.dart';
 import '../logic/puzzle_model.dart';
+import '../theme/app_palette.dart';
+import '../widgets/game_toast.dart';
 
 enum CropRatio {
   square('1:1 正方形', 1.0, 1080, 1080, PuzzleAspectRatio.square1x1, PhosphorIconsBold.square),
@@ -331,9 +333,7 @@ class _CropPuzzlePageState extends State<CropPuzzlePage> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('保存失败: $e')),
-        );
+        GameToast.show(context, message: '保存失败: $e', type: GameToastType.error);
       }
     } finally {
       if (mounted) setState(() => _isSaving = false);
@@ -344,17 +344,18 @@ class _CropPuzzlePageState extends State<CropPuzzlePage> {
 
   @override
   Widget build(BuildContext context) {
+    final palette = AppPalette.of(context);
     final targetRatio = _selectedRatio.ratio;
 
     return Scaffold(
-      backgroundColor: const Color(0xFF181818),
+      backgroundColor: palette.surface,
       appBar: AppBar(
-        backgroundColor: const Color(0xFF181818),
-        foregroundColor: Colors.white,
+        backgroundColor: palette.surface,
+        foregroundColor: palette.primaryText,
         elevation: 0,
-        title: const Text(
+        title: Text(
           '裁剪与自制拼图',
-          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: palette.primaryText),
         ),
       ),
       body: Stack(
@@ -380,8 +381,8 @@ class _CropPuzzlePageState extends State<CropPuzzlePage> {
                       ),
                       label: Text(ratio.label),
                       selected: _selectedRatio == ratio,
-                      selectedColor: const Color(0xFF2E7D32),
-                      backgroundColor: const Color(0xFF2C2C2C),
+                      selectedColor: palette.brand,
+                      backgroundColor: palette.surfaceContainerLow,
                       labelStyle: TextStyle(
                         color: _selectedRatio == ratio ? Colors.white : Colors.white70,
                         fontWeight: FontWeight.w600,
@@ -516,7 +517,7 @@ class _CropPuzzlePageState extends State<CropPuzzlePage> {
                                       child: Container(
                                         decoration: BoxDecoration(
                                           border: Border.all(
-                                            color: const Color(0xFF81C784),
+                                            color: palette.brandLight,
                                             width: 2.5,
                                           ),
                                         ),
@@ -547,7 +548,7 @@ class _CropPuzzlePageState extends State<CropPuzzlePage> {
                                                 color: Colors.black.withValues(alpha: 0.65),
                                                 borderRadius: BorderRadius.circular(16),
                                                 border: Border.all(
-                                                  color: isChanged ? const Color(0xFF81C784) : Colors.white24,
+                                                  color: isChanged ? palette.brandLight : Colors.white24,
                                                   width: 1.2,
                                                 ),
                                               ),
@@ -557,13 +558,13 @@ class _CropPuzzlePageState extends State<CropPuzzlePage> {
                                                   Icon(
                                                     isChanged ? PhosphorIconsBold.arrowsOutCardinal : PhosphorIconsRegular.magnifyingGlass,
                                                     size: 13,
-                                                    color: isChanged ? const Color(0xFF81C784) : Colors.white70,
+                                                    color: isChanged ? palette.brandLight : Colors.white70,
                                                   ),
                                                   const SizedBox(width: 4),
                                                   Text(
                                                     '$scalePercent%',
                                                     style: TextStyle(
-                                                      color: isChanged ? const Color(0xFF81C784) : Colors.white,
+                                                      color: isChanged ? palette.brandLight : Colors.white,
                                                       fontSize: 11.5,
                                                       fontWeight: FontWeight.bold,
                                                     ),
@@ -606,9 +607,9 @@ class _CropPuzzlePageState extends State<CropPuzzlePage> {
           // Simplified Bottom Action Bar
           Container(
             padding: const EdgeInsets.fromLTRB(20, 14, 20, 20),
-            decoration: const BoxDecoration(
-              color: Color(0xFF222222),
-              borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+            decoration: BoxDecoration(
+              color: palette.surfaceContainer,
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
             ),
             child: SizedBox(
               width: double.infinity,
@@ -616,7 +617,7 @@ class _CropPuzzlePageState extends State<CropPuzzlePage> {
               child: FilledButton.icon(
                 onPressed: _isSaving ? null : () => _saveAndCreate(_currentViewportSize),
                 style: FilledButton.styleFrom(
-                  backgroundColor: const Color(0xFF2E7D32),
+                  backgroundColor: palette.brand,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(14),
                   ),
@@ -635,12 +636,12 @@ class _CropPuzzlePageState extends State<CropPuzzlePage> {
         Positioned.fill(
           child: Container(
             color: Colors.black.withValues(alpha: 0.65),
-            child: const Center(
+            child: Center(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   CircularProgressIndicator(
-                    color: Color(0xFF81C784),
+                    color: palette.brandLight,
                     strokeWidth: 3,
                   ),
                   SizedBox(height: 16),

@@ -1,10 +1,14 @@
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:phosphoricons_flutter/phosphoricons_flutter.dart';
+
 import '../logic/content/app_content.dart';
 import '../logic/content/models/puzzle_pack_item.dart';
+import '../theme/app_palette.dart';
+import '../theme/app_text_styles.dart';
+import '../widgets/game_toast.dart';
 
-/// 全屏扩展图包导入界面 (支持本地文件选择与网络 URL 下载)
+/// Fullscreen extended puzzle pack import page (supports local file selection and network URL download).
 class ImportPackPage extends StatefulWidget {
   const ImportPackPage({super.key});
 
@@ -50,9 +54,7 @@ class _ImportPackPageState extends State<ImportPackPage> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('选择文件失败: $e')),
-        );
+        GameToast.show(context, message: '选择文件失败: $e', type: GameToastType.error);
       }
     }
   }
@@ -62,9 +64,7 @@ class _ImportPackPageState extends State<ImportPackPage> {
     final networkUrl = _networkUrlController.text.trim();
 
     if (localPath.isEmpty && networkUrl.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('请选择本地 ZIP 文件或输入网络下载地址')),
-      );
+      GameToast.show(context, message: '请选择本地 ZIP 文件或输入网络下载地址', type: GameToastType.warning);
       return;
     }
 
@@ -83,23 +83,17 @@ class _ImportPackPageState extends State<ImportPackPage> {
 
       if (!mounted) return;
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('成功导入《${pack.title}》(共 ${pack.levelCount} 关)'),
-          backgroundColor: const Color(0xFF2E7D32),
-        ),
+      GameToast.show(
+        context,
+        message: '成功导入《${pack.title}》(共 ${pack.levelCount} 关)',
+        type: GameToastType.success,
       );
 
-      // 导入成功，自动关闭全屏界面并返回结果
+      // Import success: auto-close fullscreen page and return result
       Navigator.of(context).pop(pack);
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('导入失败: $e'),
-            backgroundColor: Colors.red.shade700,
-          ),
-        );
+        GameToast.show(context, message: '导入失败: $e', type: GameToastType.error);
       }
     } finally {
       if (mounted) {
@@ -113,11 +107,16 @@ class _ImportPackPageState extends State<ImportPackPage> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
+    final palette = AppPalette.of(context);
+    final styles = AppTextStyles.of(context);
 
     return Scaffold(
+      backgroundColor: palette.surface,
       appBar: AppBar(
-        title: const Text('导入扩展图包 (.zip)', style: TextStyle(fontWeight: FontWeight.bold)),
+        backgroundColor: palette.surface,
+        foregroundColor: palette.primaryText,
+        elevation: 0,
+        title: Text('导入扩展图包 (.zip)', style: styles.h3.copyWith(fontWeight: FontWeight.bold)),
         centerTitle: true,
       ),
       body: SingleChildScrollView(
@@ -125,22 +124,25 @@ class _ImportPackPageState extends State<ImportPackPage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // 顶部提示卡片
+            // Info banner
             Container(
               padding: const EdgeInsets.all(14),
               decoration: BoxDecoration(
-                color: const Color(0xFFE8F5E9),
+                color: palette.brand.withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: const Color(0xFFA5D6A7)),
+                border: Border.all(color: palette.brand.withValues(alpha: 0.3)),
               ),
-              child: const Row(
+              child: Row(
                 children: [
-                  Icon(PhosphorIconsFill.info, color: Color(0xFF2E7D32), size: 22),
-                  SizedBox(width: 10),
+                  Icon(PhosphorIconsFill.info, color: palette.brand, size: 22),
+                  const SizedBox(width: 10),
                   Expanded(
                     child: Text(
                       '支持导入任意包含 JPG/PNG/WebP 图片的 ZIP 压缩包；导入后将自动生成独立合辑，可随时整包删除。',
-                      style: TextStyle(fontSize: 12.5, color: Color(0xFF1B5E20), height: 1.35),
+                      style: styles.body.copyWith(
+                        color: palette.primaryText,
+                        height: 1.35,
+                      ),
                     ),
                   ),
                 ],
@@ -148,8 +150,8 @@ class _ImportPackPageState extends State<ImportPackPage> {
             ),
             const SizedBox(height: 24),
 
-            // 方式一：本地文件浏览
-            _buildSectionHeader('📁 方式一：从本地文件选择'),
+            // Method 1: Local file
+            _buildSectionHeader('方式一：从本地文件选择', palette, styles),
             const SizedBox(height: 10),
             Row(
               children: [
@@ -157,19 +159,20 @@ class _ImportPackPageState extends State<ImportPackPage> {
                   child: TextField(
                     controller: _localPathController,
                     readOnly: true,
+                    style: TextStyle(color: palette.primaryText, fontSize: 13),
                     decoration: InputDecoration(
                       hintText: '点击右侧按钮选择 .zip 文件',
-                      hintStyle: const TextStyle(fontSize: 13, color: Colors.grey),
+                      hintStyle: TextStyle(fontSize: 13, color: palette.disabledText),
                       filled: true,
-                      fillColor: Colors.grey.shade100,
+                      fillColor: palette.surfaceContainerLow,
                       contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(12),
-                        borderSide: BorderSide(color: Colors.grey.shade300),
+                        borderSide: BorderSide(color: palette.divider),
                       ),
                       enabledBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(12),
-                        borderSide: BorderSide(color: Colors.grey.shade300),
+                        borderSide: BorderSide(color: palette.divider),
                       ),
                     ),
                   ),
@@ -180,7 +183,7 @@ class _ImportPackPageState extends State<ImportPackPage> {
                   icon: const Icon(PhosphorIconsRegular.folderOpen, size: 16),
                   label: const Text('浏览...'),
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: theme.colorScheme.primary,
+                    backgroundColor: palette.brand,
                     foregroundColor: Colors.white,
                     padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -190,31 +193,32 @@ class _ImportPackPageState extends State<ImportPackPage> {
             ),
             const SizedBox(height: 28),
 
-            // 方式二：网络下载 URL
-            _buildSectionHeader('🌐 方式二：输入网络下载地址'),
+            // Method 2: Network URL
+            _buildSectionHeader('方式二：输入网络下载地址', palette, styles),
             const SizedBox(height: 10),
             TextField(
               controller: _networkUrlController,
               enabled: !_isImporting,
+              style: TextStyle(color: palette.primaryText, fontSize: 13),
               decoration: InputDecoration(
                 hintText: 'http://example.com/puzzle_pack.zip',
-                hintStyle: const TextStyle(fontSize: 13, color: Colors.grey),
+                hintStyle: TextStyle(fontSize: 13, color: palette.disabledText),
                 filled: true,
-                fillColor: Colors.grey.shade100,
+                fillColor: palette.surfaceContainerLow,
                 contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                 suffixIcon: _networkUrlController.text.isNotEmpty
                     ? IconButton(
-                        icon: const Icon(Icons.clear, size: 18),
+                        icon: Icon(Icons.clear, size: 18, color: palette.secondaryText),
                         onPressed: () => setState(() => _networkUrlController.clear()),
                       )
                     : null,
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide(color: Colors.grey.shade300),
+                  borderSide: BorderSide(color: palette.divider),
                 ),
                 enabledBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide(color: Colors.grey.shade300),
+                  borderSide: BorderSide(color: palette.divider),
                 ),
               ),
               onChanged: (_) {
@@ -226,14 +230,14 @@ class _ImportPackPageState extends State<ImportPackPage> {
             ),
             const SizedBox(height: 8),
 
-            // 快捷填充测试 URL
+            // Quick-fill test URL chips
             Wrap(
               spacing: 8,
               children: [
                 ActionChip(
-                  avatar: const Icon(PhosphorIconsRegular.lightning, size: 14, color: Color(0xFFE65100)),
+                  avatar: Icon(PhosphorIconsRegular.lightning, size: 14, color: palette.warning),
                   label: const Text('测试包: 赛博霓虹', style: TextStyle(fontSize: 11.5)),
-                  backgroundColor: const Color(0xFFFFF3E0),
+                  backgroundColor: palette.warning.withValues(alpha: 0.12),
                   onPressed: _isImporting
                       ? null
                       : () {
@@ -244,9 +248,9 @@ class _ImportPackPageState extends State<ImportPackPage> {
                         },
                 ),
                 ActionChip(
-                  avatar: const Icon(PhosphorIconsRegular.lightning, size: 14, color: Color(0xFF0277BD)),
+                  avatar: Icon(PhosphorIconsRegular.lightning, size: 14, color: palette.info),
                   label: const Text('测试包: 纯图片猫咪', style: TextStyle(fontSize: 11.5)),
-                  backgroundColor: const Color(0xFFE1F5FE),
+                  backgroundColor: palette.info.withValues(alpha: 0.12),
                   onPressed: _isImporting
                       ? null
                       : () {
@@ -260,13 +264,13 @@ class _ImportPackPageState extends State<ImportPackPage> {
             ),
             const SizedBox(height: 36),
 
-            // 开始导入主按钮
+            // Start import button
             SizedBox(
               height: 50,
               child: ElevatedButton(
                 onPressed: _isImporting ? null : _startImport,
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF2E7D32),
+                  backgroundColor: palette.brand,
                   foregroundColor: Colors.white,
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                   elevation: 2,
@@ -306,13 +310,13 @@ class _ImportPackPageState extends State<ImportPackPage> {
     );
   }
 
-  Widget _buildSectionHeader(String title) {
+  Widget _buildSectionHeader(String title, AppPalette palette, AppTextStyles styles) {
     return Text(
       title,
-      style: const TextStyle(
+      style: styles.body.copyWith(
         fontSize: 14.5,
         fontWeight: FontWeight.bold,
-        color: Colors.black87,
+        color: palette.primaryText,
       ),
     );
   }

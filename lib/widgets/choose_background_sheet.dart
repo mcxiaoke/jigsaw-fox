@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:phosphoricons_flutter/phosphoricons_flutter.dart';
 
 import '../data/game_repository.dart';
+import '../theme/app_palette.dart';
+import '../theme/app_text_styles.dart';
 
 /// A bottom sheet modal for choosing full-screen background wallpaper in puzzle gameplay.
 class ChooseBackgroundSheet extends StatelessWidget {
@@ -32,15 +34,16 @@ class ChooseBackgroundSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
+    final palette = AppPalette.of(context);
+    final styles = AppTextStyles.of(context);
     final size = MediaQuery.sizeOf(context);
     final bgList = GameRepository.kBackgroundAssets;
 
     return Container(
       height: size.height * 0.65,
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      decoration: BoxDecoration(
+        color: palette.surfaceContainer,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
       ),
       child: Column(
         children: [
@@ -52,25 +55,25 @@ class ChooseBackgroundSheet extends StatelessWidget {
               children: [
                 Row(
                   children: [
-                    const Icon(PhosphorIconsBold.image, color: Color(0xFF2E7D32), size: 22),
+                    Icon(PhosphorIconsBold.image, color: palette.brand, size: 22),
                     const SizedBox(width: 8),
                     Text(
                       '更换拼图背景',
-                      style: theme.textTheme.titleMedium?.copyWith(
+                      style: styles.h3.copyWith(
                         fontWeight: FontWeight.bold,
                       ),
                     ),
                   ],
                 ),
                 IconButton(
-                  icon: const Icon(PhosphorIconsBold.x, color: Colors.black54),
+                  icon: Icon(PhosphorIconsBold.x, color: palette.secondaryText),
                   onPressed: () => Navigator.of(context).pop(),
                 ),
               ],
             ),
           ),
 
-          const Divider(height: 1),
+          Divider(height: 1, color: palette.divider),
 
           // 2. Wallpaper 3-Column Grid
           Expanded(
@@ -98,14 +101,14 @@ class ChooseBackgroundSheet extends StatelessWidget {
                     decoration: BoxDecoration(
                       borderRadius: BorderRadius.circular(14),
                       border: Border.all(
-                        color: isSelected ? const Color(0xFF2E7D32) : Colors.black12,
+                        color: isSelected ? palette.brand : palette.divider,
                         width: isSelected ? 3.0 : 1.0,
                       ),
                       boxShadow: [
                         BoxShadow(
                           color: isSelected
-                              ? const Color(0xFF2E7D32).withValues(alpha: 0.35)
-                              : Colors.black12,
+                              ? palette.brand.withValues(alpha: 0.35)
+                              : Colors.black.withValues(alpha: 0.08),
                           blurRadius: isSelected ? 8 : 4,
                           offset: const Offset(0, 2),
                         ),
@@ -119,9 +122,9 @@ class ChooseBackgroundSheet extends StatelessWidget {
                           bgPath,
                           repeat: ImageRepeat.repeat,
                           errorBuilder: (ctx, err, stack) => Container(
-                            color: const Color(0xFFE2E6EA),
-                            child: const Center(
-                              child: Icon(PhosphorIconsBold.imageBroken, color: Colors.black26),
+                            color: palette.surfaceContainerLow,
+                            child: Center(
+                              child: Icon(PhosphorIconsBold.imageBroken, color: palette.disabledText),
                             ),
                           ),
                         ),
@@ -133,8 +136,8 @@ class ChooseBackgroundSheet extends StatelessWidget {
                             right: 6,
                             child: Container(
                               padding: const EdgeInsets.all(3),
-                              decoration: const BoxDecoration(
-                                color: Color(0xFF2E7D32),
+                              decoration: BoxDecoration(
+                                color: palette.brand,
                                 shape: BoxShape.circle,
                               ),
                               child: const Icon(
@@ -152,12 +155,12 @@ class ChooseBackgroundSheet extends StatelessWidget {
                           bottom: 0,
                           child: Container(
                             padding: const EdgeInsets.symmetric(vertical: 4),
-                            color: Colors.black45,
+                            color: Colors.black.withValues(alpha: 0.45),
                             child: Text(
                               '桌板 ${index + 1}',
                               textAlign: TextAlign.center,
-                              style: const TextStyle(
-                                color: Colors.white,
+                              style: TextStyle(
+                                color: palette.primaryText,
                                 fontSize: 11,
                                 fontWeight: FontWeight.w600,
                               ),

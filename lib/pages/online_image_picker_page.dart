@@ -10,7 +10,9 @@ import '../data/models/downloaded_image_item.dart';
 import '../services/app_logger.dart';
 import '../logic/download_manager.dart';
 import '../main.dart';
+import '../theme/app_palette.dart';
 import '../widgets/downloaded_drawer_sheet.dart';
+import '../widgets/game_toast.dart';
 
 enum GallerySite {
   pixabay('Pixabay', 'https://pixabay.com/zh/photos/'),
@@ -316,17 +318,13 @@ class _OnlineImagePickerPageState extends State<OnlineImagePickerPage> {
     if (DownloadManager.instance.isDownloaded(targetUrl) || DownloadManager.instance.isDownloaded(rawUrl)) {
       AppLogger.webview.info('[WebView:DownloadAction] Image already in download cache.');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('该图片已在下载箱中')),
-        );
+        GameToast.show(context, message: '该图片已在下载箱中', type: GameToastType.info);
       }
       return;
     }
 
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('正在下载「${_currentSite.label}」高清图片...')),
-      );
+      GameToast.show(context, message: '正在下载「${_currentSite.label}」高清图片...');
     }
 
     try {
@@ -352,9 +350,7 @@ class _OnlineImagePickerPageState extends State<OnlineImagePickerPage> {
     } catch (e) {
       AppLogger.webview.severe('[WebView:DownloadAction:Error] Download failed: $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('下载图片失败: $e')),
-        );
+        GameToast.show(context, message: '下载图片失败: $e', type: GameToastType.error);
       }
     }
   }
@@ -371,9 +367,7 @@ class _OnlineImagePickerPageState extends State<OnlineImagePickerPage> {
       if (detectedUrl.isEmpty || detectedUrl == 'null') {
         AppLogger.webview.warning('[WebView:Extract:NotFound] No suitable image detected on current page.');
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('未在当前页面检测到高清大图，请点击进入照片详情页后再试')),
-          );
+          GameToast.show(context, message: '未在当前页面检测到高清大图，请点击进入照片详情页后再试', type: GameToastType.warning);
         }
         return;
       }
@@ -386,6 +380,7 @@ class _OnlineImagePickerPageState extends State<OnlineImagePickerPage> {
 
   @override
   Widget build(BuildContext context) {
+    final palette = AppPalette.of(context);
     return PopScope(
       canPop: !_canGoBack,
       onPopInvokedWithResult: (didPop, result) async {
@@ -421,7 +416,7 @@ class _OnlineImagePickerPageState extends State<OnlineImagePickerPage> {
               icon: Icon(
                 PhosphorIconsBold.caretLeft,
                 size: 18,
-                color: _canGoBack ? const Color(0xFF1F2937) : Colors.black26,
+                color: _canGoBack ? palette.primaryText : Colors.black26,
               ),
               onPressed: _canGoBack
                   ? () async {
@@ -465,8 +460,8 @@ class _OnlineImagePickerPageState extends State<OnlineImagePickerPage> {
                         right: 8,
                         child: Container(
                           padding: const EdgeInsets.all(4),
-                          decoration: const BoxDecoration(
-                            color: Color(0xFF4CAF50),
+                          decoration: BoxDecoration(
+                            color: palette.success,
                             shape: BoxShape.circle,
                           ),
                           constraints: const BoxConstraints(minWidth: 16, minHeight: 16),
@@ -493,7 +488,7 @@ class _OnlineImagePickerPageState extends State<OnlineImagePickerPage> {
                   child: LinearProgressIndicator(
                     value: _loadingProgress,
                     backgroundColor: Colors.transparent,
-                    valueColor: const AlwaysStoppedAnimation<Color>(Color(0xFF81C784)),
+                    valueColor: AlwaysStoppedAnimation<Color>(palette.brandLight),
                     minHeight: 3,
                   ),
                 )
@@ -627,19 +622,19 @@ class _OnlineImagePickerPageState extends State<OnlineImagePickerPage> {
                   child: Container(
                     padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                     decoration: BoxDecoration(
-                      color: const Color(0xFF1B5E20),
+                      color: palette.brand,
                       borderRadius: BorderRadius.circular(16),
                       boxShadow: const [
                         BoxShadow(color: Colors.black45, blurRadius: 10, offset: Offset(0, 4)),
                       ],
-                      border: Border.all(color: const Color(0xFF81C784), width: 1.2),
+                      border: Border.all(color: palette.brandLight, width: 1.2),
                     ),
                     child: Row(
                       children: [
-                        const CircleAvatar(
+                        CircleAvatar(
                           radius: 14,
-                          backgroundColor: Color(0xFF4CAF50),
-                          child: Icon(PhosphorIconsBold.check, size: 16, color: Colors.white),
+                          backgroundColor: palette.success,
+                          child: const Icon(PhosphorIconsBold.check, size: 16, color: Colors.white),
                         ),
                         const SizedBox(width: 10),
                         Expanded(
@@ -705,9 +700,9 @@ class _OnlineImagePickerPageState extends State<OnlineImagePickerPage> {
                   child: Container(
                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                     decoration: BoxDecoration(
-                      color: const Color(0xFF2E7D32).withValues(alpha: 0.92),
+                      color: palette.brand.withValues(alpha: 0.92),
                       borderRadius: BorderRadius.circular(18),
-                      border: Border.all(color: const Color(0xFF81C784), width: 1.2),
+                      border: Border.all(color: palette.brandLight, width: 1.2),
                       boxShadow: const [
                         BoxShadow(
                           color: Colors.black45,
@@ -749,14 +744,15 @@ class _OnlineImagePickerPageState extends State<OnlineImagePickerPage> {
   }
 
   Widget _buildSiteSegmentedTabs() {
+    final palette = AppPalette.of(context);
     return Container(
       height: 36,
       margin: const EdgeInsets.symmetric(horizontal: 4),
       padding: const EdgeInsets.all(3),
       decoration: BoxDecoration(
-        color: const Color(0xFFF1F3F4),
+        color: palette.surfaceContainerLow,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: const Color(0xFFE5E7EB), width: 1),
+        border: Border.all(color: palette.divider, width: 1),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -769,13 +765,13 @@ class _OnlineImagePickerPageState extends State<OnlineImagePickerPage> {
               padding: const EdgeInsets.symmetric(horizontal: 10),
               alignment: Alignment.center,
               decoration: BoxDecoration(
-                color: isSelected ? const Color(0xFF2E7D32) : Colors.transparent,
+                color: isSelected ? palette.brand : Colors.transparent,
                 borderRadius: BorderRadius.circular(16),
               ),
               child: Text(
                 site.label,
                 style: TextStyle(
-                  color: isSelected ? Colors.white : const Color(0xFF6B7280),
+                  color: isSelected ? Colors.white : palette.secondaryText,
                   fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
                   fontSize: 12,
                 ),

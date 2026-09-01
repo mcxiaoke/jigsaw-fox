@@ -6,7 +6,10 @@ import 'package:phosphoricons_flutter/phosphoricons_flutter.dart';
 import '../data/models/downloaded_image_item.dart';
 import '../logic/download_manager.dart';
 import '../pages/crop_puzzle_page.dart';
-import 'app_cached_image.dart';
+import '../theme/app_palette.dart';
+import '../theme/app_text_styles.dart';
+import '../widgets/app_cached_image.dart';
+import '../widgets/game_toast.dart';
 
 /// Modal bottom sheet drawer for managing and selecting batch-downloaded online images.
 class DownloadedDrawerSheet extends StatelessWidget {
@@ -25,9 +28,7 @@ class DownloadedDrawerSheet extends StatelessWidget {
     final file = File(item.localPath);
     if (!await file.exists()) {
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('素材文件不存在或已被清理')),
-        );
+        GameToast.show(context, message: '素材文件不存在或已被清理', type: GameToastType.warning);
       }
       return;
     }
@@ -48,18 +49,25 @@ class DownloadedDrawerSheet extends StatelessWidget {
   }
 
   void _confirmClearAll(BuildContext context) {
+    final palette = AppPalette.of(context);
+    final styles = AppTextStyles.of(context);
+
     showDialog<void>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('清空素材库'),
-        content: const Text('确定要清空所有待制作的素材图片吗？（不会影响已经制作成功的拼图关卡）'),
+        backgroundColor: palette.surfaceContainer,
+        title: Text('清空素材库', style: styles.h3.copyWith(color: palette.primaryText)),
+        content: Text(
+          '确定要清空所有待制作的素材图片吗？（不会影响已经制作成功的拼图关卡）',
+          style: styles.body.copyWith(color: palette.secondaryText),
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(),
-            child: const Text('取消'),
+            child: Text('取消', style: TextStyle(color: palette.secondaryText)),
           ),
           FilledButton(
-            style: FilledButton.styleFrom(backgroundColor: Colors.redAccent),
+            style: FilledButton.styleFrom(backgroundColor: palette.error),
             onPressed: () async {
               Navigator.of(ctx).pop();
               await DownloadManager.instance.clearAll();
@@ -73,15 +81,16 @@ class DownloadedDrawerSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
+    final palette = AppPalette.of(context);
+    final styles = AppTextStyles.of(context);
     final media = MediaQuery.of(context);
     final maxHeight = media.size.height * 0.85;
 
     return Container(
       constraints: BoxConstraints(maxHeight: maxHeight),
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      decoration: BoxDecoration(
+        color: palette.surfaceContainer,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -93,7 +102,7 @@ class DownloadedDrawerSheet extends StatelessWidget {
               width: 44,
               height: 4.5,
               decoration: BoxDecoration(
-                color: Colors.black26,
+                color: palette.divider,
                 borderRadius: BorderRadius.circular(3),
               ),
             ),
@@ -111,26 +120,27 @@ class DownloadedDrawerSheet extends StatelessWidget {
                   children: [
                     Row(
                       children: [
-                        const Icon(PhosphorIconsBold.archive, color: Color(0xFFE65100), size: 22),
+                        Icon(PhosphorIconsBold.archive, color: palette.warning, size: 22),
                         const SizedBox(width: 8),
                         Text(
                           '素材库',
-                          style: theme.textTheme.titleMedium?.copyWith(
+                          style: styles.h3.copyWith(
                             fontWeight: FontWeight.bold,
                             fontSize: 18,
+                            color: palette.primaryText,
                           ),
                         ),
                         const SizedBox(width: 6),
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                           decoration: BoxDecoration(
-                            color: const Color(0xFFFFF3E0),
+                            color: palette.warning.withValues(alpha: 0.15),
                             borderRadius: BorderRadius.circular(12),
                           ),
                           child: Text(
                             '${items.length} 张素材',
-                            style: const TextStyle(
-                              color: Color(0xFFE65100),
+                            style: TextStyle(
+                              color: palette.warning,
                               fontWeight: FontWeight.bold,
                               fontSize: 12,
                             ),
@@ -143,8 +153,8 @@ class DownloadedDrawerSheet extends StatelessWidget {
                         if (items.isNotEmpty)
                           TextButton.icon(
                             onPressed: () => _confirmClearAll(context),
-                            icon: const Icon(PhosphorIconsRegular.trash, size: 16, color: Colors.redAccent),
-                            label: const Text('清空全部', style: TextStyle(color: Colors.redAccent, fontSize: 13)),
+                            icon: Icon(PhosphorIconsRegular.trash, size: 16, color: palette.error),
+                            label: Text('清空全部', style: TextStyle(color: palette.error, fontSize: 13)),
                             style: TextButton.styleFrom(
                               visualDensity: VisualDensity.compact,
                               padding: const EdgeInsets.symmetric(horizontal: 8),
@@ -152,7 +162,7 @@ class DownloadedDrawerSheet extends StatelessWidget {
                           ),
                         IconButton(
                           onPressed: () => Navigator.of(context).pop(),
-                          icon: const Icon(PhosphorIconsBold.x, size: 20),
+                          icon: Icon(PhosphorIconsBold.x, size: 20, color: palette.secondaryText),
                           tooltip: '关闭',
                         ),
                       ],
@@ -162,7 +172,7 @@ class DownloadedDrawerSheet extends StatelessWidget {
               );
             },
           ),
-          const Divider(height: 1),
+          Divider(height: 1, color: palette.divider),
 
           // Body: Grid of Downloaded Images or Empty Placeholder
           Expanded(
@@ -176,17 +186,17 @@ class DownloadedDrawerSheet extends StatelessWidget {
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          Icon(PhosphorIconsRegular.archive, size: 56, color: Colors.grey.shade400),
+                          Icon(PhosphorIconsRegular.archive, size: 56, color: palette.disabledText),
                           const SizedBox(height: 12),
-                          const Text(
+                          Text(
                             '素材库暂无图片',
-                            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.black54),
+                            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: palette.secondaryText),
                           ),
                           const SizedBox(height: 6),
-                          const Text(
+                          Text(
                             '点击「相册选图」批量导入本地照片，或在「在线搜图」中一键下载，即可将图片加入素材库随时制作拼图。',
                             textAlign: TextAlign.center,
-                            style: TextStyle(fontSize: 13, color: Colors.black45),
+                            style: TextStyle(fontSize: 13, color: palette.disabledText),
                           ),
                         ],
                       ),
@@ -205,7 +215,7 @@ class DownloadedDrawerSheet extends StatelessWidget {
                   itemCount: items.length,
                   itemBuilder: (context, index) {
                     final item = items[index];
-                    return _buildImageCard(context, item);
+                    return _buildImageCard(context, item, palette, styles);
                   },
                 );
               },
@@ -216,14 +226,19 @@ class DownloadedDrawerSheet extends StatelessWidget {
     );
   }
 
-  Widget _buildImageCard(BuildContext context, DownloadedImageItem item) {
+  Widget _buildImageCard(
+    BuildContext context,
+    DownloadedImageItem item,
+    AppPalette palette,
+    AppTextStyles styles,
+  ) {
     return Container(
       decoration: BoxDecoration(
-        color: Colors.grey.shade50,
+        color: palette.surfaceContainerLow,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.black12),
-        boxShadow: const [
-          BoxShadow(color: Colors.black12, blurRadius: 4, offset: Offset(0, 2)),
+        border: Border.all(color: palette.divider),
+        boxShadow: [
+          BoxShadow(color: Colors.black.withValues(alpha: 0.08), blurRadius: 4, offset: const Offset(0, 2)),
         ],
       ),
       clipBehavior: Clip.antiAlias,
@@ -268,7 +283,7 @@ class DownloadedDrawerSheet extends StatelessWidget {
                   child: Container(
                     padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2.5),
                     decoration: BoxDecoration(
-                      color: const Color(0xFF2E7D32).withValues(alpha: 0.85),
+                      color: palette.brand.withValues(alpha: 0.85),
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: Text(
@@ -293,22 +308,22 @@ class DownloadedDrawerSheet extends StatelessWidget {
               children: [
                 Row(
                   children: [
-                    const Icon(PhosphorIconsRegular.frameCorners, size: 13, color: Colors.black54),
+                    Icon(PhosphorIconsRegular.frameCorners, size: 13, color: palette.secondaryText),
                     const SizedBox(width: 4),
                     Text(
                       item.resolutionLabel,
-                      style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.black87),
+                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: palette.primaryText),
                     ),
                   ],
                 ),
                 const SizedBox(height: 2),
                 Row(
                   children: [
-                    const Icon(PhosphorIconsRegular.hardDrive, size: 13, color: Colors.black45),
+                    Icon(PhosphorIconsRegular.hardDrive, size: 13, color: palette.disabledText),
                     const SizedBox(width: 4),
                     Text(
                       item.fileSizeLabel,
-                      style: const TextStyle(fontSize: 11, color: Colors.black54),
+                      style: TextStyle(fontSize: 11, color: palette.secondaryText),
                     ),
                   ],
                 ),
@@ -325,7 +340,7 @@ class DownloadedDrawerSheet extends StatelessWidget {
                   child: FilledButton.icon(
                     onPressed: () => _makePuzzleFromItem(context, item),
                     style: FilledButton.styleFrom(
-                      backgroundColor: const Color(0xFF2E7D32),
+                      backgroundColor: palette.brand,
                       visualDensity: VisualDensity.compact,
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                       padding: const EdgeInsets.symmetric(vertical: 6),
@@ -340,7 +355,7 @@ class DownloadedDrawerSheet extends StatelessWidget {
                 const SizedBox(width: 6),
                 IconButton(
                   onPressed: () => DownloadManager.instance.removeItem(item.id),
-                  icon: const Icon(PhosphorIconsRegular.trash, size: 16, color: Colors.black45),
+                  icon: Icon(PhosphorIconsRegular.trash, size: 16, color: palette.secondaryText),
                   visualDensity: VisualDensity.compact,
                   tooltip: '删除此图片',
                 ),
