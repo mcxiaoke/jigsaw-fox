@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:phosphoricons_flutter/phosphoricons_flutter.dart';
 
 import '../data/game_repository.dart';
+import '../data/progress_store.dart';
+import '../services/economy_service.dart';
 import '../services/sound_service.dart';
 import '../theme/app_palette.dart';
 import '../theme/app_text_styles.dart';
@@ -25,6 +27,35 @@ class SettingsPage extends StatefulWidget {
 
 class _SettingsPageState extends State<SettingsPage> {
   final _repo = GameRepository.instance;
+  int _totalSolved = 0;
+  int _totalStars = 0;
+  int _coins = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadStats();
+  }
+
+  Future<void> _loadStats() async {
+    final solved = await ProgressStore.instance.getTotalSolved();
+    final stars = await ProgressStore.instance.getTotalStars();
+    if (mounted) {
+      setState(() {
+        _totalSolved = solved;
+        _totalStars = stars;
+        _coins = EconomyService.instance.coins;
+      });
+    }
+  }
+
+  String _formatPlayTime(int seconds) {
+    if (seconds < 60) return '$seconds 秒';
+    final hours = seconds ~/ 3600;
+    final mins = (seconds % 3600) ~/ 60;
+    if (hours > 0) return '$hours 小时 $mins 分';
+    return '$mins 分';
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -54,6 +85,11 @@ class _SettingsPageState extends State<SettingsPage> {
           child: ListView(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
             children: [
+              // Player Identity Card
+              _buildPlayerIdentityCard(palette, styles),
+
+              const SizedBox(height: 18),
+
               // Group 1: Audio & Haptics
               _buildSectionHeader('音效与交互', palette, styles),
               _buildCardContainer([
@@ -254,6 +290,120 @@ class _SettingsPageState extends State<SettingsPage> {
       ),
       child: Column(
         children: children,
+      ),
+    );
+  }
+
+  Widget _buildPlayerIdentityCard(AppPalette palette, AppTextStyles styles) {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [
+            palette.surfaceContainer,
+            palette.surfaceContainerLow,
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: palette.brand.withValues(alpha: 0.25), width: 1.5),
+        boxShadow: [
+          BoxShadow(
+            color: palette.brand.withValues(alpha: 0.08),
+            blurRadius: 16,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          // Fox avatar
+          Container(
+            width: 64,
+            height: 64,
+            decoration: BoxDecoration(
+              color: palette.brand.withValues(alpha: 0.15),
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: palette.brand.withValues(alpha: 0.4), width: 2),
+            ),
+            child: const Center(
+              child: Text('🦊', style: TextStyle(fontSize: 32)),
+            ),
+          ),
+          const SizedBox(width: 16),
+          // Player info
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('拼图玩家', style: styles.h3.copyWith(fontSize: 18)),
+                const SizedBox(height: 4),
+                Text(
+                  '已游玩 ${_formatPlayTime(_repo.totalPlayTimeSeconds)}',
+                  style: styles.caption,
+                ),
+                const SizedBox(height: 10),
+                // Asset HUD
+                Row(
+                  children: [
+                    _buildAssetChip(
+                      icon: PhosphorIconsFill.coins,
+                      value: '$_coins',
+                      color: palette.gold,
+                      palette: palette,
+                      styles: styles,
+                    ),
+                    const SizedBox(width: 8),
+                    _buildAssetChip(
+                      icon: PhosphorIconsFill.star,
+                      value: '$_totalStars',
+                      color: palette.brand,
+                      palette: palette,
+                      styles: styles,
+                    ),
+                    const SizedBox(width: 8),
+                    _buildAssetChip(
+                      icon: PhosphorIconsFill.trophy,
+                      value: '$_totalSolved',
+                      color: palette.success,
+                      palette: palette,
+                      styles: styles,
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAssetChip({
+    required IconData icon,
+    required String value,
+    required Color color,
+    required AppPalette palette,
+    required AppTextStyles styles,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: color.withValues(alpha: 0.25), width: 1),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 13, color: color),
+          const SizedBox(width: 4),
+          Text(
+            value,
+            style: styles.captionBold.copyWith(color: color, fontSize: 12),
+          ),
+        ],
       ),
     );
   }
