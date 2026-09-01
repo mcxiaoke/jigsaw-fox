@@ -1,0 +1,811 @@
+{
+  "version": "4.3",
+  "_comment": "v4.3 on top of v4.2.  Diag2 run (3 tags x 8 x reseed 2 = 48 images) confirmed residual bokeh/blur in Nature:0000 and Cities:0000/0001/0003/0006. Root causes identified and fixed: (F3) 'close-up view with the background still fully sharp' replaced with 'detailed near view with full depth of field' -- 'close-up' is the single strongest bokeh trigger and the qualifying clause was too weak at CFG 1.1; Landscapes had viewpoint_deny blocking it and was clear, proving causation. (F4) 'one clear focal point' in quality_suffix changed to 'clear visual hierarchy' -- 'focal point' implies subject isolation and triggers bokeh. (F7) 'shallow stream/water' in subjects -> 'rocky stream/clear water' -- the model reads 'shallow' as a DOF instruction; Nature:0006 had this and showed confirmed blur. (F8) 'soft overcast/ambient light' -> 'even overcast/ambient light'; 'soft garden/forest/coral' in subjects -> stronger alternatives. (F9) OPTICS entries that started with 'wide-angle view, ' had that prefix dropped to avoid duplicate 'wide-angle view' when viewpoint also says it. (F10) Subject-level spatial rewrite: Nature:0000 and Cities:0000 had all elements stacked in the foreground plane ('in the lower left, in the upper right, along the bottom edge'), which the model reads as macro/close-up composition even without trigger words. Rewritten to wide-scene layout with distributed depth. Workflow defaults also changed: cfg 1.1->1.0, steps 9->8 (official values). v4.2 fixes (F1/F2/F6) inherited unchanged. ",
+  "model_hint": "z-image-turbo-fp8 (Apache 2.0, 9 steps, CFG 1.1)",
+  "critical_note": "CFG is near 1.0 on distilled Turbo models, so NEGATIVE prompts barely work. All constraints are written positively. Never use the words 'jigsaw puzzle' or 'puzzle pieces' in a prompt - some models then draw cut lines into the artwork.",
+  "generation": {
+    "steps": 8,
+    "cfg": 1.0,
+    "sampler": "res_multistep",
+    "scheduler": "simple"
+  },
+  "ratios": {
+    "1:1": {
+      "width": 1024,
+      "height": 1024
+    },
+    "2:3": {
+      "width": 896,
+      "height": 1344
+    },
+    "3:2": {
+      "width": 1344,
+      "height": 896
+    }
+  },
+  "quality_suffix": "deep depth of field, consistent sharpness across the whole image, depth conveyed through scale, overlap and perspective rather than optical blur, clean uncluttered composition with clear visual hierarchy, medium-scale readable details, vibrant saturated colors, clear visual landmarks with meaningful differences in shape, color and scale between regions, rich texture variation continuing into all four corners, no large flat empty areas, no excessive sky or water, no repetitive micro textures, full-bleed artwork",
+  "modifiers": {
+    "lighting": [
+      "golden hour light",
+      "even overcast light",
+      "dappled sunlight",
+      "dramatic side light",
+      "warm interior light",
+      "cool morning light",
+      "raking low sunlight",
+      "diffused window light",
+      "even ambient light",
+      "crisp bright daylight"
+    ],
+    "viewpoint": [
+      "eye-level view",
+      "slightly elevated view",
+      "detailed near view with full depth of field",
+      "medium shot view",
+      "three-quarter view",
+      "low angle view",
+      "high angle view",
+      "flat lay overhead view"
+    ],
+    "atmosphere": [
+      "rich saturated color grading",
+      "warm golden sunlight palette",
+      "vivid jewel-tone colors",
+      "fresh bright daylight tones",
+      "high contrast bold colors",
+      "candy-bright multicolor palette",
+      "earthy warm tones with vivid accents",
+      "teal and warm amber contrast"
+    ]
+  },
+  "tags": [
+    {
+      "id": "Animals",
+      "zh": "动物",
+      "tier": "B",
+      "quota": 100,
+      "ratios": [
+        "1:1"
+      ],
+      "extra": "",
+      "subjects": [
+        "one adult elephant with acacia trees above, dry grass tufts across the foreground, distant hills along the horizon, and dust motes catching the light",
+        "a single tiger with bamboo stalks on either side, dappled foliage above, a rocky outcrop at lower right, and deep forest depth in the distance",
+        "one red fox with autumn ferns scattered across the foreground, fallen leaves scattered across the ground, a mossy stone at right, and warm woodland depth in the distance",
+        "a lone stag with pine trunks at center, mist drifting across the middle ground, rocky ground detail in the foreground, and forest layers in the distance",
+        "one giraffe with acacia branches filling the upper right, dry scrub scattered across the foreground, a distant plain across the ground, and warm sky gradient above",
+        "a single snow leopard with granite boulders scattered across the foreground, scree slopes at right, pale lichen detail on the rocks, and distant peaks in the distance",
+        "one wolf with conifer branches above, snow-dusted rock in the foreground, a frozen stream across the ground, and blue mountain layers in the distance",
+        "a lone bison with prairie wildflowers scattered across the foreground, sagebrush at right, a wooden fence line along the middle ground, and rolling hills in the distance",
+        "one sea lion with kelp fronds at center, tide pool rocks across the foreground, foam across the ground, and open water above",
+        "a single rhinoceros with acacia scrub above, cracked earth across the foreground, scattered stones in the foreground, and layered hills in the distance",
+        "one capuchin monkey with a thick vine crossing the upper left, bromeliads clustered at right, layered canopy depth in the distance, and dappled light throughout",
+        "a lone zebra with acacia trees above, dry grass across the foreground, watering hole reflections in the foreground, and distant plains in the distance"
+      ],
+      "style_pool": "photo",
+      "visual_anchors": [
+        "high-contrast markings and fine fur detail",
+        "varied foliage texture filling the background",
+        "leaf litter and twigs in the foreground",
+        "dappled light patches across the ground"
+      ],
+      "optics": [
+        "small aperture f/8, the animal prominent in the frame with deep focus",
+        "deep focus with the animal and its habitat both sharp"
+      ]
+    },
+    {
+      "id": "Pets",
+      "zh": "宠物",
+      "tier": "B",
+      "quota": 100,
+      "ratios": [
+        "1:1"
+      ],
+      "extra": "",
+      "subjects": [
+        "one ginger cat with potted plants above, a woven rug across the foreground, a bookshelf at right, and warm window light throughout",
+        "a single golden retriever with flower beds scattered across the foreground, garden tools leaning at right, a stone path across the ground, and green foliage in the distance",
+        "one rabbit with straw scattered across the foreground, a wooden hutch frame at right, leafy greens in the foreground, with a sharply detailed garden in the distance",
+        "a lone hamster with stacked books above, pencils across the foreground, a glass jar at right, and a warm desk surface throughout",
+        "one border collie with heather scattered across the foreground, a dry stone wall along the middle ground, grass tufts in the foreground edge, and rolling hills in the distance",
+        "a single kitten with folded fabric scattered across the foreground, an old trunk at right, dust motes in a light shaft, and attic shadows in the distance",
+        "one parrot with a perch branch at center, hanging herbs above, copper pans across the ground, and warm kitchen depth in the distance",
+        "a lone tabby cat with tomato stakes above, garden netting across the background, soil rows in the foreground, and leafy greens at right",
+        "one pug with knitted throws scattered across the foreground, cushions stacked at right, a side table along the upper edge, and cozy interior light throughout",
+        "a single guinea pig with hay scattered in the foreground, a cardboard tunnel at left, leafy greens at right, and lush garden light in the distance",
+        "one puppy with a woven basket at center, boots across the ground, tiled floor across the foreground, and a doorway in the distance",
+        "a lone cat with yarn baskets scattered across the foreground, a sewing box at right, fabric scraps across the bottom edge, and warm indoor light throughout"
+      ],
+      "style_pool": "photo",
+      "visual_anchors": [
+        "colorful fabric and textile patterns",
+        "small household objects filling the corners",
+        "warm wood and woven textures",
+        "varied colored props around the subject"
+      ]
+    },
+    {
+      "id": "Nature",
+      "zh": "自然",
+      "tier": "A",
+      "quota": 140,
+      "ratios": [
+        "1:1"
+      ],
+      "extra": "",
+      "subjects": [
+        "a forest floor scene with an ancient moss-covered tree trunk at center, ferns and toadstools scattered across the ground, hanging vines from the upper branches, and layered canopy depth in the distance",
+        "a large fern frond with mossy stones scattered across the foreground, fallen leaves across the bottom, a small stream at right, and dense forest depth in the distance",
+        "one gnarled old root system with lichen-covered rocks in the foreground, blueberry bushes above, pine needles on the ground, and forest depth in the distance",
+        "a single flowering magnolia branch with blossom clusters above, a weathered wall at left, fallen petals across the ground, with a sharply detailed garden in the distance",
+        "one giant water lily with lily pads spreading to the left edge, a dragonfly above, water ripples across the bottom, and reeds in the distance",
+        "a towering cactus with desert scrub scattered across the foreground, cracked earth across the bottom, distant mesas along the horizon, and warm sky above",
+        "one mossy boulder with ferns clustered in the foreground, a rocky stream at left, overhanging branches above, and dappled forest light throughout",
+        "a single birch trunk with bracken scattered across the foreground, fungi on the bark at right, grass across the ground, and pale woodland depth in the distance",
+        "one cluster of tall bamboo with fallen leaves across the bottom, smaller shoots at center, light shafts through the upper right, and soft green depth in the distance",
+        "a large river stone with rapids foam in the foreground, submerged pebbles across the bottom, mossy banks at right, and flowing water in the distance",
+        "one flowering rhododendron with rock outcrops scattered across the foreground, pine branches above, alpine grass across the ground, and layered slopes in the distance",
+        "a single twisted vine with heart-shaped leaves above, a stone wall across the middle ground, ivy detail at center, and garden depth in the distance"
+      ],
+      "style_pool": "photo",
+      "visual_anchors": [
+        "moss and lichen texture",
+        "varied green tones with seasonal color accents",
+        "leaf litter and twigs in the foreground",
+        "water droplets on surfaces"
+      ],
+      "optics": [
+        "small aperture f/8, deep focus from the foreground to the background",
+        "everything in focus from the near foreground to the far distance"
+      ]
+    },
+    {
+      "id": "Landscapes",
+      "zh": "风景",
+      "tier": "A",
+      "quota": 140,
+      "ratios": [
+        "1:1"
+      ],
+      "extra": "",
+      "subjects": [
+        "a stone farmhouse with terraced rice fields stepping down nearby, cypress trees above, irrigation channels across the foreground, and layered hills in the distance",
+        "one winding river with moraine rocks scattered across the foreground, alpine flowers across the bottom, a glacier tongue above, and layered peaks in the distance",
+        "a red rock mesa with a river bend in the foreground, scrub vegetation across the ground, canyon walls at right, and layered rock strata in the distance",
+        "one lone cypress tree with lavender rows across the foreground, dry stone walls at center, a distant farmhouse at right, and warm hills in the distance",
+        "a wooden footbridge with a stream scattered across the foreground, wildflowers across the ground, willow branches above, and meadow depth in the distance",
+        "one volcanic peak with basalt columns in the foreground, moss patches at center, steam vents at right, and scree slopes below",
+        "a lighthouse with cliff rocks scattered across the foreground, breaking surf across the ground, wildflowers at center, and open sea in the distance",
+        "one winding mountain road with switchback curves nearby, pine forest across the middle ground, rocky scree in the foreground, and distant summits in the distance",
+        "a lakeside boathouse with still water reflections in the foreground, reeds in the foreground, forested slopes at right, and mountain layers in the distance",
+        "one covered bridge with a stream scattered across the foreground, autumn foliage above, stone abutments across the bottom, and wooded hills in the distance",
+        "a terraced vineyard with vine rows across the foreground, a cypress lane at center, a stone villa above, and rolling hills in the distance",
+        "one desert arch with sandstone fins nearby, scrub brush across the bottom, layered buttes in the distance, and warm sky above"
+      ],
+      "style_pool": "photo",
+      "visual_anchors": [
+        "layered depth from foreground to the distant horizon",
+        "distinct foreground rocks and wildflowers",
+        "textured cloud formations in the sky",
+        "still water reflections"
+      ],
+      "optics": [
+        "wide-angle lens view with everything in focus",
+        "small aperture f/11, deep focus from the foreground to the horizon",
+        "small aperture f/8, deep focus from the foreground to the horizon",
+        "panoramic wide-angle composition with a small aperture"
+      ],
+      "viewpoint_deny": [
+        "flat lay overhead view"
+      ]
+    },
+    {
+      "id": "Flowers",
+      "zh": "花卉",
+      "tier": "A",
+      "quota": 140,
+      "ratios": [
+        "1:1"
+      ],
+      "extra": "",
+      "subjects": [
+        "a single fully opened peony with unopened buds above, broad leaves scattered across the foreground, dew drops on the petals, with a sharply detailed garden in the distance",
+        "one sunflower with a bee on the seed head, smaller blooms at center, leafy stems across the bottom, and a sunlit field with visible detail in the distance",
+        "a clustered hydrangea head with serrated leaves scattered across the foreground, rain droplets above, a stone edge across the ground, and foliage depth in the distance",
+        "one purple iris with sword leaves at center, a garden path across the bottom, companion blooms above, and layered green foliage in the distance",
+        "a single water lily with lily pads scattered across the foreground, a koi fish nearby, water ripples across the bottom, and pond reflections in the distance",
+        "one rose bloom with thorny stems in the foreground, dew on the petals, companion buds above, and dark foliage depth in the distance",
+        "a tall hollyhock spike with a cottage wall nearby, scattered petals across the ground, companion flowers at right, and warm garden light throughout",
+        "one tulip with soil furrows across the bottom, companion blooms above, a windmill in the distance, and a soft sky gradient above",
+        "a single orchid spray with aerial roots at center, moss on the mount at right, glass reflections above, and greenhouse depth in the distance",
+        "one protea bloom with leathery leaves scattered across the foreground, dried grasses at right, a wooden surface across the bottom, and warm studio light throughout",
+        "a clustered dahlia with bud stems above, garden foliage across the bottom, a watering can at center, and layered garden foliage in the distance",
+        "one cherry blossom branch with dense blossom above, visible bark texture at left, fallen petals across the ground, and soft sky in the distance"
+      ],
+      "style_pool": "photo",
+      "visual_anchors": [
+        "multiple flower species in contrasting colors",
+        "visible petal veins and stamen detail",
+        "dew drops on the petals",
+        "contrasting foliage and stem structure"
+      ]
+    },
+    {
+      "id": "Ocean",
+      "zh": "海洋",
+      "tier": "C",
+      "quota": 50,
+      "ratios": [
+        "1:1"
+      ],
+      "extra": "dense reef and shore detail filling every corner",
+      "avoid": [
+        "empty open water",
+        "blank horizon",
+        "plain sky"
+      ],
+      "subjects": [
+        "a large brain coral colony with schooling fish above, anemones across the foreground, tube sponges across the ground, and reef depth in the distance",
+        "one starfish with barnacle-covered rocks scattered across the foreground, mussel clusters at right, seaweed fronds across the bottom, and clear water above",
+        "a breaking wave curl with foam texture across the bottom, wet sand in the foreground, scattered shells in the foreground, and spray above",
+        "one kelp stalk with fish schooling at center, a rocky seabed across the bottom, light shafts from above, and blue-green depth in the distance",
+        "a moored fishing boat with coiled ropes scattered across the foreground, netting draped at right, crate stacks along the dock, and harbour buildings in the distance",
+        "one weathered pier piling with encrusted mussels in the foreground, hanging rope at right, water reflections across the bottom, and pilings receding in the distance",
+        "a single nautilus shell with pebbles scattered across the foreground, driftwood above, dune grass across the ground, and a detailed shoreline in the distance",
+        "one tide pool with a sea anemone nearby, small fish above, rippled sand across the bottom, and wet rocks around",
+        "a coral-encrusted anchor with textured coral in the foreground, fish at center, sand ripples across the bottom, and blue water depth in the distance",
+        "one giant clam with reef fish above, coral rubble across the bottom, feather stars at right, and filtered light above",
+        "a lighthouse rock base with crashing foam scattered across the foreground, kelp at center, wet stone texture across the bottom, and spray above",
+        "one lobster trap with coiled rope scattered across the foreground, buoy floats above, a wooden dock across the bottom, and harbour detail in the distance"
+      ],
+      "style_pool": "photo",
+      "visual_anchors": [
+        "brightly colored tropical fish",
+        "varied blue and teal water tones",
+        "rippled sand and gravel texture",
+        "barnacles and encrusting texture on hard surfaces"
+      ],
+      "optics": [
+        "small aperture f/8, deep focus from the foreground to the background",
+        "everything in focus from the near foreground to the far distance"
+      ]
+    },
+    {
+      "id": "Birds",
+      "zh": "鸟类",
+      "tier": "B",
+      "quota": 100,
+      "ratios": [
+        "1:1"
+      ],
+      "extra": "",
+      "subjects": [
+        "a single barn owl with a stone window frame nearby, straw scattered across the foreground, weathered timber across the bottom, and dark barn interior in the distance",
+        "one scarlet macaw with a thick branch in the foreground, bromeliads above, tangled vines across the top, and green canopy depth in the distance",
+        "a lone flamingo with calm water reflections in the foreground, algae patterns in the foreground, reed stems at right, and mud flat colors throughout",
+        "one hummingbird with a trumpet flower scattered across the foreground, buds above, leaf detail across the ground, with a sharply detailed garden in the distance",
+        "a single kingfisher with a mossy branch at center, riffled water across the bottom, pebbles in the foreground, and stream depth in the distance",
+        "one peacock with tail feathers spreading across the right, stonework scattered across the foreground, ivy overhead edge, and garden depth in the distance",
+        "a lone heron with cattails scattered across the foreground, lily pads across the bottom, still water reflections at right, and reed bed depth in the distance",
+        "one eagle with a cliff face nearby, twisted nest branches in the foreground, lichen detail on the rock, and distant ridges in the distance",
+        "a single puffin with clifftop grass scattered across the foreground, sea foam across the bottom, rocky ledges at right, and open water in the distance",
+        "one toucan with a fruit-bearing branch above, broad leaves scattered across the foreground, canopy shadows in the distance, and dappled light throughout",
+        "a lone swan with reed beds at center, water ripples across the bottom, willow branches above, and pond reflections throughout",
+        "one woodpecker with bark texture filling the left, wood chips in the foreground, ivy across the ground, and dense forest depth in the distance"
+      ],
+      "style_pool": "photo",
+      "visual_anchors": [
+        "iridescent feather detail with sharp color transitions",
+        "clusters of berries or seed heads on the branch",
+        "wood grain and bark texture",
+        "bright contrasting plumage patches"
+      ],
+      "optics": [
+        "small aperture f/8, the bird prominent in the frame with deep focus",
+        "deep focus with the bird and the background both sharp"
+      ]
+    },
+    {
+      "id": "Cities",
+      "zh": "城市",
+      "tier": "A",
+      "quota": 140,
+      "ratios": [
+        "1:1"
+      ],
+      "extra": "",
+      "subjects": [
+        "a wide street corner with a flower-boxed cafe at left, cobbled pavement extending into the distance, old town facades lining both sides, and hanging signs above",
+        "one neon-lit market stall with lanterns strung across the top, produce crates scattered across the foreground, steam above, and crowded stalls in the distance",
+        "a single fountain with outdoor cafe tables scattered across the foreground, awnings above, cobblestone patterns across the bottom, and square facades in the distance",
+        "one canal bridge with moored boats scattered across the foreground, iron railings along the foreground, waterside facades at right, and reflections across the bottom",
+        "a lone tram with wet street reflections across the bottom, umbrellas above, lit shopfronts at right, and rainy city depth in the distance",
+        "one ornate subway entrance with tiled pillars nearby, a street lamp above, poster panels along the wall, and city traffic in the distance",
+        "a covered shopping arcade with vaulted glass above, mosaic floor across the bottom, kiosk stalls at center, and ironwork detail throughout",
+        "one red telephone box with paving stones across the foreground, a stone wall above, climbing ivy at right, and a quiet street in the distance",
+        "a single clock tower with rooftops spreading across the bottom, chimneys at center, laundry lines above, and layered city depth in the distance",
+        "one street food cart with steam rising above, stools across the foreground, hanging bulbs across the top, and market stalls in the distance",
+        "a grand train station hall with a departure board above, travelers silhouetted across the middle, tiled floor in the foreground, and arched windows above",
+        "one canal-side house with flower boxes in the foreground, moored bicycles at right, water reflections across the bottom, and stepped gables in the distance"
+      ],
+      "style_pool": "photo",
+      "visual_anchors": [
+        "neon signs and shopfront lettering",
+        "striped awnings and hanging signage",
+        "cobblestone or paved street texture",
+        "warm lit windows across the facades"
+      ],
+      "optics": [
+        "wide-angle street view with everything in focus",
+        "small aperture f/11, deep focus along the whole street",
+        "small aperture f/8, deep focus from the foreground to the far end"
+      ],
+      "viewpoint_deny": [
+        "flat lay overhead view"
+      ]
+    },
+    {
+      "id": "Architecture",
+      "zh": "建筑",
+      "tier": "A",
+      "quota": 140,
+      "ratios": [
+        "1:1"
+      ],
+      "extra": "",
+      "subjects": [
+        "a gothic cathedral portal with carved saints in the arch, gargoyles above, a rose window above, and weathered stonework across the bottom",
+        "one half-timbered Tudor house with exposed beams across the facade, leaded glass windows above, flower boxes across the ground, and a cobbled street in front",
+        "a Moroccan riad archway with zellige tilework across the wall, a fountain scattered across the foreground, potted plants at right, and shaded courtyard depth in the distance",
+        "one stone castle gatehouse with crenellations across the top, ivy climbing at center, a drawbridge in the foreground, and moat water across the ground",
+        "a Venetian palazzo facade with arched balconies above, shuttered windows across the middle, canal water across the ground, and reflections throughout",
+        "one pagoda with layered eaves across the top, carved brackets nearby, hanging bells above, and garden foliage across the ground",
+        "a Barcelona modernist balcony with organic stone curves nearby, mosaic detail across the railing, wrought iron above, and warm facade in the distance",
+        "one wooden stave church with shingled roofs across the top, carved dragon heads at the eaves, moss on the timbers, and grass across the ground",
+        "a Roman aqueduct with repeating arches across the middle ground, masonry joints visible, scrub in the foreground, and a dusty plain in the distance",
+        "one mosque dome with geometric tilework across the drum, arched windows in the foreground, a minaret at right, and sky above",
+        "a Chinese courtyard gate with lattice windows nearby, carved door panels in the center, stone drums in the foreground, and tiled eaves above",
+        "one Himalayan monastery with stacked roofs across the middle, prayer flags above, a stone stair in the foreground, and mountain slopes in the distance"
+      ],
+      "style_pool": "photo",
+      "visual_anchors": [
+        "brick and stone joint detail across the walls",
+        "carved ornament and ironwork detail",
+        "contrasting roof tiles and slates",
+        "planted flowerbeds and climbing greenery"
+      ],
+      "optics": [
+        "wide-angle architectural view, small aperture f/11, everything in focus",
+        "small aperture f/8, the whole structure and its surroundings in focus",
+        "wide-angle view showing the full building with its setting in focus"
+      ],
+      "viewpoint_deny": [
+        "flat lay overhead view"
+      ]
+    },
+    {
+      "id": "Food",
+      "zh": "美食",
+      "tier": "A",
+      "quota": 140,
+      "ratios": [
+        "1:1"
+      ],
+      "extra": "",
+      "subjects": [
+        "a wheel of aged cheese with bread loaves above, olive bowls across the foreground, herb sprigs across the board, and a linen cloth across the ground",
+        "one layer cake with berries on top, a cake stand beneath, pastry crumbs scattered across the foreground, and a marble counter across the ground",
+        "a bowl of ramen with a soft-boiled egg nearby, nori sheets above, chopsticks across the bowl, and scallions scattered on top",
+        "one loaf of crusty bread with a bread knife in the foreground, flour dusting across the board, olive oil above, and a linen cloth beneath",
+        "a stack of pancakes with berries above, syrup dripping down the side, a coffee cup above, and linen across the bottom",
+        "one fish fillet with lemon wedges in the foreground, herb sprigs across the top, cracked pepper on the surface, and a slate board beneath",
+        "a bowl of borscht with a swirl of cream in the center, dill above, rye bread at center, and a linen napkin across the ground",
+        "one apple pie with lattice crust across the top, a pie dish beneath, scattered flour in the foreground, and a wooden table across the ground",
+        "a cheese board with grapes above, honeycomb nearby, crackers across the board, and a slate surface beneath",
+        "one taco trio with cilantro on top, lime wedges in the foreground, salsa bowls above, and a wooden board across the ground",
+        "a roast chicken with roasted vegetables around, herbs across the top, a carving knife in the foreground, and an iron pan beneath",
+        "one chocolate tart with cacao nibs scattered nearby, gold leaf flecks on top, a fork in the foreground, and a dark marble surface beneath"
+      ],
+      "style_pool": "photo",
+      "visual_anchors": [
+        "contrasting colored ingredients and garnishes",
+        "textured table linen or wooden board surface",
+        "glazed and glossy surface highlights",
+        "scattered crumbs herbs and spices"
+      ]
+    },
+    {
+      "id": "Art",
+      "zh": "艺术",
+      "tier": "A",
+      "quota": 140,
+      "ratios": [
+        "1:1"
+      ],
+      "extra": "",
+      "subjects": [
+        "a botanical study of one flowering plant with labeled seed pods in the foreground, root detail in the foreground, aged paper texture throughout, and aged ink borders",
+        "one harbor scene with sailing boats nearby, figures on the dock in the foreground, rigging lines above, and painterly sky in the distance",
+        "a single pottery vessel with fruit arranged scattered across the foreground, a pewter jug at right, drapery across the bottom, and dark oil-painting background in the distance",
+        "one medieval village square with timbered houses nearby, market stalls across the middle, a well in the foreground, and soft watercolor washes throughout",
+        "an illuminated letter with vine borders curling at the corners, gold leaf across the panel, small figures in the foreground, and parchment texture throughout",
+        "one art nouveau poster figure with flowing organic lines across the background, floral motifs at the corners, decorative borders, and flat color blocks throughout",
+        "a persian miniature garden with patterned borders across the edges, figures in the foreground, cypress trees at right, and dense decorative detail throughout",
+        "one mountainscape with mist bands across the middle ground, pine silhouettes in the foreground, a distant pagoda above, and ink wash textures throughout",
+        "a still life of one pewter tankard with glassware nearby, fruit across the foreground, drapery across the bottom, and chiaroscuro lighting throughout",
+        "one folk art tree of life with birds in the branches, flowers across the border, symmetrical leaves, and flat decorative color throughout",
+        "a frescoed architectural panel with figures in the foreground, painted columns at right, gilded frames above, and aged plaster texture throughout",
+        "one ukiyo-e wave with a distant boat above, foam claws across the top, layered blue tones, and flat woodblock printing texture throughout"
+      ],
+      "style_pool": "illust",
+      "visual_anchors": [
+        "visible brushstrokes and paint texture",
+        "contrasting color blocks and swirls",
+        "ornamental border and corner detail",
+        "aged paper or canvas texture"
+      ]
+    },
+    {
+      "id": "Fantasy",
+      "zh": "奇幻",
+      "tier": "B",
+      "quota": 100,
+      "ratios": [
+        "1:1"
+      ],
+      "extra": "",
+      "subjects": [
+        "an open spellbook with candle flames above, crystal vials across the foreground, scattered scrolls across the ground, and dark study shelves in the distance",
+        "one coiled dragon with treasure coins across the bottom, goblets in the foreground, armor pieces at right, and cave depth in the distance",
+        "a lantern-lit treehouse with rope bridges nearby, carved walkways across the middle, hanging lanterns above, and forest canopy depth in the distance",
+        "one giant glowing mushroom with smaller toadstools scattered across the foreground, floating spores above, moss across the bottom, and twilight forest in the distance",
+        "an alchemist's alembic with glass tubing nearby, herb bundles above, parchment notes across the ground, and candlelight throughout",
+        "one floating island with a waterfall at center, overgrown ruins across the top, dangling vines across the ground, and clouds in the distance",
+        "a forge anvil with glowing embers scattered across the foreground, hanging tools at right, sparks above, and stone masonry in the distance",
+        "one crystal ball with a carved stand beneath, tarot cards in the foreground, velvet drapery at center, and candlelight throughout",
+        "a potion shelf with labeled bottles across the middle, dried herbs hanging above, a brass scale in the foreground, and warm shop light throughout",
+        "one wizard's hat with a staff leaning nearby, star embroidery across the brim, scattered scrolls across the ground, and study shadows in the distance",
+        "a treasure chest with spilled coins in the foreground, necklaces draped nearby, gem clusters above, and torchlight throughout",
+        "one enchanted doorway with glowing runes across the frame, ivy in the foreground, mist across the ground, and forest depth in the distance"
+      ],
+      "style_pool": "illust",
+      "visual_anchors": [
+        "glowing magical light sources",
+        "metallic and gemstone highlights",
+        "carved runes and ornate engravings",
+        "layered mysterious depth in the background"
+      ]
+    },
+    {
+      "id": "Space",
+      "zh": "太空",
+      "tier": "C",
+      "quota": 50,
+      "ratios": [
+        "1:1"
+      ],
+      "extra": "dense star field and instrument detail filling all edges",
+      "avoid": [
+        "empty black void",
+        "lone planet on black"
+      ],
+      "subjects": [
+        "a ringed gas giant with banded storms across the planet, a moon above, star field filling the corners, and nebula clouds in the distance",
+        "one astronaut with cratered regolith across the bottom, Earth rising above, helmet reflections, and a star-filled sky above",
+        "a control console with cable bundles nearby, monitor panels across the top, switch rows across the ground, and cabin structure in the distance",
+        "one nebula core with dust filaments across the corners, embedded star clusters in the foreground, glowing gas streams, and deep field stars throughout",
+        "a rover with wheel tracks across the bottom, rock samples in the foreground, an antenna above, and dusty terrain in the distance",
+        "one comet with a dust plume streaming nearby, ice fissures across the surface, background stars filling the corners, and sun glow nearby",
+        "a space station module with solar panels at center, radiator fins at right, Earth limb across the bottom, and star field above",
+        "one observatory dome with a telescope silhouette inside, control screens in the foreground, cable runs along the floor, and a night sky above",
+        "a terraforming dome with crop rows across the bottom, irrigation pipes nearby, habitat modules above, and dusty sky in the distance",
+        "one planet surface with canyon cracks across the middle, boulders in the foreground, an atmospheric haze band above, and a second moon above",
+        "a launch gantry with exhaust flames scattered across the foreground, steel trusses across the frame, fuel lines at right, and dawn sky in the distance",
+        "one alien landscape with crystalline spires nearby, twin suns above, mineral streaks across the ground, and layered mountains in the distance"
+      ],
+      "style_pool": "illust",
+      "visual_anchors": [
+        "bright nebula clouds in pink and blue",
+        "lit control panels and indicator lights",
+        "metallic hull plates and rivet detail",
+        "a dense star field filling the dark areas"
+      ]
+    },
+    {
+      "id": "Transportation",
+      "zh": "交通",
+      "tier": "A",
+      "quota": 140,
+      "ratios": [
+        "1:1"
+      ],
+      "extra": "",
+      "subjects": [
+        "a steam locomotive front with a cowcatcher across the bottom, riveted boiler detail, a signal post above, and platform edge in the foreground",
+        "one vintage car with chrome trim at center, a garage wall in the distance, tool shelves above, and an oil-stained floor across the ground",
+        "a fishing trawler with net piles scattered across the foreground, winch drums at right, gulls above, and harbour water across the ground",
+        "one bicycle with a pegboard wall of tools in the distance, a workbench across the ground, spare wheels at center, and warm workshop light throughout",
+        "a cockpit instrument panel with switch rows across the bottom, dial clusters nearby, a control yoke in the foreground, and window light above",
+        "one suspension bridge tower with cable stays across the top, steel trusses below, water across the ground, and a detailed skyline in the distance",
+        "a hot air balloon with a patchwork canopy across the top, a wicker basket in the foreground, burner flames above, and distant balloons in the distance",
+        "one cable car with a mountain slope scattered across the foreground, pulley gears at center, a cable line across the top, and alpine depth in the distance",
+        "a subway train front with tunnel lights above, rail tracks across the bottom, a platform edge at right, and tiled tunnel walls in the distance",
+        "one cargo ship with stacked containers across the deck, a crane above, mooring lines across the ground, and harbour water in the foreground",
+        "a vintage motorcycle with a leather saddle in the foreground, chrome exhaust nearby, cobblestones across the ground, and a garage wall in the distance",
+        "one tram interior with wooden benches nearby, hanging straps across the top, brass fittings nearby, and windows along the upper edge"
+      ],
+      "style_pool": "photo",
+      "visual_anchors": [
+        "polished metal and brass fittings",
+        "riveted plates and mechanical joints",
+        "bold colored livery and paintwork",
+        "detailed surroundings with signage and structures"
+      ],
+      "optics": [
+        "medium shot with the vehicle prominent and filling most of the frame, deep focus",
+        "small aperture f/8, deep focus across the whole scene"
+      ],
+      "viewpoint_deny": [
+        "flat lay overhead view"
+      ]
+    },
+    {
+      "id": "People",
+      "zh": "人物",
+      "tier": "B",
+      "quota": 100,
+      "ratios": [
+        "1:1"
+      ],
+      "extra": "a small group in a crowded detailed setting, faces not the focus",
+      "subjects": [
+        "a market vendor stall with produce crates scattered across the foreground, hanging fabrics across the top, shoppers silhouetted at right, and market depth in the distance",
+        "one parade float with costumed figures on top, banners above, confetti across the frame, and spectator crowds across the ground",
+        "a craftsman's workbench with hand tools hanging above, wood shavings across the bench, a half-finished piece in the foreground, and workshop depth in the distance",
+        "one restaurant pass with stacked plates nearby, steam above, hanging pans across the top, and cooks working in the background",
+        "a fishing wharf with net menders scattered across the foreground, moored boats at right, crate stacks across the ground, and harbour buildings in the distance",
+        "one dance floor with paper lanterns across the top, couples in the middle, a wooden floor in the foreground, and decoration strings at the edges",
+        "a library reading room with bookshelves across the back, desk lamps nearby, readers silhouetted nearby, and warm light throughout",
+        "one harvest field with pickers across the middle ground, crate stacks scattered across the foreground, a cart nearby, and field rows receding in the distance",
+        "a tea house counter with teapots in the foreground, steam above, hanging menus above, and patrons along the back",
+        "one climbing wall with colorful holds across the surface, a climber in the middle, chalk dust in the foreground, and safety mats across the ground",
+        "a street barber corner with a mirrored station nearby, tools on the counter, a chair in the foreground, and passersby in the distance",
+        "one train platform with luggage in the foreground, a departure board above, travelers silhouetted at right, and canopy structure above"
+      ],
+      "style_pool": "photo",
+      "visual_anchors": [
+        "patterned clothing and textiles",
+        "colorful market goods and produce",
+        "handmade craft objects on display",
+        "warm string lights and lanterns"
+      ]
+    },
+    {
+      "id": "Sports",
+      "zh": "运动",
+      "tier": "B",
+      "quota": 100,
+      "ratios": [
+        "1:1"
+      ],
+      "extra": "",
+      "subjects": [
+        "a climbing wall with colorful holds across the surface, ropes hanging nearby, chalk bags across the foreground, and mats across the ground",
+        "one tennis court with a net across the middle, ball hoppers in the foreground, a racket leaning at right, and court lines receding in the distance",
+        "a ski slope with moguls across the foreground, pine trees at center, a chairlift cable above, and mountain layers in the distance",
+        "one racing bicycle with cobblestones across the bottom, spectators along the left edge, team banners above, and a street scene in the distance",
+        "a boxing gym with a heavy bag in the center, speed bag above, wall mirrors at left, and worn floorboards across the bottom",
+        "one marina dock with sailboat masts across the top, coiled ropes in the foreground, fenders at center, and water across the ground",
+        "a skate ramp with a board mid-air above, grind rails nearby, graffiti across the back wall, and concrete ground below",
+        "one golf green with a flagstick above, a sand bunker scattered across the foreground, rough grass around, and tree lines in the distance",
+        "a swimming pool with lane ropes across the water, starting blocks in the foreground, a scoreboard above, and deck tiles below",
+        "one dojo interior with a training dummy nearby, weapon racks across the back, mats across the ground, and banners above",
+        "a stadium stand with tiered seating across the frame, flags above, banners along the front, and crowd texture throughout",
+        "one archery target with arrows clustered in the center, a bow leaning in the foreground, grass across the bottom, and a field backdrop in the distance"
+      ],
+      "style_pool": "photo",
+      "visual_anchors": [
+        "high-visibility fluorescent equipment colors",
+        "textured ground surface with tracks and markings",
+        "branded banners and signage",
+        "equipment straps and buckle detail"
+      ]
+    },
+    {
+      "id": "Seasons",
+      "zh": "四季",
+      "tier": "A",
+      "quota": 140,
+      "ratios": [
+        "1:1"
+      ],
+      "extra": "",
+      "subjects": [
+        "a leaf-covered park bench with fallen leaves across the foreground, a lantern above, tree trunks at right, and a path receding in the distance",
+        "one blossoming apple tree with long grass across the bottom, beehives in the foreground, a fence line nearby, and spring light throughout",
+        "a summer rose arch with a stone path across the bottom, a watering can scattered across the foreground, foliage at center, and garden depth in the distance",
+        "one Christmas market stall with garlands across the top, gift boxes scattered across the foreground, lanterns nearby, and snowy figures in the distance",
+        "a harvest wheat sheaf with pumpkins scattered across the foreground, wooden crates at right, an autumn hedgerow in the distance, and warm field light throughout",
+        "one bluebell carpet with fern fronds nearby, a fallen log across the middle, tree trunks above, and diffused woodland light throughout",
+        "a vineyard row with grape clusters in the foreground, trellis wires across the frame, soil furrows in the foreground, and sunlit hills in the distance",
+        "one snowy village street with sleds scattered across the foreground, wreaths on the doors, footprints across the snow, and stacked firewood at right",
+        "a spring vegetable patch with seedling trays in the foreground, cloches above, a watering can nearby, and rain barrels in the distance",
+        "one autumn orchard ladder with windfall apples across the bottom, crates in the foreground, branches above, and warm orchard light throughout",
+        "a lakeside summer dock with reeds scattered across the foreground, a rowboat at right, a picnic basket in the foreground, and sunlit water in the distance",
+        "one pumpkin patch with hay bales above, corn stalks at center, soil rows across the bottom, and autumn sky above"
+      ],
+      "style_pool": "photo",
+      "visual_anchors": [
+        "seasonal produce and harvest objects",
+        "strong seasonal foliage color",
+        "textile decorations and wreaths",
+        "weathered wood and wicker textures"
+      ],
+      "optics": [
+        "small aperture f/11, deep focus throughout",
+        "small aperture f/8, deep focus throughout",
+        "wide-angle seasonal landscape with everything in focus"
+      ]
+    },
+    {
+      "id": "Holidays",
+      "zh": "节日",
+      "tier": "A",
+      "quota": 140,
+      "ratios": [
+        "1:1"
+      ],
+      "extra": "",
+      "subjects": [
+        "a decorated Christmas tree with wrapped gifts across the bottom, ornaments nearby, tinsel strands above, and a fireplace at center",
+        "one Halloween porch with carved pumpkins scattered across the foreground, cobwebs across the upper right, a wreath on the door, and fallen leaves along the steps",
+        "an Easter table with painted eggs in the foreground, a woven nest nearby, spring blooms above, and a linen cloth across the ground",
+        "one Diwali doorway with a rangoli pattern across the bottom, oil lamps in the foreground, marigold garlands above, and warm wall light throughout",
+        "a New Year's Eve square with fireworks across the top, confetti in the foreground, string lights at center, and a crowd silhouette below",
+        "one Thanksgiving table with a roast in the center, gourds in the foreground, corn stalks nearby, and candles along the back",
+        "a Lunar New Year stall with red lanterns across the top, firecracker strings nearby, banners above, and market goods in the foreground",
+        "one carnival float with feathered panels across the front, sequin detail throughout, a masked figure above, and parade flags above",
+        "a midsummer wreath with wildflowers woven throughout, ribbons in the foreground, a wooden table beneath, and garden greenery in the distance",
+        "one harvest table with a cornucopia in the center, grapes in the foreground, squash nearby, and candles along the back",
+        "a birthday table with a layered cake in the center, streamers across the top, party hats in the foreground, and wrapped gifts at right",
+        "one lantern festival scene with floating lanterns across the sky, water reflections below, paper craft detail in the foreground, and warm glow throughout"
+      ],
+      "style_pool": "illust",
+      "visual_anchors": [
+        "ornaments and hanging decorations",
+        "patterned gift wrap and ribbons",
+        "warm candlelight and string lights",
+        "festive garlands across the edges"
+      ]
+    },
+    {
+      "id": "Abstract",
+      "zh": "抽象",
+      "tier": "C",
+      "quota": 50,
+      "ratios": [
+        "1:1"
+      ],
+      "extra": "one organic non-repeating texture with a clear focal area of highest density",
+      "avoid": [
+        "grids",
+        "stripes",
+        "regular tiling",
+        "checkerboard",
+        "uniform noise"
+      ],
+      "subjects": [
+        "a swirl of marbled ink with irregular veins spreading outward, pigment pools in the foreground, feathered edges at the corners, and varied density throughout",
+        "one splash of iridescent paint with droplets scattered outward, cracked paint texture nearby, layered pigment in the foreground, and color shifts across the corners",
+        "an extreme close-up of weathered bark with deep grooves running diagonally, lichen patches above, color variation across the surface, and irregular edges",
+        "one rusted metal surface with flaking paint nearby, pitting across the center, oxidation blooms at the corners, and layered color throughout",
+        "an extreme close-up of rock strata with mineral bands running across, crystal pockets above, fracture lines nearby, and color transitions at the edges",
+        "one flowing acrylic pour with organic cells clustered in the center, lacing patterns at the edges, varied pigment density, and iridescent sheen throughout",
+        "an extreme close-up of soap foam with bubbles of varied size, color fringes at the edges, a dense cluster in the center, and reflections throughout",
+        "one cracked mud surface with irregular polygons spreading out, mineral stains in the foreground, curled edges, and earthy color variation throughout",
+        "a molten glass streak with trapped bubbles in the center, swirl lines at the edges, iridescent layering, and color transitions at the corners",
+        "one fossil ammonite surface with suture lines radiating outward, mineral matrix at the corners, crystal pockets nearby, and varied tone throughout",
+        "an extreme close-up of woven fibers with irregular twists across the surface, a dense knot in the center, color variation at the edges, and depth shadows throughout",
+        "one oil-on-water pattern with a dense swirl in the middle, feathered rainbow edges, thin film bands at the corners, and iridescent color throughout"
+      ],
+      "style_pool": "illust",
+      "visual_anchors": [
+        "strong dark outlines separating color fields",
+        "jewel tone color blocks",
+        "iridescent and metallic color shifts",
+        "organic cells and marbled veining"
+      ]
+    },
+    {
+      "id": "Cartoon",
+      "zh": "卡通",
+      "tier": "C",
+      "quota": 50,
+      "ratios": [
+        "1:1"
+      ],
+      "extra": "one clear main with a fully rendered detailed background",
+      "avoid": [
+        "flat empty background",
+        "solid color backdrop"
+      ],
+      "subjects": [
+        "a treehouse with rope bridges nearby, lanterns strung across, carved walkways below, and dense forest canopy in the distance",
+        "one pirate ship with billowing sails across the top, barrels scattered across the foreground, coiled rope at right, and ocean waves across the ground",
+        "a bakery storefront with bread loaves in the window, awning stripes above, crates in the foreground, and cobblestone street below",
+        "one fantasy market stall with lanterns across the top, potion bottles nearby, hanging banners above, and crowded stalls in the distance",
+        "a cartoon train with a ticket booth nearby, timetable boards above, travelers along the platform, and steam across the top",
+        "one greenhouse with dense potted plants throughout, watering cans scattered across the foreground, a potting bench at right, and glass panes above",
+        "a flying airship with rigging lines across the frame, cargo crates in the foreground, clouds at the corners, and a propeller nearby",
+        "one castle courtyard with pennants across the top, a carriage in the foreground, market stalls at right, and cobblestones across the ground",
+        "a cozy kitchen with hanging pans across the top, a bread oven nearby, ingredient jars nearby, and a checkered floor below",
+        "one underwater coral house with kelp gardens nearby, fish swimming across, bubble streams above, and sandy ground below",
+        "a woodland animal burrow with a carved door in the center, flower boxes in the foreground, a stone path below, and foliage throughout",
+        "one whimsical windmill with turning blades across the top, a flower garden in the foreground, a stream nearby, and rolling hills in the distance"
+      ],
+      "style_pool": "illust",
+      "visual_anchors": [
+        "rounded chunky props with thick outlines",
+        "a candy colored high saturation palette",
+        "patterned cobbled or tiled ground",
+        "decorative details packed into the corners"
+      ]
+    },
+    {
+      "id": "Others",
+      "zh": "其他",
+      "tier": "A",
+      "quota": 80,
+      "ratios": [
+        "1:1"
+      ],
+      "extra": "",
+      "subjects": [
+        "a workbench with hand tools in the foreground, a pegboard wall of implements in the distance, a vise nearby, and shavings across the ground",
+        "one apothecary cabinet with labeled bottles across the shelves, dried herbs above, a brass scale nearby, and drawer pulls throughout",
+        "a collector's desk with mineral specimens in the foreground, a magnifier nearby, specimen trays at right, and cabinet drawers in the distance",
+        "one haberdashery shelf with thread spools in rows, buttons scattered across the foreground, ribbon spools at right, and lace trim across the ground",
+        "a potter's wheel with a clay vessel in the center, tools nearby, glaze jars above, and wet clay on the surface",
+        "one antique map with a compass rose in the foreground, rhumb lines across the surface, sea creatures nearby, and aged paper edges throughout",
+        "a wall of clocks with pendulums in the foreground, exposed gears nearby, Roman dials nearby, and brass fittings throughout",
+        "one butterfly display with pinned specimens in rows, labeled drawers below, a magnifier in the foreground, and glass case reflections throughout",
+        "a cobbler's bench with leather pieces across the surface, wooden lasts nearby, thread spools nearby, and a half-finished shoe in front",
+        "one stamp collector's desk with album pages across the surface, sorted sheets nearby, tweezers nearby, and a magnifier in front",
+        "a cartographer's table with rolled charts nearby, brass dividers in the center, ink pots above, and parchment across the surface",
+        "one musician's corner with a guitar in the foreground, sheet music on a stand, cable coils in the foreground, and a case in the distance"
+      ],
+      "style_pool": "photo",
+      "visual_anchors": [
+        "shelves filled with small labelled objects",
+        "warm wood and patina surfaces",
+        "arranged collections of varied small objects",
+        "glass jars and bottles with colored contents"
+      ]
+    }
+  ],
+  "generated_by": "temp/build_v4_library.py (derived from v3.0)",
+  "active_ratios": [
+    "1:1"
+  ],
+  "style_pools": {
+    "photo": [
+      "photorealistic with crisp natural texture",
+      "high resolution photography with fine detail",
+      "sharp focus throughout with natural lighting",
+      "lifelike realistic rendering with visible surface detail",
+      "crisp detailed photography with high dynamic range",
+      "realistic material rendering with accurate textures",
+      "high detail photographic rendering with a clean finish",
+      "documentary style photography with true to life color"
+    ],
+    "illust": [
+      "richly detailed painterly illustration with layered depth",
+      "textured gouache illustration with visible brushstrokes",
+      "polished 3D rendered illustration with rich surface detail",
+      "classical oil painting with thick impasto brushwork",
+      "detailed risograph print with layered textures",
+      "intricate decorative illustration with dense ornamental detail"
+    ]
+  }
+}
