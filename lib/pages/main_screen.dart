@@ -2,7 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:phosphoricons_flutter/phosphoricons_flutter.dart';
 
 import '../services/sound_service.dart';
-
+import '../theme/app_palette.dart';
+import '../theme/app_text_styles.dart';
 import 'achievements_page.dart';
 import 'how_to_play_page.dart';
 import 'import_pack_page.dart';
@@ -12,7 +13,8 @@ import 'tabs/events_tab_view.dart';
 import 'tabs/home_tab_view.dart';
 import 'tabs/my_puzzles_tab_view.dart';
 
-/// Main screen featuring the 4-tab bottom navigation (Home / Daily / Events / My) with streamlined header.
+/// Main screen featuring the 4-tab bottom navigation (Home / Daily / Events / My)
+/// with game-styled bottom nav: filled icons + amber gold active state glow.
 class MainScreen extends StatefulWidget {
   const MainScreen({super.key});
 
@@ -26,176 +28,61 @@ class _MainScreenState extends State<MainScreen> {
   String get _appBarTitle {
     switch (_currentIndex) {
       case 0:
-        return '主页';
+        return '异形拼图';
       case 1:
-        return '每日';
+        return '每日挑战';
       case 2:
-        return '活动';
+        return '活动专题';
       case 3:
-        return '自制';
+        return '我的拼图';
       default:
-        return '主页';
+        return '异形拼图';
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    final palette = AppPalette.of(context);
+    final styles = AppTextStyles.of(context);
+
     return Scaffold(
+      backgroundColor: palette.surface,
       appBar: AppBar(
+        backgroundColor: palette.surface,
+        foregroundColor: palette.primaryText,
+        elevation: 0.5,
+        scrolledUnderElevation: 0.5,
+        centerTitle: false,
         title: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Image.asset('assets/icons/puzzle_piece_3d.png', width: 24, height: 24),
+            Container(
+              width: 28,
+              height: 28,
+              decoration: BoxDecoration(
+                gradient: AppPalette.brandGradient,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: const Center(
+                child: Text('🦊', style: TextStyle(fontSize: 16)),
+              ),
+            ),
             const SizedBox(width: 8),
             Text(
               _appBarTitle,
-              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 19),
+              style: styles.h3.copyWith(fontSize: 19),
             ),
           ],
         ),
-        centerTitle: false,
         actions: [
-          // Achievements Page
-          IconButton(
-            icon: Image.asset('assets/icons/trophy_3d.png', width: 22, height: 22),
-            tooltip: '成就与统计',
-            onPressed: () async {
-              await AchievementsPage.open(context);
-              setState(() {});
-            },
-          ),
-
-          // 更多菜单 (精致游戏风格下拉菜单：导入关卡包、系统设置、玩法手册)
-          PopupMenuButton<String>(
-            icon: Image.asset('assets/icons/setting.png', width: 22, height: 22),
-            tooltip: '更多选项',
-            elevation: 8,
-            shadowColor: Colors.black38,
-            color: Colors.white,
-            offset: const Offset(0, 48),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(18),
-              side: const BorderSide(color: Color(0xFFE5E7EB), width: 1.2),
-            ),
-            // 去掉默认的 8px 垂直内边距，让首/末行按压高亮触达菜单圆角边界并被裁剪，
-            // 避免按下高亮仍是直角（与 clipBehavior: Clip.antiAlias 配合）。
-            menuPadding: EdgeInsets.zero,
-            clipBehavior: Clip.antiAlias,
-            onSelected: (val) async {
-              if (val == 'import') {
-                final pack = await ImportPackPage.push(context);
-                if (pack != null && mounted) {
-                  SoundService.I.play(Sfx.tap);
-                  setState(() => _currentIndex = 3); // 切换到自制 Tab 查看
-                }
-              } else if (val == 'settings') {
-                await SettingsPage.open(context);
-                if (mounted) setState(() {});
-              } else if (val == 'help') {
-                await HowToPlayPage.open(context);
-              }
-            },
-            itemBuilder: (ctx) => [
-              PopupMenuItem(
-                value: 'import',
-                height: 52,
-                child: Row(
-                  children: [
-                    Container(
-                      width: 32,
-                      height: 32,
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFE8F5E9),
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: const Icon(PhosphorIconsBold.downloadSimple, color: Color(0xFF2E7D32), size: 17),
-                    ),
-                    const SizedBox(width: 12),
-                    const Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Text(
-                          '导入关卡包',
-                          style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.bold, color: Color(0xFF1F2937)),
-                        ),
-                        Text(
-                          '从本地 ZIP 或网络导入',
-                          style: TextStyle(fontSize: 10.5, color: Color(0xFF6B7280)),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-              const PopupMenuDivider(height: 1),
-              PopupMenuItem(
-                value: 'settings',
-                height: 52,
-                child: Row(
-                  children: [
-                    Container(
-                      width: 32,
-                      height: 32,
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFF3F4F6),
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: const Icon(PhosphorIconsBold.gearSix, color: Color(0xFF4B5563), size: 17),
-                    ),
-                    const SizedBox(width: 12),
-                    const Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Text(
-                          '游戏设置',
-                          style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.bold, color: Color(0xFF1F2937)),
-                        ),
-                        Text(
-                          '音效、排布与触感设置',
-                          style: TextStyle(fontSize: 10.5, color: Color(0xFF6B7280)),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-              const PopupMenuDivider(height: 1),
-              PopupMenuItem(
-                value: 'help',
-                height: 52,
-                child: Row(
-                  children: [
-                    Container(
-                      width: 32,
-                      height: 32,
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFE0F2FE),
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: const Icon(PhosphorIconsBold.bookOpenText, color: Color(0xFF0284C7), size: 17),
-                    ),
-                    const SizedBox(width: 12),
-                    const Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Text(
-                          '玩法手册',
-                          style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.bold, color: Color(0xFF1F2937)),
-                        ),
-                        Text(
-                          '拼图规则与技巧指引',
-                          style: TextStyle(fontSize: 10.5, color: Color(0xFF6B7280)),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
+          // Coin badge
+          _CoinBadge(palette: palette),
+          const SizedBox(width: 4),
+          // Trophy button
+          _TrophyButton(palette: palette),
+          const SizedBox(width: 4),
+          // More menu
+          _MoreMenu(palette: palette),
           const SizedBox(width: 8),
         ],
       ),
@@ -213,45 +100,279 @@ class _MainScreenState extends State<MainScreen> {
           const MyPuzzlesTabView(),
         ],
       ),
-      bottomNavigationBar: Container(
-        decoration: const BoxDecoration(
-          color: Colors.white,
-          border: Border(top: BorderSide(color: Color(0xFFE5E7EB), width: 0.8)),
+      bottomNavigationBar: _GameBottomNav(
+        currentIndex: _currentIndex,
+        onTap: (idx) {
+          if (idx != _currentIndex) {
+            SoundService.I.play(Sfx.tap);
+          }
+          setState(() => _currentIndex = idx);
+        },
+        palette: palette,
+      ),
+    );
+  }
+}
+
+// ── Coin Badge ─────────────────────────────
+class _CoinBadge extends StatelessWidget {
+  const _CoinBadge({required this.palette});
+  final AppPalette palette;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.symmetric(vertical: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: palette.surfaceContainer,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: palette.divider, width: 1),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Text('🪙', style: TextStyle(fontSize: 14)),
+          const SizedBox(width: 4),
+          Text(
+            '1,280',
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+              color: palette.gold,
+              fontFeatures: const [FontFeature.tabularFigures()],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Trophy Button ──────────────────────────
+class _TrophyButton extends StatelessWidget {
+  const _TrophyButton({required this.palette});
+  final AppPalette palette;
+
+  @override
+  Widget build(BuildContext context) {
+    return IconButton(
+      icon: Icon(PhosphorIconsFill.trophy, color: palette.brand, size: 22),
+      tooltip: '成就与统计',
+      onPressed: () async {
+        await AchievementsPage.open(context);
+      },
+    );
+  }
+}
+
+// ── More Menu (Import / Settings / Help) ───
+class _MoreMenu extends StatelessWidget {
+  const _MoreMenu({required this.palette});
+  final AppPalette palette;
+
+  @override
+  Widget build(BuildContext context) {
+    return PopupMenuButton<String>(
+      icon: Icon(PhosphorIconsFill.dotsThreeVertical,
+          color: palette.secondaryText, size: 22),
+      tooltip: '更多选项',
+      elevation: 8,
+      shadowColor: Colors.black38,
+      color: palette.surfaceContainer,
+      offset: const Offset(0, 48),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(18),
+        side: BorderSide(color: palette.divider, width: 1.2),
+      ),
+      menuPadding: EdgeInsets.zero,
+      clipBehavior: Clip.antiAlias,
+      onSelected: (val) async {
+        if (val == 'import') {
+          final pack = await ImportPackPage.push(context);
+          if (pack != null && context.mounted) {
+            SoundService.I.play(Sfx.tap);
+          }
+        } else if (val == 'settings') {
+          await SettingsPage.open(context);
+        } else if (val == 'help') {
+          await HowToPlayPage.open(context);
+        }
+      },
+      itemBuilder: (ctx) => [
+        _menuItem(
+          value: 'import',
+          icon: PhosphorIconsBold.downloadSimple,
+          iconBg: palette.success.withValues(alpha: 0.12),
+          iconColor: palette.success,
+          title: '导入关卡包',
+          subtitle: '从本地 ZIP 或网络导入',
         ),
-        child: NavigationBar(
-          selectedIndex: _currentIndex,
-          onDestinationSelected: (idx) {
-            if (idx != _currentIndex) {
-              SoundService.I.play(Sfx.tap);
-            }
-            setState(() => _currentIndex = idx);
-          },
-          backgroundColor: Colors.white,
-          indicatorColor: const Color(0xFFE8F5E9),
-          destinations: const [
-            NavigationDestination(
-              icon: Icon(PhosphorIconsRegular.house),
-              selectedIcon: Icon(PhosphorIconsFill.house, color: Color(0xFF2E7D32)),
-              label: '主页',
+        PopupMenuDivider(height: 1, color: palette.divider),
+        _menuItem(
+          value: 'settings',
+          icon: PhosphorIconsBold.gearSix,
+          iconBg: palette.surfaceContainerLow,
+          iconColor: palette.secondaryText,
+          title: '游戏设置',
+          subtitle: '音效、排布与触感设置',
+        ),
+        PopupMenuDivider(height: 1, color: palette.divider),
+        _menuItem(
+          value: 'help',
+          icon: PhosphorIconsBold.bookOpenText,
+          iconBg: palette.info.withValues(alpha: 0.12),
+          iconColor: palette.info,
+          title: '玩法手册',
+          subtitle: '拼图规则与技巧指引',
+        ),
+      ],
+    );
+  }
+
+  PopupMenuItem<String> _menuItem({
+    required String value,
+    required IconData icon,
+    required Color iconBg,
+    required Color iconColor,
+    required String title,
+    required String subtitle,
+  }) {
+    return PopupMenuItem(
+      value: value,
+      height: 56,
+      child: Row(
+        children: [
+          Container(
+            width: 32,
+            height: 32,
+            decoration: BoxDecoration(
+              color: iconBg,
+              borderRadius: BorderRadius.circular(10),
             ),
-            NavigationDestination(
-              icon: Icon(PhosphorIconsRegular.calendarCheck),
-              selectedIcon: Icon(PhosphorIconsFill.calendarCheck, color: Color(0xFF2E7D32)),
-              label: '每日',
+            child: Icon(icon, color: iconColor, size: 17),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(
+                  title,
+                  style: TextStyle(
+                    fontSize: 13.5,
+                    fontWeight: FontWeight.bold,
+                    color: palette.primaryText,
+                  ),
+                ),
+                Text(
+                  subtitle,
+                  style: TextStyle(
+                    fontSize: 10.5,
+                    color: palette.secondaryText,
+                  ),
+                ),
+              ],
             ),
-            NavigationDestination(
-              icon: Icon(PhosphorIconsRegular.sparkle),
-              selectedIcon: Icon(PhosphorIconsFill.sparkle, color: Color(0xFF2E7D32)),
-              label: '活动',
-            ),
-            NavigationDestination(
-              icon: Icon(PhosphorIconsRegular.images),
-              selectedIcon: Icon(PhosphorIconsFill.images, color: Color(0xFF2E7D32)),
-              label: '自制',
-            ),
-          ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Game-styled Bottom Nav ─────────────────
+class _GameBottomNav extends StatelessWidget {
+  const _GameBottomNav({
+    required this.currentIndex,
+    required this.onTap,
+    required this.palette,
+  });
+
+  final int currentIndex;
+  final ValueChanged<int> onTap;
+  final AppPalette palette;
+
+  @override
+  Widget build(BuildContext context) {
+    final items = [
+      _NavItemData(icon: PhosphorIconsFill.house, label: '主页'),
+      _NavItemData(icon: PhosphorIconsFill.calendarCheck, label: '每日'),
+      _NavItemData(icon: PhosphorIconsFill.sparkle, label: '活动'),
+      _NavItemData(icon: PhosphorIconsFill.images, label: '自制'),
+    ];
+
+    return Container(
+      decoration: BoxDecoration(
+        color: palette.surface,
+        border: Border(top: BorderSide(color: palette.divider, width: 0.8)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.15),
+            blurRadius: 12,
+            offset: const Offset(0, -2),
+          ),
+        ],
+      ),
+      child: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceAround,
+            children: List.generate(items.length, (i) {
+              final item = items[i];
+              final isActive = i == currentIndex;
+              return GestureDetector(
+                onTap: () => onTap(i),
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 200),
+                  curve: Curves.easeOutBack,
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                  decoration: isActive
+                      ? BoxDecoration(
+                          color: palette.brand.withValues(alpha: 0.08),
+                          borderRadius: BorderRadius.circular(16),
+                        )
+                      : null,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      AnimatedScale(
+                        scale: isActive ? 1.1 : 1.0,
+                        duration: const Duration(milliseconds: 200),
+                        curve: Curves.easeOutBack,
+                        child: Icon(
+                          item.icon,
+                          size: 24,
+                          color: isActive ? palette.brand : palette.secondaryText,
+                        ),
+                      ),
+                      const SizedBox(height: 3),
+                      Text(
+                        item.label,
+                        style: TextStyle(
+                          fontSize: 10,
+                          fontWeight:
+                              isActive ? FontWeight.w600 : FontWeight.w500,
+                          color: isActive ? palette.brand : palette.disabledText,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            }),
+          ),
         ),
       ),
     );
   }
+}
+
+class _NavItemData {
+  const _NavItemData({required this.icon, required this.label});
+  final IconData icon;
+  final String label;
 }
