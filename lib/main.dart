@@ -93,86 +93,86 @@ class JigsawPuzzleApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // 品牌锚点：琥珀金 #D4963C 作为种子色，暗色模式默认
-    final scheme = ColorScheme.fromSeed(
-      seedColor: const Color(0xFFD4963C),
-      brightness: Brightness.dark,
-    );
+    const seed = Color(0xFFD4963C);
+    final lightScheme = ColorScheme.fromSeed(seedColor: seed, brightness: Brightness.light);
+    final darkScheme  = ColorScheme.fromSeed(seedColor: seed, brightness: Brightness.dark);
+
     return MaterialApp(
       title: '异形拼图 Jigsaw Puzzle',
       debugShowCheckedModeBanner: false,
       scrollBehavior: const AppScrollBehavior(),
-      theme: ThemeData(
-        brightness: Brightness.dark,
-        colorScheme: scheme,
-        useMaterial3: true,
-        fontFamilyFallback: const ['Microsoft YaHei', 'PingFang SC', 'sans-serif'],
-        // 全局暗色背景
-        scaffoldBackgroundColor: const Color(0xFF1A1D24),
-        // AppBar：暗色半透明 + 品牌色前景
-        appBarTheme: AppBarTheme(
-          backgroundColor: const Color(0xFF1A1D24).withValues(alpha: 0.95),
-          foregroundColor: const Color(0xFFE8EAEE),
-          elevation: 0.5,
-          scrolledUnderElevation: 0.5,
-          centerTitle: false,
-          titleTextStyle: const TextStyle(
-            fontSize: 19,
-            fontWeight: FontWeight.bold,
-            color: Color(0xFFE8EAEE),
-          ),
-        ),
-        // 主按钮统一圆角
-        filledButtonTheme: FilledButtonThemeData(
-          style: FilledButton.styleFrom(
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-            padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 24),
-          ),
-        ),
-        // 分段按钮选中态 = 品牌色
-        segmentedButtonTheme: SegmentedButtonThemeData(
-          style: SegmentedButton.styleFrom(
-            selectedBackgroundColor: scheme.primary,
-            selectedForegroundColor: scheme.onPrimary,
-            backgroundColor: const Color(0xFF252A33),
-            foregroundColor: const Color(0xFF9CA3AF),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            visualDensity: VisualDensity.compact,
-          ),
-        ),
-        // 开关选中态 = 品牌色
-        switchTheme: SwitchThemeData(
-          trackColor: WidgetStateProperty.resolveWith(
-            (states) => states.contains(WidgetState.selected)
-                ? scheme.primary
-                : const Color(0xFF3A3F4A),
-          ),
-          trackOutlineColor: WidgetStateProperty.resolveWith(
-            (states) => states.contains(WidgetState.selected)
-                ? scheme.primary
-                : const Color(0xFF3A3F4A),
-          ),
-          thumbColor: WidgetStateProperty.resolveWith(
-            (states) => states.contains(WidgetState.selected)
-                ? scheme.onPrimary
-                : const Color(0xFF9CA3AF),
-          ),
-        ),
-        // 卡片主题
-        cardTheme: const CardThemeData(
-          color: Color(0xFF252A33),
-          elevation: 0,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.all(Radius.circular(24))),
-          margin: EdgeInsets.zero,
-        ),
-        // 分割线
-        dividerTheme: const DividerThemeData(
-          color: Color(0xFF2E3440),
-          thickness: 1,
-          space: 1,
+      themeMode: ThemeMode.light, // 默认亮色 — 休闲明亮
+      theme: _buildTheme(lightScheme, Brightness.light),
+      darkTheme: _buildTheme(darkScheme, Brightness.dark),
+      home: const MainScreen(),
+    );
+  }
+
+  ThemeData _buildTheme(ColorScheme scheme, Brightness brightness) {
+    return ThemeData(
+      brightness: brightness,
+      colorScheme: scheme,
+      useMaterial3: true,
+      fontFamilyFallback: const ['Microsoft YaHei', 'PingFang SC', 'sans-serif'],
+      scaffoldBackgroundColor: scheme.surface,
+      appBarTheme: AppBarTheme(
+        backgroundColor: scheme.surface,
+        foregroundColor: scheme.onSurface,
+        elevation: 0.5,
+        scrolledUnderElevation: 0.5,
+        centerTitle: false,
+        titleTextStyle: TextStyle(
+          fontSize: 19,
+          fontWeight: FontWeight.bold,
+          color: scheme.onSurface,
         ),
       ),
-      home: const MainScreen(),
+      filledButtonTheme: FilledButtonThemeData(
+        style: FilledButton.styleFrom(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 24),
+        ),
+      ),
+      segmentedButtonTheme: SegmentedButtonThemeData(
+        style: SegmentedButton.styleFrom(
+          selectedBackgroundColor: scheme.primary,
+          selectedForegroundColor: scheme.onPrimary,
+          backgroundColor: scheme.surfaceContainer,
+          foregroundColor: scheme.onSurfaceVariant,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          visualDensity: VisualDensity.compact,
+        ),
+      ),
+      switchTheme: SwitchThemeData(
+        trackColor: WidgetStateProperty.resolveWith(
+          (states) => states.contains(WidgetState.selected)
+              ? scheme.primary
+              : scheme.surfaceContainerHighest,
+        ),
+        trackOutlineColor: WidgetStateProperty.resolveWith(
+          (states) => states.contains(WidgetState.selected)
+              ? scheme.primary
+              : scheme.surfaceContainerHighest,
+        ),
+        thumbColor: WidgetStateProperty.resolveWith(
+          (states) => states.contains(WidgetState.selected)
+              ? scheme.onPrimary
+              : scheme.onSurfaceVariant,
+        ),
+      ),
+      cardTheme: CardThemeData(
+        color: scheme.surfaceContainer,
+        elevation: 0,
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.all(Radius.circular(24)),
+        ),
+        margin: EdgeInsets.zero,
+      ),
+      dividerTheme: DividerThemeData(
+        color: scheme.outlineVariant,
+        thickness: 1,
+        space: 1,
+      ),
     );
   }
 }
