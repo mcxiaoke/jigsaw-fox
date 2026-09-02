@@ -81,7 +81,7 @@ class _MyPuzzlesTabViewState extends State<MyPuzzlesTabView> {
       if (mounted) {
         GameToast.show(
           context,
-          icon: Icons.error_outline,
+          icon: PhosphorIconsRegular.warning,
           message: '选择图片失败: $e',
           type: GameToastType.error,
         );

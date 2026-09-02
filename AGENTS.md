@@ -6,6 +6,7 @@
 - 如果要使用`python`可以用这里的 `C:\Home\Develop\venv` 可自由安装pip包
 
 ## 开发测试
+- 代码格式：对有改动的代码运行 `dart format` ，禁止全仓库运行格式化工具
 - 普通测试: 改代码后运行 `flutter analyze` 和 `flutter test` 测试通过
 - 编译验证: 运行 `flutter build windows --debug` 验证编译无错误
 

@@ -70,10 +70,12 @@ class _HomeTabViewState extends State<HomeTabView> {
     }
     if (_selectedTag != 'all') {
       list = list.where((l) {
-        if (_selectedTag == 'animal')
+        if (_selectedTag == 'animal') {
           return l.index % 5 == 1 || l.index % 5 == 3;
-        if (_selectedTag == 'landscape')
+        }
+        if (_selectedTag == 'landscape') {
           return l.index % 5 == 2 || l.index % 5 == 0;
+        }
         if (_selectedTag == 'bird') return l.index % 5 == 2;
         if (_selectedTag == 'art') return l.index % 5 == 4;
         if (_selectedTag == 'architecture') return l.index % 5 == 0;

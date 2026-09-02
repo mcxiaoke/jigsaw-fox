@@ -43,8 +43,9 @@ class SnapshotStore {
         p.join(Directory.systemTemp.path, 'jigsaw_snapshots'),
       );
       try {
-        if (!await _snapshotsDir!.exists())
+        if (!await _snapshotsDir!.exists()) {
           await _snapshotsDir!.create(recursive: true);
+        }
       } catch (_) {}
       _initialized = true;
       _cleanupTempFiles();

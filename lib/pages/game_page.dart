@@ -350,14 +350,18 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
   }
 
   String _canonicalIdForSave() {
-    if (widget.canonicalId != null && widget.canonicalId!.isNotEmpty)
+    if (widget.canonicalId != null && widget.canonicalId!.isNotEmpty) {
       return widget.canonicalId!;
-    if (widget.levelIndex != null)
+    }
+    if (widget.levelIndex != null) {
       return GameRepository.canonicalForLevel(widget.levelIndex!);
-    if (widget.dailyDateStr != null)
+    }
+    if (widget.dailyDateStr != null) {
       return GameRepository.canonicalForDaily(widget.dailyDateStr!);
-    if (widget.customId != null)
+    }
+    if (widget.customId != null) {
       return GameRepository.canonicalForCustom(widget.customId!);
+    }
     return '';
   }
 

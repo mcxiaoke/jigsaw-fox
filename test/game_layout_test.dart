@@ -1061,10 +1061,12 @@ void main() {
 
     game.boardState = game.boardState.copyWith(
       pieces: game.boardState.pieces.map((p) {
-        if (p.id == 1)
+        if (p.id == 1) {
           return p.copyWith(nx: out1[0], ny: out1[1], clusterId: 888);
-        if (p.id == 2)
+        }
+        if (p.id == 2) {
           return p.copyWith(nx: out2[0], ny: out2[1], clusterId: 888);
+        }
         return p;
       }).toList(),
     );

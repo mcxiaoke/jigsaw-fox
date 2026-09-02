@@ -510,8 +510,9 @@ class _CropPuzzlePageState extends State<CropPuzzlePage> {
                           ValueListenableBuilder<Matrix4>(
                             valueListenable: _transformController,
                             builder: (context, matrix, _) {
-                              if (_decodedImage == null)
+                              if (_decodedImage == null) {
                                 return const SizedBox(height: 24);
+                              }
                               final currentScale = matrix.getMaxScaleOnAxis();
                               final imgW = _decodedImage!.width.toDouble();
                               final baseSize = _calculateBaseSize(

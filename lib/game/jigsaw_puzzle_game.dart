@@ -442,8 +442,9 @@ class JigsawPuzzleGame extends FlameGame
 
     // 仅针对在棋盘外部/散落区域的游离碎片进行视口安全收拢，处于合法棋盘范围内的碎片随棋盘整体自适应，严禁误 Clamp
     final freeComponents = _pieces.values.where((p) {
-      if (p.isInTray || p.isLocked || p == _holdingPiece || p.isDragging)
+      if (p.isInTray || p.isLocked || p == _holdingPiece || p.isDragging) {
         return false;
+      }
       final pState = _boardState.pieceById(p.id);
       // 若处于合法棋盘归一化空间内，受棋盘矩阵直接保护
       final isOnBoardDomain =
@@ -2023,10 +2024,12 @@ class JigsawPuzzleGame extends FlameGame
       if (comp == null ||
           comp.isDragging ||
           comp == _holdingPiece ||
-          comp.isInTray)
+          comp.isInTray) {
         continue;
-      if (holdingClusterId != null && comp.clusterId == holdingClusterId)
+      }
+      if (holdingClusterId != null && comp.clusterId == holdingClusterId) {
         continue;
+      }
 
       final visualW = comp.size.x * comp.scale.x;
       final visualH = comp.size.y * comp.scale.y;

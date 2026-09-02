@@ -73,7 +73,7 @@ class _EventLevelsPageState extends State<EventLevelsPage> {
       if (mounted) {
         GameToast.show(
           context,
-          icon: Icons.error_outline,
+          icon: PhosphorIconsRegular.warning,
           message: '图片加载失败: $e',
           type: GameToastType.error,
         );

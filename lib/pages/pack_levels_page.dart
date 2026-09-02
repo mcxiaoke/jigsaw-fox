@@ -85,7 +85,7 @@ class _PackLevelsPageState extends State<PackLevelsPage> {
         } else {
           GameToast.show(
             context,
-            icon: Icons.error_outline,
+            icon: PhosphorIconsRegular.warning,
             message: '删除失败，请重试',
             type: GameToastType.error,
           );
@@ -106,8 +106,8 @@ class _PackLevelsPageState extends State<PackLevelsPage> {
     if (!imageFile.existsSync()) {
       GameToast.show(
         context,
-        icon: Icons.error_outline,
-        message: '关卡图片文件不存在',
+          icon: PhosphorIconsRegular.warning,
+          message: '关卡图片文件不存在',
         type: GameToastType.error,
       );
       return;

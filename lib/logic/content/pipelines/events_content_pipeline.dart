@@ -111,8 +111,9 @@ class EventsContentPipeline {
 
       // 触发 Auto-GC 垃圾回收：自动清理 disabled 活动的本地沙盒目录
       final gcCount = await performAutoGc();
-      if (gcCount > 0)
+      if (gcCount > 0) {
         AppLogger.events.info('Auto-GC deleted $gcCount disabled events');
+      }
 
       // 持久化到缓存
       await _persistToCache();
