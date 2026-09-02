@@ -7,7 +7,6 @@ import '../logic/models/puzzle_state.dart';
 import '../services/app_logger.dart';
 import 'game_repository.dart';
 import 'models/custom_puzzle_item.dart';
-import 'models/daily_challenge.dart';
 import 'models/level_item.dart';
 import 'progress_store.dart';
 import 'snapshot_store.dart';
@@ -37,17 +36,11 @@ class MigrationService {
   Future<void> migrateIfNeeded({
     required SharedPreferences prefs,
     required List<LevelItem> levels,
-    required List<DailyChallengeItem> dailyChallenges,
     required List<CustomPuzzleItem> customPuzzles,
   }) async {
     final alreadyMigratedV3 = prefs.getBool(_keyMigrated) ?? false;
     if (!alreadyMigratedV3) {
-      await _migrateLegacyPrefsSnapshots(
-        prefs,
-        levels,
-        dailyChallenges,
-        customPuzzles,
-      );
+      await _migrateLegacyPrefsSnapshots(prefs, levels, customPuzzles);
     }
 
     final alreadyMigratedV33 = prefs.getBool(_keyV33Migrated) ?? false;
@@ -60,7 +53,6 @@ class MigrationService {
   Future<void> _migrateLegacyPrefsSnapshots(
     SharedPreferences prefs,
     List<LevelItem> levels,
-    List<DailyChallengeItem> dailyChallenges,
     List<CustomPuzzleItem> customPuzzles,
   ) async {
     AppLogger.repo.info(
@@ -95,39 +87,6 @@ class MigrationService {
         } catch (e, st) {
           AppLogger.repo.warning(
             'MigrationService: failed for level ${level.index}',
-            e,
-            st,
-          );
-        }
-      }
-    }
-
-    // 每日挑战
-    for (final daily in dailyChallenges) {
-      final snapJson = daily.savedSnapshotJson;
-      if (snapJson != null && snapJson.isNotEmpty && !daily.isCompleted) {
-        try {
-          final cid = GameRepository.canonicalForDaily(daily.date);
-          final map = jsonDecode(snapJson) as Map<String, dynamic>;
-          final state = PuzzleBoardState.fromJson(map);
-          final enriched = state.copyWith(
-            canonicalId: cid,
-            difficultyKey: state.effectiveDifficultyKey,
-            updatedAt: DateTime.now(),
-            createdAt: state.createdAt ?? DateTime.now(),
-          );
-          await SnapshotStore.instance.save(enriched);
-          await ProgressStore.instance.updateProgress(
-            canonicalId: cid,
-            progressPercent: daily.progressPercent,
-            hasSnapshot: true,
-            activeDifficultyKey: enriched.effectiveDifficultyKey,
-            snapshotKeys: [enriched.effectiveDifficultyKey],
-          );
-          count++;
-        } catch (e, st) {
-          AppLogger.repo.warning(
-            'MigrationService: failed for daily ${daily.date}',
             e,
             st,
           );

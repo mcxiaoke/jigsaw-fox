@@ -8,6 +8,7 @@ import '../../data/resume_helper.dart';
 import '../../data/snapshot_store.dart';
 import '../../logic/cache/image_cache_manager.dart';
 import '../../logic/content/app_content.dart';
+import '../../logic/image_source.dart';
 import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
 import '../../widgets/app_cached_image.dart';
@@ -242,12 +243,9 @@ class _HomeTabViewState extends State<HomeTabView> {
     final allLevels = _repo.levels;
     final filteredLevels = _getFilteredLevels(allLevels);
     final now = DateTime.now();
-    final todayStr =
-        '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
-    final todayDaily = _repo.dailyChallenges.firstWhere(
-      (d) => d.date == todayStr,
-      orElse: () => _repo.dailyChallenges.first,
-    );
+    final todayDaily = AppContent.instance.isInitialized
+        ? AppContent.instance.manager.getTodayDailyLevel()
+        : null;
 
     return RefreshIndicator(
       color: palette.brand,
@@ -557,7 +555,7 @@ class _DailyBanner extends StatelessWidget {
           fit: StackFit.expand,
           children: [
             AppCachedImage(
-              imagePathOrUrl: todayDaily.assetPath,
+              imagePathOrUrl: todayDaily?.imagePathOrUrl ?? assetSamples[0],
               fit: BoxFit.cover,
               targetDimension: ThumbnailDimension.eventCover,
             ),

@@ -103,9 +103,11 @@ class ContentManager {
             ),
         // 预备当月每日挑战
         () async {
-          final currentMonth = manifest.dailyModule.currentMonth.isNotEmpty
-              ? manifest.dailyModule.currentMonth
-              : _formatCurrentMonth(overrideToday ?? DateTime.now());
+          final currentMonth = overrideToday != null
+              ? _formatCurrentMonth(overrideToday)
+              : (manifest.dailyModule.currentMonth.isNotEmpty
+                    ? manifest.dailyModule.currentMonth
+                    : _formatCurrentMonth(DateTime.now()));
           if (manifest.dailyModule.zipUrlPattern.isNotEmpty) {
             final ok = await dailyPipeline.ensureMonthReady(
               yyyyMm: currentMonth,

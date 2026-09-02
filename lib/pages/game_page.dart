@@ -418,10 +418,11 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
           snapshotJson: snapshot,
         );
       } else if (widget.dailyDateStr != null) {
-        await _repo.updateDailyProgress(
-          dateStr: widget.dailyDateStr!,
+        await _repo.updateGenericProgress(
+          canonicalId: GameRepository.canonicalForDaily(widget.dailyDateStr!),
           progressPercent: percent,
           snapshotJson: snapshot,
+          difficultyHint: _effectiveDifficulty ?? widget.difficulty,
         );
       } else if (widget.customId != null) {
         await _repo.updateCustomProgress(
@@ -525,13 +526,14 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
         timeSeconds: _seconds,
       );
     } else if (widget.dailyDateStr != null) {
-      await _repo.updateDailyProgress(
-        dateStr: widget.dailyDateStr!,
+      await _repo.updateGenericProgress(
+        canonicalId: GameRepository.canonicalForDaily(widget.dailyDateStr!),
         progressPercent: 100,
         isCompleted: true,
         completedPieceCount: actualPieces,
         difficultyKey: dkey,
         timeSeconds: _seconds,
+        difficultyHint: _effectiveDifficulty ?? widget.difficulty,
       );
     } else if (widget.customId != null) {
       await _repo.updateCustomProgress(

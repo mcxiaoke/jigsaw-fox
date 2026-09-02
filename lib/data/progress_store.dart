@@ -239,6 +239,18 @@ class ProgressStore {
     }
   }
 
+  /// 同步读取单关卡通用进度（直接从已初始化的内存 Prefs 读取）
+  LevelProgress getLevelProgress(String canonicalId) {
+    final str = _prefs?.getString(_keyFor(canonicalId));
+    if (str == null) return LevelProgress(canonicalId: canonicalId);
+    try {
+      final map = jsonDecode(str) as Map<String, dynamic>;
+      return LevelProgress.fromJson(map);
+    } catch (_) {
+      return LevelProgress(canonicalId: canonicalId);
+    }
+  }
+
   /// 批量高效加载全部已保存的 LevelProgress（单次遍历 prefs keys，消除 N+1）
   Future<Map<String, LevelProgress>> loadAllProgress() async {
     await init();

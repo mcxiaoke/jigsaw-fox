@@ -1,13 +1,19 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:path/path.dart' as p;
 import 'package:phosphoricons_flutter/phosphoricons_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../data/game_repository.dart';
-import '../../data/models/daily_challenge.dart';
+import '../../data/progress_store.dart';
 import '../../data/resume_helper.dart';
 import '../../data/snapshot_store.dart';
+import '../../logic/content/app_content.dart';
+import '../../logic/content/models/canonical_id.dart';
+import '../../logic/content/models/puzzle_level_item.dart';
 import '../../logic/image_source.dart';
+import '../../logic/puzzle_model.dart';
 import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
 import '../../widgets/app_cached_image.dart';
@@ -22,8 +28,6 @@ class DailyTabView extends StatefulWidget {
 }
 
 class _DailyTabViewState extends State<DailyTabView> {
-  final _repo = GameRepository.instance;
-
   static const String _keyDailyFoldPrefs = 'jigsaw_daily_fold_v1';
   final Set<String> _expandedMonthKeys = {};
 
@@ -31,10 +35,20 @@ class _DailyTabViewState extends State<DailyTabView> {
   void initState() {
     super.initState();
     final now = DateTime.now();
-    _expandedMonthKeys.add(
-      '${now.year}-${now.month.toString().padLeft(2, '0')}',
-    );
+    final curMonth = '${now.year}-${now.month.toString().padLeft(2, '0')}';
+    _expandedMonthKeys.add(curMonth);
     _loadFoldPrefs();
+    AppContent.instance.contentUpdateNotifier.addListener(_onContentUpdate);
+  }
+
+  @override
+  void dispose() {
+    AppContent.instance.contentUpdateNotifier.removeListener(_onContentUpdate);
+    super.dispose();
+  }
+
+  void _onContentUpdate() {
+    if (mounted) setState(() {});
   }
 
   Future<void> _loadFoldPrefs() async {
@@ -66,26 +80,106 @@ class _DailyTabViewState extends State<DailyTabView> {
     await prefs.setStringList(_keyDailyFoldPrefs, _expandedMonthKeys.toList());
   }
 
-  Future<void> _openDaily(DailyChallengeItem item) async {
+  /// 格式化 YYYYMM -> YYYY-MM
+  String _formatMonthKey(String yyyyMm) {
+    if (yyyyMm.length == 6) {
+      return '${yyyyMm.substring(0, 4)}-${yyyyMm.substring(4, 6)}';
+    }
+    return yyyyMm;
+  }
+
+  /// 获取所有可用月份列表 (降序排列)
+  List<String> _getAvailableMonths() {
+    final now = DateTime.now();
+    final nowMm = '${now.year}${now.month.toString().padLeft(2, '0')}';
+    final monthSet = <String>{nowMm};
+    // 默认展示近3个月（当月及前2个月）
+    for (var i = 1; i <= 2; i++) {
+      final prevDate = DateTime(now.year, now.month - i, 1);
+      final prevMm =
+          '${prevDate.year}${prevDate.month.toString().padLeft(2, '0')}';
+      monthSet.add(prevMm);
+    }
+
+    if (AppContent.instance.isInitialized) {
+      final pipeline = AppContent.instance.manager.dailyPipeline;
+      final baseDir = Directory(pipeline.dailyStorageBaseDir);
+      if (baseDir.existsSync()) {
+        try {
+          for (final entity in baseDir.listSync()) {
+            if (entity is Directory) {
+              final name = p.basename(entity.path);
+              if (RegExp(r'^\d{6}$').hasMatch(name)) {
+                monthSet.add(name);
+              }
+            }
+          }
+        } catch (_) {}
+      }
+
+      final manifestMonth =
+          AppContent.instance.manager.currentManifest?.dailyModule.currentMonth;
+      if (manifestMonth != null && manifestMonth.isNotEmpty) {
+        monthSet.add(manifestMonth);
+      }
+    }
+
+    final list = monthSet.toList()..sort((a, b) => b.compareTo(a));
+    return list;
+  }
+
+  int _extractDayNumber(String? dailyDate) {
+    if (dailyDate == null || dailyDate.length < 8) return 1;
+    return int.tryParse(dailyDate.substring(6, 8)) ?? 1;
+  }
+
+  String _formatDailyDateDisplay(String? dailyDate) {
+    if (dailyDate == null || dailyDate.length < 8) return '今日挑战';
+    final m = int.tryParse(dailyDate.substring(4, 6)) ?? 1;
+    final d = int.tryParse(dailyDate.substring(6, 8)) ?? 1;
+    return '$m月$d日 挑战';
+  }
+
+  Future<void> _openDaily(PuzzleLevelItem level) async {
+    if (level.isTimeLocked) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('⏳ 未到解锁时间，敬请期待！'),
+          duration: Duration(seconds: 2),
+        ),
+      );
+      return;
+    }
+
     Uint8List imgBytes;
     try {
-      final bytes = await rootBundle.load(item.assetPath);
-      imgBytes = bytes.buffer.asUint8List();
+      final file = File(level.imagePathOrUrl);
+      if (await file.exists()) {
+        imgBytes = await file.readAsBytes();
+      } else {
+        final bytes = await rootBundle.load(assetSamples[0]);
+        imgBytes = bytes.buffer.asUint8List();
+      }
     } catch (_) {
       final bytes = await rootBundle.load(assetSamples[0]);
       imgBytes = bytes.buffer.asUint8List();
     }
     if (!mounted) return;
-    final canonicalId = GameRepository.canonicalForDaily(item.date);
+
+    final canonicalId = level.id;
+    final progress = ProgressStore.instance.getLevelProgress(canonicalId);
+    final fallbackDifficulty = PuzzleDifficulty.presets[2]; // 4x4
+    final title = _formatDailyDateDisplay(level.dailyDate);
+
     final handled = await ResumeHelper.tryHandleResumeFlow(
       context: context,
       canonicalId: canonicalId,
-      fallbackDifficulty: item.difficulty,
-      isCompleted: item.isCompleted,
-      title: '${item.date} 挑战',
+      fallbackDifficulty: fallbackDifficulty,
+      isCompleted: progress.isCompleted,
+      title: title,
       imageBytes: imgBytes,
-      onClearRepo: (k) => _repo.updateDailyProgress(
-        dateStr: item.date,
+      onClearRepo: (k) => GameRepository.instance.updateGenericProgress(
+        canonicalId: canonicalId,
         progressPercent: 0,
         snapshotJson: null,
       ),
@@ -96,7 +190,8 @@ class _DailyTabViewState extends State<DailyTabView> {
             builder: (_) => GamePage(
               imageBytes: imgBytes,
               difficulty: diff,
-              dailyDateStr: item.date,
+              canonicalId: canonicalId,
+              dailyDateStr: level.dailyDate,
               initialSnapshotJson: jsonStr,
             ),
           ),
@@ -111,29 +206,30 @@ class _DailyTabViewState extends State<DailyTabView> {
       return;
     }
     if (!mounted) return;
-    final progress = await ResumeHelper.loadProgress(canonicalId);
+
     final displayPercent = ResumeHelper.displayProgress(
       progress,
-      item.progressPercent,
-      item.isCompleted,
+      progress.progressPercent,
+      progress.isCompleted,
     );
     if (!mounted) return;
+
     await ChooseDifficultySheet.show(
       context: context,
       imageBytes: imgBytes,
-      initialDifficulty: item.difficulty,
-      completedPieceCounts: item.completedPieceCounts.toSet(),
+      initialDifficulty: fallbackDifficulty,
+      completedPieceCounts: progress.completedPieceCounts.toSet(),
       canonicalId: canonicalId,
-      title: '${item.date} 挑战',
-      imagePathOrUrl: item.assetPath,
+      title: title,
+      imagePathOrUrl: level.imagePathOrUrl,
       savedProgressPercent: displayPercent == 0 ? null : displayPercent,
       onResetProgress: () async {
         final prog = await ResumeHelper.loadProgress(canonicalId);
         if (prog.activeDifficultyKey.isNotEmpty) {
           await ResumeHelper.clearResume(canonicalId, prog.activeDifficultyKey);
         }
-        await _repo.updateDailyProgress(
-          dateStr: item.date,
+        await GameRepository.instance.updateGenericProgress(
+          canonicalId: canonicalId,
           progressPercent: 0,
           snapshotJson: null,
         );
@@ -142,8 +238,9 @@ class _DailyTabViewState extends State<DailyTabView> {
           MaterialPageRoute<void>(
             builder: (_) => GamePage(
               imageBytes: imgBytes,
-              difficulty: item.difficulty,
-              dailyDateStr: item.date,
+              difficulty: fallbackDifficulty,
+              canonicalId: canonicalId,
+              dailyDateStr: level.dailyDate,
               initialSnapshotJson: null,
             ),
           ),
@@ -156,18 +253,15 @@ class _DailyTabViewState extends State<DailyTabView> {
           canonicalId,
           dkey,
         );
-        final fallbackLegacy =
-            (diff.pieceCount == item.difficulty.pieceCount && !item.isCompleted)
-            ? item.savedSnapshotJson
-            : null;
         if (!mounted) return;
         await Navigator.of(context).push(
           MaterialPageRoute<void>(
             builder: (_) => GamePage(
               imageBytes: imgBytes,
               difficulty: diff,
-              dailyDateStr: item.date,
-              initialSnapshotJson: snapJson ?? fallbackLegacy,
+              canonicalId: canonicalId,
+              dailyDateStr: level.dailyDate,
+              initialSnapshotJson: snapJson,
             ),
           ),
         );
@@ -176,19 +270,18 @@ class _DailyTabViewState extends State<DailyTabView> {
     );
   }
 
-  int _calculateStreak(List<DailyChallengeItem> dailyList) {
+  int _calculateStreak() {
     var streak = 0;
     final now = DateTime.now();
     for (var offset = 0; offset < 365; offset++) {
       final date = now.subtract(Duration(days: offset));
       final dateStr =
-          '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
-      final match = dailyList.firstWhere(
-        (item) => item.date == dateStr,
-        orElse: () => dailyList.first,
-      );
-      if (match.date != dateStr) break;
-      if (match.isCompleted) {
+          '${date.year.toString().padLeft(4, '0')}'
+          '${date.month.toString().padLeft(2, '0')}'
+          '${date.day.toString().padLeft(2, '0')}';
+      final cid = CanonicalId.forDaily(dateStr);
+      final prog = ProgressStore.instance.getLevelProgress(cid);
+      if (prog.isCompleted) {
         streak++;
       } else if (offset > 0) {
         break;
@@ -197,46 +290,62 @@ class _DailyTabViewState extends State<DailyTabView> {
     return streak;
   }
 
-  static bool isValidDateStr(String dateStr) {
-    final parts = dateStr.split('-');
-    if (parts.length != 3) return false;
-    final year = int.tryParse(parts[0]) ?? 0;
-    final month = int.tryParse(parts[1]) ?? 0;
-    final day = int.tryParse(parts[2]) ?? 0;
-    if (year < 2000 || year > 2100 || month < 1 || month > 12) return false;
-    final maxDays = DateTime(year, month + 1, 0).day;
-    return day >= 1 && day <= maxDays;
-  }
-
   @override
   Widget build(BuildContext context) {
     final palette = AppPalette.of(context);
     final styles = AppTextStyles.of(context);
-    final dailyList = _repo.dailyChallenges;
     final now = DateTime.now();
-    final todayStr =
-        '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
-    final visibleDailyList = dailyList.where((d) {
-      if (!isValidDateStr(d.date)) return false;
-      return d.date.compareTo(todayStr) <= 0;
-    }).toList();
-    final todayItem = dailyList.firstWhere(
-      (d) => d.date == todayStr,
-      orElse: () => visibleDailyList.isNotEmpty
-          ? visibleDailyList.first
-          : dailyList.first,
-    );
-    final totalCompletedCount = visibleDailyList
-        .where((d) => d.isCompleted)
-        .length;
-    final streak = _calculateStreak(dailyList);
-    final Map<String, List<DailyChallengeItem>> monthGroups = {};
-    for (final item in visibleDailyList) {
-      final monthKey = item.date.substring(0, 7);
-      monthGroups.putIfAbsent(monthKey, () => []).add(item);
+
+    final availableMonths = _getAvailableMonths();
+    final Map<String, List<PuzzleLevelItem>> monthGroups = {};
+
+    PuzzleLevelItem? todayItem;
+    if (AppContent.instance.isInitialized) {
+      todayItem = AppContent.instance.manager.getTodayDailyLevel();
     }
+    final todayStr =
+        '${now.year}${now.month.toString().padLeft(2, '0')}${now.day.toString().padLeft(2, '0')}';
+    final effectiveTodayItem =
+        todayItem ??
+        PuzzleLevelItem(
+          id: CanonicalId.forDaily(todayStr),
+          dailyDate: todayStr,
+          imagePathOrUrl: assetSamples[0],
+          isLocalFile: true,
+          isTimeLocked: false,
+        );
+
+    var totalCompletedCount = 0;
+    var totalVisibleCount = 0;
+
+    for (final monthMm in availableMonths) {
+      final monthKey = _formatMonthKey(monthMm);
+      List<PuzzleLevelItem> levels = [];
+      if (AppContent.instance.isInitialized) {
+        levels = AppContent.instance.manager
+            .getDailyLevelsForMonth(monthMm)
+            .where((lvl) => !lvl.isTimeLocked)
+            .toList();
+      }
+      monthGroups[monthKey] = levels;
+
+      for (final lvl in levels) {
+        totalVisibleCount++;
+        if (ProgressStore.instance.getLevelProgress(lvl.id).isCompleted) {
+          totalCompletedCount++;
+        }
+      }
+    }
+
+    final streak = _calculateStreak();
+
     return RefreshIndicator(
-      onRefresh: () async => setState(() {}),
+      onRefresh: () async {
+        if (AppContent.instance.isInitialized) {
+          await AppContent.instance.syncAll();
+        }
+        if (mounted) setState(() {});
+      },
       color: palette.brand,
       child: CustomScrollView(
         slivers: [
@@ -310,35 +419,42 @@ class _DailyTabViewState extends State<DailyTabView> {
                               overflow: TextOverflow.ellipsis,
                             ),
                             const SizedBox(height: 14),
-                            FilledButton.icon(
-                              onPressed: () => _openDaily(todayItem),
-                              icon: Icon(
-                                todayItem.isCompleted
-                                    ? PhosphorIconsBold.arrowsClockwise
-                                    : PhosphorIconsFill.play,
-                                size: 18,
-                              ),
-                              label: Text(
-                                todayItem.isCompleted
-                                    ? '已通关 (重玩)'
-                                    : (todayItem.progressPercent > 0
-                                          ? '继续挑战'
-                                          : '开始挑战'),
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                              style: FilledButton.styleFrom(
-                                backgroundColor: palette.brand,
-                                foregroundColor: palette.surface,
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(20),
-                                ),
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 18,
-                                  vertical: 8,
-                                ),
-                              ),
+                            Builder(
+                              builder: (context) {
+                                final prog = ProgressStore.instance
+                                    .getLevelProgress(effectiveTodayItem.id);
+                                return FilledButton.icon(
+                                  onPressed: () =>
+                                      _openDaily(effectiveTodayItem),
+                                  icon: Icon(
+                                    prog.isCompleted
+                                        ? PhosphorIconsBold.arrowsClockwise
+                                        : PhosphorIconsFill.play,
+                                    size: 18,
+                                  ),
+                                  label: Text(
+                                    prog.isCompleted
+                                        ? '已通关 (重玩)'
+                                        : (prog.progressPercent > 0
+                                              ? '继续挑战'
+                                              : '开始挑战'),
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                  style: FilledButton.styleFrom(
+                                    backgroundColor: palette.brand,
+                                    foregroundColor: palette.surface,
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(20),
+                                    ),
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 18,
+                                      vertical: 8,
+                                    ),
+                                  ),
+                                );
+                              },
                             ),
                           ],
                         ),
@@ -350,7 +466,7 @@ class _DailyTabViewState extends State<DailyTabView> {
                           width: 130,
                           height: 120,
                           child: AppCachedImage(
-                            imagePathOrUrl: todayItem.assetPath,
+                            imagePathOrUrl: effectiveTodayItem.imagePathOrUrl,
                             fit: BoxFit.cover,
                             errorWidget: Image.asset(
                               assetSamples[0],
@@ -392,7 +508,9 @@ class _DailyTabViewState extends State<DailyTabView> {
                         ),
                         const SizedBox(width: 6),
                         Text(
-                          '每日总进度: $totalCompletedCount/${visibleDailyList.length}',
+                          totalVisibleCount > 0
+                              ? '每日总进度: $totalCompletedCount/$totalVisibleCount'
+                              : '每日挑战',
                           style: styles.bodyBold,
                         ),
                       ],
@@ -432,6 +550,8 @@ class _DailyTabViewState extends State<DailyTabView> {
             ),
           ),
           const SliverToBoxAdapter(child: SizedBox(height: 8)),
+
+          // Monthly Grids
           for (final entry in monthGroups.entries) ...[
             SliverToBoxAdapter(
               child: _buildMonthHeader(
@@ -444,24 +564,41 @@ class _DailyTabViewState extends State<DailyTabView> {
               ),
             ),
             if (_expandedMonthKeys.contains(entry.key)) ...[
-              SliverPadding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 6,
-                ),
-                sliver: SliverGrid(
-                  gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-                    maxCrossAxisExtent: 220,
-                    crossAxisSpacing: 14,
-                    mainAxisSpacing: 14,
-                    childAspectRatio: 1.0,
+              if (entry.value.isEmpty)
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 24),
+                    child: Center(
+                      child: Text(
+                        '暂无当月挑战关卡',
+                        style: TextStyle(
+                          color: palette.secondaryText,
+                          fontSize: 13,
+                        ),
+                      ),
+                    ),
                   ),
-                  delegate: SliverChildBuilderDelegate((context, index) {
-                    final item = entry.value[index];
-                    return _buildDailyCard(item, palette, styles);
-                  }, childCount: entry.value.length),
+                )
+              else
+                SliverPadding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 6,
+                  ),
+                  sliver: SliverGrid(
+                    gridDelegate:
+                        const SliverGridDelegateWithMaxCrossAxisExtent(
+                          maxCrossAxisExtent: 220,
+                          crossAxisSpacing: 14,
+                          mainAxisSpacing: 14,
+                          childAspectRatio: 1.0,
+                        ),
+                    delegate: SliverChildBuilderDelegate((context, index) {
+                      final item = entry.value[index];
+                      return _buildDailyCard(item, palette, styles);
+                    }, childCount: entry.value.length),
+                  ),
                 ),
-              ),
               const SliverToBoxAdapter(child: SizedBox(height: 12)),
             ],
           ],
@@ -473,7 +610,7 @@ class _DailyTabViewState extends State<DailyTabView> {
 
   Widget _buildMonthHeader(
     String monthKey,
-    List<DailyChallengeItem> monthItems,
+    List<PuzzleLevelItem> monthItems,
     AppPalette palette,
     AppTextStyles styles, {
     required bool isExpanded,
@@ -483,7 +620,14 @@ class _DailyTabViewState extends State<DailyTabView> {
     final year = parts.isNotEmpty ? parts[0] : '';
     final month = parts.length > 1 ? int.tryParse(parts[1]) ?? 1 : 1;
     final headerTitle = '$year年$month月';
-    final completedCount = monthItems.where((d) => d.isCompleted).length;
+
+    var completedCount = 0;
+    for (final item in monthItems) {
+      if (ProgressStore.instance.getLevelProgress(item.id).isCompleted) {
+        completedCount++;
+      }
+    }
+
     return InkWell(
       onTap: onToggle,
       borderRadius: BorderRadius.circular(12),
@@ -508,25 +652,26 @@ class _DailyTabViewState extends State<DailyTabView> {
             ),
             Row(
               children: [
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 10,
-                    vertical: 3,
-                  ),
-                  decoration: BoxDecoration(
-                    color: palette.surfaceContainer,
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: palette.divider, width: 0.8),
-                  ),
-                  child: Text(
-                    '已完成 $completedCount/${monthItems.length}',
-                    style: TextStyle(
-                      fontSize: 11.5,
-                      fontWeight: FontWeight.w600,
-                      color: palette.secondaryText,
+                if (monthItems.isNotEmpty)
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 3,
+                    ),
+                    decoration: BoxDecoration(
+                      color: palette.surfaceContainer,
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: palette.divider, width: 0.8),
+                    ),
+                    child: Text(
+                      '已完成 $completedCount/${monthItems.length}',
+                      style: TextStyle(
+                        fontSize: 11.5,
+                        fontWeight: FontWeight.w600,
+                        color: palette.secondaryText,
+                      ),
                     ),
                   ),
-                ),
                 const SizedBox(width: 6),
                 AnimatedRotation(
                   turns: isExpanded ? 0 : 0.5,
@@ -546,10 +691,13 @@ class _DailyTabViewState extends State<DailyTabView> {
   }
 
   Widget _buildDailyCard(
-    DailyChallengeItem item,
+    PuzzleLevelItem item,
     AppPalette palette,
     AppTextStyles styles,
   ) {
+    final progress = ProgressStore.instance.getLevelProgress(item.id);
+    final dayNumber = _extractDayNumber(item.dailyDate);
+
     return InkWell(
       onTap: () => _openDaily(item),
       borderRadius: BorderRadius.circular(18),
@@ -563,7 +711,7 @@ class _DailyTabViewState extends State<DailyTabView> {
           fit: StackFit.expand,
           children: [
             AppCachedImage(
-              imagePathOrUrl: item.assetPath,
+              imagePathOrUrl: item.imagePathOrUrl,
               fit: BoxFit.cover,
               errorWidget: Image.asset(assetSamples[0], fit: BoxFit.cover),
             ),
@@ -591,7 +739,7 @@ class _DailyTabViewState extends State<DailyTabView> {
                 ),
                 alignment: Alignment.center,
                 child: Text(
-                  '${item.dayNumber}',
+                  '$dayNumber',
                   style: TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.bold,
@@ -600,7 +748,7 @@ class _DailyTabViewState extends State<DailyTabView> {
                 ),
               ),
             ),
-            if (item.isCompleted)
+            if (progress.isCompleted)
               Positioned(
                 top: 10,
                 right: 10,
@@ -617,7 +765,7 @@ class _DailyTabViewState extends State<DailyTabView> {
                   ),
                 ),
               )
-            else if (item.progressPercent > 0)
+            else if (progress.progressPercent > 0)
               Positioned(
                 top: 10,
                 right: 10,
@@ -631,7 +779,7 @@ class _DailyTabViewState extends State<DailyTabView> {
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Text(
-                    '${item.progressPercent}%',
+                    '${progress.progressPercent}%',
                     style: TextStyle(
                       fontSize: 11,
                       fontWeight: FontWeight.bold,

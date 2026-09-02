@@ -87,31 +87,37 @@ def main():
         json.dump(main_json, f, ensure_ascii=False, indent=2)
     print(f"[OK] main.json ({len(main_levels)} levels) and main/ images deployed.")
 
-    # 2. 部署每日挑战 daily/ 202608.zip 和 202607.zip (各 31 天)
+    # 2. 部署每日挑战 daily/ 202609.zip (30 天), 202608.zip (31 天), 202607.zip (31 天)
     daily_dir = BASE_DIR / "daily"
     daily_dir.mkdir(exist_ok=True)
-    
-    # 202608.zip
-    daily_zip_path_08 = daily_dir / "202608.zip"
-    with zipfile.ZipFile(daily_zip_path_08, "w", zipfile.ZIP_DEFLATED) as zf:
-        for day in range(1, 32):
-            date_str = f"202608{day:02d}"
-            src_img = src_images[(day + 5) % len(src_images)]
-            ext = src_img.suffix
-            arcname = f"{date_str}{ext}"
-            zf.write(src_img, arcname=arcname)
-            
-    # 202607.zip
-    daily_zip_path_07 = daily_dir / "202607.zip"
-    with zipfile.ZipFile(daily_zip_path_07, "w", zipfile.ZIP_DEFLATED) as zf:
-        for day in range(1, 32):
-            date_str = f"202607{day:02d}"
-            src_img = src_images[(day + 15) % len(src_images)]
-            ext = src_img.suffix
-            arcname = f"{date_str}{ext}"
-            zf.write(src_img, arcname=arcname)
-            
-    print(f"[OK] daily/202608.zip and daily/202607.zip (31 days each) created.")
+
+    def make_daily_zip(yyyy_mm: str, days: int, offset: int):
+        zip_path = daily_dir / f"{yyyy_mm}.zip"
+        with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
+            for day in range(1, days + 1):
+                date_str = f"{yyyy_mm}{day:02d}"
+                src_img = src_images[(day + offset) % len(src_images)]
+                ext = src_img.suffix
+                arcname = f"{date_str}{ext}"
+                zf.write(src_img, arcname=arcname)
+        return zip_path
+
+    # 202609.zip (30 天)
+    make_daily_zip("202609", 30, 0)
+    # 202608.zip (31 天)
+    make_daily_zip("202608", 31, 5)
+    # 202607.zip (31 天)
+    make_daily_zip("202607", 31, 15)
+
+    # 202609.json 列表清单备用
+    daily_json_09 = [
+        f"{HTTP_BASE}/daily/202609/{day:02d}.webp"
+        for day in range(1, 31)
+    ]
+    with open(daily_dir / "202609.json", "w", encoding="utf-8") as f:
+        json.dump(daily_json_09, f, ensure_ascii=False, indent=2)
+
+    print(f"[OK] daily/ 202609.zip (30 days), 202608.zip (31 days), 202607.zip (31 days) created.")
 
     # 3. 部署丰富活动中心 events/
     events_dir = BASE_DIR / "events"
@@ -229,7 +235,7 @@ def main():
     # 4. 部署根清单 manifest.json
     root_manifest = {
         "schemaVersion": 3,
-        "updatedAt": "2026-08-27T14:50:00Z",
+        "updatedAt": "2026-09-02T13:05:00Z",
         "appConfig": {
             "minAppVersion": "1.0.0",
             "notice": "欢迎体验全动态活动与多标签关卡！"
@@ -240,10 +246,10 @@ def main():
                 "version": 120
             },
             "daily": {
-                "currentMonth": "202608",
+                "currentMonth": "202609",
                 "zipUrlPattern": f"{HTTP_BASE}/daily/{{YYYYMM}}.zip",
                 "listUrlPattern": f"{HTTP_BASE}/daily/{{YYYYMM}}.json",
-                "version": 20260827
+                "version": 20260902
             },
             "events": {
                 "url": f"{HTTP_BASE}/events/events.json",

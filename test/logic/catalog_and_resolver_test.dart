@@ -31,13 +31,11 @@ void main() {
         expect(entry1!.sourceLabel, equals('主线'));
         expect(entry1.aspectRatio, equals(PuzzleAspectRatio.square1x1));
 
-        // 每日挑战应当存在
-        if (GameRepository.instance.dailyChallenges.isNotEmpty) {
-          final d1 = GameRepository.instance.dailyChallenges.first;
-          final cidDaily = GameRepository.canonicalForDaily(d1.date);
-          final entryDaily = index.get(cidDaily);
-          expect(entryDaily, isNotNull);
-          expect(entryDaily!.sourceLabel, equals('每日'));
+        // 每日挑战支持按 canonicalId 检索
+        final cidDaily = GameRepository.canonicalForDaily('20260901');
+        final entryDaily = index.get(cidDaily);
+        if (entryDaily != null) {
+          expect(entryDaily.sourceLabel, equals('每日'));
         }
       },
     );

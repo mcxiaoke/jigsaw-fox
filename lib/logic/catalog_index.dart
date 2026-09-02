@@ -95,26 +95,50 @@ class UnifiedCatalogIndex {
     }
 
     // 2. 每日挑战 (daily:yyyyMMdd)
-    for (final daily in repo.dailyChallenges) {
-      final cid = GameRepository.canonicalForDaily(daily.date);
-      map[cid] = CatalogEntry(
-        canonicalId: cid,
-        title: daily.title,
-        imagePathOrUrl: daily.assetPath,
-        isLocalFile: true,
-        sourceLabel: '每日',
-        sourceModule: CanonicalId.prefixDaily,
-        aspectRatio: PuzzleAspectRatio.fromSize(
-          daily.difficulty.cols.toDouble(),
-          daily.difficulty.rows.toDouble(),
-        ),
-        author: daily.author,
-        tags: const ['每日挑战'],
-        addedAt: DateTime.tryParse(daily.date),
-        recommendedDifficulty: SnapshotStore.difficultyKeyFor(daily.difficulty),
-        contextId: daily.date,
-        displaySubtitle: '${daily.date} 挑战',
-      );
+    try {
+      if (AppContent.instance.isInitialized) {
+        final currentMonth =
+            AppContent
+                .instance
+                .manager
+                .currentManifest
+                ?.dailyModule
+                .currentMonth ??
+            '';
+        final months = <String>{};
+        if (currentMonth.isNotEmpty) months.add(currentMonth);
+        final now = DateTime.now();
+        months.add('${now.year}${now.month.toString().padLeft(2, '0')}');
+        for (final m in months) {
+          final levels = AppContent.instance.manager.getDailyLevelsForMonth(m);
+          for (final lvl in levels) {
+            map[lvl.id] = CatalogEntry(
+              canonicalId: lvl.id,
+              title: lvl.displayTitle,
+              imagePathOrUrl: lvl.imagePathOrUrl,
+              isLocalFile: lvl.isLocalFile,
+              sourceLabel: '每日',
+              sourceModule: CanonicalId.prefixDaily,
+              aspectRatio: PuzzleAspectRatio.square1x1,
+              author: '每日挑战',
+              tags: const ['每日挑战'],
+              addedAt: lvl.dailyDate != null && lvl.dailyDate!.length == 8
+                  ? DateTime.tryParse(
+                      '${lvl.dailyDate!.substring(0, 4)}-${lvl.dailyDate!.substring(4, 6)}-${lvl.dailyDate!.substring(6, 8)}',
+                    )
+                  : null,
+              recommendedDifficulty: '6x6',
+              contextId: lvl.dailyDate ?? '',
+              displaySubtitle:
+                  lvl.dailyDate != null && lvl.dailyDate!.length == 8
+                  ? '${lvl.dailyDate!.substring(0, 4)}-${lvl.dailyDate!.substring(4, 6)}-${lvl.dailyDate!.substring(6, 8)} 挑战'
+                  : '${lvl.dailyDate} 挑战',
+            );
+          }
+        }
+      }
+    } catch (e, st) {
+      AppLogger.content.warning('UnifiedCatalogIndex daily scan fail', e, st);
     }
 
     // 3. 自制关卡 (ugc:id)

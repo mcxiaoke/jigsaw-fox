@@ -280,6 +280,62 @@ void main() {
       },
     );
 
+    testWidgets(
+      'ChooseDifficultySheet renders 2:3 vertical preview without square distortion',
+      (tester) async {
+        final imgBytes = base64Decode(
+          'iVBORw0KGgoAAAANSUhEUgAAAMgAAAEsCAIAAAAJmGvpAAADDUlEQVR4nO3UsQ0AIBADsYf9d4YluALJHiDVKWvmDLy2ny+CsKh4LBLCIiEsEsIiISwSwiIhLBLCIiEsEsIiISwSwiIhLBLCIiEsEsIiISwSwiIhLBLCIiEsEsIiISwSwiIhLBLCIiEsEsIiISwSwiIhLBLCIiEsEsIiISwSwiIhLBLCIiEsEsIiISwSwiIhLBLCIiEsEsIiISwSwiIhLBLCIiEsEsIiISwSwiIhLBLCIiEsEsIiISwSwiIhLBLCIiEsEsIiISwSwiIhLBLCIiEsEsIiISwSwiIhLBLCIiEsEsIiISwSwiIhLBLCIiEsEsIiISwSwiIhLBLCIiEsEsIiISwSwiIhLBLCIiEsEsJCWPzDY5EQFglhkRAWCWGREBYJYZEQFglhkRAWCWGREBYJYZEQFglhkRAWCWGREBYJYZEQFglhkRAWCWGREBYJYZEQFglhkRAWCWGREBYJYZEQFglhkRAWCWGREBYJYZEQFglhkRAWCWGREBYJYZEQFglhkRAWCWGREBYJYZEQFglhkRAWCWGREBYJYZEQFglhkRAWCWGREBYJYZEQFglhkRAWCWGREBYJYZEQFglhkRAWCWGREBYJYZEQFglhkRAWCWGREBYJYZEQFglhkRAWCWGREBYJYZEQFglhkRAWCWGREBYJYZEQFglhkRAWCWGREBYJYZEQFglhkRAWCWGREBbC4h8ei4SwSAiLhLBICIuEsEgIi4SwSAiLhLBICIuEsEgIi4SwSAiLhLBICIuEsEgIi4SwSAiLhLBICIuEsEgIi4SwSAiLhLBICIuEsEgIi4SwSAiLhLBICIuEsEgIi4SwSAiLhLBICIuEsEgIi4SwSAiLhLBICIuEsEgIi4SwSAiLhLBICIuEsEgIi4SwSAiLhLBICIuEsEgIi4SwSAiLhLBICIuEsEgIi4SwSAiLhLBICIuEsEgIi4SwSAiLhLBICIuEsEgIi4SwSAiLKVz7qgNXDTaY5AAAAABJRU5ErkJggg==',
+        );
+
+        await tester.pumpWidget(
+          MaterialApp(
+            home: Scaffold(
+              body: Builder(
+                builder: (context) => ElevatedButton(
+                  onPressed: () {
+                    ChooseDifficultySheet.show(
+                      context: context,
+                      imageBytes: imgBytes,
+                      initialDifficulty: const PuzzleDifficulty(
+                        label: '4 × 6 (24 块)',
+                        rows: 6,
+                        cols: 4,
+                      ),
+                      title: '竖屏关卡预览',
+                      onStart: (_) {},
+                    );
+                  },
+                  child: const Text('Open 2:3 Sheet'),
+                ),
+              ),
+            ),
+          ),
+        );
+
+        await tester.tap(find.text('Open 2:3 Sheet'));
+        await tester.pumpAndSettle();
+
+        expect(find.text('2:3 竖屏'), findsOneWidget);
+        // Find AspectRatio widget inside the sheet and verify its ratio is 2/3 (0.6667)
+        final aspectRatioWidgets = tester.widgetList<AspectRatio>(
+          find.byType(AspectRatio),
+        );
+        expect(
+          aspectRatioWidgets.any((ar) => (ar.aspectRatio - 2 / 3).abs() < 0.01),
+          isTrue,
+        );
+
+        // Verify the render box height is greater than its width (vertical, not square!)
+        final stackFinder = find.descendant(
+          of: find.byType(ClipRRect),
+          matching: find.byType(Stack),
+        );
+        final size = tester.getSize(stackFinder.first);
+        expect(size.height, greaterThan(size.width));
+        expect(size.width / size.height, closeTo(2 / 3, 0.05));
+      },
+    );
+
     testWidgets('ChooseDifficultySheet supports custom puzzle deletion', (
       tester,
     ) async {

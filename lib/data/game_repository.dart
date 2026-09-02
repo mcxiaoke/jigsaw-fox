@@ -8,10 +8,8 @@ import '../logic/image_source.dart';
 import '../logic/models/puzzle_state.dart';
 import '../logic/puzzle_model.dart';
 import '../services/app_logger.dart';
-import 'bing_daily_data.dart';
 import 'migration_service.dart';
 import 'models/custom_puzzle_item.dart';
-import 'models/daily_challenge.dart';
 import 'models/level_item.dart';
 import 'progress_store.dart';
 import 'snapshot_store.dart';
@@ -37,7 +35,6 @@ class GameRepository {
   ];
 
   static const String _keyLevelsPrefix = 'jigsaw_level_';
-  static const String _keyDailyPrefix = 'jigsaw_daily_';
   static const String _keyCustomList = 'jigsaw_custom_list';
   static const String _keySoundEnabled = 'jigsaw_setting_sound';
   static const String _keyHapticEnabled = 'jigsaw_setting_haptic';
@@ -53,15 +50,12 @@ class GameRepository {
 
   SharedPreferences? _prefs;
   List<LevelItem> _levels = [];
-  List<DailyChallengeItem> _dailyChallenges = [];
   List<CustomPuzzleItem> _customPuzzles = [];
 
   final ValueNotifier<List<CustomPuzzleItem>> customPuzzlesNotifier =
       ValueNotifier<List<CustomPuzzleItem>>([]);
 
   List<LevelItem> get levels => List.unmodifiable(_levels);
-  List<DailyChallengeItem> get dailyChallenges =>
-      List.unmodifiable(_dailyChallenges);
   List<CustomPuzzleItem> get customPuzzles => List.unmodifiable(_customPuzzles);
 
   bool get soundEnabled => _prefs?.getBool(_keySoundEnabled) ?? true;
@@ -105,18 +99,16 @@ class GameRepository {
       AppLogger.repo.warning('Snapshot/Progress init failed', e, st);
     }
     _initLevels();
-    _initDailyChallenges();
     _initCustomPuzzles();
     if (_prefs != null) {
       await MigrationService.instance.migrateIfNeeded(
         prefs: _prefs!,
         levels: _levels,
-        dailyChallenges: _dailyChallenges,
         customPuzzles: _customPuzzles,
       );
     }
     AppLogger.repo.info(
-      'init done ${sw.elapsedMilliseconds}ms levels=${_levels.length} daily=${_dailyChallenges.length} custom=${_customPuzzles.length}',
+      'init done ${sw.elapsedMilliseconds}ms levels=${_levels.length} custom=${_customPuzzles.length}',
     );
   }
 
@@ -191,53 +183,6 @@ class GameRepository {
     AppLogger.repo.info(
       'initLevels ${list.length} levels completed=${list.where((l) => l.isCompleted).length} unlocked=${list.where((l) => l.isUnlocked).length}',
     );
-  }
-
-  void _initDailyChallenges() {
-    final list = <DailyChallengeItem>[];
-
-    // Load from Bing multi-month dataset
-    for (final item in kBingDailyAll) {
-      final key = '$_keyDailyPrefix${item.dateStr}';
-      final savedStr = _prefs?.getString(key);
-      if (savedStr != null) {
-        try {
-          final json = jsonDecode(savedStr) as Map<String, dynamic>;
-          var daily = DailyChallengeItem.fromJson(json);
-          // Sanitize potential outdated asset path
-          if (!daily.assetPath.startsWith('assets/images/sample_')) {
-            daily = daily.copyWith(assetPath: item.fallbackAsset);
-          }
-          list.add(daily);
-          continue;
-        } catch (e, st) {
-          AppLogger.repo.warning(
-            'Failed to parse daily ${item.dateStr}',
-            e,
-            st,
-          );
-        }
-      }
-
-      final diff = PuzzleDifficulty.presets.firstWhere(
-        (d) => d.rows == item.defaultRows && d.cols == item.defaultCols,
-        orElse: () => PuzzleDifficulty.presets[5],
-      );
-
-      list.add(
-        DailyChallengeItem(
-          id: 'daily_${item.dateStr}',
-          date: item.dateStr,
-          dayNumber: item.dayNumber,
-          title: item.title,
-          author: item.author,
-          assetPath: item.fallbackAsset,
-          difficulty: diff,
-        ),
-      );
-    }
-    _dailyChallenges = list;
-    AppLogger.repo.info('initDaily ${list.length} daily challenges');
   }
 
   void _initCustomPuzzles() {
@@ -546,144 +491,6 @@ class GameRepository {
       canonicalForLevel(levelIndex),
       SnapshotStore.difficultyKeyFor(difficulty),
     );
-  }
-
-  /// Updates daily challenge state.
-  Future<void> updateDailyProgress({
-    required String dateStr,
-    required int progressPercent,
-    String? snapshotJson,
-    bool isCompleted = false,
-    int? completedPieceCount,
-    String? difficultyKey,
-    int timeSeconds = 0,
-  }) async {
-    AppLogger.repo.info(
-      'updateDailyProgress date=$dateStr progress=$progressPercent% completed=$isCompleted pieceCount=$completedPieceCount time=${timeSeconds}s',
-    );
-    final idx = _dailyChallenges.indexWhere((d) => d.date == dateStr);
-    if (idx == -1) {
-      AppLogger.repo.warning('updateDailyProgress not found date=$dateStr');
-      return;
-    }
-
-    var current = _dailyChallenges[idx];
-    final newBestTime = isCompleted
-        ? (current.bestTimeSeconds == 0 || timeSeconds < current.bestTimeSeconds
-              ? timeSeconds
-              : current.bestTimeSeconds)
-        : current.bestTimeSeconds;
-
-    final updatedCompletedCounts = Set<int>.from(current.completedPieceCounts);
-    if (isCompleted && completedPieceCount != null) {
-      updatedCompletedCounts.add(completedPieceCount);
-    }
-
-    final shouldClear =
-        isCompleted || (snapshotJson == null && progressPercent == 0);
-    _dailyChallenges[idx] = current.copyWith(
-      progressPercent: progressPercent,
-      isCompleted:
-          isCompleted ||
-          current.isCompleted ||
-          updatedCompletedCounts.isNotEmpty,
-      bestTimeSeconds: newBestTime,
-      savedSnapshotJson: null,
-      clearSnapshot: true,
-      completedPieceCounts: updatedCompletedCounts.toList(),
-    );
-
-    await _prefs?.setString(
-      '$_keyDailyPrefix$dateStr',
-      jsonEncode(_dailyChallenges[idx].toJson()),
-    );
-
-    final canonicalId = canonicalForDaily(dateStr);
-    try {
-      if (snapshotJson != null && !isCompleted) {
-        final state = PuzzleBoardState.fromJson(
-          jsonDecode(snapshotJson) as Map<String, dynamic>,
-        );
-        final enriched = state.copyWith(
-          canonicalId: canonicalId,
-          difficultyKey: state.effectiveDifficultyKey,
-          updatedAt: DateTime.now(),
-          createdAt: state.createdAt ?? DateTime.now(),
-        );
-        await SnapshotStore.instance.save(enriched);
-        await ProgressStore.instance.updateProgress(
-          canonicalId: canonicalId,
-          progressPercent: progressPercent,
-          hasSnapshot: true,
-          activeDifficultyKey: enriched.effectiveDifficultyKey,
-          snapshotKeys: [enriched.effectiveDifficultyKey],
-        );
-      } else if (shouldClear) {
-        if (difficultyKey != null && difficultyKey.isNotEmpty) {
-          await SnapshotStore.instance.delete(canonicalId, difficultyKey);
-          await ProgressStore.instance.clearSnapshot(
-            canonicalId,
-            difficultyKey,
-          );
-        } else if (completedPieceCount != null) {
-          final diff = PuzzleDifficulty.presets.firstWhere(
-            (d) => d.pieceCount == completedPieceCount,
-            orElse: () => current.difficulty,
-          );
-          await SnapshotStore.instance.delete(
-            canonicalId,
-            SnapshotStore.difficultyKeyFor(diff),
-          );
-          await ProgressStore.instance.clearSnapshot(
-            canonicalId,
-            SnapshotStore.difficultyKeyFor(diff),
-          );
-        } else if (snapshotJson == null && !isCompleted) {
-          final prog = await ProgressStore.instance.load(canonicalId);
-          if (prog.activeDifficultyKey.isNotEmpty) {
-            await SnapshotStore.instance.delete(
-              canonicalId,
-              prog.activeDifficultyKey,
-            );
-            await ProgressStore.instance.clearSnapshot(
-              canonicalId,
-              prog.activeDifficultyKey,
-            );
-          } else {
-            await SnapshotStore.instance.deleteAllFor(canonicalId);
-            await ProgressStore.instance.clearAllSnapshots(canonicalId);
-          }
-        } else {
-          await SnapshotStore.instance.deleteAllFor(canonicalId);
-          await ProgressStore.instance.clearAllSnapshots(canonicalId);
-        }
-      } else if (!isCompleted && progressPercent > 0) {
-        await ProgressStore.instance.updateProgress(
-          canonicalId: canonicalId,
-          progressPercent: progressPercent,
-        );
-      }
-
-      if (isCompleted && completedPieceCount != null) {
-        await ProgressStore.instance.updateProgress(
-          canonicalId: canonicalId,
-          isCompleted: true,
-          completedPieceCount: completedPieceCount,
-          bestTimeSeconds: newBestTime,
-          hasSnapshot: false,
-        );
-      }
-    } catch (e, st) {
-      AppLogger.repo.warning(
-        'updateDailyProgress snapshot sync failed date=$dateStr',
-        e,
-        st,
-      );
-    }
-
-    if (isCompleted) {
-      AppLogger.repo.info('Daily $dateStr completed');
-    }
   }
 
   Future<PuzzleBoardState?> loadDailySnapshot(
@@ -1010,7 +817,6 @@ class GameRepository {
       await ProgressStore.instance.init();
     } catch (_) {}
     _initLevels();
-    _initDailyChallenges();
     _initCustomPuzzles();
   }
 }

@@ -131,7 +131,6 @@ void main() {
       await MigrationService.instance.migrateIfNeeded(
         prefs: prefs,
         levels: levels,
-        dailyChallenges: const [],
         customPuzzles: const [],
       );
 

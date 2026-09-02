@@ -525,16 +525,13 @@ class _ChooseDifficultySheetState extends State<ChooseDifficultySheet> {
                 child: ClipRRect(
                   borderRadius: BorderRadius.circular(20),
                   child: Container(
-                    width: double.infinity,
                     constraints: const BoxConstraints(
                       maxWidth: 520,
                       maxHeight: 360,
                     ),
                     color: palette.surfaceContainer,
                     child: AspectRatio(
-                      aspectRatio: _imageLoaded && _imageHeight > 0
-                          ? _imageWidth / _imageHeight
-                          : 1.0,
+                      aspectRatio: _imageLoaded ? _aspectRatio.ratio : 1.0,
                       child: Stack(
                         fit: StackFit.expand,
                         children: [
