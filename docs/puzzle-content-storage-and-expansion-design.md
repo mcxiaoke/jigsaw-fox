@@ -236,9 +236,9 @@ for (final file in directory.listSync()) {
 
 ---
 
-### 4.3 活动中心模块 (Events)：独立主题包 + 状态机生命周期
+### 4.3 活动中心模块 (Events)：独立主题包 + 状态机生命周期 + 懒落地保证离线
 
-活动是高度自包含的独立专题。活动自身需要面向玩家的介绍元数据，但**活动内部的关卡图片不需要单独配置 ID**。
+活动是高度自包含的独立专题。活动自身需要面向玩家的介绍元数据，但**活动内部的关卡图片不需要单独配置 ID**；网络 `array` 关卡可视即经 `LevelImageResolver` 后台落盘到 `network_levels/` 再生成缩略，保证见缩略必可玩（`docs/network-level-lazy-download-plan-20260902.md`）。
 
 #### (1) 服务端活动列表规范 (`events.json`)
 支持 `type: "zip"`（整包）与 `type: "array"`（列表）双模式：
@@ -291,7 +291,7 @@ for (final file in directory.listSync()) {
 
 #### (3) 活动包内关卡解析
 *   若为 **Zip 模式**：客户端解压至 `[App Documents]/events/{eventId}/`，遍历目录下所有图片文件，排序后生成 `event:{eventId}:{文件名}`（如 `event:cyberpunk_2026:01_rain`）；
-*   若为 **Array 模式**：客户端直接拉取关卡 URL，生成 `event:{eventId}:{文件名}`。
+*   若为 **Array 模式**：可视时 `LazyLevelImage` 经 `LevelImageResolver` 下载到 `network_levels/net_<hash>.jpg` 再转本地 `PuzzleLevelItem(isLocalFile:true)`，与 `Zip` 同享 `AppCachedImageProvider` 缩略链路，离线可玩。
 
 ---
 
@@ -326,6 +326,8 @@ for (final file in directory.listSync()) {
 │   ├── manifest_cache.json                      # 缓存的 Root Manifest
 │   ├── main_levels_cache.json                   # 缓存的首页关卡元数据
 │   ├── events_cache.json                        # 缓存的活动列表
+│   ├── thumbnail_cache/                         # 缩略图三级缓存 L2 磁盘
+│   │   └── thumb_<fnv63>_<dim>.jpg (360/720 两档，FNV63 掩码)
 │   └── snapshots/                               # 对局断点残局快照 (独立文件)
 │       ├── main_101.snapshot
 │       └── daily_20260827.snapshot
@@ -335,6 +337,8 @@ for (final file in directory.listSync()) {
     │   └── main/
     │       ├── 101.webp
     │       └── 102.webp
+    ├── network_levels/                          # 网络关卡懒落地（Array 关卡单次下载，见缩略必可玩）
+    │   └── net_<fnv63>.jpg
     ├── daily/                                   # 每日挑战月度沙盒
     │   ├── 202607/ (已归档月份图片)
     │   └── 202608/ (当月图片: 20260801.webp...)

@@ -13,6 +13,7 @@ import '../theme/app_text_styles.dart';
 import '../widgets/app_cached_image.dart';
 import '../widgets/choose_difficulty_sheet.dart';
 import '../widgets/game_toast.dart';
+import '../widgets/lazy_level_image.dart';
 import 'game_page.dart';
 
 /// 图包专属关卡列表页 (展示图包封面信息、关卡网格与一键物理删除)
@@ -297,8 +298,8 @@ class _PackLevelsPageState extends State<PackLevelsPage> {
         child: Stack(
           fit: StackFit.expand,
           children: [
-            AppCachedImage(
-              imagePathOrUrl: level.imagePathOrUrl,
+            LazyLevelImage(
+              level: level,
               fit: BoxFit.cover,
             ),
             Container(

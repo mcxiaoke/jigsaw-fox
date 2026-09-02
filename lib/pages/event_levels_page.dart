@@ -3,15 +3,16 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:phosphoricons_flutter/phosphoricons_flutter.dart';
 
+import '../logic/cache/level_image_resolver.dart';
 import '../logic/content/app_content.dart';
 import '../logic/content/models/puzzle_event_item.dart';
 import '../logic/content/models/puzzle_level_item.dart';
 import '../logic/puzzle_model.dart';
 import '../theme/app_palette.dart';
 import '../theme/app_text_styles.dart';
-import '../widgets/app_cached_image.dart';
 import '../widgets/choose_difficulty_sheet.dart';
 import '../widgets/game_toast.dart';
+import '../widgets/lazy_level_image.dart';
 import 'game_page.dart';
 
 /// 活动内关卡 Grid 页面
@@ -52,20 +53,25 @@ class _EventLevelsPageState extends State<EventLevelsPage> {
 
   Future<void> _openLevel(PuzzleLevelItem level, int index) async {
     Uint8List? imgBytes;
-    if (level.isLocalFile && File(level.imagePathOrUrl).existsSync()) {
-      imgBytes = await File(level.imagePathOrUrl).readAsBytes();
-    } else {
-      try {
-        final downloaded = await _content.ensureMainLevelDownloaded(level);
-        if (File(downloaded.imagePathOrUrl).existsSync()) {
-          imgBytes = await File(downloaded.imagePathOrUrl).readAsBytes();
-        }
-      } catch (e) {
-        if (mounted) {
-          GameToast.show(context, icon: Icons.error_outline, message: '图片加载失败: $e', type: GameToastType.error);
-        }
-        return;
+    String localPath = '';
+    try {
+      // 统一经 LevelImageResolver 落原图，保证与卡片缩略同文件，见缩略必可玩
+      localPath = await LevelImageResolver.instance.resolveLevelLocalPath(level);
+      if (localPath.startsWith('http')) {
+        throw Exception('关卡图片下载失败，请检查网络后重试');
       }
+      if (!mounted) return;
+      if (localPath.startsWith('assets/')) {
+        final data = await DefaultAssetBundle.of(context).load(localPath);
+        imgBytes = data.buffer.asUint8List();
+      } else if (File(localPath).existsSync()) {
+        imgBytes = await File(localPath).readAsBytes();
+      }
+    } catch (e) {
+      if (mounted) {
+        GameToast.show(context, icon: Icons.error_outline, message: '图片加载失败: $e', type: GameToastType.error);
+      }
+      return;
     }
 
     if (imgBytes == null || !mounted) return;
@@ -172,8 +178,8 @@ class _EventLevelsPageState extends State<EventLevelsPage> {
         child: Stack(
           fit: StackFit.expand,
           children: [
-            AppCachedImage(
-              imagePathOrUrl: level.imagePathOrUrl,
+            LazyLevelImage(
+              level: level,
               fit: BoxFit.cover,
             ),
             Container(
