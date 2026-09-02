@@ -488,7 +488,7 @@ class _ChooseDifficultySheetState extends State<ChooseDifficultySheet> {
               ),
             ),
 
-            const SizedBox(height: 12),
+            const SizedBox(height: 24),
 
             // Locked banner if overall level is locked
             if (!widget.isUnlocked)

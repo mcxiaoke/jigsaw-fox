@@ -604,19 +604,35 @@ class _LevelCard extends StatelessWidget {
         child: Stack(
           fit: StackFit.expand,
           children: [
-            // Image
-            AppCachedImage(
-              imagePathOrUrl: level.assetPath,
-              fit: BoxFit.cover,
-              targetWidth: 360,
-              targetHeight: 360,
-            ),
+            // Image — greyscale for locked levels (reference: temp/homeunlock.jpg)
+            if (level.isUnlocked)
+              AppCachedImage(
+                imagePathOrUrl: level.assetPath,
+                fit: BoxFit.cover,
+                targetWidth: 360,
+                targetHeight: 360,
+              )
+            else
+              ColorFiltered(
+                colorFilter: const ColorFilter.matrix([
+                  0.33, 0.33, 0.33, 0, 0,
+                  0.33, 0.33, 0.33, 0, 0,
+                  0.33, 0.33, 0.33, 0, 0,
+                  0,    0,    0,    1, 0,
+                ]),
+                child: AppCachedImage(
+                  imagePathOrUrl: level.assetPath,
+                  fit: BoxFit.cover,
+                  targetWidth: 360,
+                  targetHeight: 360,
+                ),
+              ),
 
-            // Dark overlay for locked levels — warm grey wash instead of black
+            // Warm wash overlay for locked levels
             if (!level.isUnlocked)
               Container(
                 decoration: BoxDecoration(
-                  color: palette.surface.withValues(alpha: 0.55),
+                  color: palette.surface.withValues(alpha: 0.45),
                 ),
               ),
 

@@ -5,8 +5,6 @@ import '../services/sound_service.dart';
 import '../theme/app_palette.dart';
 import '../theme/app_text_styles.dart';
 import 'achievements_page.dart';
-import 'how_to_play_page.dart';
-import 'import_pack_page.dart';
 import 'settings_page.dart';
 import 'tabs/daily_tab_view.dart';
 import 'tabs/events_tab_view.dart';
@@ -80,8 +78,6 @@ class _MainScreenState extends State<MainScreen> {
           _TrophyButton(palette: palette),
           const SizedBox(width: 2),
           _SettingsButton(palette: palette),
-          const SizedBox(width: 2),
-          _MoreMenu(palette: palette),
           const SizedBox(width: 8),
         ],
       ),
@@ -165,7 +161,7 @@ class _TrophyButton extends StatelessWidget {
   }
 }
 
-// ── Settings Button (outline, no bg) ──────────
+// ── Settings Button (assets/icons/setting.png with icon fallback) ──
 class _SettingsButton extends StatelessWidget {
   const _SettingsButton({required this.palette});
   final AppPalette palette;
@@ -173,116 +169,18 @@ class _SettingsButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return IconButton(
-      icon: Icon(PhosphorIconsBold.gear, color: palette.secondaryText, size: 22),
+      icon: Image.asset(
+        'assets/icons/setting.png',
+        width: 22,
+        height: 22,
+        color: palette.secondaryText,
+        errorBuilder: (_, _, _) =>
+            Icon(PhosphorIconsBold.gear, color: palette.secondaryText, size: 22),
+      ),
       tooltip: '设置',
       onPressed: () async {
         await SettingsPage.open(context);
       },
-    );
-  }
-}
-
-// ── More Menu (Import / Settings / Help) ───
-class _MoreMenu extends StatelessWidget {
-  const _MoreMenu({required this.palette});
-  final AppPalette palette;
-
-  @override
-  Widget build(BuildContext context) {
-    return PopupMenuButton<String>(
-      icon: Icon(PhosphorIconsBold.dotsThree,
-          color: palette.secondaryText, size: 24),
-      tooltip: '更多选项',
-      elevation: 8,
-      shadowColor: palette.surfaceContainer,
-      color: palette.surfaceContainer,
-      offset: const Offset(0, 48),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(18),
-        side: BorderSide(color: palette.divider, width: 1.2),
-      ),
-      menuPadding: EdgeInsets.zero,
-      clipBehavior: Clip.antiAlias,
-      onSelected: (val) async {
-        if (val == 'import') {
-          final pack = await ImportPackPage.push(context);
-          if (pack != null && context.mounted) {
-            SoundService.I.play(Sfx.tap);
-          }
-        } else if (val == 'help') {
-          await HowToPlayPage.open(context);
-        }
-      },
-      itemBuilder: (ctx) => [
-        _menuItem(
-          value: 'import',
-          icon: PhosphorIconsBold.downloadSimple,
-          iconBg: palette.success.withValues(alpha: 0.12),
-          iconColor: palette.success,
-          title: '导入关卡包',
-          subtitle: '从本地 ZIP 或网络导入',
-        ),
-        PopupMenuDivider(height: 1, color: palette.divider),
-        _menuItem(
-          value: 'help',
-          icon: PhosphorIconsBold.bookOpenText,
-          iconBg: palette.info.withValues(alpha: 0.12),
-          iconColor: palette.info,
-          title: '玩法手册',
-          subtitle: '拼图规则与技巧指引',
-        ),
-      ],
-    );
-  }
-
-  PopupMenuItem<String> _menuItem({
-    required String value,
-    required IconData icon,
-    required Color iconBg,
-    required Color iconColor,
-    required String title,
-    required String subtitle,
-  }) {
-    return PopupMenuItem(
-      value: value,
-      height: 56,
-      child: Row(
-        children: [
-          Container(
-            width: 32,
-            height: 32,
-            decoration: BoxDecoration(
-              color: iconBg,
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Icon(icon, color: iconColor, size: 17),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Text(
-                  title,
-                  style: TextStyle(
-                    fontSize: 13.5,
-                    fontWeight: FontWeight.bold,
-                    color: palette.primaryText,
-                  ),
-                ),
-                Text(
-                  subtitle,
-                  style: TextStyle(
-                    fontSize: 10.5,
-                    color: palette.secondaryText,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
     );
   }
 }
