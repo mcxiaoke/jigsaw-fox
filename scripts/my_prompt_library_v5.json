@@ -117,8 +117,8 @@
       ],
       "style_pool": "photo",
       "optics": [
-        "small aperture f/8, the animal prominent in the frame with deep focus",
-        "deep focus with the animal and its habitat both sharp"
+        "small aperture f/8, the animal large in the frame and filling much of the foreground, deep focus",
+        "deep focus with the animal large in the foreground and its habitat both sharp"
       ],
       "catalog_subjects": [
         "lion",
@@ -266,6 +266,7 @@
         "smoking active volcano",
         "tropical swamp"
       ],
+      "template_group": "animal",
       "env_groups": {
         "arctic": [
           "snow-dusted scree cliff",
@@ -399,9 +400,17 @@
         "mammoth": "prehistoric",
         "saber-toothed tiger": "prehistoric"
       },
-      "template_group": "animal",
+      "quality_prefix": "deep depth of field with consistent sharpness, clear visual hierarchy, varied shape color and scale between regions",
+      "quality_tail": "medium-scale readable details, full-bleed artwork",
       "viewpoint_deny": [
-        "flat lay overhead view"
+        "flat lay overhead view",
+        "high angle view",
+        "slightly elevated view"
+      ],
+      "prompt_templates": [
+        "one large {subject} filling most of the frame in the foreground, {env_fg} and {env_mid} in the background, and {detail} throughout",
+        "a single large {subject} dominating the foreground, with {env_fg} behind it and {env_mid} in the distance, and {detail} throughout",
+        "a large {subject} taking up most of the picture, with {env_fg} and {env_mid} as its backdrop, and {detail} throughout"
       ]
     },
     {
@@ -507,8 +516,21 @@
         "animal shelter with rows of blankets and toys"
       ],
       "template_group": "object",
+      "quality_prefix": "deep depth of field with consistent sharpness, clear visual hierarchy, varied shape color and scale between regions",
+      "quality_tail": "medium-scale readable details, full-bleed artwork",
       "viewpoint_deny": [
-        "flat lay overhead view"
+        "flat lay overhead view",
+        "high angle view",
+        "slightly elevated view"
+      ],
+      "prompt_templates": [
+        "one large {subject} filling most of the frame in the foreground, with {env_fg} in the background and {env_mid} at the sides, and {detail} throughout",
+        "a single large {subject} dominating the frame, {env_fg} visible behind it, {env_mid} filling the edges, and {detail} throughout",
+        "a large {subject} front and center taking up most of the image, surrounded by {env_fg} and {env_mid}, with {detail} throughout"
+      ],
+      "optics": [
+        "medium shot with the pet large in the frame and filling most of it, deep focus",
+        "small aperture f/8, the pet prominent and filling most of the frame, deep focus"
       ]
     },
     {
@@ -706,7 +728,7 @@
         "water lily",
         "phalaenopsis orchid",
         "dancing lady orchid",
-        "bird of paradise",
+        "male bird-of-paradise with ornate iridescent plumage",
         "amaryllis",
         "hibiscus",
         "plumeria",
@@ -826,8 +848,8 @@
       ],
       "style_pool": "photo",
       "optics": [
-        "small aperture f/8, the bird prominent in the frame with deep focus",
-        "deep focus with the bird and the background both sharp"
+        "small aperture f/8, the bird large in the frame and filling much of it, background fully sharp, deep focus",
+        "deep focus with the bird large on its perch and the background both sharp"
       ],
       "catalog_subjects": [
         "scarlet macaw",
@@ -835,11 +857,11 @@
         "rainbow lorikeet",
         "cockatoo",
         "hummingbird",
-        "bird of paradise",
+        "male bird-of-paradise with ornate iridescent plumage",
         "hornbill",
         "bald eagle",
         "golden eagle",
-        "owl family",
+        "great grey owl",
         "peregrine falcon",
         "vulture",
         "albatross",
@@ -869,7 +891,7 @@
         "hwamei",
         "oriole",
         "chinese bulbul",
-        "flamingo flock",
+        "greater flamingo",
         "emperor penguin",
         "king penguin",
         "adélie penguin",
@@ -891,8 +913,17 @@
         "morning mist reed marsh"
       ],
       "template_group": "animal",
+      "quality_prefix": "deep depth of field with consistent sharpness, clear visual hierarchy, varied shape color and scale between regions",
+      "quality_tail": "medium-scale readable details, full-bleed artwork",
       "viewpoint_deny": [
-        "flat lay overhead view"
+        "flat lay overhead view",
+        "high angle view",
+        "slightly elevated view"
+      ],
+      "prompt_templates": [
+        "one large {subject} perched prominently and filling most of the frame in the foreground, with {env_fg} in the background and {env_mid} at the sides, and {detail} throughout",
+        "a single large {subject} dominating the frame on its perch, {env_fg} visible behind it, {env_mid} filling the edges, and {detail} throughout",
+        "a large {subject} with detailed feathers taking up most of the picture, {env_fg} and {env_mid} as its backdrop, and {detail} throughout"
       ]
     },
     {
@@ -1248,8 +1279,8 @@
         "gold leaf reflection",
         "palette knife impasto thickness"
       ],
-      "quality_prefix": "corner-to-corner dense detail, rich tonal range and contrast, busy composition with clear visual hierarchy, varied shapes and scales between regions",
-      "template_group": "special"
+      "template_group": "special",
+      "quality_prefix": "corner-to-corner dense detail, rich tonal range and contrast, busy composition with clear visual hierarchy, varied shapes and scales between regions"
     },
     {
       "id": "Fantasy",
@@ -1534,67 +1565,6 @@
       ]
     },
     {
-      "id": "Sports",
-      "zh": "运动",
-      "ratios": [
-        "1:1"
-      ],
-      "style_pool": "photo",
-      "catalog_subjects": [
-        "soccer",
-        "basketball",
-        "tennis",
-        "golf",
-        "snooker break-off shot",
-        "baseball",
-        "volleyball",
-        "rugby",
-        "table tennis",
-        "badminton",
-        "cricket",
-        "field hockey",
-        "surfing",
-        "sailing race",
-        "skiing",
-        "figure skating spin",
-        "ice hockey face-off",
-        "snowboarding",
-        "ice skating ice dance",
-        "toboggan",
-        "ski jumping",
-        "curling",
-        "diving and snorkeling",
-        "road cycling",
-        "free climbing",
-        "skydiving and wingsuit flying",
-        "whitewater kayaking",
-        "F1 car cornering",
-        "parkour",
-        "skateboarding",
-        "paragliding",
-        "hiking backpacker",
-        "equestrian show jumping",
-        "sunrise yoga silhouette on beach",
-        "archery",
-        "fencing",
-        "weightlifting",
-        "running marathon",
-        "boxing and MMA",
-        "martial arts karate judo taekwondo muay thai",
-        "gymnastics and rhythmic gymnastics",
-        "fishing"
-      ],
-      "catalog_env_partners": [
-        "frozen water spray ice shards red clay dust",
-        "sunlight through water mist micro rainbow",
-        "stadium spectator stands with dense lights and colorful flags"
-      ],
-      "template_group": "special",
-      "viewpoint_deny": [
-        "flat lay overhead view"
-      ]
-    },
-    {
       "id": "Seasons",
       "zh": "四季",
       "ratios": [
@@ -1756,6 +1726,7 @@
         "layered gold leaf fragment collage foreground",
         "high saturation color wheel overlay"
       ],
+      "template_group": "special",
       "photo_subjects": [
         "acrylic fluid pour painting",
         "natural marble cross-section",
@@ -1773,8 +1744,7 @@
         "ink diffusion wash and alcohol ink",
         "paint splatter and ink splash",
         "batik"
-      ],
-      "template_group": "special"
+      ]
     },
     {
       "id": "Cartoon",

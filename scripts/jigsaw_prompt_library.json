@@ -3,7 +3,6 @@
   "_comment": "21-tag prompt library for jigsaw puzzle source images. v2.0: subject pool expanded to 12-13 per tag (was 6-8) + new 'atmosphere' modifier dimension to maximize visual diversity and color entropy.",
   "model_hint": "z-image-turbo-fp8 (Apache 2.0, 8 steps, CFG 1.0) or flux2-klein-4b-fp8 (Apache 2.0, 4 steps).",
   "critical_note": "Distilled Turbo/Klein models run at CFG 1.0, so NEGATIVE PROMPTS ARE IGNORED. Dead-zone avoidance must be encoded in the POSITIVE description only. The 'avoid' field per tag is documentation for humans, not an active prompt.",
-
   "generation": {
     "steps": 9,
     "cfg": 1.1,
@@ -11,21 +10,26 @@
     "scheduler": "simple",
     "_steps_note": "9 steps in ComfyUI = 8 actual NFE for Z-Image Turbo (sampler counts first/last point)."
   },
-
   "ratios": {
-    "1:1": { "width": 1024, "height": 1024 },
-    "2:3": { "width": 896, "height": 1344 },
-    "3:2": { "width": 1344, "height": 896 },
+    "1:1": {
+      "width": 1024,
+      "height": 1024
+    },
+    "2:3": {
+      "width": 896,
+      "height": 1344
+    },
+    "3:2": {
+      "width": 1344,
+      "height": 896
+    },
     "_note": "Generate small, then 2x upscale. 896x1344 -> 1792x2688. 1024x1024 -> 2048x2048. Both land in the 1440-2160 target band."
   },
-
   "upscale": {
     "factor": 2,
     "model": "4x-UltraSharp.pth"
   },
-
   "quality_suffix": "highly detailed, intricate detail across the entire frame, dense visual texture, rich and varied color palette, busy composition, filled frame with corner-to-corner detail, sharp focus throughout, even balanced lighting",
-
   "modifiers": {
     "lighting": [
       "golden hour light",
@@ -70,16 +74,22 @@
       "deep rich jewel tones"
     ]
   },
-
   "tags": [
     {
       "id": "Animals",
       "zh": "动物",
       "tier": "B",
       "quota": 100,
-      "ratios": ["1:1", "2:3", "3:2"],
+      "ratios": [
+        "1:1",
+        "2:3",
+        "3:2"
+      ],
       "extra": "animal in its natural habitat with environmental texture, no plain backdrop",
-      "avoid": ["studio backdrop", "single animal on white"],
+      "avoid": [
+        "studio backdrop",
+        "single animal on white"
+      ],
       "subjects": [
         "a herd of elephants crossing a dusty savanna with acacia trees and tall dry grass",
         "a tiger prowling through dense bamboo forest with dappled sunlight on foliage",
@@ -100,9 +110,16 @@
       "zh": "宠物",
       "tier": "B",
       "quota": 100,
-      "ratios": ["1:1", "3:2"],
+      "ratios": [
+        "1:1",
+        "3:2"
+      ],
       "extra": "pet surrounded by a cluttered lived-in environment, no seamless backdrop",
-      "avoid": ["portrait studio", "plain gradient background", "bokeh"],
+      "avoid": [
+        "portrait studio",
+        "plain gradient background",
+        "bokeh"
+      ],
       "subjects": [
         "a ginger cat curled on a woven rug surrounded by potted plants and a bookshelf",
         "a golden retriever in an overgrown garden among flower beds and garden tools",
@@ -123,9 +140,16 @@
       "zh": "自然",
       "tier": "A",
       "quota": 140,
-      "ratios": ["1:1", "2:3", "3:2"],
+      "ratios": [
+        "1:1",
+        "2:3",
+        "3:2"
+      ],
       "extra": "dense layered vegetation filling the whole frame",
-      "avoid": ["single tree on empty grass", "misty minimal"],
+      "avoid": [
+        "single tree on empty grass",
+        "misty minimal"
+      ],
       "subjects": [
         "a dense temperate rainforest with moss-covered trunks, ferns and fallen logs",
         "an autumn forest floor covered in red and gold leaves with mushrooms and bark",
@@ -146,9 +170,17 @@
       "zh": "风景",
       "tier": "A",
       "quota": 140,
-      "ratios": ["3:2", "2:3", "1:1"],
+      "ratios": [
+        "3:2",
+        "2:3",
+        "1:1"
+      ],
       "extra": "textured foreground and midground filling most of the frame, textured cloud detail, sky occupying less than one fifth of the frame",
-      "avoid": ["empty sky", "single horizon line", "flat water reflection"],
+      "avoid": [
+        "empty sky",
+        "single horizon line",
+        "flat water reflection"
+      ],
       "subjects": [
         "a terraced rice mountainside with winding water channels and scattered farmhouses",
         "a glacial valley with layered moraine rock, alpine flowers and a braided river",
@@ -169,9 +201,15 @@
       "zh": "花卉",
       "tier": "A",
       "quota": 140,
-      "ratios": ["1:1", "2:3"],
+      "ratios": [
+        "1:1",
+        "2:3"
+      ],
       "extra": "dense overlapping blooms with visible leaf and stem structure",
-      "avoid": ["one flower on blurred background", "bokeh"],
+      "avoid": [
+        "one flower on blurred background",
+        "bokeh"
+      ],
       "subjects": [
         "a dense cottage garden overflowing with roses, delphiniums and foxgloves",
         "a field of sunflowers with textured seed heads, bees and detailed foliage",
@@ -192,9 +230,17 @@
       "zh": "海洋",
       "tier": "C",
       "quota": 50,
-      "ratios": ["3:2", "1:1"],
+      "ratios": [
+        "3:2",
+        "1:1"
+      ],
       "extra": "packed with coral, rock, foam and organism detail, no large empty water or empty sky",
-      "avoid": ["vast empty sea", "open horizon", "calm plain water", "empty beach"],
+      "avoid": [
+        "vast empty sea",
+        "open horizon",
+        "calm plain water",
+        "empty beach"
+      ],
       "_warn": "Highest dead-zone risk of all tags. Expect low pass rate in quality analyzer.",
       "subjects": [
         "a coral reef teeming with fish, anemones, tube sponges and textured coral",
@@ -216,9 +262,16 @@
       "zh": "鸟类",
       "tier": "B",
       "quota": 100,
-      "ratios": ["1:1", "2:3", "3:2"],
+      "ratios": [
+        "1:1",
+        "2:3",
+        "3:2"
+      ],
       "extra": "bird within a textured natural or architectural setting",
-      "avoid": ["plain sky background", "studio shot"],
+      "avoid": [
+        "plain sky background",
+        "studio shot"
+      ],
       "subjects": [
         "a barn owl perched in a stone barn window with weathered wood and straw",
         "parrots in a rainforest canopy with bromeliads, orchids and tangled branches",
@@ -239,9 +292,16 @@
       "zh": "城市",
       "tier": "A",
       "quota": 140,
-      "ratios": ["3:2", "2:3", "1:1"],
+      "ratios": [
+        "3:2",
+        "2:3",
+        "1:1"
+      ],
       "extra": "dense street-level detail with signage, texture and architectural layers",
-      "avoid": ["minimal skyline silhouette", "empty plaza"],
+      "avoid": [
+        "minimal skyline silhouette",
+        "empty plaza"
+      ],
       "subjects": [
         "a narrow old town street with flower boxes, hanging signs and cobbles",
         "a dense night market with neon signs, stalls, lanterns and crowds",
@@ -262,9 +322,16 @@
       "zh": "建筑",
       "tier": "A",
       "quota": 140,
-      "ratios": ["2:3", "1:1", "3:2"],
+      "ratios": [
+        "2:3",
+        "1:1",
+        "3:2"
+      ],
       "extra": "ornate surface detail, visible material joints, weathered stonework",
-      "avoid": ["plain glass curtain wall", "blank concrete facade"],
+      "avoid": [
+        "plain glass curtain wall",
+        "blank concrete facade"
+      ],
       "subjects": [
         "a gothic cathedral facade with carved saints, gargoyles and rose window tracery",
         "a half-timbered Tudor building with exposed beams, leaded glass and flower boxes",
@@ -285,9 +352,15 @@
       "zh": "美食",
       "tier": "A",
       "quota": 140,
-      "ratios": ["1:1", "3:2"],
+      "ratios": [
+        "1:1",
+        "3:2"
+      ],
       "extra": "table filled edge to edge with ingredients, vessels and utensils",
-      "avoid": ["single plate on empty table", "minimal plating"],
+      "avoid": [
+        "single plate on empty table",
+        "minimal plating"
+      ],
       "subjects": [
         "a rustic wooden table spread with bread, cheeses, olives, herbs and copper pans",
         "a patisserie display case layered with cakes, tarts, macarons and pastries",
@@ -308,9 +381,17 @@
       "zh": "艺术",
       "tier": "A",
       "quota": 140,
-      "ratios": ["1:1", "2:3", "3:2"],
+      "ratios": [
+        "1:1",
+        "2:3",
+        "3:2"
+      ],
       "extra": "artwork with dense subject matter filling the whole canvas",
-      "avoid": ["minimal abstraction", "empty color field", "single object on blank ground"],
+      "avoid": [
+        "minimal abstraction",
+        "empty color field",
+        "single object on blank ground"
+      ],
       "subjects": [
         "an oil painting of a bustling harbor with boats, figures and detailed rigging",
         "a detailed botanical illustration with several labeled specimens on aged paper",
@@ -331,9 +412,16 @@
       "zh": "奇幻",
       "tier": "B",
       "quota": 100,
-      "ratios": ["1:1", "2:3", "3:2"],
+      "ratios": [
+        "1:1",
+        "2:3",
+        "3:2"
+      ],
       "extra": "scene cluttered with props, textures and layered magical detail",
-      "avoid": ["lone hero on empty background", "minimal poster look"],
+      "avoid": [
+        "lone hero on empty background",
+        "minimal poster look"
+      ],
       "subjects": [
         "a wizard's study crammed with books, scrolls, potions, crystals and candles",
         "a dragon coiled on a hoard of coins, goblets, armor and scattered treasure",
@@ -354,9 +442,16 @@
       "zh": "太空",
       "tier": "C",
       "quota": 50,
-      "ratios": ["3:2", "1:1"],
+      "ratios": [
+        "3:2",
+        "1:1"
+      ],
       "extra": "dense star fields, textured terrain, busy instrumentation, no large black void",
-      "avoid": ["black empty void", "single planet on black", "dark minimal"],
+      "avoid": [
+        "black empty void",
+        "single planet on black",
+        "dark minimal"
+      ],
       "_warn": "Second highest dead-zone risk. Black space reads as dead zone in the analyzer.",
       "subjects": [
         "a dense nebula with layered gas clouds, bright star clusters and dust lanes",
@@ -378,9 +473,15 @@
       "zh": "交通",
       "tier": "A",
       "quota": 140,
-      "ratios": ["3:2", "1:1"],
+      "ratios": [
+        "3:2",
+        "1:1"
+      ],
       "extra": "mechanical surface detail, rivets, cables, weathered materials",
-      "avoid": ["car on plain backdrop", "product shot on white"],
+      "avoid": [
+        "car on plain backdrop",
+        "product shot on white"
+      ],
       "subjects": [
         "a vintage steam locomotive with rivets, valves, cowcatcher and platform detail",
         "a classic car engine bay with chrome, hoses, manifolds and painted metal",
@@ -401,9 +502,18 @@
       "zh": "人物",
       "tier": "B",
       "quota": 100,
-      "ratios": ["3:2", "1:1"],
+      "ratios": [
+        "3:2",
+        "1:1"
+      ],
       "extra": "people within a crowded detailed environment, faces small and not the focus",
-      "avoid": ["single portrait", "studio backdrop", "bokeh", "close-up face", "shallow depth of field"],
+      "avoid": [
+        "single portrait",
+        "studio backdrop",
+        "bokeh",
+        "close-up face",
+        "shallow depth of field"
+      ],
       "_warn": "Crowd scenes only. Avoids dead zone AND avoids portrait-rights exposure.",
       "subjects": [
         "a crowded open-air market with shoppers, stalls, produce and hanging fabrics",
@@ -421,36 +531,21 @@
       ]
     },
     {
-      "id": "Sports",
-      "zh": "运动",
-      "tier": "B",
-      "quota": 100,
-      "ratios": ["3:2", "1:1"],
-      "extra": "equipment, crowd and venue texture, no motion-blurred empty background",
-      "avoid": ["single athlete on blurred ground", "motion blur", "empty stadium"],
-      "subjects": [
-        "a packed stadium stand with crowd, flags, banners and tiered seating",
-        "a climbing wall with colorful holds, ropes, chalk bags and harnesses",
-        "a ski slope with moguls, pine trees, tracks and lift cables",
-        "a bicycle race peloton on a cobbled street with spectators and banners",
-        "a martial arts dojo with mats, equipment racks, banners and training gear",
-        "a marina with sailboats, masts, rigging, fenders and dock hardware",
-        "a gymnasium with parallel bars, mats, rings, ropes and wall padding",
-        "a golf course green with sand bunker, rough grass, flag and tree line",
-        "a tennis court with ball hoppers, rackets, benches and worn court lines",
-        "a swimming pool deck with lanes, flags, starting blocks and equipment",
-        "a boxing gym with heavy bags, wraps, ropes, posters and worn floor",
-        "a skatepark with ramps, grind rails, graffiti and scattered boards"
-      ]
-    },
-    {
       "id": "Seasons",
       "zh": "四季",
       "tier": "A",
       "quota": 140,
-      "ratios": ["3:2", "1:1", "2:3"],
+      "ratios": [
+        "3:2",
+        "1:1",
+        "2:3"
+      ],
       "extra": "seasonal texture covering the whole frame, dense ground detail",
-      "avoid": ["uniform snow field", "foggy minimal scene", "flat white winter"],
+      "avoid": [
+        "uniform snow field",
+        "foggy minimal scene",
+        "flat white winter"
+      ],
       "_note": "Weight toward spring, summer and autumn. Winter snow must stay dense with props.",
       "subjects": [
         "an autumn park path with fallen leaves, benches, lanterns and tree trunks",
@@ -472,9 +567,16 @@
       "zh": "节日",
       "tier": "A",
       "quota": 140,
-      "ratios": ["1:1", "3:2", "2:3"],
+      "ratios": [
+        "1:1",
+        "3:2",
+        "2:3"
+      ],
       "extra": "decorations and objects filling the frame, no empty wall or clear sky",
-      "avoid": ["single ornament on plain background", "minimal card design"],
+      "avoid": [
+        "single ornament on plain background",
+        "minimal card design"
+      ],
       "subjects": [
         "a Christmas tree with ornaments, tinsel, ribbons, baubles and wrapped gifts",
         "a Halloween porch with pumpkins, cobwebs, lanterns, wreaths and fallen leaves",
@@ -495,9 +597,18 @@
       "zh": "抽象",
       "tier": "C",
       "quota": 50,
-      "ratios": ["1:1"],
+      "ratios": [
+        "1:1"
+      ],
       "extra": "organic irregular non-repeating texture with varied density and color",
-      "avoid": ["grids", "stripes", "regular tiling", "checkerboard", "concentric rings", "uniform noise"],
+      "avoid": [
+        "grids",
+        "stripes",
+        "regular tiling",
+        "checkerboard",
+        "concentric rings",
+        "uniform noise"
+      ],
       "_warn": "Highest ambiguity risk. Regular patterns let pieces fit anywhere, worse than dead zones.",
       "subjects": [
         "an organic marbled ink swirl with irregular veins and varying density",
@@ -519,9 +630,16 @@
       "zh": "卡通",
       "tier": "C",
       "quota": 50,
-      "ratios": ["3:2", "1:1"],
+      "ratios": [
+        "3:2",
+        "1:1"
+      ],
       "extra": "illustration with a fully rendered detailed background, not flat color blocks",
-      "avoid": ["flat minimal background", "solid color backdrop", "white space"],
+      "avoid": [
+        "flat minimal background",
+        "solid color backdrop",
+        "white space"
+      ],
       "_note": "Use the Z-Anime variant of Z-Image for this tag if available.",
       "subjects": [
         "a children's book illustration of a woodland village with animals, houses and foliage",
@@ -543,9 +661,15 @@
       "zh": "其他",
       "tier": "A",
       "quota": 80,
-      "ratios": ["1:1", "3:2"],
+      "ratios": [
+        "1:1",
+        "3:2"
+      ],
       "extra": "collections and assemblages with many distinct small objects",
-      "avoid": ["single object", "empty surroundings"],
+      "avoid": [
+        "single object",
+        "empty surroundings"
+      ],
       "_note": "Deliberately steered toward 'many small objects' subjects - the most puzzle-friendly images.",
       "subjects": [
         "a workshop pegboard wall densely hung with tools of every shape and size",

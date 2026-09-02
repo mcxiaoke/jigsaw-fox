@@ -462,31 +462,6 @@
       ]
     },
     {
-      "id": "Sports",
-      "zh": "运动",
-      "tier": "B",
-      "quota": 100,
-      "ratios": [
-        "3:2",
-        "1:1"
-      ],
-      "extra": "",
-      "subjects": [
-        "a climbing wall as the clear focal subject, with colorful holds across the surface, ropes hanging at the left, chalk bags in the lower right, and mats along the bottom",
-        "one tennis court as the focal point, with a net across the middle, ball hoppers at the lower left, a racket leaning at right, and court lines receding behind",
-        "a ski slope as the clear central subject, with moguls across the foreground, pine trees at the left edge, a chairlift cable above, and mountain layers behind",
-        "one racing bicycle as the focal subject, with cobblestones across the bottom, spectators along the left edge, team banners above, and a street scene behind",
-        "a boxing gym as the clear focal point, with a heavy bag in the center, speed bag at the upper right, wall mirrors at left, and worn floorboards across the bottom",
-        "one marina dock as the central subject, with sailboat masts across the top, coiled ropes in the foreground, fenders at the right edge, and water along the bottom",
-        "a skate ramp as the clear focal subject, with a board mid-air above, grind rails at the left, graffiti across the back wall, and concrete ground below",
-        "one golf green as the focal point, with a flagstick at the upper right, a sand bunker in the lower left, rough grass around, and tree lines behind",
-        "a swimming pool as the clear central subject, with lane ropes across the water, starting blocks in the foreground, a scoreboard at the upper right, and deck tiles below",
-        "one dojo interior as the focal subject, with a training dummy at the left, weapon racks across the back, mats along the bottom, and banners above",
-        "a stadium stand as the clear focal point, with tiered seating across the frame, flags at the upper left, banners along the front, and crowd texture throughout",
-        "one archery target as the central subject, with arrows clustered in the center, a bow leaning at the lower left, grass across the bottom, and a field backdrop behind"
-      ]
-    },
-    {
       "id": "Seasons",
       "zh": "四季",
       "tier": "A",

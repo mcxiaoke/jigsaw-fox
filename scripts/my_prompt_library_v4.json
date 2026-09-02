@@ -582,37 +582,6 @@
       ]
     },
     {
-      "id": "Sports",
-      "zh": "运动",
-      "tier": "B",
-      "quota": 100,
-      "ratios": [
-        "1:1"
-      ],
-      "extra": "",
-      "subjects": [
-        "a climbing wall with colorful holds across the surface, ropes hanging nearby, chalk bags across the foreground, and mats across the ground",
-        "one tennis court with a net across the middle, ball hoppers in the foreground, a racket leaning at right, and court lines receding in the distance",
-        "a ski slope with moguls across the foreground, pine trees at center, a chairlift cable above, and mountain layers in the distance",
-        "one racing bicycle with cobblestones across the bottom, spectators along the left edge, team banners above, and a street scene in the distance",
-        "a boxing gym with a heavy bag in the center, speed bag above, wall mirrors at left, and worn floorboards across the bottom",
-        "one marina dock with sailboat masts across the top, coiled ropes in the foreground, fenders at center, and water across the ground",
-        "a skate ramp with a board mid-air above, grind rails nearby, graffiti across the back wall, and concrete ground below",
-        "one golf green with a flagstick above, a sand bunker scattered across the foreground, rough grass around, and tree lines in the distance",
-        "a swimming pool with lane ropes across the water, starting blocks in the foreground, a scoreboard above, and deck tiles below",
-        "one dojo interior with a training dummy nearby, weapon racks across the back, mats across the ground, and banners above",
-        "a stadium stand with tiered seating across the frame, flags above, banners along the front, and crowd texture throughout",
-        "one archery target with arrows clustered in the center, a bow leaning in the foreground, grass across the bottom, and a field backdrop in the distance"
-      ],
-      "style_pool": "photo",
-      "visual_anchors": [
-        "high-visibility fluorescent equipment colors",
-        "textured ground surface with tracks and markings",
-        "branded banners and signage",
-        "equipment straps and buckle detail"
-      ]
-    },
-    {
       "id": "Seasons",
       "zh": "四季",
       "tier": "A",

@@ -114,7 +114,7 @@ subject, tag.extra, visual_anchor, lighting, viewpoint, style, atmosphere, optic
 
 | 池 | 条数 | 使用 tag | 配额占比 |
 |---|---|---|---|
-| photo | 8 | Animals, Pets, Nature, Landscapes, Flowers, Ocean, Birds, Cities, Architecture, Food, Transportation, People, Sports, Seasons, Others | 77% |
+| photo | 8 | Animals, Pets, Nature, Landscapes, Flowers, Ocean, Birds, Cities, Architecture, Food, Transportation, People, Seasons, Others | 77% |
 | illust | 6 | Art, Fantasy, Space, Holidays, Abstract, Cartoon | 23% |
 
 ### 4.3 配额
@@ -124,7 +124,7 @@ subject, tag.extra, visual_anchor, lighting, viewpoint, style, atmosphere, optic
 | 级别 | tag | quota/tag |
 |---|---|---|
 | A（高配额） | Nature, Landscapes, Flowers, Cities, Architecture, Food, Art, Transportation, Seasons, Holidays | 140 |
-| B（中配额） | Animals, Pets, Birds, Fantasy, People, Sports, Others | 50-100 |
+| B（中配额） | Animals, Pets, Birds, Fantasy, People, Others | 50-100 |
 | C（低配额） | Ocean, Space, Abstract, Cartoon | 50-80 |
 
 ---
@@ -153,7 +153,7 @@ subject, tag.extra, visual_anchor, lighting, viewpoint, style, atmosphere, optic
 & "C:/Home/Develop/venv/Scripts/python.exe" -u scripts/my_comfyui_batch_gen_v4.py --workflow scripts/zimage_api_workflow.json --comfyui-root "F:/ai/ComfyUI/ComfyUI" --out "C:/Home/Temp/JigsawTest" --per-tag 2 --reseed 2 --seed-base 12345678
 ```
 
-先跑 84 张（21 tag × 2 × 2），看显存、耗时、画质。
+先跑 80 张（20 tag × 2 × 2），看显存、耗时、画质。
 
 ### 5.4 全量挂机
 
@@ -176,7 +176,7 @@ subject, tag.extra, visual_anchor, lighting, viewpoint, style, atmosphere, optic
 | `--workflow` | — | **必填**，API 格式 JSON |
 | `--comfyui-root` | — | **必填**，ComfyUI 安装目录 |
 | `--out` | `jigsaw_raw` | 输出根目录 |
-| `--tags` | 全部 21 tag | 逗号分隔，限定跑哪些 tag |
+| `--tags` | 全部 20 tag | 逗号分隔，限定跑哪些 tag |
 | `--per-tag` | 库内 quota | 覆盖每 tag prompt 数（小批量测试用） |
 | `--reseed` | 2 | 每 prompt 跑 N 个不同 seed |
 | `--seed-base` | `20260830` | 改它可整体重洗所有 prompt |
@@ -238,7 +238,7 @@ C:/Home/Temp/JigsawV4/
 ├── Animals/
 │   └── Animals_0000_2070660966_896x1344.png
 ├── Cities/
-├── ...（21 个 tag 目录）
+├── ...（20 个 tag 目录）
 ├── _metadata/
 │   ├── Animals.jsonl          # 每张图的 prompt / seed / 尺寸 / 时间戳
 │   └── Cities.jsonl

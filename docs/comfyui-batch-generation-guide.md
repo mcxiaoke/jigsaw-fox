@@ -23,7 +23,7 @@
 
 1. **许可**。素材要进 App。FLUX.1-dev 与 FLUX.2-dev 都禁止商用，跑一晚上最后不能用是纯浪费。Z-Image Turbo 与 FLUX.2 Klein 4B 均为 Apache 2.0，生成内容归你。
 2. **步数**。8 步 vs SDXL 的 20~~30 步，同样的挂机时间产能是 3~~4 倍。
-3. **中文 prompt**。文本编码器是 Qwen3-4B，中文描述直出，21 个 tag 里的「节日」「四季」这类中文语境很好写。
+3. **中文 prompt**。文本编码器是 Qwen3-4B，中文描述直出，20 个 tag 里的「节日」「四季」这类中文语境很好写。
 
 > Z-Image 由阿里通义实验室（Tongyi-MAI）于 2025-11 发布，HuggingFace 仓库 `Tongyi-MAI/Z-Image-Turbo`，ComfyUI 有 Day-0 原生支持。
 
@@ -153,15 +153,15 @@ Z-Image Turbo 是蒸馏模型，**CFG 固定 1.0，negative prompt 不参与采�
 
 ## 6. Prompt 库与配额
 
-`scripts/jigsaw_prompt_library.json` 定义了 21 个 tag，按拼图适玩性分三级：
+`scripts/jigsaw_prompt_library.json` 定义了 20 个 tag，按拼图适玩性分三级：
 
 | 级别    | tag                                                                                                     | 每 tag 张数    | 说明             |
 | ----- | ------------------------------------------------------------------------------------------------------- | ----------- | -------------- |
 | **A** | Nature, Landscapes, Flowers, Cities, Architecture, Food, Art, Transportation, Seasons, Holidays, Others | 180×10 + 80 | 纹理密、色彩多、分布散    |
-| **B** | Animals, Pets, Birds, Fantasy, People, Sports                                                           | 150×6       | 需强制加环境，避免棚拍纯背景 |
+| **B** | Animals, Pets, Birds, Fantasy, People                                                           | 150×5       | 需强制加环境，避免棚拍纯背景 |
 | **C** | Ocean, Space, Abstract, Cartoon                                                                         | 80×4        | 死区或歧义高危，配额减半   |
 
-**合计 3100 张**，RTX 4070 约 6~8 小时跑完。
+**合计 2950 张**，RTX 4070 约 6~8 小时跑完。
 
 ### 6.1 C 级 tag 的专项处理
 

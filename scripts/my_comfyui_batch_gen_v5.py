@@ -396,6 +396,9 @@ def build_jobs(
 
             # --- TEMPLATE POOL (pure catalog) ---
             cat_subject = cat_subjects[i % n_subjects]
+            # Per-tag template override wins over the group pool (used by the
+            # subject-scale fix: Pets/Animals need subject-first templates).
+            tag_templates = tag.get("prompt_templates") or tag_templates
             template = rng.choice(tag_templates)
             # Env selection: prefer the subject's affinity group (env_groups +
             # subject_env_group, e.g. polar bear -> arctic pool), else the tag
