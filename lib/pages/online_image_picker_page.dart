@@ -355,10 +355,6 @@ class _OnlineImagePickerPageState extends State<OnlineImagePickerPage> {
       return;
     }
 
-    if (mounted) {
-      GameToast.show(context, message: '正在下载「${_currentSite.label}」高清图片...');
-    }
-
     try {
       // 1. Try authenticated in-webview fetch first for zero 403 error
       Uint8List? fetchedBytes = await _fetchImageBytesInsideWebView(targetUrl);

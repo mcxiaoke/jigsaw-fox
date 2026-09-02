@@ -166,12 +166,6 @@ class _MyPuzzlesTabViewState extends State<MyPuzzlesTabView> {
         await _repo.deleteCustomPuzzle(item.id);
         if (mounted) {
           setState(() {});
-          GameToast.show(
-            context,
-            icon: PhosphorIconsFill.trashSimple,
-            message: '已删除自制拼图',
-            type: GameToastType.warning,
-          );
         }
       },
       onResetProgress: () async {

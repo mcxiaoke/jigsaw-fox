@@ -19,7 +19,6 @@ import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
 import '../../widgets/app_cached_image.dart';
 import '../../widgets/choose_difficulty_sheet.dart';
-import '../../widgets/game_toast.dart';
 import '../game_page.dart';
 
 /// 全新“我的”中心 Tab 视图（聚合进行中、收藏与已完成拼图）
@@ -186,11 +185,7 @@ class _MyCenterTabViewState extends State<MyCenterTabView> {
 
   Future<void> _handleCardClick(UnifiedPuzzleCardData card) async {
     if (card.isOrphan) {
-      GameToast.show(
-        context,
-        message: '该拼图资源已失效或从本地移除',
-        type: GameToastType.warning,
-      );
+      await _cleanOrphan(card);
       return;
     }
 
@@ -271,16 +266,16 @@ class _MyCenterTabViewState extends State<MyCenterTabView> {
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('清理失效记录'),
-        content: Text('是否从记录和收藏中移除「${card.title}」？'),
+        title: const Text('拼图资源已失效'),
+        content: Text('该拼图资源已从本地或列表中移除，无法继续游玩。\n是否从记录与收藏中清理移除「${card.title}」？'),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(false),
-            child: const Text('取消'),
+            child: const Text('暂保留'),
           ),
           FilledButton(
             onPressed: () => Navigator.of(ctx).pop(true),
-            child: const Text('移除'),
+            child: const Text('清理移除'),
           ),
         ],
       ),
@@ -291,13 +286,6 @@ class _MyCenterTabViewState extends State<MyCenterTabView> {
       await SnapshotStore.instance.deleteAllFor(card.canonicalId);
       await FavoriteStore.instance.remove(card.canonicalId);
       _loadAllData();
-      if (mounted) {
-        GameToast.show(
-          context,
-          message: '已移除失效记录',
-          type: GameToastType.success,
-        );
-      }
     }
   }
 
@@ -354,7 +342,7 @@ class _MyCenterTabViewState extends State<MyCenterTabView> {
                         items: _favoritesList,
                         emptyEmoji: '❤️',
                         emptyTitle: '还没有收藏的拼图',
-                        emptySub: '在选择难度面板或游戏内点击红心，可快捷收藏',
+                        emptySub: '在选择难度面板中点击红心，可快捷收藏',
                         palette: palette,
                         styles: styles,
                         tabType: _MyTabType.favorites,
@@ -579,7 +567,7 @@ class _MyCenterTabViewState extends State<MyCenterTabView> {
                         Expanded(
                           child: Text(
                             card.isOrphan
-                                ? '已失效 · 长按清理'
+                                ? '已失效 · 点击清理'
                                 : (card.displaySubtitle ??
                                       (card.author != null
                                           ? 'By ${card.author}'

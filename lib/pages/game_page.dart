@@ -20,6 +20,7 @@ import '../services/app_logger.dart';
 import '../services/economy_service.dart';
 import '../services/sound_service.dart';
 import '../widgets/choose_background_sheet.dart';
+import '../widgets/game_toast.dart';
 import '../widgets/share_card_generator.dart';
 import '../widgets/victory_dialog.dart';
 
@@ -594,14 +595,12 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
       if (mounted) {
         final price = EconomyService
             .kHintPrices[tier.clamp(0, EconomyService.kHintPrices.length - 1)];
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
+        GameToast.show(
+          context,
+          icon: PhosphorIconsRegular.coins,
+          message:
               '金币不足（当前难度提示需 $price 金币，当前拥有 ${EconomyService.instance.coins}）',
-            ),
-            duration: const Duration(seconds: 2),
-            behavior: SnackBarBehavior.floating,
-          ),
+          type: GameToastType.warning,
         );
       }
       return;

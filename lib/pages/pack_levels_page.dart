@@ -75,12 +75,6 @@ class _PackLevelsPageState extends State<PackLevelsPage> {
       );
       if (mounted) {
         if (success) {
-          GameToast.show(
-            context,
-            icon: PhosphorIconsFill.trashSimple,
-            message: '已成功删除《${widget.pack.title}》',
-            type: GameToastType.success,
-          );
           Navigator.of(context).pop();
         } else {
           GameToast.show(

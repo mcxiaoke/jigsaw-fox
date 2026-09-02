@@ -482,7 +482,7 @@ class _ChooseDifficultySheetState extends State<ChooseDifficultySheet> {
                                   : (cid.startsWith(CanonicalId.prefixPack)
                                         ? '扩展包'
                                         : '主线')));
-                    final nowFav = await FavoriteStore.instance.toggleFavorite(
+                    await FavoriteStore.instance.toggleFavorite(
                       cid,
                       title: widget.title,
                       image: widget.imagePathOrUrl,
@@ -495,12 +495,6 @@ class _ChooseDifficultySheetState extends State<ChooseDifficultySheet> {
                       preferredDifficultyKey: SnapshotStore.difficultyKeyFor(
                         effectiveDiff,
                       ),
-                    );
-                    if (!mounted) return;
-                    GameToast.show(
-                      this.context,
-                      message: nowFav ? '已加入收藏' : '已取消收藏',
-                      type: GameToastType.info,
                     );
                   },
                 );
