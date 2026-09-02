@@ -40,7 +40,7 @@ class HowToPlayPage extends StatelessWidget {
       ),
       _TipItemData(
         icon: PhosphorIconsFill.stack,
-        color: const Color(0xFF9C6BC0),
+        color: palette.info,
         title: '底图透视参考 (Ghost)',
         desc: '点击顶部透视图标可在棋盘开启 20%/45% 半透明底图，辅助观察画面线条与色彩快速定位。',
       ),

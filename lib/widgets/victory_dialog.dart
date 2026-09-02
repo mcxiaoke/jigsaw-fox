@@ -354,7 +354,7 @@ class _VictoryDialogState extends State<VictoryDialog>
                             label: const Text('下一关'),
                             style: FilledButton.styleFrom(
                               backgroundColor: palette.brand,
-                              foregroundColor: Colors.white,
+                              foregroundColor: palette.surface,
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(14),
                               ),

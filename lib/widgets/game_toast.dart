@@ -147,7 +147,7 @@ class _GameToastWidgetState extends State<_GameToastWidget>
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             decoration: BoxDecoration(
-              color: const Color(0xFF2A2F3A),
+              color: p.surfaceContainerLow,
               borderRadius: BorderRadius.circular(24),
               border: Border.all(color: p.brand.withValues(alpha: 0.25), width: 1),
               boxShadow: [

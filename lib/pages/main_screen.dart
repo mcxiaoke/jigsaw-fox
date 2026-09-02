@@ -194,7 +194,7 @@ class _MoreMenu extends StatelessWidget {
           color: palette.secondaryText, size: 24),
       tooltip: '更多选项',
       elevation: 8,
-      shadowColor: Colors.black38,
+      shadowColor: palette.surfaceContainer,
       color: palette.surfaceContainer,
       offset: const Offset(0, 48),
       shape: RoundedRectangleBorder(

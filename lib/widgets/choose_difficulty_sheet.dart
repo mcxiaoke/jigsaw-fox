@@ -298,7 +298,7 @@ class _ChooseDifficultySheetState extends State<ChooseDifficultySheet> {
                         value: doNotShowAgain,
                         onChanged: (v) => setDialogState(() => doNotShowAgain = v ?? false),
                       ),
-                      const Text('不再提示此类跨度', style: TextStyle(fontSize: 13, color: Colors.black87)),
+                      Text('不再提示此类跨度', style: TextStyle(fontSize: 13, color: palette.primaryText)),
                     ],
                   ),
                 ],
