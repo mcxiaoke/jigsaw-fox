@@ -64,7 +64,7 @@ class _MainScreenState extends State<MainScreen> {
                 borderRadius: BorderRadius.circular(8),
               ),
               child: const Center(
-                child: Text('🦊', style: TextStyle(fontSize: 16)),
+                child: Text('\u{1F98A}', style: TextStyle(fontSize: 16)),
               ),
             ),
             const SizedBox(width: 8),
@@ -75,13 +75,12 @@ class _MainScreenState extends State<MainScreen> {
           ],
         ),
         actions: [
-          // Coin badge
           _CoinBadge(palette: palette),
-          const SizedBox(width: 4),
-          // Trophy button
+          const SizedBox(width: 2),
           _TrophyButton(palette: palette),
-          const SizedBox(width: 4),
-          // More menu
+          const SizedBox(width: 2),
+          _SettingsButton(palette: palette),
+          const SizedBox(width: 2),
           _MoreMenu(palette: palette),
           const SizedBox(width: 8),
         ],
@@ -157,10 +156,27 @@ class _TrophyButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return IconButton(
-      icon: Icon(PhosphorIconsFill.trophy, color: palette.brand, size: 22),
+      icon: Icon(PhosphorIconsBold.trophy, color: palette.brand, size: 22),
       tooltip: '成就与统计',
       onPressed: () async {
         await AchievementsPage.open(context);
+      },
+    );
+  }
+}
+
+// ── Settings Button (outline, no bg) ──────────
+class _SettingsButton extends StatelessWidget {
+  const _SettingsButton({required this.palette});
+  final AppPalette palette;
+
+  @override
+  Widget build(BuildContext context) {
+    return IconButton(
+      icon: Icon(PhosphorIconsBold.gear, color: palette.secondaryText, size: 22),
+      tooltip: '设置',
+      onPressed: () async {
+        await SettingsPage.open(context);
       },
     );
   }
@@ -174,8 +190,8 @@ class _MoreMenu extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return PopupMenuButton<String>(
-      icon: Icon(PhosphorIconsFill.dotsThreeVertical,
-          color: palette.secondaryText, size: 22),
+      icon: Icon(PhosphorIconsBold.dotsThree,
+          color: palette.secondaryText, size: 24),
       tooltip: '更多选项',
       elevation: 8,
       shadowColor: Colors.black38,
@@ -193,8 +209,6 @@ class _MoreMenu extends StatelessWidget {
           if (pack != null && context.mounted) {
             SoundService.I.play(Sfx.tap);
           }
-        } else if (val == 'settings') {
-          await SettingsPage.open(context);
         } else if (val == 'help') {
           await HowToPlayPage.open(context);
         }
@@ -207,15 +221,6 @@ class _MoreMenu extends StatelessWidget {
           iconColor: palette.success,
           title: '导入关卡包',
           subtitle: '从本地 ZIP 或网络导入',
-        ),
-        PopupMenuDivider(height: 1, color: palette.divider),
-        _menuItem(
-          value: 'settings',
-          icon: PhosphorIconsBold.gearSix,
-          iconBg: palette.surfaceContainerLow,
-          iconColor: palette.secondaryText,
-          title: '游戏设置',
-          subtitle: '音效、排布与触感设置',
         ),
         PopupMenuDivider(height: 1, color: palette.divider),
         _menuItem(
@@ -307,59 +312,51 @@ class _GameBottomNav extends StatelessWidget {
       decoration: BoxDecoration(
         color: palette.surface,
         border: Border(top: BorderSide(color: palette.divider, width: 0.8)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.15),
-            blurRadius: 12,
-            offset: const Offset(0, -2),
-          ),
-        ],
       ),
       child: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+        child: SizedBox(
+          height: 64,
           child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
             children: List.generate(items.length, (i) {
               final item = items[i];
               final isActive = i == currentIndex;
-              return GestureDetector(
-                onTap: () => onTap(i),
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 200),
-                  curve: Curves.easeOutBack,
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-                  decoration: isActive
-                      ? BoxDecoration(
-                          color: palette.brand.withValues(alpha: 0.08),
-                          borderRadius: BorderRadius.circular(16),
-                        )
-                      : null,
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      AnimatedScale(
-                        scale: isActive ? 1.1 : 1.0,
-                        duration: const Duration(milliseconds: 200),
-                        curve: Curves.easeOutBack,
-                        child: Icon(
-                          item.icon,
-                          size: 24,
-                          color: isActive ? palette.brand : palette.secondaryText,
+              return Expanded(
+                child: InkWell(
+                  onTap: () => onTap(i),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+                    decoration: isActive
+                        ? BoxDecoration(
+                            color: palette.brand.withValues(alpha: 0.08),
+                            borderRadius: BorderRadius.circular(14),
+                          )
+                        : null,
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        AnimatedScale(
+                          scale: isActive ? 1.1 : 1.0,
+                          duration: const Duration(milliseconds: 200),
+                          curve: Curves.easeOutBack,
+                          child: Icon(
+                            item.icon,
+                            size: 24,
+                            color: isActive ? palette.brand : palette.secondaryText,
+                          ),
                         ),
-                      ),
-                      const SizedBox(height: 3),
-                      Text(
-                        item.label,
-                        style: TextStyle(
-                          fontSize: 10,
-                          fontWeight:
-                              isActive ? FontWeight.w600 : FontWeight.w500,
-                          color: isActive ? palette.brand : palette.disabledText,
+                        const SizedBox(height: 4),
+                        Text(
+                          item.label,
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: isActive ? FontWeight.w600 : FontWeight.w500,
+                            color: isActive ? palette.brand : palette.disabledText,
+                          ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
               );

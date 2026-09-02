@@ -291,7 +291,7 @@ class _ChooseDifficultySheetState extends State<ChooseDifficultySheet> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   const Text('当前 54 块相比新手 24 块难度提升较大，碎片较为小巧。是否继续进入挑战？'),
-                  const SizedBox(height: 12),
+            const SizedBox(height: 24),
                   Row(
                     children: [
                       Checkbox(
@@ -416,70 +416,73 @@ class _ChooseDifficultySheetState extends State<ChooseDifficultySheet> {
       body: SafeArea(
         top: false,
         child: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-            // Puzzle Image Preview Card with Grid Overlay
+            // Puzzle Image Preview Card with Grid Overlay — large preview, max width
             Center(
               child: ClipRRect(
-                borderRadius: BorderRadius.circular(16),
+                borderRadius: BorderRadius.circular(20),
                 child: Container(
-                  width: 280,
-                  height: 180,
+                  width: double.infinity,
+                  constraints: const BoxConstraints(maxWidth: 520, maxHeight: 360),
                   color: palette.surfaceContainer,
-                  child: Stack(
-                    fit: StackFit.expand,
-                    children: [
-                      Image.memory(
-                        widget.imageBytes,
-                        fit: BoxFit.cover,
-                      ),
-                      if (_showGridOverlay)
-                        CustomPaint(
-                          painter: _JigsawOverlayPainter(
-                            rows: effectiveDiff.rows,
-                            cols: effectiveDiff.cols,
-                          ),
+                  child: AspectRatio(
+                    aspectRatio: _imageLoaded && _imageHeight > 0 ? _imageWidth / _imageHeight : 1.0,
+                    child: Stack(
+                      fit: StackFit.expand,
+                      children: [
+                        Image.memory(
+                          widget.imageBytes,
+                          fit: BoxFit.cover,
                         ),
-                      Positioned(
-                        right: 8,
-                        bottom: 8,
-                        child: Material(
-                          color: Colors.black54,
-                          borderRadius: BorderRadius.circular(16),
-                          child: InkWell(
+                        if (_showGridOverlay)
+                          CustomPaint(
+                            painter: _JigsawOverlayPainter(
+                              rows: effectiveDiff.rows,
+                              cols: effectiveDiff.cols,
+                            ),
+                          ),
+                        Positioned(
+                          right: 10,
+                          bottom: 10,
+                          child: Material(
+                            color: Colors.black54,
                             borderRadius: BorderRadius.circular(16),
-                            onTap: () {
-                              SoundService.I.play(Sfx.tap);
-                              setState(() {
-                                _showGridOverlay = !_showGridOverlay;
-                              });
-                              _repo.gridPreviewEnabled = _showGridOverlay;
-                            },
-                            child: Padding(
-                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Icon(
-                                    _showGridOverlay ? PhosphorIconsFill.gridFour : PhosphorIconsRegular.gridFour,
-                                    color: Colors.white,
-                                    size: 14,
-                                  ),
-                                  const SizedBox(width: 4),
-                                  Text(
-                                    _showGridOverlay ? '切图网格' : '无网格',
-                                    style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
-                                  ),
-                                ],
+                            child: InkWell(
+                              borderRadius: BorderRadius.circular(16),
+                              onTap: () {
+                                SoundService.I.play(Sfx.tap);
+                                setState(() {
+                                  _showGridOverlay = !_showGridOverlay;
+                                });
+                                _repo.gridPreviewEnabled = _showGridOverlay;
+                              },
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(
+                                      _showGridOverlay ? PhosphorIconsFill.gridFour : PhosphorIconsRegular.gridFour,
+                                      color: Colors.white,
+                                      size: 14,
+                                    ),
+                                    const SizedBox(width: 4),
+                                    Text(
+                                      _showGridOverlay ? '切图网格' : '无网格',
+                                      style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
+                                    ),
+                                  ],
+                                ),
                               ),
                             ),
                           ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
               ),
@@ -545,7 +548,7 @@ class _ChooseDifficultySheetState extends State<ChooseDifficultySheet> {
                 ),
               ),
 
-            const SizedBox(height: 6),
+            const SizedBox(height: 20),
 
             // Difficulty & Aspect Ratio Info Header
             Padding(
@@ -622,13 +625,13 @@ class _ChooseDifficultySheetState extends State<ChooseDifficultySheet> {
                 ],
               ),
             ),
-            const SizedBox(height: 4),
+            const SizedBox(height: 16),
             Text(
               '⏱️ 预计耗时：${selectedTier.estimatedMinutes}',
               style: TextStyle(fontSize: 12, color: palette.secondaryText, fontWeight: FontWeight.w500),
               textAlign: TextAlign.center,
             ),
-            const SizedBox(height: 14),
+            const SizedBox(height: 28),
 
             // Horizontal scroll of 7 difficulty tiers
             SingleChildScrollView(
@@ -649,11 +652,11 @@ class _ChooseDifficultySheetState extends State<ChooseDifficultySheet> {
               ),
             ),
 
-            const SizedBox(height: 18),
+            const SizedBox(height: 32),
 
             // Big Start CTA Button with Saved Progress Detection
             Padding(
-              padding: const EdgeInsets.fromLTRB(0, 0, 0, 20),
+              padding: const EdgeInsets.fromLTRB(0, 0, 0, 40),
               child: Builder(
                 builder: (context) {
                   final hasSavedProgress = widget.savedProgressPercent != null && widget.savedProgressPercent! > 0;

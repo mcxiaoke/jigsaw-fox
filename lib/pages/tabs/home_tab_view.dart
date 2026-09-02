@@ -612,11 +612,11 @@ class _LevelCard extends StatelessWidget {
               targetHeight: 360,
             ),
 
-            // Dark overlay for locked levels
+            // Dark overlay for locked levels — warm grey wash instead of black
             if (!level.isUnlocked)
               Container(
                 decoration: BoxDecoration(
-                  color: Colors.black.withValues(alpha: 0.45),
+                  color: palette.surface.withValues(alpha: 0.55),
                 ),
               ),
 
