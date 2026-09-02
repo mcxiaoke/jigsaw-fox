@@ -1344,7 +1344,7 @@ def main():
         """
     )
     parser.add_argument("-i", "--input", type=str, required=True, help="输入图片目录或单张图片路径")
-    parser.add_argument("-o", "--output-dir", type=str, default="./temp/puzzle_quality_report", help="报告输出目录 (默认: ./temp/puzzle_quality_report)")
+    parser.add_argument("-o", "--output-dir", "--output", type=str, default=None, help="报告输出目录 (默认: 与 input 目录一致)")
     parser.add_argument("-w", "--workers", type=int, default=os.cpu_count() or 4, help="Stage 1 物理分析并发线程数 (默认: CPU核心数)")
     parser.add_argument("-m", "--max-images", type=int, default=None, help="最大扫描图片数量")
     parser.add_argument("--grid-size", type=int, default=8, help="网格切片大小 N x N (默认: 8, 即 64 块)")
@@ -1363,7 +1363,6 @@ def main():
     args = parser.parse_args()
     
     input_path = Path(args.input)
-    output_dir = Path(args.output_dir)
     enable_vlm = args.vlm and not args.no_vlm
     
     if not input_path.exists():
@@ -1376,6 +1375,12 @@ def main():
     else:
         base_dir = input_path
         image_files = scan_directory_for_images(input_path, recursive=not args.no_recursive)
+
+    if args.output_dir:
+        output_dir = Path(args.output_dir)
+    else:
+        output_dir = base_dir
+    output_dir.mkdir(parents=True, exist_ok=True)
         
     if args.max_images and len(image_files) > args.max_images:
         image_files = image_files[:args.max_images]

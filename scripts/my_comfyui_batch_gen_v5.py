@@ -30,10 +30,11 @@ Design notes:
 
 Usage:
     python scripts/my_comfyui_batch_gen_v5.py --list-tags
-    python scripts/my_comfyui_batch_gen_v5.py --workflow wf_api.json --dry-run --dry-run-count 5
-    python scripts/my_comfyui_batch_gen_v5.py --workflow wf_api.json --comfyui-root D:/ComfyUI --out D:/jigsaw_raw
-    python scripts/my_comfyui_batch_gen_v5.py --workflow wf_api.json --tags Nature,Flowers --per-tag 20
-    python scripts/my_comfyui_batch_gen_v5.py --workflow wf_api.json --resume --out D:/jigsaw_raw
+    python scripts/my_comfyui_batch_gen_v5.py --dry-run --dry-run-count 5
+    python scripts/my_comfyui_batch_gen_v5.py --tags Nature,Flowers --per-tag 20
+    python scripts/my_comfyui_batch_gen_v5.py --library scripts/my_prompt_library_illust_v5.json --tags Cartoon,Pets
+    python scripts/my_comfyui_batch_gen_v5.py --cards-per-subject 2 --seed-base 87654321
+    python scripts/my_comfyui_batch_gen_v5.py --resume --out D:/jigsaw_raw
 """
 
 from __future__ import annotations
@@ -575,13 +576,18 @@ def parse_args(argv=None):
         default=str(Path(__file__).with_name("my_prompt_library_v5.json")),
         help="prompt library JSON (default: my_prompt_library_v5.json)",
     )
-    p.add_argument("--workflow", help="ComfyUI workflow exported in API format (JSON)")
+    p.add_argument(
+        "--workflow",
+        default=str(Path(__file__).with_name("zimage_api_workflow_v5.json")),
+        help="ComfyUI workflow exported in API format (JSON) (default: scripts/zimage_api_workflow_v5.json)",
+    )
     p.add_argument(
         "--host", default="http://127.0.0.1:8188", help="ComfyUI HTTP address"
     )
     p.add_argument(
         "--comfyui-root",
-        help="ComfyUI install root, needed to move files out of its output dir",
+        default=r"F:\ai\ComfyUI\ComfyUI",
+        help=r"ComfyUI install root (default: F:\ai\ComfyUI\ComfyUI)",
     )
     p.add_argument("--out", default="jigsaw_raw", help="output directory")
     p.add_argument("--tags", help="comma separated tag ids to restrict the run")
