@@ -5,7 +5,10 @@ import 'package:flutter/material.dart';
 import 'package:phosphoricons_flutter/phosphoricons_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../data/favorite_store.dart';
 import '../data/game_repository.dart';
+import '../data/snapshot_store.dart';
+import '../logic/content/models/canonical_id.dart';
 import '../logic/geometry/edge_layout.dart';
 import '../logic/geometry/piece_shape.dart';
 import '../logic/puzzle_model.dart';
@@ -77,6 +80,7 @@ class ChooseDifficultySheet extends StatefulWidget {
     required this.initialDifficulty,
     required this.title,
     required this.onStart,
+    this.canonicalId,
     this.completedPieceCounts = const {},
     this.isUnlocked = true,
     this.lockedMessage,
@@ -85,12 +89,14 @@ class ChooseDifficultySheet extends StatefulWidget {
     this.onResetProgress,
     this.sourcePlatform,
     this.sourceUrl,
+    this.imagePathOrUrl,
   });
 
   final Uint8List imageBytes;
   final PuzzleDifficulty initialDifficulty;
   final String title;
   final ValueChanged<PuzzleDifficulty> onStart;
+  final String? canonicalId;
   final Set<int> completedPieceCounts;
   final bool isUnlocked;
   final String? lockedMessage;
@@ -99,6 +105,7 @@ class ChooseDifficultySheet extends StatefulWidget {
   final VoidCallback? onResetProgress;
   final String? sourcePlatform;
   final String? sourceUrl;
+  final String? imagePathOrUrl;
 
   static Future<void> show({
     required BuildContext context,
@@ -106,6 +113,7 @@ class ChooseDifficultySheet extends StatefulWidget {
     required PuzzleDifficulty initialDifficulty,
     required String title,
     required ValueChanged<PuzzleDifficulty> onStart,
+    String? canonicalId,
     Set<int> completedPieceCounts = const {},
     bool isUnlocked = true,
     String? lockedMessage,
@@ -114,6 +122,7 @@ class ChooseDifficultySheet extends StatefulWidget {
     VoidCallback? onResetProgress,
     String? sourcePlatform,
     String? sourceUrl,
+    String? imagePathOrUrl,
   }) {
     return Navigator.of(context).push(
       MaterialPageRoute<void>(
@@ -122,6 +131,7 @@ class ChooseDifficultySheet extends StatefulWidget {
           initialDifficulty: initialDifficulty,
           title: title,
           onStart: onStart,
+          canonicalId: canonicalId,
           completedPieceCounts: completedPieceCounts,
           isUnlocked: isUnlocked,
           lockedMessage: lockedMessage,
@@ -130,6 +140,7 @@ class ChooseDifficultySheet extends StatefulWidget {
           onResetProgress: onResetProgress,
           sourcePlatform: sourcePlatform,
           sourceUrl: sourceUrl,
+          imagePathOrUrl: imagePathOrUrl,
         ),
       ),
     );
@@ -385,8 +396,19 @@ class _ChooseDifficultySheetState extends State<ChooseDifficultySheet> {
         ),
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
           children: [
-            Text('选择难度', style: styles.h3.copyWith(fontSize: 18)),
+            Text('选择难度', style: styles.h3.copyWith(fontSize: 17)),
+            if (widget.title.isNotEmpty && widget.title != '选择难度')
+              Text(
+                widget.title,
+                style: styles.caption.copyWith(
+                  color: palette.secondaryText,
+                  fontSize: 11,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
             if (widget.sourcePlatform != null && widget.sourceUrl != null)
               Row(
                 children: [
@@ -428,6 +450,62 @@ class _ChooseDifficultySheetState extends State<ChooseDifficultySheet> {
           ],
         ),
         actions: [
+          if (widget.canonicalId != null && widget.canonicalId!.isNotEmpty)
+            ValueListenableBuilder<Set<String>>(
+              valueListenable: FavoriteStore.instance.idsNotifier,
+              builder: (_, ids, child) {
+                final isFav = ids.contains(widget.canonicalId);
+                return IconButton(
+                  icon: Icon(
+                    isFav ? PhosphorIconsFill.heart : PhosphorIconsBold.heart,
+                    color: isFav ? Colors.redAccent : palette.secondaryText,
+                    size: 21,
+                  ),
+                  tooltip: isFav ? '取消收藏' : '加入收藏',
+                  onPressed: () async {
+                    final cid = widget.canonicalId!;
+                    final aspect = (_imageWidth > 0 && _imageHeight > 0)
+                        ? PuzzleAspectRatio.fromSize(
+                            _imageWidth,
+                            _imageHeight,
+                          ).name
+                        : PuzzleAspectRatio.fromSize(
+                            effectiveDiff.cols.toDouble(),
+                            effectiveDiff.rows.toDouble(),
+                          ).name;
+                    final source =
+                        widget.sourcePlatform ??
+                        (cid.startsWith(CanonicalId.prefixDaily)
+                            ? '每日'
+                            : (cid.startsWith(CanonicalId.prefixUgc)
+                                  ? '自制'
+                                  : (cid.startsWith(CanonicalId.prefixPack)
+                                        ? '扩展包'
+                                        : '主线')));
+                    final nowFav = await FavoriteStore.instance.toggleFavorite(
+                      cid,
+                      title: widget.title,
+                      image: widget.imagePathOrUrl,
+                      sourceLabel: source,
+                      isLocalFile:
+                          widget.imagePathOrUrl != null &&
+                          !widget.imagePathOrUrl!.startsWith('assets/') &&
+                          !widget.imagePathOrUrl!.startsWith('http'),
+                      aspectRatioLabel: aspect,
+                      preferredDifficultyKey: SnapshotStore.difficultyKeyFor(
+                        effectiveDiff,
+                      ),
+                    );
+                    if (!mounted) return;
+                    GameToast.show(
+                      this.context,
+                      message: nowFav ? '已加入收藏' : '已取消收藏',
+                      type: GameToastType.info,
+                    );
+                  },
+                );
+              },
+            ),
           if (widget.onDelete != null)
             IconButton(
               icon: Icon(

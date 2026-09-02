@@ -9,9 +9,10 @@ import 'settings_page.dart';
 import 'tabs/daily_tab_view.dart';
 import 'tabs/events_tab_view.dart';
 import 'tabs/home_tab_view.dart';
+import 'tabs/my_center_tab_view.dart';
 import 'tabs/my_puzzles_tab_view.dart';
 
-/// Main screen featuring the 4-tab bottom navigation (Home / Daily / Events / My)
+/// Main screen featuring the 5-tab bottom navigation (Home / Daily / Events / Custom / My)
 /// with game-styled bottom nav: filled icons + amber gold active state glow.
 class MainScreen extends StatefulWidget {
   const MainScreen({super.key});
@@ -32,6 +33,8 @@ class _MainScreenState extends State<MainScreen> {
       case 2:
         return '活动专题';
       case 3:
+        return '自制拼图';
+      case 4:
         return '我的拼图';
       default:
         return '异形拼图';
@@ -71,7 +74,7 @@ class _MainScreenState extends State<MainScreen> {
         ),
         actions: [
           _TrophyButton(palette: palette),
-          if (_currentIndex == 3) ...[
+          if (_currentIndex == 4) ...[
             const SizedBox(width: 2),
             _SettingsButton(palette: palette),
           ],
@@ -90,6 +93,13 @@ class _MainScreenState extends State<MainScreen> {
           const DailyTabView(),
           const EventsTabView(),
           const MyPuzzlesTabView(),
+          MyCenterTabView(
+            isActive: _currentIndex == 4,
+            onGoExplore: () {
+              SoundService.I.play(Sfx.tap);
+              setState(() => _currentIndex = 0);
+            },
+          ),
         ],
       ),
       bottomNavigationBar: _GameBottomNav(
@@ -204,6 +214,7 @@ class _GameBottomNav extends StatelessWidget {
       _NavItemData(icon: PhosphorIconsFill.calendarCheck, label: '每日'),
       _NavItemData(icon: PhosphorIconsFill.sparkle, label: '活动'),
       _NavItemData(icon: PhosphorIconsFill.images, label: '自制'),
+      _NavItemData(icon: PhosphorIconsFill.user, label: '我的'),
     ];
 
     return Container(

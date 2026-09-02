@@ -1,9 +1,9 @@
 import 'dart:async';
 import 'dart:io';
 import 'dart:math';
-import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:phosphoricons_flutter/phosphoricons_flutter.dart';
 
@@ -112,6 +112,7 @@ class _VictoryDialogState extends State<VictoryDialog>
   late final Animation<double> _fadeAnim;
   late final Animation<double> _imageScale;
   late final Animation<double> _statProgress;
+  late final FocusNode _focusNode;
 
   int _litStars = 0;
   int _displayedTime = 0;
@@ -121,6 +122,7 @@ class _VictoryDialogState extends State<VictoryDialog>
   @override
   void initState() {
     super.initState();
+    _focusNode = FocusNode();
 
     // Fade-in overlay (300ms)
     _fadeController = AnimationController(
@@ -193,6 +195,7 @@ class _VictoryDialogState extends State<VictoryDialog>
 
   @override
   void dispose() {
+    _focusNode.dispose();
     _fadeController.dispose();
     _imageController.dispose();
     _starController.dispose();
@@ -232,284 +235,404 @@ class _VictoryDialogState extends State<VictoryDialog>
     final palette = AppPalette.of(context);
     final styles = AppTextStyles.of(context);
 
-    return AnimatedBuilder(
-      animation: _fadeAnim,
-      builder: (context, child) {
-        return Container(
-          color: palette.surface.withValues(alpha: 0.92 * _fadeAnim.value),
-          child: child,
-        );
+    return Focus(
+      focusNode: _focusNode,
+      autofocus: true,
+      onKeyEvent: (node, event) {
+        if (event is KeyDownEvent &&
+            event.logicalKey == LogicalKeyboardKey.escape) {
+          Navigator.of(context).pop();
+          if (widget.onViewPuzzle != null) {
+            widget.onViewPuzzle!();
+          }
+          return KeyEventResult.handled;
+        }
+        return KeyEventResult.ignored;
       },
-      child: Stack(
-        children: [
-          // Confetti layer
-          Positioned.fill(
-            child: CustomPaint(painter: _ConfettiPainter(palette)),
-          ),
+      child: AnimatedBuilder(
+        animation: _fadeAnim,
+        builder: (context, child) {
+          return Container(
+            color: palette.surface.withValues(alpha: 0.92 * _fadeAnim.value),
+            child: child,
+          );
+        },
+        child: Stack(
+          children: [
+            // Confetti layer
+            Positioned.fill(
+              child: CustomPaint(painter: _ConfettiPainter(palette)),
+            ),
 
-          // Main content
-          Center(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 24),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  // Title
-                  Text(
-                    '拼图完成！',
-                    style: styles.h1.copyWith(
-                      fontSize: 24,
-                      color: palette.brand,
+            // Top-right close button (X)
+            Positioned(
+              top: 16,
+              right: 16,
+              child: SafeArea(
+                child: Material(
+                  color: palette.surfaceContainer.withValues(alpha: 0.85),
+                  shape: const CircleBorder(),
+                  elevation: 2,
+                  child: IconButton(
+                    icon: Icon(
+                      PhosphorIconsBold.x,
+                      size: 20,
+                      color: palette.primaryText,
                     ),
-                  ),
-                  const SizedBox(height: 16),
-
-                  // Completed image with brand border
-                  ScaleTransition(
-                    scale: _imageScale,
-                    child: Container(
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(color: palette.brand, width: 4),
-                        boxShadow: [
-                          BoxShadow(
-                            color: palette.brand.withValues(alpha: 0.3),
-                            blurRadius: 20,
-                            offset: const Offset(0, 4),
-                          ),
-                        ],
-                      ),
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(12),
-                        child: Image.memory(
-                          widget.imageBytes,
-                          width: 200,
-                          height: 200,
-                          fit: BoxFit.cover,
-                          // 解码期降采样：展示盒 200px × 3 倍 DPR 足够清晰，
-                          // 避免按原图分辨率全量解码（超分图可达数十 MB）
-                          cacheWidth: 600,
-                          errorBuilder: (_, _, _) => Container(
-                            width: 200,
-                            height: 200,
-                            color: palette.surfaceContainer,
-                            child: Icon(
-                              PhosphorIconsFill.puzzlePiece,
-                              size: 48,
-                              color: palette.brand,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-
-                  // Stars
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: List.generate(3, (i) {
-                      final lit = i < _litStars;
-                      return Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 6),
-                        child: AnimatedScale(
-                          scale: lit ? 1.0 : 0.6,
-                          duration: const Duration(milliseconds: 300),
-                          curve: Curves.easeOutBack,
-                          child: Icon(
-                            lit
-                                ? PhosphorIconsFill.star
-                                : PhosphorIconsRegular.star,
-                            size: 36,
-                            color: lit ? palette.gold : palette.disabledText,
-                          ),
-                        ),
-                      );
-                    }),
-                  ),
-                  const SizedBox(height: 20),
-
-                  // Stats row
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                    children: [
-                      _buildStat(
-                        icon: PhosphorIconsBold.clock,
-                        label: '用时',
-                        value: _formatTime(_displayedTime),
-                        palette: palette,
-                        styles: styles,
-                      ),
-                      _buildStat(
-                        icon: PhosphorIconsBold.puzzlePiece,
-                        label: '规格',
-                        value: widget.pieceCount != null
-                            ? '${widget.pieceCount}块'
-                            : '$_displayedMoves',
-                        palette: palette,
-                        styles: styles,
-                      ),
-                      _buildStat(
-                        icon: PhosphorIconsFill.coins,
-                        label: '奖励',
-                        value: '+$_displayedCoins',
-                        color: palette.gold,
-                        palette: palette,
-                        styles: styles,
-                      ),
-                    ],
-                  ),
-
-                  // Unlocked achievements banner
-                  if (widget.newAchievements.isNotEmpty) ...[
-                    const SizedBox(height: 14),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 14,
-                        vertical: 8,
-                      ),
-                      decoration: BoxDecoration(
-                        color: palette.gold.withValues(alpha: 0.12),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(
-                          color: palette.gold.withValues(alpha: 0.4),
-                        ),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(
-                            PhosphorIconsFill.trophy,
-                            size: 20,
-                            color: palette.gold,
-                          ),
-                          const SizedBox(width: 8),
-                          Flexible(
-                            child: Text(
-                              '解锁成就: ${widget.newAchievements.map((a) => a.title).join("、")}',
-                              style: styles.caption.copyWith(
-                                fontWeight: FontWeight.bold,
-                                color: palette.brand,
-                              ),
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                  const SizedBox(height: 22),
-
-                  // Action buttons
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Expanded(
-                        child: OutlinedButton.icon(
-                          onPressed:
-                              widget.onSaveWallpaper ?? _defaultSaveWallpaper,
-                          icon: const Icon(
-                            PhosphorIconsRegular.image,
-                            size: 16,
-                          ),
-                          label: const Text('保存壁纸'),
-                          style: OutlinedButton.styleFrom(
-                            foregroundColor: palette.secondaryText,
-                            side: BorderSide(color: palette.divider),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(14),
-                            ),
-                            padding: const EdgeInsets.symmetric(vertical: 12),
-                          ),
-                        ),
-                      ),
-                      if (widget.onShare != null) ...[
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: FilledButton.icon(
-                            onPressed: widget.onShare,
-                            icon: const Icon(
-                              PhosphorIconsBold.shareNetwork,
-                              size: 16,
-                            ),
-                            label: const Text('分享成绩'),
-                            style: FilledButton.styleFrom(
-                              backgroundColor: palette.surfaceContainer,
-                              foregroundColor: palette.primaryText,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(14),
-                              ),
-                              padding: const EdgeInsets.symmetric(vertical: 12),
-                            ),
-                          ),
-                        ),
-                      ],
-                      const SizedBox(width: 10),
-                      if (widget.onNextLevel != null)
-                        Expanded(
-                          child: FilledButton.icon(
-                            onPressed: () {
-                              Navigator.of(context).pop();
-                              widget.onNextLevel!();
-                            },
-                            icon: const Icon(PhosphorIconsFill.play, size: 16),
-                            label: const Text('下一关'),
-                            style: FilledButton.styleFrom(
-                              backgroundColor: palette.brand,
-                              foregroundColor: palette.surface,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(14),
-                              ),
-                              padding: const EdgeInsets.symmetric(vertical: 12),
-                              elevation: 2,
-                            ),
-                          ),
-                        )
-                      else
-                        Expanded(
-                          child: FilledButton.icon(
-                            onPressed: () {
-                              Navigator.of(context).pop();
-                              if (widget.onExit != null) {
-                                widget.onExit!();
-                              }
-                            },
-                            icon: const Icon(PhosphorIconsBold.check, size: 16),
-                            label: const Text('返回列表'),
-                            style: FilledButton.styleFrom(
-                              backgroundColor: palette.brand,
-                              foregroundColor: palette.surface,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(14),
-                              ),
-                              padding: const EdgeInsets.symmetric(vertical: 12),
-                              elevation: 2,
-                            ),
-                          ),
-                        ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-
-                  // Close / View Puzzle button
-                  TextButton(
+                    tooltip: '关闭弹窗 (Esc)',
                     onPressed: () {
                       Navigator.of(context).pop();
                       if (widget.onViewPuzzle != null) {
                         widget.onViewPuzzle!();
                       }
                     },
-                    child: Text(
-                      widget.onViewPuzzle != null ? '查看已完成拼图' : '返回',
-                      style: TextStyle(color: palette.secondaryText),
-                    ),
                   ),
-                ],
+                ),
               ),
             ),
-          ),
-        ],
+
+            // Main content
+            Center(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // Title
+                    Text(
+                      '拼图完成！',
+                      style: styles.h1.copyWith(
+                        fontSize: 24,
+                        color: palette.brand,
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+
+                    // Completed image with brand border
+                    ScaleTransition(
+                      scale: _imageScale,
+                      child: Container(
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(color: palette.brand, width: 4),
+                          boxShadow: [
+                            BoxShadow(
+                              color: palette.brand.withValues(alpha: 0.3),
+                              blurRadius: 20,
+                              offset: const Offset(0, 4),
+                            ),
+                          ],
+                        ),
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(12),
+                          child: Image.memory(
+                            widget.imageBytes,
+                            width: 200,
+                            height: 200,
+                            fit: BoxFit.cover,
+                            cacheWidth: 600,
+                            errorBuilder: (_, _, _) => Container(
+                              width: 200,
+                              height: 200,
+                              color: palette.surfaceContainer,
+                              child: Icon(
+                                PhosphorIconsFill.puzzlePiece,
+                                size: 48,
+                                color: palette.brand,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+
+                    // Stars
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: List.generate(3, (i) {
+                        final lit = i < _litStars;
+                        return Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 6),
+                          child: AnimatedScale(
+                            scale: lit ? 1.0 : 0.6,
+                            duration: const Duration(milliseconds: 300),
+                            curve: Curves.easeOutBack,
+                            child: Icon(
+                              lit
+                                  ? PhosphorIconsFill.star
+                                  : PhosphorIconsRegular.star,
+                              size: 36,
+                              color: lit ? palette.gold : palette.divider,
+                            ),
+                          ),
+                        );
+                      }),
+                    ),
+                    const SizedBox(height: 18),
+
+                    // Stats row
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        vertical: 12,
+                        horizontal: 16,
+                      ),
+                      decoration: BoxDecoration(
+                        color: palette.surfaceContainer,
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: palette.divider),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                        children: [
+                          _buildStat(
+                            icon: PhosphorIconsRegular.clock,
+                            label: '用时',
+                            value: _formatTime(_displayedTime),
+                            palette: palette,
+                            styles: styles,
+                          ),
+                          Container(
+                            width: 1,
+                            height: 32,
+                            color: palette.divider,
+                          ),
+                          _buildStat(
+                            icon: PhosphorIconsRegular.puzzlePiece,
+                            label: '规格',
+                            value: widget.pieceCount != null
+                                ? '${widget.pieceCount} 块'
+                                : '$_displayedMoves 步',
+                            palette: palette,
+                            styles: styles,
+                          ),
+                          if (widget.rewardCoins > 0) ...[
+                            Container(
+                              width: 1,
+                              height: 32,
+                              color: palette.divider,
+                            ),
+                            _buildStat(
+                              icon: PhosphorIconsFill.coins,
+                              label: '奖励',
+                              value: '+$_displayedCoins',
+                              color: palette.gold,
+                              palette: palette,
+                              styles: styles,
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+
+                    // New achievements bar (if any)
+                    if (widget.newAchievements.isNotEmpty) ...[
+                      const SizedBox(height: 12),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          vertical: 8,
+                          horizontal: 14,
+                        ),
+                        decoration: BoxDecoration(
+                          color: palette.gold.withValues(alpha: 0.12),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: palette.gold.withValues(alpha: 0.35),
+                          ),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              PhosphorIconsFill.trophy,
+                              size: 20,
+                              color: palette.gold,
+                            ),
+                            const SizedBox(width: 8),
+                            Flexible(
+                              child: Text(
+                                '解锁成就: ${widget.newAchievements.map((a) => a.title).join("、")}',
+                                style: styles.caption.copyWith(
+                                  fontWeight: FontWeight.bold,
+                                  color: palette.brand,
+                                ),
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                    const SizedBox(height: 20),
+
+                    // 1. 核心行动栏（Primary Action Buttons）
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        if (widget.onNextLevel != null) ...[
+                          Expanded(
+                            child: OutlinedButton.icon(
+                              onPressed: () {
+                                Navigator.of(context).pop();
+                                if (widget.onExit != null) {
+                                  widget.onExit!();
+                                }
+                              },
+                              icon: const Icon(
+                                PhosphorIconsBold.arrowLeft,
+                                size: 16,
+                              ),
+                              label: const Text('返回列表'),
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: palette.primaryText,
+                                side: BorderSide(
+                                  color: palette.divider,
+                                  width: 1.2,
+                                ),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(14),
+                                ),
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 12,
+                                ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: FilledButton.icon(
+                              onPressed: () {
+                                Navigator.of(context).pop();
+                                widget.onNextLevel!();
+                              },
+                              icon: const Icon(
+                                PhosphorIconsFill.play,
+                                size: 16,
+                              ),
+                              label: const Text('下一关'),
+                              style: FilledButton.styleFrom(
+                                backgroundColor: palette.brand,
+                                foregroundColor: palette.surface,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(14),
+                                ),
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 12,
+                                ),
+                                elevation: 2,
+                              ),
+                            ),
+                          ),
+                        ] else ...[
+                          Expanded(
+                            child: FilledButton.icon(
+                              onPressed: () {
+                                Navigator.of(context).pop();
+                                if (widget.onExit != null) {
+                                  widget.onExit!();
+                                }
+                              },
+                              icon: const Icon(
+                                PhosphorIconsBold.check,
+                                size: 16,
+                              ),
+                              label: const Text('返回列表'),
+                              style: FilledButton.styleFrom(
+                                backgroundColor: palette.brand,
+                                foregroundColor: palette.surface,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(14),
+                                ),
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 12,
+                                ),
+                                elevation: 2,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+
+                    // 2. 辅助功能栏（Secondary Utility Buttons）
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Expanded(
+                          child: OutlinedButton.icon(
+                            onPressed:
+                                widget.onSaveWallpaper ?? _defaultSaveWallpaper,
+                            icon: const Icon(
+                              PhosphorIconsRegular.image,
+                              size: 15,
+                            ),
+                            label: const Text('保存壁纸'),
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: palette.secondaryText,
+                              side: BorderSide(
+                                color: palette.divider.withValues(alpha: 0.6),
+                              ),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              padding: const EdgeInsets.symmetric(vertical: 9),
+                            ),
+                          ),
+                        ),
+                        if (widget.onShare != null) ...[
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: OutlinedButton.icon(
+                              onPressed: widget.onShare,
+                              icon: const Icon(
+                                PhosphorIconsBold.shareNetwork,
+                                size: 15,
+                              ),
+                              label: const Text('分享成绩'),
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: palette.secondaryText,
+                                side: BorderSide(
+                                  color: palette.divider.withValues(alpha: 0.6),
+                                ),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 9,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+
+                    // 3. 留在棋盘查看大图
+                    TextButton.icon(
+                      onPressed: () {
+                        Navigator.of(context).pop();
+                        if (widget.onViewPuzzle != null) {
+                          widget.onViewPuzzle!();
+                        }
+                      },
+                      icon: const Icon(PhosphorIconsBold.eye, size: 15),
+                      label: Text(
+                        widget.onViewPuzzle != null ? '留在棋盘欣赏完整拼图' : '返回',
+                      ),
+                      style: TextButton.styleFrom(
+                        foregroundColor: palette.secondaryText,
+                        visualDensity: VisualDensity.compact,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

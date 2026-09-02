@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:path_provider/path_provider.dart';
 
+import 'data/favorite_store.dart';
 import 'data/game_repository.dart';
 import 'logic/cache/image_cache_manager.dart';
 import 'logic/content/app_content.dart';
@@ -56,12 +57,13 @@ void main() async {
   }
 
   final sw = Stopwatch()..start();
-  // 组1 必须await：首屏与币/成就强依赖（main.dart:80 需首帧就绪避免 coins 0 与成就阻塞）
+  // 组1 必须await：首屏与币/成就/收藏强依赖
   await Future.wait([
     ImageCacheManager.instance.init(),
     GameRepository.instance.init(),
     EconomyService.instance.init(),
     AchievementStore.instance.init(),
+    FavoriteStore.instance.init(),
   ]);
   AppLogger.system.info('Group1(Core) init done ${sw.elapsedMilliseconds}ms');
   sw.reset();

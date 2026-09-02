@@ -106,8 +106,8 @@ class _PackLevelsPageState extends State<PackLevelsPage> {
     if (!imageFile.existsSync()) {
       GameToast.show(
         context,
-          icon: PhosphorIconsRegular.warning,
-          message: '关卡图片文件不存在',
+        icon: PhosphorIconsRegular.warning,
+        message: '关卡图片文件不存在',
         type: GameToastType.error,
       );
       return;
@@ -177,6 +177,7 @@ class _PackLevelsPageState extends State<PackLevelsPage> {
       imageBytes: bytes,
       initialDifficulty: _defaultDiff,
       completedPieceCounts: progress.completedPieceCounts.toSet(),
+      canonicalId: canonicalId,
       isUnlocked: true,
       title: '${widget.pack.title} · 第 ${level.order} 关',
       sourcePlatform: widget.pack.displaySource,

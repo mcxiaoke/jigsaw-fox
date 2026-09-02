@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:phosphoricons_flutter/phosphoricons_flutter.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../data/game_repository.dart';
 import '../../data/models/daily_challenge.dart';
@@ -22,6 +23,48 @@ class DailyTabView extends StatefulWidget {
 
 class _DailyTabViewState extends State<DailyTabView> {
   final _repo = GameRepository.instance;
+
+  static const String _keyDailyFoldPrefs = 'jigsaw_daily_fold_v1';
+  final Set<String> _expandedMonthKeys = {};
+
+  @override
+  void initState() {
+    super.initState();
+    final now = DateTime.now();
+    _expandedMonthKeys.add(
+      '${now.year}-${now.month.toString().padLeft(2, '0')}',
+    );
+    _loadFoldPrefs();
+  }
+
+  Future<void> _loadFoldPrefs() async {
+    final prefs = await SharedPreferences.getInstance();
+    final saved = prefs.getStringList(_keyDailyFoldPrefs);
+    final now = DateTime.now();
+    final curMonth = '${now.year}-${now.month.toString().padLeft(2, '0')}';
+    if (saved != null && saved.isNotEmpty) {
+      _expandedMonthKeys
+        ..clear()
+        ..addAll(saved);
+    } else {
+      _expandedMonthKeys
+        ..clear()
+        ..add(curMonth);
+    }
+    if (mounted) setState(() {});
+  }
+
+  Future<void> _toggleMonth(String monthKey) async {
+    setState(() {
+      if (_expandedMonthKeys.contains(monthKey)) {
+        _expandedMonthKeys.remove(monthKey);
+      } else {
+        _expandedMonthKeys.add(monthKey);
+      }
+    });
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setStringList(_keyDailyFoldPrefs, _expandedMonthKeys.toList());
+  }
 
   Future<void> _openDaily(DailyChallengeItem item) async {
     Uint8List imgBytes;
@@ -80,7 +123,9 @@ class _DailyTabViewState extends State<DailyTabView> {
       imageBytes: imgBytes,
       initialDifficulty: item.difficulty,
       completedPieceCounts: item.completedPieceCounts.toSet(),
-      title: '${item.date} 挑战 · 难度选择',
+      canonicalId: canonicalId,
+      title: '${item.date} 挑战',
+      imagePathOrUrl: item.assetPath,
       savedProgressPercent: displayPercent == 0 ? null : displayPercent,
       onResetProgress: () async {
         final prog = await ResumeHelper.loadProgress(canonicalId);
@@ -389,24 +434,36 @@ class _DailyTabViewState extends State<DailyTabView> {
           const SliverToBoxAdapter(child: SizedBox(height: 8)),
           for (final entry in monthGroups.entries) ...[
             SliverToBoxAdapter(
-              child: _buildMonthHeader(entry.key, entry.value, palette, styles),
-            ),
-            SliverPadding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-              sliver: SliverGrid(
-                gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-                  maxCrossAxisExtent: 220,
-                  crossAxisSpacing: 14,
-                  mainAxisSpacing: 14,
-                  childAspectRatio: 1.0,
-                ),
-                delegate: SliverChildBuilderDelegate((context, index) {
-                  final item = entry.value[index];
-                  return _buildDailyCard(item, palette, styles);
-                }, childCount: entry.value.length),
+              child: _buildMonthHeader(
+                entry.key,
+                entry.value,
+                palette,
+                styles,
+                isExpanded: _expandedMonthKeys.contains(entry.key),
+                onToggle: () => _toggleMonth(entry.key),
               ),
             ),
-            const SliverToBoxAdapter(child: SizedBox(height: 12)),
+            if (_expandedMonthKeys.contains(entry.key)) ...[
+              SliverPadding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 6,
+                ),
+                sliver: SliverGrid(
+                  gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+                    maxCrossAxisExtent: 220,
+                    crossAxisSpacing: 14,
+                    mainAxisSpacing: 14,
+                    childAspectRatio: 1.0,
+                  ),
+                  delegate: SliverChildBuilderDelegate((context, index) {
+                    final item = entry.value[index];
+                    return _buildDailyCard(item, palette, styles);
+                  }, childCount: entry.value.length),
+                ),
+              ),
+              const SliverToBoxAdapter(child: SizedBox(height: 12)),
+            ],
           ],
           const SliverToBoxAdapter(child: SizedBox(height: 28)),
         ],
@@ -418,49 +475,72 @@ class _DailyTabViewState extends State<DailyTabView> {
     String monthKey,
     List<DailyChallengeItem> monthItems,
     AppPalette palette,
-    AppTextStyles styles,
-  ) {
+    AppTextStyles styles, {
+    required bool isExpanded,
+    required VoidCallback onToggle,
+  }) {
     final parts = monthKey.split('-');
     final year = parts.isNotEmpty ? parts[0] : '';
     final month = parts.length > 1 ? int.tryParse(parts[1]) ?? 1 : 1;
     final headerTitle = '$year年$month月';
     final completedCount = monthItems.where((d) => d.isCompleted).length;
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(18, 14, 18, 6),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Row(
-            children: [
-              Container(
-                width: 4,
-                height: 16,
-                decoration: BoxDecoration(
-                  color: palette.brand,
-                  borderRadius: BorderRadius.circular(2),
+    return InkWell(
+      onTap: onToggle,
+      borderRadius: BorderRadius.circular(12),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(18, 14, 18, 6),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Row(
+              children: [
+                Container(
+                  width: 4,
+                  height: 16,
+                  decoration: BoxDecoration(
+                    color: palette.brand,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
                 ),
-              ),
-              const SizedBox(width: 8),
-              Text(headerTitle, style: styles.h3.copyWith(fontSize: 16)),
-            ],
-          ),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
-            decoration: BoxDecoration(
-              color: palette.surfaceContainer,
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: palette.divider, width: 0.8),
+                const SizedBox(width: 8),
+                Text(headerTitle, style: styles.h3.copyWith(fontSize: 16)),
+              ],
             ),
-            child: Text(
-              '已完成 $completedCount/${monthItems.length}',
-              style: TextStyle(
-                fontSize: 11.5,
-                fontWeight: FontWeight.w600,
-                color: palette.secondaryText,
-              ),
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 3,
+                  ),
+                  decoration: BoxDecoration(
+                    color: palette.surfaceContainer,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: palette.divider, width: 0.8),
+                  ),
+                  child: Text(
+                    '已完成 $completedCount/${monthItems.length}',
+                    style: TextStyle(
+                      fontSize: 11.5,
+                      fontWeight: FontWeight.w600,
+                      color: palette.secondaryText,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 6),
+                AnimatedRotation(
+                  turns: isExpanded ? 0 : 0.5,
+                  duration: const Duration(milliseconds: 200),
+                  child: Icon(
+                    PhosphorIconsBold.caretUp,
+                    size: 16,
+                    color: palette.secondaryText,
+                  ),
+                ),
+              ],
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

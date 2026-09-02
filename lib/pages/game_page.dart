@@ -499,6 +499,7 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
           timeSeconds: _seconds,
           hintsUsed: hints,
           completedPieceCount: actualPieces,
+          moves: _solvedPieces,
         );
 
     // 2. 同步更新 GameRepository 关卡状态与内存列表

@@ -134,5 +134,85 @@ void main() {
       // totalSolved = 3 images
       expect(await store.getTotalSolved(), equals(3));
     });
+
+    test('Timestamp fields and batch loadAllProgress', () async {
+      final store = ProgressStore.instance;
+      const cid = 'main:999';
+
+      await store.recordDifficultyCompletion(
+        canonicalId: cid,
+        difficultyKey: '4x4',
+        stars: 3,
+        timeSeconds: 30,
+        hintsUsed: 0,
+      );
+
+      final p = await store.load(cid);
+      expect(p.firstPlayedAt, isNotNull);
+      expect(p.lastCompletedAt, isNotNull);
+      expect(p.firstCompletedAt, isNotNull);
+      expect(p.lastPlayedAt, isNotNull);
+      expect(p.completedDifficultyCount, equals(1));
+      expect(p.bestDifficultyKey, equals('4x4'));
+      expect(p.allDifficultyStars['4x4'], equals(3));
+      expect(p.totalPlayCount, equals(1));
+
+      final rec = p.records['4x4']!;
+      expect(rec.isPerfect, isTrue);
+      expect(rec.firstCompletedAt, isNotNull);
+      expect(rec.lastCompletedAt, isNotNull);
+
+      // 验证 loadAllProgress 批量加载
+      final all = await store.loadAllProgress();
+      expect(all.containsKey(cid), isTrue);
+      expect(all[cid]!.maxStars, equals(3));
+      expect(await store.getTotalPlayCount(), greaterThanOrEqualTo(1));
+    });
+
+    test('minMoves records minimum moves and delete clears record', () async {
+      final store = ProgressStore.instance;
+      const cid = 'main:min_moves_test';
+
+      // 1. First win with 80 moves
+      await store.recordDifficultyCompletion(
+        canonicalId: cid,
+        difficultyKey: '5x5',
+        stars: 3,
+        timeSeconds: 40,
+        hintsUsed: 0,
+        moves: 80,
+      );
+      var p = await store.load(cid);
+      expect(p.records['5x5']!.minMoves, equals(80));
+
+      // 2. Second win with 65 moves -> updates minMoves
+      await store.recordDifficultyCompletion(
+        canonicalId: cid,
+        difficultyKey: '5x5',
+        stars: 3,
+        timeSeconds: 35,
+        hintsUsed: 0,
+        moves: 65,
+      );
+      p = await store.load(cid);
+      expect(p.records['5x5']!.minMoves, equals(65));
+
+      // 3. Third win with 90 moves -> retains 65
+      await store.recordDifficultyCompletion(
+        canonicalId: cid,
+        difficultyKey: '5x5',
+        stars: 3,
+        timeSeconds: 50,
+        hintsUsed: 0,
+        moves: 90,
+      );
+      p = await store.load(cid);
+      expect(p.records['5x5']!.minMoves, equals(65));
+
+      // 4. Test delete
+      await store.delete(cid);
+      final allAfter = await store.loadAllProgress();
+      expect(allAfter.containsKey(cid), isFalse);
+    });
   });
 }

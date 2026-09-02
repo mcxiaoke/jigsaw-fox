@@ -173,8 +173,10 @@ class _HomeTabViewState extends State<HomeTabView> {
       imageBytes: imgBytes,
       initialDifficulty: level.difficulty,
       completedPieceCounts: level.completedPieceCounts.toSet(),
+      canonicalId: canonicalId,
       isUnlocked: true,
-      title: '拼图 · 难度选择',
+      title: level.title,
+      imagePathOrUrl: level.assetPath,
       savedProgressPercent: displayPercent == 0 ? null : displayPercent,
       onResetProgress: () async {
         final prog = await ResumeHelper.loadProgress(canonicalId);

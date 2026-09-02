@@ -93,6 +93,7 @@ class _EventLevelsPageState extends State<EventLevelsPage> {
         recommended: true,
       ),
       completedPieceCounts: const {},
+      canonicalId: level.id,
       isUnlocked: true,
       title: '${_currentEvent.title} · 第 $index 关',
       onStart: (diff) async {
