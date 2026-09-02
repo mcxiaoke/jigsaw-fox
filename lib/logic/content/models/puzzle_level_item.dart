@@ -18,6 +18,9 @@ class PuzzleLevelItem {
     this.completedPieceCounts = const [],
     this.bestTimeSeconds = 0,
     this.hasSavedSnapshot = false,
+    this.addedAt,
+    this.unlockCoins,
+    this.unlockCode,
   });
 
   /// 全局唯一 Canonical ID (如 "main:101", "daily:20260827", "event:cyberpunk:01")
@@ -56,6 +59,9 @@ class PuzzleLevelItem {
   final List<int> completedPieceCounts;
   final int bestTimeSeconds;
   final bool hasSavedSnapshot;
+  final DateTime? addedAt;
+  final int? unlockCoins;
+  final String? unlockCode;
 
   /// UI 展示标题快捷推导 (零元数据下的友好默认标题)
   String get displayTitle {
@@ -93,6 +99,12 @@ class PuzzleLevelItem {
     List<int>? completedPieceCounts,
     int? bestTimeSeconds,
     bool? hasSavedSnapshot,
+    DateTime? addedAt,
+    bool clearAddedAt = false,
+    int? unlockCoins,
+    bool clearUnlockCoins = false,
+    String? unlockCode,
+    bool clearUnlockCode = false,
   }) {
     return PuzzleLevelItem(
       id: id ?? this.id,
@@ -110,7 +122,16 @@ class PuzzleLevelItem {
       completedPieceCounts: completedPieceCounts ?? this.completedPieceCounts,
       bestTimeSeconds: bestTimeSeconds ?? this.bestTimeSeconds,
       hasSavedSnapshot: hasSavedSnapshot ?? this.hasSavedSnapshot,
+      addedAt: clearAddedAt ? null : (addedAt ?? this.addedAt),
+      unlockCoins: clearUnlockCoins ? null : (unlockCoins ?? this.unlockCoins),
+      unlockCode: clearUnlockCode ? null : (unlockCode ?? this.unlockCode),
     );
+  }
+
+  bool get isNew {
+    final a = addedAt;
+    if (a == null || isCompleted) return false;
+    return DateTime.now().difference(a).inDays < 7;
   }
 
   Map<String, dynamic> toJson() {
@@ -125,6 +146,9 @@ class PuzzleLevelItem {
       'eventId': eventId,
       'dailyDate': dailyDate,
       'isTimeLocked': isTimeLocked,
+      'addedAt': addedAt?.toIso8601String(),
+      'unlockCoins': unlockCoins,
+      'unlockCode': unlockCode,
     };
   }
 
@@ -142,6 +166,11 @@ class PuzzleLevelItem {
       eventId: json['eventId'] as String?,
       dailyDate: json['dailyDate'] as String?,
       isTimeLocked: json['isTimeLocked'] as bool? ?? false,
+      addedAt: json['addedAt'] != null
+          ? DateTime.tryParse(json['addedAt'] as String)
+          : null,
+      unlockCoins: json['unlockCoins'] as int?,
+      unlockCode: json['unlockCode'] as String?,
     );
   }
 

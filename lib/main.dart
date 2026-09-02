@@ -56,34 +56,36 @@ void main() async {
   }
 
   final sw = Stopwatch()..start();
-  await ImageCacheManager.instance.init();
-  AppLogger.system.info(
-    'ImageCacheManager init done ${sw.elapsedMilliseconds}ms',
-  );
+  // 组1 必须await：首屏与币/成就强依赖（main.dart:80 需首帧就绪避免 coins 0 与成就阻塞）
+  await Future.wait([
+    ImageCacheManager.instance.init(),
+    GameRepository.instance.init(),
+    EconomyService.instance.init(),
+    AchievementStore.instance.init(),
+  ]);
+  AppLogger.system.info('Group1(Core) init done ${sw.elapsedMilliseconds}ms');
   sw.reset();
-  await GameRepository.instance.init();
-  AppLogger.system.info('GameRepository init done ${sw.elapsedMilliseconds}ms');
-  sw.reset();
-  await DownloadManager.instance.init();
-  AppLogger.system.info(
-    'DownloadManager init done ${sw.elapsedMilliseconds}ms',
-  );
-  sw.reset();
-  await AppContent.instance.init();
-  AppLogger.system.info('AppContent init done ${sw.elapsedMilliseconds}ms');
-  sw.reset();
-  await SoundService.I.init();
-  AppLogger.system.info(
-    'SoundService init done ${sw.elapsedMilliseconds}ms total=${sw.elapsedMilliseconds}ms',
-  );
-  sw.reset();
-  // 经济/成就存储预热：新手赠送（5 券 + 100 币）与成就计数在首帧前就绪，
-  // 避免首帧读 coins 返回 0 或成就事件首次触发时阻塞
-  await EconomyService.instance.init();
-  await AchievementStore.instance.init();
-  AppLogger.system.info(
-    'Economy/Achievement init done ${sw.elapsedMilliseconds}ms',
-  );
+  // 组2/3 可后台：下载与内容同步、音效不阻塞首帧
+  final bgFutures = [
+    DownloadManager.instance.init().then((_) {
+      AppLogger.system.info(
+        'DownloadManager init done ${sw.elapsedMilliseconds}ms',
+      );
+    }),
+    AppContent.instance.init().then((_) {
+      AppLogger.system.info('AppContent init done ${sw.elapsedMilliseconds}ms');
+    }),
+    SoundService.I.init().then((_) {
+      AppLogger.system.info(
+        'SoundService init done ${sw.elapsedMilliseconds}ms',
+      );
+    }),
+  ];
+  // 不阻塞首帧，后台并行；首帧先出壳由 contentUpdateNotifier 刷新
+  // ignore: discarded_futures
+  Future.wait(bgFutures).then((_) {
+    AppLogger.system.info('Background init group done');
+  });
   AppLogger.system.info('App launch completed runApp');
   runApp(const JigsawPuzzleApp());
 }

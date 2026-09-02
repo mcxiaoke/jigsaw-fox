@@ -7,23 +7,48 @@ import '../../data/models/level_item.dart';
 import '../../data/resume_helper.dart';
 import '../../data/snapshot_store.dart';
 import '../../logic/cache/image_cache_manager.dart';
+import '../../logic/content/app_content.dart';
 import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
 import '../../widgets/app_cached_image.dart';
 import '../../widgets/choose_difficulty_sheet.dart';
 import '../game_page.dart';
 
-enum LevelFilter {
-  all('全部关卡'),
-  starter('新手 (9-16)'),
-  intermediate('进阶 (24-36)'),
-  master('大师 (48-100+)'),
-  completed('已通关'),
-  inProgress('进行中');
+// 21 Primary Tags（对齐 jigsaw-image-tagging-specification.md v1.1）
+const List<Map<String, String>> kHomeTags = [
+  {'id': 'all', 'label': '全部'},
+  {'id': 'Pets', 'label': '宠物'},
+  {'id': 'Animals', 'label': '动物'},
+  {'id': 'Birds', 'label': '鸟类'},
+  {'id': 'Nature', 'label': '自然'},
+  {'id': 'Landscapes', 'label': '风景'},
+  {'id': 'Flowers', 'label': '花卉'},
+  {'id': 'Ocean', 'label': '海洋'},
+  {'id': 'Cities', 'label': '城市'},
+  {'id': 'Architecture', 'label': '建筑'},
+  {'id': 'Food', 'label': '美食'},
+  {'id': 'Art', 'label': '艺术'},
+  {'id': 'Fantasy', 'label': '奇幻'},
+  {'id': 'Space', 'label': '太空'},
+  {'id': 'Transportation', 'label': '交通'},
+  {'id': 'People', 'label': '人物'},
+  {'id': 'Sports', 'label': '运动'},
+  {'id': 'Seasons', 'label': '四季'},
+  {'id': 'Holidays', 'label': '节日'},
+  {'id': 'Abstract', 'label': '抽象'},
+  {'id': 'Cartoon', 'label': '卡通'},
+  {'id': 'Others', 'label': '其他'},
+];
 
-  const LevelFilter(this.label);
-  final String label;
-}
+// 热门N个（横滑常驻，末位固定入口之后展开全部21）
+const List<String> kHotTagIds = [
+  'Pets',
+  'Landscapes',
+  'Flowers',
+  'Architecture',
+  'Food',
+  'Art',
+];
 
 class HomeTabView extends StatefulWidget {
   const HomeTabView({super.key, required this.onSwitchToDaily});
@@ -36,53 +61,65 @@ class HomeTabView extends StatefulWidget {
 
 class _HomeTabViewState extends State<HomeTabView> {
   final _repo = GameRepository.instance;
-  LevelFilter _selectedFilter = LevelFilter.all;
   String _selectedTag = 'all';
+  final ScrollController _scrollController = ScrollController();
+  final ScrollController _tagScrollController = ScrollController();
+  final Map<String, GlobalKey> _tagKeys = {
+    for (final t in kHomeTags) t['id']!: GlobalKey(),
+  };
+
+  // 伪Tag映射（数据未接入前兜底，按index%21分配，便于过滤演示）
+  String _resolveTag(LevelItem l) {
+    if (l.tags.isNotEmpty) return l.tags.first;
+    // 映射到 21 中的一个（跳过 'all'）
+    final idx = (l.index - 1) % 20;
+    return kHomeTags[idx + 1]['id']!;
+  }
 
   List<LevelItem> _getFilteredLevels(List<LevelItem> all) {
-    var list = all;
-    switch (_selectedFilter) {
-      case LevelFilter.all:
-        break;
-      case LevelFilter.starter:
-        list = list.where((l) => l.difficulty.pieceCount <= 16).toList();
-        break;
-      case LevelFilter.intermediate:
-        list = list
-            .where(
-              (l) =>
-                  l.difficulty.pieceCount >= 24 &&
-                  l.difficulty.pieceCount <= 36,
-            )
-            .toList();
-        break;
-      case LevelFilter.master:
-        list = list.where((l) => l.difficulty.pieceCount >= 48).toList();
-        break;
-      case LevelFilter.completed:
-        list = list.where((l) => l.isCompleted).toList();
-        break;
-      case LevelFilter.inProgress:
-        list = list
-            .where((l) => l.progressPercent > 0 && !l.isCompleted)
-            .toList();
-        break;
+    if (_selectedTag == 'all') return all;
+    return all
+        .where(
+          (l) => _resolveTag(l).toLowerCase() == _selectedTag.toLowerCase(),
+        )
+        .toList();
+  }
+
+  void _onTagSelected(String tag) {
+    if (_selectedTag == tag) return;
+    setState(() => _selectedTag = tag);
+    // 过滤后回顶
+    if (_scrollController.hasClients) {
+      _scrollController.animateTo(
+        0,
+        duration: const Duration(milliseconds: 200),
+        curve: Curves.easeOut,
+      );
     }
-    if (_selectedTag != 'all') {
-      list = list.where((l) {
-        if (_selectedTag == 'animal') {
-          return l.index % 5 == 1 || l.index % 5 == 3;
-        }
-        if (_selectedTag == 'landscape') {
-          return l.index % 5 == 2 || l.index % 5 == 0;
-        }
-        if (_selectedTag == 'bird') return l.index % 5 == 2;
-        if (_selectedTag == 'art') return l.index % 5 == 4;
-        if (_selectedTag == 'architecture') return l.index % 5 == 0;
-        return true;
-      }).toList();
+    // 横滑 Tag 栏滚动到选中项可见
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final key = _tagKeys[tag];
+      if (key?.currentContext != null) {
+        Scrollable.ensureVisible(
+          key!.currentContext!,
+          duration: const Duration(milliseconds: 250),
+          curve: Curves.easeOut,
+          alignment: 0.5,
+        );
+      }
+    });
+  }
+
+  Future<void> _showAllTagsSheet() async {
+    final selected = await showModalBottomSheet<String>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _AllTagsSheet(selectedTag: _selectedTag),
+    );
+    if (selected != null && selected != _selectedTag) {
+      _onTagSelected(selected);
     }
-    return list;
   }
 
   Future<void> _openLevel(LevelItem level) async {
@@ -95,7 +132,7 @@ class _HomeTabViewState extends State<HomeTabView> {
       canonicalId: canonicalId,
       fallbackDifficulty: level.difficulty,
       isCompleted: level.isCompleted,
-      title: '第 ${level.index} 关',
+      title: '拼图',
       imageBytes: imgBytes,
       onClearRepo: (k) => _repo.updateLevelProgress(
         levelIndex: level.index,
@@ -136,9 +173,8 @@ class _HomeTabViewState extends State<HomeTabView> {
       imageBytes: imgBytes,
       initialDifficulty: level.difficulty,
       completedPieceCounts: level.completedPieceCounts.toSet(),
-      isUnlocked: level.isUnlocked,
-      lockedMessage: '请先通关第 ${level.index - 1} 关解锁此关卡',
-      title: '第 ${level.index} 关 · ${level.isUnlocked ? "难度选择" : "关卡预览(未解锁)"}',
+      isUnlocked: true,
+      title: '拼图 · 难度选择',
       savedProgressPercent: displayPercent == 0 ? null : displayPercent,
       onResetProgress: () async {
         final prog = await ResumeHelper.loadProgress(canonicalId);
@@ -191,6 +227,13 @@ class _HomeTabViewState extends State<HomeTabView> {
   }
 
   @override
+  void dispose() {
+    _scrollController.dispose();
+    _tagScrollController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     final palette = AppPalette.of(context);
     final styles = AppTextStyles.of(context);
@@ -209,42 +252,35 @@ class _HomeTabViewState extends State<HomeTabView> {
       backgroundColor: palette.surfaceContainer,
       onRefresh: () async => setState(() {}),
       child: CustomScrollView(
+        controller: _scrollController,
         slivers: [
-          // ── Banner ─────────────────────────
+          // ── Header 可横滑（每日+活动），不吸顶，随滚动
           SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 12, 16, 10),
-              child: _DailyBanner(
-                todayDaily: todayDaily,
-                now: now,
-                palette: palette,
-                styles: styles,
-                onTap: widget.onSwitchToDaily,
-              ),
-            ),
-          ),
-
-          // ── Filter Segmented Control ───────
-          SliverToBoxAdapter(
-            child: _FilterBar(
-              selectedFilter: _selectedFilter,
+            child: _HeaderCarousel(
+              todayDaily: todayDaily,
+              now: now,
               palette: palette,
-              onChanged: (f) => setState(() => _selectedFilter = f),
+              styles: styles,
+              onTapDaily: widget.onSwitchToDaily,
             ),
           ),
 
-          // ── Tag Chips ──────────────────────
-          SliverToBoxAdapter(
-            child: _TagChips(
+          // ── Tag栏 单行吸顶 44dp ─────────────────
+          SliverPersistentHeader(
+            pinned: true,
+            delegate: _TagBarDelegate(
               selectedTag: _selectedTag,
               palette: palette,
-              onChanged: (t) => setState(() => _selectedTag = t),
+              tagKeys: _tagKeys,
+              tagScrollController: _tagScrollController,
+              onTagSelected: _onTagSelected,
+              onShowAll: _showAllTagsSheet,
             ),
           ),
 
-          const SliverToBoxAdapter(child: SizedBox(height: 6)),
+          const SliverToBoxAdapter(child: SizedBox(height: 8)),
 
-          // ── Level Grid ─────────────────────
+          // ── Level Grid 纯图卡 ───────────────────
           if (filteredLevels.isEmpty)
             SliverToBoxAdapter(
               child: Padding(
@@ -255,8 +291,16 @@ class _HomeTabViewState extends State<HomeTabView> {
                       const Text('🦊', style: TextStyle(fontSize: 44)),
                       const SizedBox(height: 8),
                       Text(
-                        '小狐狸没找到符合该条件的关卡',
+                        '小狐狸没找到该分类的关卡',
                         style: styles.caption.copyWith(fontSize: 14),
+                      ),
+                      const SizedBox(height: 12),
+                      FilledButton(
+                        onPressed: () => _onTagSelected('all'),
+                        style: FilledButton.styleFrom(
+                          backgroundColor: palette.brand,
+                        ),
+                        child: const Text('查看全部'),
                       ),
                     ],
                   ),
@@ -265,12 +309,12 @@ class _HomeTabViewState extends State<HomeTabView> {
             )
           else
             SliverPadding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
               sliver: SliverGrid(
                 gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
                   maxCrossAxisExtent: 220,
-                  crossAxisSpacing: 14,
-                  mainAxisSpacing: 14,
+                  crossAxisSpacing: 10,
+                  mainAxisSpacing: 10,
                   childAspectRatio: 1.0,
                 ),
                 delegate: SliverChildBuilderDelegate((context, index) {
@@ -278,7 +322,6 @@ class _HomeTabViewState extends State<HomeTabView> {
                   return _LevelCard(
                     level: level,
                     palette: palette,
-                    styles: styles,
                     onTap: () => _openLevel(level),
                   );
                 }, childCount: filteredLevels.length),
@@ -293,7 +336,188 @@ class _HomeTabViewState extends State<HomeTabView> {
 }
 
 // ═══════════════════════════════════════════════════
-// Banner: full-bleed image + gradient overlay
+// Header Carousel: 每日 + 活动 PageView，不吸顶
+// ═══════════════════════════════════════════════════
+class _HeaderCarousel extends StatefulWidget {
+  const _HeaderCarousel({
+    required this.todayDaily,
+    required this.now,
+    required this.palette,
+    required this.styles,
+    required this.onTapDaily,
+  });
+
+  final dynamic todayDaily;
+  final DateTime now;
+  final AppPalette palette;
+  final AppTextStyles styles;
+  final VoidCallback onTapDaily;
+
+  @override
+  State<_HeaderCarousel> createState() => _HeaderCarouselState();
+}
+
+class _HeaderCarouselState extends State<_HeaderCarousel> {
+  late final PageController _pc;
+
+  @override
+  void initState() {
+    super.initState();
+    _pc = PageController(viewportFraction: 0.96);
+    AppContent.instance.contentUpdateNotifier.addListener(_onContentUpdate);
+  }
+
+  void _onContentUpdate() {
+    if (mounted) setState(() {});
+  }
+
+  int _idx = 0;
+
+  @override
+  void dispose() {
+    AppContent.instance.contentUpdateNotifier.removeListener(_onContentUpdate);
+    _pc.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final events = AppContent.instance.isInitialized
+        ? AppContent.instance.manager.getVisibleEvents().take(3).toList()
+        : [];
+    final pageCount = 1 + events.length;
+    return Padding(
+      padding: const EdgeInsets.only(top: 12, bottom: 8),
+      child: Column(
+        children: [
+          SizedBox(
+            height: 160,
+            child: PageView.builder(
+              controller: _pc,
+              onPageChanged: (i) => setState(() => _idx = i),
+              physics: const BouncingScrollPhysics(),
+              clipBehavior: Clip.none,
+              itemCount: pageCount,
+              itemBuilder: (_, i) {
+                final card = i == 0
+                    ? _DailyBanner(
+                        todayDaily: widget.todayDaily,
+                        now: widget.now,
+                        palette: widget.palette,
+                        styles: widget.styles,
+                        onTap: widget.onTapDaily,
+                      )
+                    : _EventBannerCard(event: events[i - 1]);
+                // 水平 4dp 间距，viewportFraction 0.96 => 侧边距12dp，卡间距8dp，居中等宽
+                return Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 4),
+                  child: card,
+                );
+              },
+            ),
+          ),
+          if (pageCount > 1) ...[
+            const SizedBox(height: 8),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: List.generate(pageCount, (i) {
+                final sel = i == _idx;
+                return AnimatedContainer(
+                  duration: const Duration(milliseconds: 200),
+                  margin: const EdgeInsets.symmetric(horizontal: 3),
+                  width: sel ? 18 : 8,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: sel ? Colors.black87 : Colors.black26,
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                );
+              }),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _EventBannerCard extends StatelessWidget {
+  const _EventBannerCard({required this.event});
+  final dynamic event;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = AppPalette.of(context);
+    final styles = AppTextStyles.of(context);
+    return Container(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.12),
+            blurRadius: 8,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          AppCachedImage(
+            imagePathOrUrl:
+                event.coverUrl ??
+                (event.levels.isNotEmpty ? event.levels.first : ''),
+            fit: BoxFit.cover,
+            targetDimension: ThumbnailDimension.eventCover,
+          ),
+          Container(
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(
+                colors: [Colors.black54, Colors.transparent],
+                begin: Alignment.bottomCenter,
+                end: Alignment.topCenter,
+              ),
+            ),
+          ),
+          Positioned(
+            left: 14,
+            right: 14,
+            bottom: 12,
+            child: Text(
+              event.title ?? '精选活动',
+              style: styles.h3.copyWith(color: Colors.white, fontSize: 16),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          Positioned(
+            left: 12,
+            top: 12,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+              decoration: BoxDecoration(
+                color: palette.brand,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: const Text(
+                '活动',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 10,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ═══════════════════════════════════════════════════
+// Daily Banner (保持现有简洁样式)
 // ═══════════════════════════════════════════════════
 class _DailyBanner extends StatelessWidget {
   const _DailyBanner({
@@ -314,16 +538,15 @@ class _DailyBanner extends StatelessWidget {
   Widget build(BuildContext context) {
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(24),
+      borderRadius: BorderRadius.circular(16),
       child: Container(
-        height: 160,
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(24),
+          borderRadius: BorderRadius.circular(16),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withValues(alpha: 0.2),
-              blurRadius: 12,
-              offset: const Offset(0, 4),
+              color: Colors.black.withValues(alpha: 0.15),
+              blurRadius: 10,
+              offset: const Offset(0, 3),
             ),
           ],
         ),
@@ -331,130 +554,58 @@ class _DailyBanner extends StatelessWidget {
         child: Stack(
           fit: StackFit.expand,
           children: [
-            // Background image
             AppCachedImage(
               imagePathOrUrl: todayDaily.assetPath,
               fit: BoxFit.cover,
               targetDimension: ThumbnailDimension.eventCover,
             ),
-            // Gradient overlay (black → transparent)
             Container(
               decoration: const BoxDecoration(
                 gradient: LinearGradient(
-                  colors: [Colors.black87, Colors.transparent, Colors.black54],
+                  colors: [Colors.black54, Colors.transparent],
                   begin: Alignment.bottomCenter,
                   end: Alignment.topCenter,
-                  stops: [0.0, 0.5, 1.0],
                 ),
               ),
             ),
-            // Content
             Padding(
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.all(14),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: [
-                  // Tag row
-                  Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 4,
-                        ),
-                        decoration: BoxDecoration(
-                          color: palette.brand,
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            const Text('🔥', style: TextStyle(fontSize: 10)),
-                            const SizedBox(width: 4),
-                            Text(
-                              '每日挑战',
-                              style: TextStyle(
-                                color: palette.surface,
-                                fontSize: 11,
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      if (todayDaily.isCompleted) ...[
-                        const SizedBox(width: 8),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 8,
-                            vertical: 4,
-                          ),
-                          decoration: BoxDecoration(
-                            color: palette.success,
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: Text(
-                            '已完成',
-                            style: TextStyle(
-                              color: palette.surface,
-                              fontSize: 10,
-                              fontWeight: FontWeight.w700,
-                            ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 3,
+                    ),
+                    decoration: BoxDecoration(
+                      color: palette.brand,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Text('🔥', style: TextStyle(fontSize: 10)),
+                        const SizedBox(width: 4),
+                        Text(
+                          '每日挑战',
+                          style: TextStyle(
+                            color: palette.surface,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
                           ),
                         ),
                       ],
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    '${now.month}月${now.day}日 · 今日专属',
-                    style: styles.h2.copyWith(
-                      color: Colors.white,
-                      fontSize: 20,
                     ),
                   ),
-                  const SizedBox(height: 4),
-                  Row(
-                    children: [
-                      Icon(
-                        PhosphorIconsFill.puzzlePiece,
-                        size: 12,
-                        color: Colors.white70,
-                      ),
-                      const SizedBox(width: 4),
-                      Text(
-                        '${todayDaily.difficulty.pieceCount} 块拼图',
-                        style: TextStyle(color: Colors.white70, fontSize: 12),
-                      ),
-                      const SizedBox(width: 12),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 2,
-                        ),
-                        decoration: BoxDecoration(
-                          color: Colors.white.withValues(alpha: 0.15),
-                          borderRadius: BorderRadius.circular(6),
-                          border: Border.all(color: Colors.white24, width: 0.5),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            const Text('🪙', style: TextStyle(fontSize: 10)),
-                            const SizedBox(width: 2),
-                            Text(
-                              '+50',
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontSize: 11,
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
+                  const SizedBox(height: 6),
+                  Text(
+                    '${now.month}月${now.day}日 · 今日专属',
+                    style: styles.h3.copyWith(
+                      color: Colors.white,
+                      fontSize: 16,
+                    ),
                   ),
                 ],
               ),
@@ -467,52 +618,141 @@ class _DailyBanner extends StatelessWidget {
 }
 
 // ═══════════════════════════════════════════════════
-// Filter Segmented Control
+// Tag栏 吸顶 Delegate 44dp 单行横滑 + 固定入口
 // ═══════════════════════════════════════════════════
-class _FilterBar extends StatelessWidget {
-  const _FilterBar({
-    required this.selectedFilter,
+class _TagBarDelegate extends SliverPersistentHeaderDelegate {
+  _TagBarDelegate({
+    required this.selectedTag,
     required this.palette,
-    required this.onChanged,
+    required this.tagKeys,
+    required this.tagScrollController,
+    required this.onTagSelected,
+    required this.onShowAll,
   });
 
-  final LevelFilter selectedFilter;
+  final String selectedTag;
   final AppPalette palette;
-  final ValueChanged<LevelFilter> onChanged;
+  final Map<String, GlobalKey> tagKeys;
+  final ScrollController tagScrollController;
+  final ValueChanged<String> onTagSelected;
+  final VoidCallback onShowAll;
 
   @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-      child: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        physics: const BouncingScrollPhysics(),
-        child: Row(
-          children: [
-            for (final filter in LevelFilter.values) ...[
-              _FilterChip(
-                label: filter.label,
-                isActive: selectedFilter == filter,
-                palette: palette,
-                onTap: () => onChanged(filter),
+  double get minExtent => 44;
+  @override
+  double get maxExtent => 44;
+
+  @override
+  Widget build(
+    BuildContext context,
+    double shrinkOffset,
+    bool overlapsContent,
+  ) {
+    return Container(
+      height: 44,
+      color: palette.surface,
+      // 垂直居中：Container 44dp 内所有子元素居中
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          // 横滑区 占满高度并居中
+          Align(
+            alignment: Alignment.centerLeft,
+            child: Padding(
+              padding: const EdgeInsets.only(right: 48),
+              child: SingleChildScrollView(
+                controller: tagScrollController,
+                scrollDirection: Axis.horizontal,
+                physics: const BouncingScrollPhysics(),
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    for (final entry in kHomeTags) ...[
+                      Container(
+                        key: tagKeys[entry['id']],
+                        child: _TagChip(
+                          label: entry['label']!,
+                          isActive:
+                              selectedTag.toLowerCase() ==
+                              entry['id']!.toLowerCase(),
+                          palette: palette,
+                          onTap: () => onTagSelected(entry['id']!),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                    ],
+                  ],
+                ),
               ),
-              const SizedBox(width: 8),
-            ],
-          ],
-        ),
+            ),
+          ),
+          // 固定入口 + 右侧渐变遮罩，垂直居中
+          Positioned(
+            right: 0,
+            top: 0,
+            bottom: 0,
+            child: Container(
+              width: 48,
+              decoration: BoxDecoration(color: palette.surface),
+              // 渐变遮罩在底层，避免遮挡点击
+              child: Stack(
+                alignment: Alignment.center,
+                children: [
+                  // 渐变
+                  Positioned.fill(
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: [
+                            palette.surface.withValues(alpha: 0),
+                            palette.surface,
+                          ],
+                          begin: Alignment.centerLeft,
+                          end: Alignment.centerRight,
+                        ),
+                      ),
+                    ),
+                  ),
+                  // 按钮 严格居中
+                  Center(
+                    child: IconButton(
+                      icon: Icon(
+                        PhosphorIconsBold.list,
+                        size: 20,
+                        color: palette.secondaryText,
+                      ),
+                      tooltip: '全部分类',
+                      onPressed: onShowAll,
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(
+                        minWidth: 36,
+                        minHeight: 36,
+                      ),
+                      visualDensity: VisualDensity.compact,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
+
+  @override
+  bool shouldRebuild(covariant _TagBarDelegate oldDelegate) =>
+      oldDelegate.selectedTag != selectedTag || oldDelegate.palette != palette;
 }
 
-class _FilterChip extends StatelessWidget {
-  const _FilterChip({
+class _TagChip extends StatelessWidget {
+  const _TagChip({
     required this.label,
     required this.isActive,
     required this.palette,
     required this.onTap,
   });
-
   final String label;
   final bool isActive;
   final AppPalette palette;
@@ -524,19 +764,28 @@ class _FilterChip extends StatelessWidget {
       onTap: onTap,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
         decoration: BoxDecoration(
           color: isActive ? palette.brand : palette.surfaceContainer,
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(14),
           border: Border.all(
             color: isActive ? palette.brand : palette.divider,
             width: 1,
           ),
+          boxShadow: isActive
+              ? [
+                  BoxShadow(
+                    color: palette.brand.withValues(alpha: 0.18),
+                    blurRadius: 6,
+                    offset: const Offset(0, 2),
+                  ),
+                ]
+              : null,
         ),
         child: Text(
           label,
           style: TextStyle(
-            fontSize: 12,
+            fontSize: 13,
             fontWeight: isActive ? FontWeight.w700 : FontWeight.w500,
             color: isActive ? palette.surface : palette.secondaryText,
           ),
@@ -547,127 +796,114 @@ class _FilterChip extends StatelessWidget {
 }
 
 // ═══════════════════════════════════════════════════
-// Tag Chips
+// 全部 Sheet 3列
 // ═══════════════════════════════════════════════════
-class _TagChips extends StatelessWidget {
-  const _TagChips({
-    required this.selectedTag,
-    required this.palette,
-    required this.onChanged,
-  });
-
+class _AllTagsSheet extends StatelessWidget {
+  const _AllTagsSheet({required this.selectedTag});
   final String selectedTag;
-  final AppPalette palette;
-  final ValueChanged<String> onChanged;
-
-  static const List<Map<String, String>> _tags = [
-    {'tag': 'all', 'label': '全部'},
-    {'tag': 'animal', 'label': '萌宠'},
-    {'tag': 'landscape', 'label': '风光'},
-    {'tag': 'bird', 'label': '飞鸟'},
-    {'tag': 'art', 'label': '艺术'},
-    {'tag': 'architecture', 'label': '建筑'},
-  ];
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-      child: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        physics: const BouncingScrollPhysics(),
-        child: Row(
-          children: [
-            for (final item in _tags) ...[
-              _TagChip(
-                label: item['label']!,
-                isActive: selectedTag == item['tag']!,
-                palette: palette,
-                onTap: () => onChanged(item['tag']!),
-              ),
-              const SizedBox(width: 8),
-            ],
-          ],
-        ),
+    return Container(
+      constraints: BoxConstraints(
+        maxHeight: MediaQuery.of(context).size.height * 0.7,
       ),
-    );
-  }
-}
-
-class _TagChip extends StatelessWidget {
-  const _TagChip({
-    required this.label,
-    required this.isActive,
-    required this.palette,
-    required this.onTap,
-  });
-
-  final String label;
-  final bool isActive;
-  final AppPalette palette;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-        decoration: BoxDecoration(
-          color: isActive
-              ? palette.brand.withValues(alpha: 0.12)
-              : palette.surfaceContainer,
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(
-            color: isActive
-                ? palette.brand.withValues(alpha: 0.4)
-                : palette.divider,
-            width: isActive ? 1.5 : 1,
+      decoration: const BoxDecoration(
+        color: Color(0xFFF2F2F2),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const SizedBox(height: 12),
+          Container(
+            width: 40,
+            height: 4,
+            decoration: BoxDecoration(
+              color: Colors.black12,
+              borderRadius: BorderRadius.circular(4),
+            ),
           ),
-        ),
-        child: Text(
-          label,
-          style: TextStyle(
-            fontSize: 12,
-            fontWeight: isActive ? FontWeight.w700 : FontWeight.w500,
-            color: isActive ? palette.brand : palette.secondaryText,
+          const SizedBox(height: 12),
+          Flexible(
+            child: GridView.count(
+              shrinkWrap: true,
+              crossAxisCount: 3,
+              childAspectRatio: 2.8,
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+              mainAxisSpacing: 8,
+              crossAxisSpacing: 8,
+              children: kHomeTags.map((e) {
+                final id = e['id']!;
+                final label = e['label']!;
+                final isActive = selectedTag.toLowerCase() == id.toLowerCase();
+                return Material(
+                  color: isActive ? Colors.white : Colors.transparent,
+                  borderRadius: BorderRadius.circular(12),
+                  child: InkWell(
+                    onTap: () => Navigator.of(context).pop(id),
+                    borderRadius: BorderRadius.circular(12),
+                    hoverColor: Colors.white,
+                    highlightColor: Colors.white,
+                    splashColor: const Color(
+                      0xFF6B4EFF,
+                    ).withValues(alpha: 0.12),
+                    child: Container(
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Text(
+                        label,
+                        style: TextStyle(
+                          fontSize: 15,
+                          color: isActive
+                              ? const Color(0xFF6B4EFF)
+                              : Colors.black87,
+                          fontWeight: isActive
+                              ? FontWeight.w700
+                              : FontWeight.w400,
+                        ),
+                      ),
+                    ),
+                  ),
+                );
+              }).toList(),
+            ),
           ),
-        ),
+        ],
       ),
     );
   }
 }
 
 // ═══════════════════════════════════════════════════
-// Level Card (no title text, tag-like visuals)
+// Level Card 纯图 + NEW 飘带
 // ═══════════════════════════════════════════════════
 class _LevelCard extends StatelessWidget {
   const _LevelCard({
     required this.level,
     required this.palette,
-    required this.styles,
     required this.onTap,
   });
-
   final LevelItem level;
   final AppPalette palette;
-  final AppTextStyles styles;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
+    final isNew = level.isNew;
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(24),
+      borderRadius: BorderRadius.circular(8),
       child: Container(
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(24),
+          borderRadius: BorderRadius.circular(8),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withValues(alpha: 0.12),
-              blurRadius: 8,
-              offset: const Offset(0, 3),
+              color: Colors.black.withValues(alpha: 0.08),
+              blurRadius: 6,
+              offset: const Offset(0, 2),
             ),
           ],
         ),
@@ -675,258 +911,40 @@ class _LevelCard extends StatelessWidget {
         child: Stack(
           fit: StackFit.expand,
           children: [
-            // Image — greyscale for locked levels (reference: temp/homeunlock.jpg)
-            if (level.isUnlocked)
-              AppCachedImage(imagePathOrUrl: level.assetPath, fit: BoxFit.cover)
-            else
-              ColorFiltered(
-                colorFilter: const ColorFilter.matrix([
-                  0.33,
-                  0.33,
-                  0.33,
-                  0,
-                  0,
-                  0.33,
-                  0.33,
-                  0.33,
-                  0,
-                  0,
-                  0.33,
-                  0.33,
-                  0.33,
-                  0,
-                  0,
-                  0,
-                  0,
-                  0,
-                  1,
-                  0,
-                ]),
-                child: AppCachedImage(
-                  imagePathOrUrl: level.assetPath,
-                  fit: BoxFit.cover,
-                ),
-              ),
-
-            // Warm wash overlay for locked levels
-            if (!level.isUnlocked)
-              Container(
-                decoration: BoxDecoration(
-                  color: palette.surface.withValues(alpha: 0.45),
-                ),
-              ),
-
-            // Top gradient for pill readability
-            Container(
-              decoration: const BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [Colors.black54, Colors.transparent],
-                  begin: Alignment.topCenter,
-                  end: Alignment.center,
-                ),
-              ),
+            AppCachedImage(
+              imagePathOrUrl: level.assetPath,
+              fit: BoxFit.cover,
+              targetDimension: ThumbnailDimension.card,
             ),
-
-            // Bottom gradient for progress bar readability
-            Container(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [
-                    Colors.transparent,
-                    Colors.black.withValues(alpha: 0.6),
-                  ],
-                  begin: Alignment.center,
-                  end: Alignment.bottomCenter,
-                ),
-              ),
-            ),
-
-            // ── Top-left: #index pill ──
-            Positioned(
-              left: 10,
-              top: 10,
-              child: Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 4,
-                ),
-                decoration: BoxDecoration(
-                  color: Colors.black.withValues(alpha: 0.55),
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: Text(
-                  '#${level.index}',
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 11,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ),
-            ),
-
-            // ── Top-right: piece count pill ──
-            Positioned(
-              top: 10,
-              right: 10,
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: palette.surface.withValues(alpha: 0.85),
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: palette.divider, width: 0.5),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      PhosphorIconsFill.puzzlePiece,
-                      size: 11,
-                      color: palette.secondaryText,
-                    ),
-                    const SizedBox(width: 3),
-                    Text(
-                      '${level.difficulty.pieceCount}',
-                      style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w700,
-                        color: palette.primaryText,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-
-            // ── Center: play button (unlocked, not started) ──
-            if (level.isUnlocked &&
-                !level.isCompleted &&
-                level.progressPercent == 0)
-              Center(
+            if (isNew)
+              Positioned(
+                left: 0,
+                top: 8,
                 child: Container(
                   padding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 8,
+                    horizontal: 10,
+                    vertical: 3,
                   ),
-                  decoration: BoxDecoration(
-                    gradient: AppPalette.brandGradient,
-                    borderRadius: BorderRadius.circular(20),
-                    boxShadow: [
-                      BoxShadow(
-                        color: palette.brand.withValues(alpha: 0.35),
-                        blurRadius: 10,
-                        offset: const Offset(0, 4),
-                      ),
-                    ],
+                  decoration: const BoxDecoration(
+                    color: Color(0xFFC97A2E),
+                    borderRadius: BorderRadius.only(
+                      topRight: Radius.circular(4),
+                      bottomRight: Radius.circular(4),
+                    ),
                   ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        PhosphorIconsFill.play,
-                        color: palette.surface,
-                        size: 14,
-                      ),
-                      const SizedBox(width: 4),
-                      Text(
-                        '开始',
-                        style: TextStyle(
-                          color: palette.surface,
-                          fontWeight: FontWeight.w700,
-                          fontSize: 13,
-                        ),
-                      ),
-                    ],
+                  child: const Text(
+                    'New',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w800,
+                      fontStyle: FontStyle.italic,
+                    ),
                   ),
                 ),
               ),
-
-            // ── Bottom area ──
-            Positioned(
-              left: 10,
-              right: 10,
-              bottom: 10,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  // Stars for completed
-                  if (level.isCompleted)
-                    Row(
-                      children: List.generate(3, (i) {
-                        return Padding(
-                          padding: const EdgeInsets.only(right: 2),
-                          child: i < level.stars
-                              ? Icon(
-                                  PhosphorIconsFill.star,
-                                  color: palette.gold,
-                                  size: 16,
-                                )
-                              : Icon(
-                                  PhosphorIconsRegular.star,
-                                  color: Colors.white.withValues(alpha: 0.4),
-                                  size: 16,
-                                ),
-                        );
-                      }),
-                    )
-                  else if (level.progressPercent > 0)
-                    // Progress bar for in-progress
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(4),
-                      child: LinearProgressIndicator(
-                        value: level.progressPercent / 100.0,
-                        minHeight: 4,
-                        backgroundColor: Colors.white.withValues(alpha: 0.25),
-                        valueColor: AlwaysStoppedAnimation<Color>(
-                          palette.brand,
-                        ),
-                      ),
-                    )
-                  else if (!level.isUnlocked)
-                    // Lock icon
-                    Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          PhosphorIconsFill.lockKey,
-                          color: palette.disabledText,
-                          size: 14,
-                        ),
-                        const SizedBox(width: 4),
-                        Text(
-                          '需 ${level.index * 2} 星解锁',
-                          style: TextStyle(
-                            color: palette.disabledText,
-                            fontSize: 11,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ],
-                    ),
-
-                  const SizedBox(height: 4),
-                  // Meta info (piece count / time)
-                  if (level.isCompleted)
-                    Text(
-                      '最佳 ${level.bestTimeSeconds > 0 ? '${(level.bestTimeSeconds ~/ 60)}:${(level.bestTimeSeconds % 60).toString().padLeft(2, '0')}' : '—'}',
-                      style: TextStyle(
-                        color: Colors.white.withValues(alpha: 0.7),
-                        fontSize: 11,
-                      ),
-                    )
-                  else if (level.progressPercent > 0)
-                    Text(
-                      '${level.progressPercent}%',
-                      style: TextStyle(
-                        color: palette.brand,
-                        fontSize: 11,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                ],
-              ),
-            ),
+            // 可选：最高块数（首期不显示，二期启用）
+            // Positioned(right:6, bottom:6, child: Container(padding: EdgeInsets.symmetric(horizontal:6, vertical:2), decoration:BoxDecoration(color: Colors.black54, borderRadius: BorderRadius.circular(6)), child: Text('◈ ${level.difficulty.pieceCount}', style: TextStyle(color: Colors.white, fontSize:10))))
           ],
         ),
       ),

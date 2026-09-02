@@ -15,6 +15,10 @@ class LevelItem {
     this.bestTimeSeconds = 0,
     this.savedSnapshotJson,
     this.completedPieceCounts = const [],
+    this.tags = const [],
+    this.addedAt,
+    this.unlockCoins,
+    this.unlockCode,
   });
 
   final String id;
@@ -29,6 +33,10 @@ class LevelItem {
   final int bestTimeSeconds;
   final String? savedSnapshotJson;
   final List<int> completedPieceCounts;
+  final List<String> tags;
+  final DateTime? addedAt; // NEW判定SSOT：运营发布时间
+  final int? unlockCoins; // 预留：金币象征性解锁（后续新增关卡）
+  final String? unlockCode; // 预留：兑换码解锁
 
   LevelItem copyWith({
     String? id,
@@ -44,6 +52,13 @@ class LevelItem {
     String? savedSnapshotJson,
     bool clearSnapshot = false,
     List<int>? completedPieceCounts,
+    List<String>? tags,
+    DateTime? addedAt,
+    bool clearAddedAt = false,
+    int? unlockCoins,
+    bool clearUnlockCoins = false,
+    String? unlockCode,
+    bool clearUnlockCode = false,
   }) {
     return LevelItem(
       id: id ?? this.id,
@@ -60,7 +75,18 @@ class LevelItem {
           ? null
           : (savedSnapshotJson ?? this.savedSnapshotJson),
       completedPieceCounts: completedPieceCounts ?? this.completedPieceCounts,
+      tags: tags ?? this.tags,
+      addedAt: clearAddedAt ? null : (addedAt ?? this.addedAt),
+      unlockCoins: clearUnlockCoins ? null : (unlockCoins ?? this.unlockCoins),
+      unlockCode: clearUnlockCode ? null : (unlockCode ?? this.unlockCode),
     );
+  }
+
+  /// NEW判定：addedAt 7天内且未完成
+  bool get isNew {
+    final a = addedAt;
+    if (a == null || isCompleted) return false;
+    return DateTime.now().difference(a).inDays < 7;
   }
 
   Map<String, dynamic> toJson() => {
@@ -77,6 +103,10 @@ class LevelItem {
     'bestTimeSeconds': bestTimeSeconds,
     'savedSnapshotJson': savedSnapshotJson,
     'completedPieceCounts': completedPieceCounts,
+    'tags': tags,
+    'addedAt': addedAt?.toIso8601String(),
+    'unlockCoins': unlockCoins,
+    'unlockCode': unlockCode,
   };
 
   factory LevelItem.fromJson(Map<String, dynamic> json) {
@@ -111,6 +141,14 @@ class LevelItem {
       bestTimeSeconds: json['bestTimeSeconds'] as int? ?? 0,
       savedSnapshotJson: json['savedSnapshotJson'] as String?,
       completedPieceCounts: completedCounts,
+      tags:
+          (json['tags'] as List<dynamic>?)?.map((e) => e.toString()).toList() ??
+          const [],
+      addedAt: json['addedAt'] != null
+          ? DateTime.tryParse(json['addedAt'] as String)
+          : null,
+      unlockCoins: json['unlockCoins'] as int?,
+      unlockCode: json['unlockCode'] as String?,
     );
   }
 }

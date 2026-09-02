@@ -70,11 +70,11 @@ class _MainScreenState extends State<MainScreen> {
           ],
         ),
         actions: [
-          _CoinBadge(palette: palette),
-          const SizedBox(width: 2),
           _TrophyButton(palette: palette),
-          const SizedBox(width: 2),
-          _SettingsButton(palette: palette),
+          if (_currentIndex == 3) ...[
+            const SizedBox(width: 2),
+            _SettingsButton(palette: palette),
+          ],
           const SizedBox(width: 8),
         ],
       ),
@@ -107,39 +107,39 @@ class _MainScreenState extends State<MainScreen> {
 }
 
 // ── Coin Badge ─────────────────────────────
-class _CoinBadge extends StatelessWidget {
-  const _CoinBadge({required this.palette});
-  final AppPalette palette;
+// class _CoinBadge extends StatelessWidget {
+//   const _CoinBadge({required this.palette});
+//   final AppPalette palette;
 
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.symmetric(vertical: 10),
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-      decoration: BoxDecoration(
-        color: palette.surfaceContainer,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: palette.divider, width: 1),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const Text('🪙', style: TextStyle(fontSize: 14)),
-          const SizedBox(width: 4),
-          Text(
-            '1,280',
-            style: TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w700,
-              color: palette.gold,
-              fontFeatures: const [FontFeature.tabularFigures()],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
+//   @override
+//   Widget build(BuildContext context) {
+//     return Container(
+//       margin: const EdgeInsets.symmetric(vertical: 10),
+//       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+//       decoration: BoxDecoration(
+//         color: palette.surfaceContainer,
+//         borderRadius: BorderRadius.circular(20),
+//         border: Border.all(color: palette.divider, width: 1),
+//       ),
+//       child: Row(
+//         mainAxisSize: MainAxisSize.min,
+//         children: [
+//           const Text('🪙', style: TextStyle(fontSize: 14)),
+//           const SizedBox(width: 4),
+//           Text(
+//             '1,280',
+//             style: TextStyle(
+//               fontSize: 12,
+//               fontWeight: FontWeight.w700,
+//               color: palette.gold,
+//               fontFeatures: const [FontFeature.tabularFigures()],
+//             ),
+//           ),
+//         ],
+//       ),
+//     );
+//   }
+// }
 
 // ── Trophy Button ──────────────────────────
 class _TrophyButton extends StatelessWidget {

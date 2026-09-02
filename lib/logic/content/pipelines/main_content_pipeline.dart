@@ -232,6 +232,9 @@ class MainContentPipeline {
       order = int.tryParse(numMatch.group(1)!) ?? 0;
     }
 
+    final addedAt = raw['addedAt'] != null
+        ? DateTime.tryParse(raw['addedAt'].toString())
+        : null;
     return PuzzleLevelItem(
       id: canonicalId,
       imagePathOrUrl: url,
@@ -239,6 +242,9 @@ class MainContentPipeline {
       order: (raw['order'] as num?)?.toInt() ?? order,
       tags: tags,
       sourceModule: CanonicalId.prefixMain,
+      addedAt: addedAt,
+      unlockCoins: (raw['unlockCoins'] as num?)?.toInt(),
+      unlockCode: raw['unlockCode']?.toString(),
     );
   }
 
@@ -263,6 +269,9 @@ class MainContentPipeline {
                 'url': l.imagePathOrUrl,
                 'order': l.order,
                 'tags': l.tags,
+                if (l.addedAt != null) 'addedAt': l.addedAt!.toIso8601String(),
+                if (l.unlockCoins != null) 'unlockCoins': l.unlockCoins,
+                if (l.unlockCode != null) 'unlockCode': l.unlockCode,
               },
             )
             .toList(),

@@ -167,7 +167,12 @@ class GameRepository {
         }
       }
 
-      // Default level state (Level 1 is unlocked initially)
+      // 全量可浏览：无解锁墙，首期全部可玩（Phase0）
+      // 后续如需象征性解锁，通过 manifest unlockCoins/unlockCode 字段扩展
+      final now = DateTime.now();
+      final addedAt = i > 90
+          ? now.subtract(Duration(days: 100 - i))
+          : now.subtract(const Duration(days: 30));
       list.add(
         LevelItem(
           id: 'level_$i',
@@ -175,9 +180,10 @@ class GameRepository {
           title: '第 $i 关',
           assetPath: assetPath,
           difficulty: diff,
-          isUnlocked: i == 1,
+          isUnlocked: true,
           isCompleted: false,
           progressPercent: 0,
+          addedAt: addedAt,
         ),
       );
     }
@@ -493,7 +499,8 @@ class GameRepository {
       );
     }
 
-    // Unlock next level if completed
+    // Phase0：全量可玩，无关卡墙；保留空实现以兼容旧存档，后续如启用金币解锁再在此扩展
+    // 后续象征性解锁示例：if (nextLevel.unlockCoins != null) check coins
     if (isCompleted && levelIndex < _levels.length) {
       final nextIdx = levelIndex;
       if (!_levels[nextIdx].isUnlocked) {
