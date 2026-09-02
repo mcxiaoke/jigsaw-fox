@@ -2,14 +2,119 @@ import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:flame/game.dart';
 import 'package:jigsawpuzzle/data/game_repository.dart';
 import 'package:jigsawpuzzle/data/models/level_item.dart';
+import 'package:jigsawpuzzle/game/jigsaw_puzzle_game.dart';
 import 'package:jigsawpuzzle/logic/puzzle_model.dart';
+import 'package:jigsawpuzzle/pages/game_page.dart';
 import 'package:jigsawpuzzle/widgets/choose_background_sheet.dart';
 import 'package:jigsawpuzzle/widgets/choose_difficulty_sheet.dart';
+import 'package:jigsawpuzzle/widgets/victory_dialog.dart';
 import 'package:phosphoricons_flutter/phosphoricons_flutter.dart';
 
 void main() {
+  testWidgets('GamePage builds properly with top bar actions and canvas', (
+    tester,
+  ) async {
+    final kTransparentImage = Uint8List.fromList([
+      0x89,
+      0x50,
+      0x4E,
+      0x47,
+      0x0D,
+      0x0A,
+      0x1A,
+      0x0A,
+      0x00,
+      0x00,
+      0x00,
+      0x0D,
+      0x49,
+      0x48,
+      0x44,
+      0x52,
+      0x00,
+      0x00,
+      0x00,
+      0x01,
+      0x00,
+      0x00,
+      0x00,
+      0x01,
+      0x08,
+      0x06,
+      0x00,
+      0x00,
+      0x00,
+      0x1F,
+      0x15,
+      0xC4,
+      0x89,
+      0x00,
+      0x00,
+      0x00,
+      0x0A,
+      0x49,
+      0x44,
+      0x41,
+      0x54,
+      0x78,
+      0x9C,
+      0x63,
+      0x00,
+      0x01,
+      0x00,
+      0x00,
+      0x05,
+      0x00,
+      0x01,
+      0x0D,
+      0x0A,
+      0x2D,
+      0xB4,
+      0x00,
+      0x00,
+      0x00,
+      0x00,
+      0x49,
+      0x45,
+      0x4E,
+      0x44,
+      0xAE,
+      0x42,
+      0x60,
+      0x82,
+    ]);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: GamePage(
+          imageBytes: kTransparentImage,
+          difficulty: PuzzleDifficulty.presets.first,
+          levelIndex: 1,
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.runAsync(() async {
+      await Future<void>.delayed(const Duration(milliseconds: 200));
+    });
+    await tester.pump();
+
+    // 验证 AppBar 上的 6 个操作图标存在
+    expect(find.byIcon(PhosphorIconsBold.cornersOut), findsOneWidget);
+    expect(find.byIcon(PhosphorIconsFill.lightbulb), findsOneWidget);
+    expect(find.byIcon(PhosphorIconsBold.stack), findsOneWidget);
+    expect(find.byIcon(PhosphorIconsBold.eye), findsOneWidget);
+    expect(find.byIcon(PhosphorIconsBold.broom), findsOneWidget);
+    expect(find.byIcon(PhosphorIconsBold.image), findsOneWidget);
+
+    // 验证进度条与 GameWidget 正常挂载在树中
+    expect(find.byType(LinearProgressIndicator), findsOneWidget);
+    expect(find.byType(GameWidget<JigsawPuzzleGame>), findsOneWidget);
+  });
+
   test('difficulty preset configuration', () {
     expect(PuzzleDifficulty.presets.first.pieceCount, 24);
     expect(PuzzleDifficulty.presets.last.pieceCount, 400);
@@ -170,61 +275,15 @@ void main() {
             body: Builder(
               builder: (context) => ElevatedButton(
                 onPressed: () {
-                  showDialog<void>(
+                  VictoryDialog.show(
                     context: context,
-                    builder: (ctx) => AlertDialog(
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      title: const Row(
-                        children: [
-                          Text('🎉 ', style: TextStyle(fontSize: 24)),
-                          Text(
-                            '恭喜通关！',
-                            style: TextStyle(fontWeight: FontWeight.bold),
-                          ),
-                        ],
-                      ),
-                      content: SizedBox(
-                        width: 300,
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            ClipRRect(
-                              borderRadius: BorderRadius.circular(12),
-                              child: Image.memory(
-                                kTransparentImage,
-                                height: 160,
-                                width: 300,
-                                fit: BoxFit.cover,
-                              ),
-                            ),
-                            const SizedBox(height: 16),
-                            const Text(
-                              '总用时：01:23',
-                              style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                            const SizedBox(height: 4),
-                            const Text(
-                              '规格：3 × 3 (9 块)',
-                              style: TextStyle(
-                                fontSize: 14,
-                                color: Colors.black54,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      actions: [
-                        TextButton(
-                          onPressed: () => Navigator.pop(ctx),
-                          child: const Text('查看拼图'),
-                        ),
-                      ],
-                    ),
+                    imageBytes: kTransparentImage,
+                    stars: 3,
+                    elapsedSeconds: 83,
+                    pieceCount: 64,
+                    rewardCoins: 25,
+                    onNextLevel: () {},
+                    onShare: () {},
                   );
                 },
                 child: const Text('Open Dialog'),
@@ -237,8 +296,10 @@ void main() {
       await tester.tap(find.text('Open Dialog'));
       await tester.pumpAndSettle();
 
-      expect(find.text('恭喜通关！'), findsOneWidget);
-      expect(find.text('总用时：01:23'), findsOneWidget);
+      expect(find.text('拼图完成！'), findsOneWidget);
+      expect(find.text('下一关'), findsOneWidget);
+      expect(find.text('保存壁纸'), findsOneWidget);
+      expect(find.text('分享成绩'), findsOneWidget);
     },
   );
 
@@ -396,7 +457,7 @@ void main() {
       await tester.pumpAndSettle();
 
       // 1. Check title and header indicator
-      expect(find.text('第 1 关 · 难度选择'), findsOneWidget);
+      expect(find.text('选择难度'), findsOneWidget);
       expect(
         find.text('已通关'),
         findsOneWidget,

@@ -1,13 +1,17 @@
 import 'dart:async';
+import 'dart:io';
 import 'dart:math';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:phosphoricons_flutter/phosphoricons_flutter.dart';
 
+import '../services/achievement_service.dart';
 import '../services/sound_service.dart';
 import '../theme/app_palette.dart';
 import '../theme/app_text_styles.dart';
+import 'game_toast.dart';
 
 /// Full-screen Victory dialog with confetti, star animation, and stat roll-up.
 ///
@@ -16,7 +20,7 @@ import '../theme/app_text_styles.dart';
 /// - Confetti: gold + amber particles falling down
 /// - Center: completed image, 4px brand border, scale-in (0.8→1.0, elasticOut, 500ms)
 /// - Stars: 3 stars light up sequentially (400ms interval)
-/// - Stats: time, moves, reward with number roll animation (0→target, 800ms)
+/// - Stats: time, moves/pieces, reward with number roll animation (0→target, 800ms)
 /// - Buttons: "保存壁纸"(ghost), "分享成绩"(brand), "下一关"(brand, most prominent)
 class VictoryDialog extends StatefulWidget {
   const VictoryDialog({
@@ -25,19 +29,25 @@ class VictoryDialog extends StatefulWidget {
     this.stars = 3,
     this.elapsedSeconds = 0,
     this.moveCount = 0,
+    this.pieceCount,
     this.rewardCoins = 0,
+    this.newAchievements = const [],
     this.onNextLevel,
     this.onShare,
     this.onSaveWallpaper,
+    this.onViewPuzzle,
+    this.onExit,
   });
 
   final Uint8List imageBytes;
   final int stars;
   final int elapsedSeconds;
   final int moveCount;
+  final int? pieceCount;
   final int rewardCoins;
+  final List<AchievementDefinition> newAchievements;
 
-  /// Called when user taps "下一关". If null, button is hidden.
+  /// Called when user taps "下一关". If null, primary button shows "返回列表".
   final VoidCallback? onNextLevel;
 
   /// Called when user taps "分享成绩".
@@ -46,16 +56,26 @@ class VictoryDialog extends StatefulWidget {
   /// Called when user taps "保存壁纸".
   final VoidCallback? onSaveWallpaper;
 
+  /// Called when user wants to close dialog and view the completed puzzle in board.
+  final VoidCallback? onViewPuzzle;
+
+  /// Called when user taps "返回列表" (when onNextLevel is null).
+  final VoidCallback? onExit;
+
   static Future<void> show({
     required BuildContext context,
     required Uint8List imageBytes,
     int stars = 3,
     int elapsedSeconds = 0,
     int moveCount = 0,
+    int? pieceCount,
     int rewardCoins = 0,
+    List<AchievementDefinition> newAchievements = const [],
     VoidCallback? onNextLevel,
     VoidCallback? onShare,
     VoidCallback? onSaveWallpaper,
+    VoidCallback? onViewPuzzle,
+    VoidCallback? onExit,
   }) {
     return showDialog<void>(
       context: context,
@@ -66,10 +86,14 @@ class VictoryDialog extends StatefulWidget {
         stars: stars,
         elapsedSeconds: elapsedSeconds,
         moveCount: moveCount,
+        pieceCount: pieceCount,
         rewardCoins: rewardCoins,
+        newAchievements: newAchievements,
         onNextLevel: onNextLevel,
         onShare: onShare,
         onSaveWallpaper: onSaveWallpaper,
+        onViewPuzzle: onViewPuzzle,
+        onExit: onExit,
       ),
     );
   }
@@ -174,6 +198,27 @@ class _VictoryDialogState extends State<VictoryDialog>
     _starController.dispose();
     _statController.dispose();
     super.dispose();
+  }
+
+  Future<void> _defaultSaveWallpaper() async {
+    try {
+      final dir = await getTemporaryDirectory();
+      final ts = DateTime.now().millisecondsSinceEpoch;
+      final file = File('${dir.path}/puzzle_wallpaper_$ts.png');
+      await file.writeAsBytes(widget.imageBytes);
+      if (mounted) {
+        GameToast.show(
+          context,
+          message: '壁纸已保存到本地',
+          type: GameToastType.success,
+          icon: PhosphorIconsFill.checkCircle,
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        GameToast.show(context, message: '保存失败: $e', type: GameToastType.error);
+      }
+    }
   }
 
   String _formatTime(int seconds) {
@@ -296,9 +341,11 @@ class _VictoryDialogState extends State<VictoryDialog>
                         styles: styles,
                       ),
                       _buildStat(
-                        icon: PhosphorIconsBold.cursorClick,
-                        label: '步数',
-                        value: '$_displayedMoves',
+                        icon: PhosphorIconsBold.puzzlePiece,
+                        label: '规格',
+                        value: widget.pieceCount != null
+                            ? '${widget.pieceCount}块'
+                            : '$_displayedMoves',
                         palette: palette,
                         styles: styles,
                       ),
@@ -312,35 +359,73 @@ class _VictoryDialogState extends State<VictoryDialog>
                       ),
                     ],
                   ),
-                  const SizedBox(height: 24),
+
+                  // Unlocked achievements banner
+                  if (widget.newAchievements.isNotEmpty) ...[
+                    const SizedBox(height: 14),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 8,
+                      ),
+                      decoration: BoxDecoration(
+                        color: palette.gold.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: palette.gold.withValues(alpha: 0.4),
+                        ),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            PhosphorIconsFill.trophy,
+                            size: 20,
+                            color: palette.gold,
+                          ),
+                          const SizedBox(width: 8),
+                          Flexible(
+                            child: Text(
+                              '解锁成就: ${widget.newAchievements.map((a) => a.title).join("、")}',
+                              style: styles.caption.copyWith(
+                                fontWeight: FontWeight.bold,
+                                color: palette.brand,
+                              ),
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                  const SizedBox(height: 22),
 
                   // Action buttons
                   Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      if (widget.onSaveWallpaper != null)
-                        Expanded(
-                          child: OutlinedButton.icon(
-                            onPressed: widget.onSaveWallpaper,
-                            icon: const Icon(
-                              PhosphorIconsRegular.image,
-                              size: 16,
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed:
+                              widget.onSaveWallpaper ?? _defaultSaveWallpaper,
+                          icon: const Icon(
+                            PhosphorIconsRegular.image,
+                            size: 16,
+                          ),
+                          label: const Text('保存壁纸'),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: palette.secondaryText,
+                            side: BorderSide(color: palette.divider),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(14),
                             ),
-                            label: const Text('保存壁纸'),
-                            style: OutlinedButton.styleFrom(
-                              foregroundColor: palette.secondaryText,
-                              side: BorderSide(color: palette.divider),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(14),
-                              ),
-                              padding: const EdgeInsets.symmetric(vertical: 12),
-                            ),
+                            padding: const EdgeInsets.symmetric(vertical: 12),
                           ),
                         ),
-                      if (widget.onSaveWallpaper != null &&
-                          widget.onShare != null)
+                      ),
+                      if (widget.onShare != null) ...[
                         const SizedBox(width: 10),
-                      if (widget.onShare != null)
                         Expanded(
                           child: FilledButton.icon(
                             onPressed: widget.onShare,
@@ -359,14 +444,39 @@ class _VictoryDialogState extends State<VictoryDialog>
                             ),
                           ),
                         ),
-                      if (widget.onShare != null && widget.onNextLevel != null)
-                        const SizedBox(width: 10),
+                      ],
+                      const SizedBox(width: 10),
                       if (widget.onNextLevel != null)
                         Expanded(
                           child: FilledButton.icon(
-                            onPressed: widget.onNextLevel,
+                            onPressed: () {
+                              Navigator.of(context).pop();
+                              widget.onNextLevel!();
+                            },
                             icon: const Icon(PhosphorIconsFill.play, size: 16),
                             label: const Text('下一关'),
+                            style: FilledButton.styleFrom(
+                              backgroundColor: palette.brand,
+                              foregroundColor: palette.surface,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(14),
+                              ),
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                              elevation: 2,
+                            ),
+                          ),
+                        )
+                      else
+                        Expanded(
+                          child: FilledButton.icon(
+                            onPressed: () {
+                              Navigator.of(context).pop();
+                              if (widget.onExit != null) {
+                                widget.onExit!();
+                              }
+                            },
+                            icon: const Icon(PhosphorIconsBold.check, size: 16),
+                            label: const Text('返回列表'),
                             style: FilledButton.styleFrom(
                               backgroundColor: palette.brand,
                               foregroundColor: palette.surface,
@@ -382,11 +492,16 @@ class _VictoryDialogState extends State<VictoryDialog>
                   ),
                   const SizedBox(height: 8),
 
-                  // Close button
+                  // Close / View Puzzle button
                   TextButton(
-                    onPressed: () => Navigator.of(context).pop(),
+                    onPressed: () {
+                      Navigator.of(context).pop();
+                      if (widget.onViewPuzzle != null) {
+                        widget.onViewPuzzle!();
+                      }
+                    },
                     child: Text(
-                      '返回',
+                      widget.onViewPuzzle != null ? '查看已完成拼图' : '返回',
                       style: TextStyle(color: palette.secondaryText),
                     ),
                   ),

@@ -556,10 +556,15 @@ class JigsawPuzzleGame extends FlameGame
 
   /// Computes smart board maximizing layout and normalized tray metrics.
   /// 桌面散落模式采用动态自适应棋盘：根据窗口尺寸、图片长宽比与碎片数量
-  /// 动态估算四周散落所需空间，最大化中央棋盘同时保持长宽比。
   void _computeLayout() {
-    // 1. Bottom Tray Height (comfortably houses ~64px touch piece)
-    final targetTrayH = min(size.y * 0.28, max(size.y * 0.20, 100.0));
+    // 1. Bottom Tray Height: 碎片高度为基准，上边间距 15%，下边间距 30%
+    final srcPieceW = image.width / cols;
+    final srcPieceH = image.height / rows;
+    final maxSrcSide = max(srcPieceW, srcPieceH);
+    _trayPieceWidth = srcPieceW * (targetTrayPieceBaseSize / maxSrcSide);
+    _trayPieceHeight = srcPieceH * (targetTrayPieceBaseSize / maxSrcSide);
+
+    final targetTrayH = _trayPieceHeight * (1.0 + 0.15 + 0.30);
     traySize = Vector2(size.x - _sideMargin * 2, targetTrayH);
     trayPosition = Vector2(
       _sideMargin,
@@ -778,18 +783,17 @@ class JigsawPuzzleGame extends FlameGame
     // 3. Normalized Tray Scaling (Target max side = 64px, preserving piece aspect ratio)
     final maxPieceSide = max(pieceSize.x, pieceSize.y);
     _trayPieceScale = targetTrayPieceBaseSize / maxPieceSide;
-    _trayPieceWidth = pieceSize.x * _trayPieceScale;
-    _trayPieceHeight = pieceSize.y * _trayPieceScale;
     _traySpacing = 14.0;
   }
 
   List<Vector2>? _tabletopScatterSlots;
 
   /// Computes the exact screen coordinate for the N-th piece in the bottom tray.
+  /// 托盘内上边间距为 15% 碎片高度，下边自然留出 30% 碎片高度
   Vector2 _getTrayPositionForIndex(int index) {
     final startX = trayPosition.x + 18.0 + _trayScrollX;
     final px = startX + index * (_trayPieceWidth + _traySpacing);
-    final py = trayPosition.y + (traySize.y - _trayPieceHeight) / 2;
+    final py = trayPosition.y + (_trayPieceHeight * 0.15);
     return Vector2(px, py);
   }
 

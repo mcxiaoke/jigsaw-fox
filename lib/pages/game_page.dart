@@ -20,6 +20,8 @@ import '../services/app_logger.dart';
 import '../services/economy_service.dart';
 import '../services/sound_service.dart';
 import '../widgets/choose_background_sheet.dart';
+import '../widgets/share_card_generator.dart';
+import '../widgets/victory_dialog.dart';
 
 /// Full-screen in-game puzzle page matching commercial Jigsaw experience.
 class GamePage extends StatefulWidget {
@@ -685,209 +687,32 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
     final hasNext =
         widget.levelIndex != null && widget.levelIndex! < _repo.levels.length;
 
-    showDialog<void>(
+    VictoryDialog.show(
       context: context,
-      barrierDismissible: true,
-      builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-        contentPadding: const EdgeInsets.fromLTRB(20, 20, 20, 16),
-        content: SizedBox(
-          width: 320,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Text(
-                '🎉 恭喜通关！',
-                style: TextStyle(
-                  fontSize: 22,
-                  fontWeight: FontWeight.bold,
-                  color: Color(0xFF2E7D32),
-                ),
-              ),
-              const SizedBox(height: 8),
-
-              // Star rating
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: List.generate(
-                  3,
-                  (i) => Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 4),
-                    child: i < earnedStars
-                        ? Image.asset(
-                            'assets/icons/star_3d.png',
-                            width: 36,
-                            height: 36,
-                          )
-                        : const Icon(
-                            PhosphorIconsRegular.star,
-                            color: Colors.amber,
-                            size: 36,
-                          ),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 12),
-
-              ClipRRect(
-                borderRadius: BorderRadius.circular(14),
-                child: Image.memory(
-                  widget.imageBytes,
-                  height: 160,
-                  width: 300,
-                  fit: BoxFit.cover,
-                  // 解码期降采样：展示区 300px × 3倍DPR ≈900，1080已足，
-                  // 避免超分原图全量解码数十MB
-                  cacheWidth: 1080,
-                ),
-              ),
-              const SizedBox(height: 14),
-
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 8,
-                ),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFF1F8E9),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceAround,
-                  children: [
-                    Column(
-                      children: [
-                        const Text(
-                          '总用时',
-                          style: TextStyle(fontSize: 12, color: Colors.black54),
-                        ),
-                        ValueListenableBuilder<int>(
-                          valueListenable: _secondsNotifier,
-                          builder: (context, _, _) => Text(
-                            _timeString,
-                            style: const TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                    Column(
-                      children: [
-                        const Text(
-                          '获得金币',
-                          style: TextStyle(fontSize: 12, color: Colors.black54),
-                        ),
-                        Text(
-                          '+$earnedCoins 💰',
-                          style: const TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.amber,
-                          ),
-                        ),
-                      ],
-                    ),
-                    Column(
-                      children: [
-                        const Text(
-                          '规格',
-                          style: TextStyle(fontSize: 12, color: Colors.black54),
-                        ),
-                        Text(
-                          '$_totalPieces 块',
-                          style: const TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                            color: Color(0xFF2E7D32),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-              if (newAchievements.isNotEmpty) ...[
-                const SizedBox(height: 10),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 6,
-                  ),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFFFF8E1),
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: Colors.amber.shade300),
-                  ),
-                  child: Row(
-                    children: [
-                      const Icon(
-                        PhosphorIconsFill.trophy,
-                        color: Colors.amber,
-                        size: 20,
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          '解锁成就: ${newAchievements.map((a) => a.title).join("、")}',
-                          style: const TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                            color: Color(0xFF795548),
-                          ),
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ],
-          ),
-        ),
-        actionsAlignment: MainAxisAlignment.spaceEvenly,
-        actions: [
-          TextButton(
-            onPressed: () {
-              SoundService.I.play(Sfx.tap);
-              Navigator.pop(ctx);
-            },
-            child: const Text('查看已完成拼图'),
-          ),
-          if (hasNext)
-            FilledButton.icon(
-              onPressed: () {
-                SoundService.I.play(Sfx.tap);
-                Navigator.pop(ctx);
-                _playNextLevel();
-              },
-              icon: const Icon(PhosphorIconsBold.fastForward),
-              label: const Text('下一关'),
-              style: FilledButton.styleFrom(
-                backgroundColor: const Color(0xFF2E7D32),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(14),
-                ),
-              ),
-            )
-          else
-            FilledButton(
-              onPressed: () {
-                SoundService.I.play(Sfx.tap);
-                Navigator.pop(ctx);
-                Navigator.pop(context);
-              },
-              style: FilledButton.styleFrom(
-                backgroundColor: const Color(0xFF2E7D32),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(14),
-                ),
-              ),
-              child: const Text('返回列表'),
-            ),
-        ],
-      ),
+      imageBytes: widget.imageBytes,
+      stars: earnedStars,
+      elapsedSeconds: _seconds,
+      pieceCount: _totalPieces,
+      rewardCoins: earnedCoins,
+      newAchievements: newAchievements,
+      onNextLevel: hasNext ? _playNextLevel : null,
+      onShare: () {
+        ShareCardGenerator.open(
+          context,
+          imageBytes: widget.imageBytes,
+          elapsedSeconds: _seconds,
+          pieceCount: _totalPieces,
+          starCount: earnedStars,
+          stepCount: _solvedPieces,
+          levelTitle: _pageTitle,
+        );
+      },
+      onViewPuzzle: () {
+        setState(() {}); // 停留在游戏内自由缩放欣赏完整拼图
+      },
+      onExit: () {
+        Navigator.of(context).pop();
+      },
     );
   }
 
@@ -1022,8 +847,8 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
     super.dispose();
   }
 
-  /// 标准 AppBar：左侧返回 + 标题，右侧仅保留 4 个图标（左到右）：
-  /// 1) 只显示边缘碎片  2) 提示  3) 半透明原图叠层  4) 扫把整理
+  /// 标准 AppBar：左侧返回，右侧收敛 6 个图标（左到右）：
+  /// 1) 边缘碎片  2) 提示  3) 遮罩  4) 眼睛看原图  5) 扫把整理  6) 换背景
   AppBar _buildAppBar() {
     final ghostOpacity = _game?.boardGhostOpacity ?? 0.0;
     final isBorderActive = _game?.isBorderFilterActive ?? false;
@@ -1032,13 +857,8 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
       elevation: 2,
       scrolledUnderElevation: 2,
       surfaceTintColor: Colors.transparent,
-      iconTheme: IconThemeData(color: _headerIconColor),
-      titleTextStyle: TextStyle(
-        fontWeight: FontWeight.bold,
-        fontSize: 17,
-        color: _headerIconColor,
-      ),
       titleSpacing: 0,
+      automaticallyImplyLeading: false,
       leading: IconButton(
         icon: Icon(PhosphorIconsBold.arrowLeft, color: _headerIconColor),
         tooltip: '返回',
@@ -1048,10 +868,13 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
           if (mounted) Navigator.of(context).pop();
         },
       ),
-      title: Text(_pageTitle, maxLines: 1, overflow: TextOverflow.ellipsis),
+      title: const SizedBox.shrink(),
       actions: [
-        // 1. 只显示边缘碎片
+        // 1. 显示边缘碎片
         IconButton(
+          visualDensity: VisualDensity.compact,
+          padding: const EdgeInsets.symmetric(horizontal: 5),
+          constraints: const BoxConstraints(minWidth: 38, minHeight: 40),
           icon: Icon(
             isBorderActive
                 ? PhosphorIconsFill.cornersOut
@@ -1069,6 +892,9 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
         ),
         // 2. 提示
         IconButton(
+          visualDensity: VisualDensity.compact,
+          padding: const EdgeInsets.symmetric(horizontal: 5),
+          constraints: const BoxConstraints(minWidth: 38, minHeight: 40),
           icon: const Icon(
             PhosphorIconsFill.lightbulb,
             size: 21,
@@ -1077,8 +903,11 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
           tooltip: '智能提示',
           onPressed: _onHintPressed,
         ),
-        // 3. 半透明原图叠层（底图透视 0%/20%/45%）
+        // 3. 显示遮罩（底图透视 0%/20%/45%）
         IconButton(
+          visualDensity: VisualDensity.compact,
+          padding: const EdgeInsets.symmetric(horizontal: 5),
+          constraints: const BoxConstraints(minWidth: 38, minHeight: 40),
           icon: Stack(
             alignment: Alignment.center,
             children: [
@@ -1123,8 +952,32 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
             setState(() {});
           },
         ),
-        // 4. 扫把一键整理
+        // 4. 显示眼睛（看原图）
         IconButton(
+          visualDensity: VisualDensity.compact,
+          padding: const EdgeInsets.symmetric(horizontal: 5),
+          constraints: const BoxConstraints(minWidth: 38, minHeight: 40),
+          icon: Icon(
+            _showOriginalImage ? PhosphorIconsFill.eye : PhosphorIconsBold.eye,
+            size: 21,
+            color: _showOriginalImage
+                ? const Color(0xFF0288D1)
+                : _headerIconColor,
+          ),
+          tooltip: '查看原图',
+          onPressed: () {
+            SoundService.I.play(Sfx.preview);
+            setState(() {
+              _showOriginalImage = !_showOriginalImage;
+              _isPaused = _showOriginalImage;
+            });
+          },
+        ),
+        // 5. 扫把一键整理
+        IconButton(
+          visualDensity: VisualDensity.compact,
+          padding: const EdgeInsets.symmetric(horizontal: 5),
+          constraints: const BoxConstraints(minWidth: 38, minHeight: 40),
           icon: Icon(
             PhosphorIconsBold.broom,
             size: 21,
@@ -1136,72 +989,21 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
             SoundService.I.play(Sfx.tap);
           },
         ),
+        // 6. 换背景图
+        IconButton(
+          visualDensity: VisualDensity.compact,
+          padding: const EdgeInsets.symmetric(horizontal: 5),
+          constraints: const BoxConstraints(minWidth: 38, minHeight: 40),
+          icon: const Icon(
+            PhosphorIconsBold.image,
+            size: 21,
+            color: Color(0xFF2E7D32),
+          ),
+          tooltip: '更换壁纸背景',
+          onPressed: _openBackgroundSelector,
+        ),
         const SizedBox(width: 4),
       ],
-    );
-  }
-
-  /// AppBar 下方的短状态条：仅在屏幕右侧显示的胶囊短条，内含 2 个图标：
-  /// 换背景图片 + 查看原图（全屏原图叠层切换）
-  Widget _buildShortStatusBar() {
-    return Align(
-      alignment: Alignment.centerRight,
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(0, 6, 10, 0),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
-          decoration: BoxDecoration(
-            color: _headerBarColor.withValues(alpha: 0.94),
-            borderRadius: BorderRadius.circular(16),
-            boxShadow: const [
-              BoxShadow(
-                color: Colors.black12,
-                blurRadius: 4,
-                offset: Offset(0, 2),
-              ),
-            ],
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              IconButton(
-                visualDensity: VisualDensity.compact,
-                padding: const EdgeInsets.symmetric(horizontal: 6),
-                constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
-                icon: const Icon(
-                  PhosphorIconsBold.image,
-                  size: 19,
-                  color: Color(0xFF2E7D32),
-                ),
-                tooltip: '更换壁纸背景',
-                onPressed: _openBackgroundSelector,
-              ),
-              IconButton(
-                visualDensity: VisualDensity.compact,
-                padding: const EdgeInsets.symmetric(horizontal: 6),
-                constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
-                icon: Icon(
-                  _showOriginalImage
-                      ? PhosphorIconsFill.eye
-                      : PhosphorIconsBold.eye,
-                  size: 19,
-                  color: _showOriginalImage
-                      ? const Color(0xFF0288D1)
-                      : _headerIconColor,
-                ),
-                tooltip: '查看原图',
-                onPressed: () {
-                  SoundService.I.play(Sfx.preview);
-                  setState(() {
-                    _showOriginalImage = !_showOriginalImage;
-                    _isPaused = _showOriginalImage;
-                  });
-                },
-              ),
-            ],
-          ),
-        ),
-      ),
     );
   }
 
@@ -1240,14 +1042,11 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
               ),
             ),
 
-            // 2. Short right-aligned status bar + progress + Flame Game Canvas
+            // 2. Progress Line + Flame Game Canvas
+            // Keep as non-positioned Column so Stack fills the entire available screen
             Column(
               children: [
-                _buildShortStatusBar(),
-                Padding(
-                  padding: const EdgeInsets.only(top: 4),
-                  child: _buildProgressLine(),
-                ),
+                _buildProgressLine(),
                 Expanded(
                   child: _game != null
                       ? KeyboardListener(
@@ -1273,7 +1072,11 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
                               opacity: _gameFadeIn ? 1.0 : 0.0,
                               duration: const Duration(milliseconds: 300),
                               curve: Curves.easeOutCubic,
-                              child: ClipRect(child: GameWidget(game: _game!)),
+                              child: ClipRect(
+                                child: GameWidget<JigsawPuzzleGame>(
+                                  game: _game!,
+                                ),
+                              ),
                             ),
                           ),
                         )
@@ -1421,7 +1224,7 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
                     vertical: 12,
                   ),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF2E7D32),
+                    color: const Color(0xFF1F2937),
                     borderRadius: BorderRadius.circular(24),
                     boxShadow: const [
                       BoxShadow(
@@ -1448,7 +1251,7 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
                             onPressed: _showVictoryDialog,
                             child: const Text(
                               '结算成绩',
-                              style: TextStyle(color: Colors.white70),
+                              style: TextStyle(color: Colors.amber),
                             ),
                           ),
                           FilledButton(
@@ -1458,7 +1261,7 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
                             ),
                             child: const Text(
                               '返回',
-                              style: TextStyle(color: Color(0xFF2E7D32)),
+                              style: TextStyle(color: Color(0xFF1F2937)),
                             ),
                           ),
                         ],

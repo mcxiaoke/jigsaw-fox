@@ -21,7 +21,7 @@ Future<ui.Image> _decodePng() async {
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  test('初始碎片 base cell 应在托盘区域内垂直居中', () async {
+  test('初始碎片 base cell 应在托盘区域内满足上边距 15%、下边距 30%', () async {
     final img = await _decodePng();
     final game = JigsawPuzzleGame(
       image: img,
@@ -37,33 +37,31 @@ void main() {
 
     final trayTop = game.trayPosition.y;
     final trayHeight = game.traySize.y;
-    final trayCenterY = trayTop + trayHeight / 2;
 
     final report = <String>[];
     for (final p in pieces) {
       // 组件 anchor=topLeft，渲染内容覆盖 [position, position + size*scale]
       final top = p.position.y;
       final bottom = p.position.y + p.size.y * p.scale.y;
-      final centerOffset = (top + bottom) / 2 - trayCenterY;
+      final pieceHeight = p.size.y * p.scale.y;
+      final actualTopMargin = top - trayTop;
+      final actualBottomMargin = (trayTop + trayHeight) - bottom;
       report.add(
-        'piece#${p.id} top=${top.toStringAsFixed(1)} '
-        'bottom=${bottom.toStringAsFixed(1)} '
-        'centerOffset=${centerOffset.toStringAsFixed(1)} '
-        'scale=${p.scale.y.toStringAsFixed(3)} '
-        'sizeY=${p.size.y.toStringAsFixed(1)}',
+        'piece#${p.id} top=$top bottom=$bottom '
+        'topMargin=$actualTopMargin bottomMargin=$actualBottomMargin '
+        'expectedTop=${pieceHeight * 0.15} expectedBottom=${pieceHeight * 0.30}',
       );
       expect(
-        centerOffset.abs(),
+        (actualTopMargin - pieceHeight * 0.15).abs(),
         lessThan(1.0),
-        reason:
-            '碎片 base cell 应垂直居中于托盘 (trayTop=$trayTop, '
-            'trayHeight=$trayHeight):\n${report.join('\n')}',
+        reason: '碎片上边距应为碎片高度的 15%:\n${report.join('\n')}',
+      );
+      expect(
+        (actualBottomMargin - pieceHeight * 0.30).abs(),
+        lessThan(1.0),
+        reason: '碎片下边距应为碎片高度的 30%:\n${report.join('\n')}',
       );
     }
-    // ignore: avoid_print
-    print(
-      'TRAY  layout trayTop=$trayTop trayHeight=$trayHeight\n${report.join('\n')}',
-    );
   });
 
   test('连续 hint 每次都应归位新碎片且 id 一致，拖拽结束不应崩溃', () async {
@@ -903,7 +901,7 @@ void main() {
 
     final initialTrayY = game.trayPosition.y;
     final initialBoardW = game.boardSize.x;
-    expect(initialTrayY, equals(800.0 - game.traySize.y - 8.0));
+    expect(initialTrayY, closeTo(800.0 - game.traySize.y - 8.0, 1e-4));
 
     // 拼入一块碎片到棋盘上
     game.hint();
@@ -913,13 +911,13 @@ void main() {
     game.onGameResize(Vector2(1280, 720));
 
     // 1. 验证托盘依然紧贴新视口底部
-    expect(game.trayPosition.y, equals(720.0 - game.traySize.y - 8.0));
+    expect(game.trayPosition.y, closeTo(720.0 - game.traySize.y - 8.0, 1e-4));
     expect(game.traySize.x, equals(1280.0 - 16.0));
 
     // 2. 验证棋盘与碎片尺寸同步等比重算
     expect(game.boardSize.x, isNot(equals(initialBoardW)));
-    expect(game.pieceSize.x, equals(game.boardSize.x / 3));
-    expect(game.pieceSize.y, equals(game.boardSize.y / 3));
+    expect(game.pieceSize.x, closeTo(game.boardSize.x / 3, 1e-4));
+    expect(game.pieceSize.y, closeTo(game.boardSize.y / 3, 1e-4));
 
     // 3. 验证已归位棋盘碎片的新屏幕坐标与新棋盘对齐
     final solvedComp = game.children
@@ -938,7 +936,7 @@ void main() {
 
     // 4. 模拟缩小窗口至 320 x 480
     game.onGameResize(Vector2(320, 480));
-    expect(game.trayPosition.y, equals(480.0 - game.traySize.y - 8.0));
+    expect(game.trayPosition.y, closeTo(480.0 - game.traySize.y - 8.0, 1e-4));
     expect(game.traySize.x, equals(320.0 - 16.0));
     expect(
       solvedComp.position.x,
@@ -1075,11 +1073,11 @@ void main() {
     game.onGameResize(Vector2(800, 600));
 
     // 验证单块 p0 已被安全 Clamp 收拢在 800 x 600 的安全可视区域内
-    expect(p0.position.x, lessThanOrEqualTo(800.0 - p0.size.x - 8.0));
+    expect(p0.position.x, lessThanOrEqualTo(800.0 - p0.size.x - 8.0 + 1e-3));
     expect(p0.position.x, greaterThanOrEqualTo(8.0));
     expect(
       p0.position.y,
-      lessThanOrEqualTo(game.trayPosition.y - p0.size.y - 8.0),
+      lessThanOrEqualTo(game.trayPosition.y - p0.size.y - 8.0 + 1e-3),
     );
     expect(p0.position.y, greaterThanOrEqualTo(44.0));
 
