@@ -89,32 +89,44 @@ class _CropPuzzlePageState extends State<CropPuzzlePage> {
   }
 
   Future<void> _decodeImage() async {
-    final codec = await ui.instantiateImageCodec(widget.rawBytes);
-    final frame = await codec.getNextFrame();
-    if (mounted) {
-      setState(() {
-        _decodedImage = frame.image;
-        // Automatically suggest closest ratio matching the uploaded photo
-        final detected = PuzzleAspectRatio.fromSize(
-          frame.image.width.toDouble(),
-          frame.image.height.toDouble(),
-        );
-        _selectedRatio = CropRatio.values.firstWhere(
-          (c) => c.aspectRatio == detected,
-          orElse: () => CropRatio.square,
-        );
-        final tiers = _selectedRatio.aspectRatio.tiers;
-        _selectedDifficulty = tiers.firstWhere(
-          (t) => t.difficulty.recommended,
-          orElse: () => tiers[0],
-        ).difficulty;
-        _needsResetMatrix = true;
-      });
+    ui.Codec? codec;
+    try {
+      codec = await ui.instantiateImageCodec(widget.rawBytes);
+      final frame = await codec.getNextFrame();
+      if (mounted) {
+        setState(() {
+          // 释放旧图避免 GPU 常驻泄漏（重复进裁切页场景）
+          _decodedImage?.dispose();
+          _decodedImage = frame.image;
+          // Automatically suggest closest ratio matching the uploaded photo
+          final detected = PuzzleAspectRatio.fromSize(
+            frame.image.width.toDouble(),
+            frame.image.height.toDouble(),
+          );
+          _selectedRatio = CropRatio.values.firstWhere(
+            (c) => c.aspectRatio == detected,
+            orElse: () => CropRatio.square,
+          );
+          final tiers = _selectedRatio.aspectRatio.tiers;
+          _selectedDifficulty = tiers.firstWhere(
+            (t) => t.difficulty.recommended,
+            orElse: () => tiers[0],
+          ).difficulty;
+          _needsResetMatrix = true;
+        });
+      } else {
+        // 未挂载时及时释放，避免后台解码泄漏
+        frame.image.dispose();
+      }
+    } catch (_) {
+    } finally {
+      codec?.dispose();
     }
   }
 
   @override
   void dispose() {
+    _decodedImage?.dispose();
     _transformController.dispose();
     super.dispose();
   }

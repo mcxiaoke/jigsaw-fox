@@ -6,6 +6,7 @@ import '../../data/game_repository.dart';
 import '../../data/models/level_item.dart';
 import '../../data/resume_helper.dart';
 import '../../data/snapshot_store.dart';
+import '../../logic/cache/image_cache_manager.dart';
 import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
 import '../../widgets/app_cached_image.dart';
@@ -278,8 +279,7 @@ class _DailyBanner extends StatelessWidget {
             AppCachedImage(
               imagePathOrUrl: todayDaily.assetPath,
               fit: BoxFit.cover,
-              targetWidth: 600,
-              targetHeight: 320,
+              targetDimension: ThumbnailDimension.eventCover,
             ),
             // Gradient overlay (black → transparent)
             Container(
@@ -609,8 +609,6 @@ class _LevelCard extends StatelessWidget {
               AppCachedImage(
                 imagePathOrUrl: level.assetPath,
                 fit: BoxFit.cover,
-                targetWidth: 360,
-                targetHeight: 360,
               )
             else
               ColorFiltered(
@@ -623,8 +621,6 @@ class _LevelCard extends StatelessWidget {
                 child: AppCachedImage(
                   imagePathOrUrl: level.assetPath,
                   fit: BoxFit.cover,
-                  targetWidth: 360,
-                  targetHeight: 360,
                 ),
               ),
 

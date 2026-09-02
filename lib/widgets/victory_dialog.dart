@@ -241,6 +241,9 @@ class _VictoryDialogState extends State<VictoryDialog>
                           width: 200,
                           height: 200,
                           fit: BoxFit.cover,
+                          // 解码期降采样：展示盒 200px × 3 倍 DPR 足够清晰，
+                          // 避免按原图分辨率全量解码（超分图可达数十 MB）
+                          cacheWidth: 600,
                           errorBuilder: (_, _, _) => Container(
                             width: 200,
                             height: 200,

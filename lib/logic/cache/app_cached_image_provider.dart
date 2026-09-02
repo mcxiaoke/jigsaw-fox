@@ -12,12 +12,12 @@ import 'image_cache_manager.dart';
 class AppImageKey {
   const AppImageKey({
     required this.filePath,
-    required this.targetDimension,
+    required this.dimension,
     required this.scale,
   });
 
   final String filePath;
-  final int targetDimension;
+  final ThumbnailDimension dimension;
   final double scale;
 
   @override
@@ -25,15 +25,15 @@ class AppImageKey {
     if (other.runtimeType != runtimeType) return false;
     return other is AppImageKey &&
         other.filePath == filePath &&
-        other.targetDimension == targetDimension &&
+        other.dimension == dimension &&
         other.scale == scale;
   }
 
   @override
-  int get hashCode => Object.hash(filePath, targetDimension, scale);
+  int get hashCode => Object.hash(filePath, dimension, scale);
 
   @override
-  String toString() => '${describeIdentity(this)}("$filePath", dim: $targetDimension, scale: $scale)';
+  String toString() => '${describeIdentity(this)}("$filePath", dim: ${dimension.pixels}, scale: $scale)';
 }
 
 /// 基于工业级三级分级缓存系统实现的 Flutter 原生 [ImageProvider]
@@ -46,12 +46,12 @@ class AppImageKey {
 class AppCachedImageProvider extends ImageProvider<AppImageKey> {
   const AppCachedImageProvider(
     this.filePath, {
-    this.targetDimension = ImageCacheManager.kDefaultThumbnailDimension,
+    this.dimension = ThumbnailDimension.card,
     this.scale = 1.0,
   });
 
   final String filePath;
-  final int targetDimension;
+  final ThumbnailDimension dimension;
   final double scale;
 
   @override
@@ -59,7 +59,7 @@ class AppCachedImageProvider extends ImageProvider<AppImageKey> {
     return SynchronousFuture<AppImageKey>(
       AppImageKey(
         filePath: filePath,
-        targetDimension: targetDimension,
+        dimension: dimension,
         scale: scale,
       ),
     );
@@ -83,7 +83,7 @@ class AppCachedImageProvider extends ImageProvider<AppImageKey> {
       // 1. 通过分级缓存系统获取缩略图字节 (L1 内存 -> L2 磁盘 -> L3 调度生成)
       Uint8List? bytes = await ImageCacheManager.instance.getThumbnailBytes(
         key.filePath,
-        targetDimension: key.targetDimension,
+        dimension: key.dimension,
       );
 
       // 2. 若分级缓存未返回，回退异步读取原始文件
@@ -105,8 +105,9 @@ class AppCachedImageProvider extends ImageProvider<AppImageKey> {
           if (intrinsicWidth <= 0 || intrinsicHeight <= 0) {
             return const ui.TargetImageSize(width: 1, height: 1);
           }
-          if (intrinsicWidth > key.targetDimension || intrinsicHeight > key.targetDimension) {
-            final double ratio = key.targetDimension / (intrinsicWidth > intrinsicHeight ? intrinsicWidth : intrinsicHeight);
+          final targetDim = key.dimension.pixels;
+          if (intrinsicWidth > targetDim || intrinsicHeight > targetDim) {
+            final double ratio = targetDim / (intrinsicWidth > intrinsicHeight ? intrinsicWidth : intrinsicHeight);
             return ui.TargetImageSize(
               width: (intrinsicWidth * ratio).round(),
               height: (intrinsicHeight * ratio).round(),
@@ -126,13 +127,13 @@ class AppCachedImageProvider extends ImageProvider<AppImageKey> {
     if (other.runtimeType != runtimeType) return false;
     return other is AppCachedImageProvider &&
         other.filePath == filePath &&
-        other.targetDimension == targetDimension &&
+        other.dimension == dimension &&
         other.scale == scale;
   }
 
   @override
-  int get hashCode => Object.hash(filePath, targetDimension, scale);
+  int get hashCode => Object.hash(filePath, dimension, scale);
 
   @override
-  String toString() => '${describeIdentity(this)}("$filePath", targetDim: $targetDimension)';
+  String toString() => '${describeIdentity(this)}("$filePath", dim: ${dimension.pixels})';
 }

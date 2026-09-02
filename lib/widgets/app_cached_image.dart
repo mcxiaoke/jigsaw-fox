@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:phosphoricons_flutter/phosphoricons_flutter.dart';
 
 import '../logic/cache/app_cached_image_provider.dart';
+import '../logic/cache/app_cached_network_image_provider.dart';
 import '../logic/cache/image_cache_manager.dart';
 
 /// Convenient, high-performance UI Widget for displaying images with built-in
@@ -21,8 +22,7 @@ class AppCachedImage extends StatelessWidget {
     this.memoryBytes,
     this.width,
     this.height,
-    this.targetWidth = ImageCacheManager.kDefaultThumbnailDimension,
-    this.targetHeight = ImageCacheManager.kDefaultThumbnailDimension,
+    this.targetDimension = ThumbnailDimension.card,
     this.fit = BoxFit.cover,
     this.alignment = Alignment.center,
     this.borderRadius,
@@ -41,8 +41,11 @@ class AppCachedImage extends StatelessWidget {
 
   final double? width;
   final double? height;
-  final int? targetWidth;
-  final int? targetHeight;
+
+  /// 解码与缓存档位：所有图片统一从预定义档位中选择，
+  /// 避免各调用点传不同像素值造成同一源图生成多份缩略图。
+  final ThumbnailDimension targetDimension;
+
   final BoxFit fit;
   final Alignment alignment;
   final BorderRadius? borderRadius;
@@ -55,12 +58,10 @@ class AppCachedImage extends StatelessWidget {
   final bool useThumbnailCache;
 
   ImageProvider _wrapResize(ImageProvider provider) {
-    if (targetWidth == null && targetHeight == null) return provider;
     // 仅按单边等比下采样解码，保证原图宽高比绝对不被破坏，由外层 Image(fit: BoxFit.cover) 执行等比居中裁剪
-    final dim = targetWidth ?? targetHeight;
     return ResizeImage(
       provider,
-      width: dim,
+      width: targetDimension.pixels,
       allowUpscaling: false,
     );
   }
@@ -76,10 +77,10 @@ class AppCachedImage extends StatelessWidget {
       return const AssetImage('assets/images/sample_01.jpg');
     }
 
-    // 1. 网络图片支持 (支持 HTTP / HTTPS)
+    // 1. 网络图片（统一走三级缓存：L1 内存 → L2 磁盘 thumbnail_cache → L3 下载+后台缩略）
+    // 与本地文件共用同一缓存目录与 key 体系，解决此前 NetworkImage 无磁盘缓存、每次重联网的问题
     if (path.startsWith('http://') || path.startsWith('https://')) {
-      final netProvider = NetworkImage(path);
-      return _wrapResize(netProvider);
+      return AppCachedNetworkImageProvider(path, dimension: targetDimension);
     }
 
     // 2. Assets 打包静态资源
@@ -90,8 +91,7 @@ class AppCachedImage extends StatelessWidget {
 
     // 3. Local file 本地文件路径
     if (useThumbnailCache) {
-      final targetDim = targetWidth ?? targetHeight ?? ImageCacheManager.kDefaultThumbnailDimension;
-      return AppCachedImageProvider(path, targetDimension: targetDim);
+      return AppCachedImageProvider(path, dimension: targetDimension);
     } else {
       final fileProvider = FileImage(File(path));
       return _wrapResize(fileProvider);
@@ -135,8 +135,6 @@ class AppCachedImage extends StatelessWidget {
       height: height,
       fit: fit,
       alignment: alignment,
-      color: colorFilter != null ? null : null,
-      colorBlendMode: BlendMode.srcIn,
       frameBuilder: (context, child, frame, wasSynchronouslyLoaded) {
         if (wasSynchronouslyLoaded || fadeInDuration == Duration.zero) {
           return child;

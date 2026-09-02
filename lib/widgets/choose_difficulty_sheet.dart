@@ -189,30 +189,35 @@ class _ChooseDifficultySheetState extends State<ChooseDifficultySheet> {
   }
 
   Future<void> _decodeImageSize() async {
+    ui.ImmutableBuffer? buffer;
+    ui.ImageDescriptor? descriptor;
     try {
-      final codec = await ui.instantiateImageCodec(widget.imageBytes);
-      final frame = await codec.getNextFrame();
-      if (mounted) {
-        setState(() {
-          _imageWidth = frame.image.width.toDouble();
-          _imageHeight = frame.image.height.toDouble();
-          _imageLoaded = true;
+      buffer = await ui.ImmutableBuffer.fromUint8List(widget.imageBytes);
+      descriptor = await ui.ImageDescriptor.encoded(buffer);
+      if (!mounted) return;
+      setState(() {
+        _imageWidth = descriptor!.width.toDouble();
+        _imageHeight = descriptor.height.toDouble();
+        _imageLoaded = true;
 
-          final aspect = PuzzleAspectRatio.fromSize(_imageWidth, _imageHeight);
-          final tiers = aspect.tiers;
-          _selectedDifficulty = tiers
-              .firstWhere(
-                (t) => t.difficulty.pieceCount == widget.initialDifficulty.pieceCount,
-                orElse: () => tiers.firstWhere(
-                  (t) => t.difficulty.recommended,
-                  orElse: () => tiers[0],
-                ),
-              )
-              .difficulty;
-        });
-        _loadTierUnlocks();
-      }
-    } catch (_) {}
+        final aspect = PuzzleAspectRatio.fromSize(_imageWidth, _imageHeight);
+        final tiers = aspect.tiers;
+        _selectedDifficulty = tiers
+            .firstWhere(
+              (t) => t.difficulty.pieceCount == widget.initialDifficulty.pieceCount,
+              orElse: () => tiers.firstWhere(
+                (t) => t.difficulty.recommended,
+                orElse: () => tiers[0],
+              ),
+            )
+            .difficulty;
+      });
+      _loadTierUnlocks();
+    } catch (_) {
+    } finally {
+      descriptor?.dispose();
+      buffer?.dispose();
+    }
   }
 
   PuzzleDifficulty get _effectiveDifficulty {
@@ -437,6 +442,9 @@ class _ChooseDifficultySheetState extends State<ChooseDifficultySheet> {
                         Image.memory(
                           widget.imageBytes,
                           fit: BoxFit.cover,
+                          // 解码期降采样：预览区 maxWidth 520 × 3倍DPR ≈1560，
+                          // 1080已足够清晰，避免按超分原图全量解码数十MB
+                          cacheWidth: 1080,
                         ),
                         if (_showGridOverlay)
                           CustomPaint(

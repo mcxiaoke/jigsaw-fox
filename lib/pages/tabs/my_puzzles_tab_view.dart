@@ -289,7 +289,7 @@ class _MyPuzzlesTabViewState extends State<MyPuzzlesTabView> {
   }
 
   Widget _buildThumbnail(CustomPuzzleItem item) {
-    return AppCachedImage(imagePathOrUrl: item.imagePathOrUrl, fit: BoxFit.cover, targetWidth: 360, targetHeight: 360, errorWidget: Image.asset(assetSamples[0], fit: BoxFit.cover));
+    return AppCachedImage(imagePathOrUrl: item.imagePathOrUrl, fit: BoxFit.cover, errorWidget: Image.asset(assetSamples[0], fit: BoxFit.cover));
   }
 
   Widget _buildLargePackCard(PuzzlePackItem pack, AppPalette palette, AppTextStyles styles) {
@@ -301,7 +301,9 @@ class _MyPuzzlesTabViewState extends State<MyPuzzlesTabView> {
         children: [
           Stack(
             children: [
-              SizedBox(height: 140, width: double.infinity, child: AppCachedImage(imagePathOrUrl: pack.coverPath, fit: BoxFit.cover, targetWidth: 600, targetHeight: 300)),
+              // 封面卡实际高度仅 140px，默认 card 档位（360），
+              // 与图包详情页 header 共用同一份缩略图
+              SizedBox(height: 140, width: double.infinity, child: AppCachedImage(imagePathOrUrl: pack.coverPath, fit: BoxFit.cover)),
               Positioned.fill(child: Container(decoration: BoxDecoration(gradient: LinearGradient(colors: [Colors.black.withValues(alpha: 0.35), Colors.transparent, Colors.black.withValues(alpha: 0.45)], begin: Alignment.topCenter, end: Alignment.bottomCenter, stops: [0.0, 0.45, 1.0])))),
               Positioned(left: 12, top: 12, child: Container(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4), decoration: BoxDecoration(color: palette.brand, borderRadius: BorderRadius.circular(12)), child: Row(mainAxisSize: MainAxisSize.min, children: [Icon(PhosphorIconsFill.package, color: palette.surface, size: 13), const SizedBox(width: 4), Text('扩展合辑', style: TextStyle(color: palette.surface, fontSize: 11, fontWeight: FontWeight.bold))]))),
               Positioned(right: 12, top: 12, child: Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4), decoration: BoxDecoration(color: Colors.black.withValues(alpha: 0.65), borderRadius: BorderRadius.circular(10)), child: Text('${pack.displaySource} • ${pack.displayFileSize}', style: const TextStyle(color: Colors.white70, fontSize: 10.5)))),

@@ -253,8 +253,6 @@ class DownloadedDrawerSheet extends StatelessWidget {
                 AppCachedImage(
                   imagePathOrUrl: item.localPath,
                   fit: BoxFit.cover,
-                  targetWidth: 360,
-                  targetHeight: 360,
                 ),
                 // Platform Tag
                 Positioned(

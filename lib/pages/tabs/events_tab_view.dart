@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:phosphoricons_flutter/phosphoricons_flutter.dart';
 
+import '../../logic/cache/image_cache_manager.dart';
 import '../../logic/content/app_content.dart';
 import '../../logic/content/models/puzzle_event_item.dart';
 import '../../theme/app_palette.dart';
@@ -121,8 +122,7 @@ class _EventsTabViewState extends State<EventsTabView> {
                     imagePathOrUrl: event.coverUrl ?? (event.levels.isNotEmpty ? event.levels.first : ''),
                     fit: BoxFit.cover,
                     alignment: Alignment.center,
-                    targetWidth: 720,
-                    targetHeight: 360,
+                    targetDimension: ThumbnailDimension.eventCover,
                   ),
                 ),
                 Positioned.fill(

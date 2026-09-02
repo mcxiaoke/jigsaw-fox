@@ -203,7 +203,11 @@ class _PackLevelsPageState extends State<PackLevelsPage> {
                       child: SizedBox(
                         width: 80,
                         height: 80,
-                        child: AppCachedImage(imagePathOrUrl: pack.coverPath, fit: BoxFit.cover),
+                        // 默认 card 档位（360），与「我的拼图」图包大卡共用同一份缩略图
+                        child: AppCachedImage(
+                          imagePathOrUrl: pack.coverPath,
+                          fit: BoxFit.cover,
+                        ),
                       ),
                     ),
                     const SizedBox(width: 14),
@@ -296,8 +300,6 @@ class _PackLevelsPageState extends State<PackLevelsPage> {
             AppCachedImage(
               imagePathOrUrl: level.imagePathOrUrl,
               fit: BoxFit.cover,
-              targetWidth: 360,
-              targetHeight: 360,
             ),
             Container(
               decoration: BoxDecoration(

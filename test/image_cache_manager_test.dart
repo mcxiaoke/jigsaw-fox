@@ -172,7 +172,7 @@ void main() {
       expect(manager.getCachedThumbnailBytesFromMemory(testImgFile.path), isNull);
 
       // Fetch bytes through tiered pipeline (generates & populates L2 disk + L1 memory)
-      final bytes = await manager.getThumbnailBytes(testImgFile.path, targetDimension: 360);
+      final bytes = await manager.getThumbnailBytes(testImgFile.path, dimension: ThumbnailDimension.card);
       expect(bytes, isNotNull);
       expect(bytes!.isNotEmpty, isTrue);
 
@@ -188,7 +188,7 @@ void main() {
       expect(manager.isThumbnailCached(testImgFile.path), isTrue);
 
       // Fetching again reads from L2 disk into L1 memory
-      final bytesFromDisk = await manager.getThumbnailBytes(testImgFile.path, targetDimension: 360);
+      final bytesFromDisk = await manager.getThumbnailBytes(testImgFile.path, dimension: ThumbnailDimension.card);
       expect(bytesFromDisk, isNotNull);
       expect(manager.getCachedThumbnailBytesFromMemory(testImgFile.path), isNotNull);
 
@@ -201,13 +201,51 @@ void main() {
       final testImgFile = File('${testTempDir.path}/clear_test_origin.png');
       await testImgFile.writeAsBytes(createTestPngBytes(600, 400));
 
-      await manager.getThumbnailBytes(testImgFile.path, targetDimension: 360);
+      await manager.getThumbnailBytes(testImgFile.path, dimension: ThumbnailDimension.card);
       expect(manager.isThumbnailCached(testImgFile.path), isTrue);
 
       await manager.clearCache();
       expect(manager.isThumbnailCached(testImgFile.path), isFalse);
       expect(manager.getCachedThumbnailBytesFromMemory(testImgFile.path), isNull);
       expect(await manager.getCacheSizeBytes(), equals(0));
+    });
+  });
+
+  group('ThumbnailDimension Enum Tests', () {
+    test('enum exposes expected pixel buckets', () {
+      expect(ThumbnailDimension.card.pixels, 360);
+      expect(ThumbnailDimension.eventCover.pixels, 720);
+    });
+
+    test('getCacheKey produces distinct keys per dimension for the same source', () {
+      final manager = ImageCacheManager.instance;
+      final src = '${testTempDir.path}/enum_test_origin.png';
+
+      final cardKey = manager.getCacheKey(src, dimension: ThumbnailDimension.card);
+      final coverKey = manager.getCacheKey(src, dimension: ThumbnailDimension.eventCover);
+
+      expect(cardKey, isNot(equals(coverKey)));
+      expect(cardKey, endsWith('_360.jpg'));
+      expect(coverKey, endsWith('_720.jpg'));
+    });
+
+    test('removeThumbnailForSource cleans up all dimension variants', () async {
+      final manager = ImageCacheManager.instance;
+      final src = '${testTempDir.path}/remove_all_test_origin.png';
+      await File(src).writeAsBytes(createTestPngBytes(800, 600));
+
+      // Populate both dimension variants
+      await manager.getThumbnailBytes(src, dimension: ThumbnailDimension.card);
+      await manager.getThumbnailBytes(src, dimension: ThumbnailDimension.eventCover);
+      expect(manager.isThumbnailCached(src, dimension: ThumbnailDimension.card), isTrue);
+      expect(manager.isThumbnailCached(src, dimension: ThumbnailDimension.eventCover), isTrue);
+
+      await manager.removeThumbnailForSource(src);
+
+      for (final dim in ThumbnailDimension.values) {
+        expect(manager.isThumbnailCached(src, dimension: dim), isFalse,
+            reason: 'variant ${dim.name} should be removed');
+      }
     });
   });
 
@@ -258,8 +296,7 @@ void main() {
           home: Scaffold(
             body: AppCachedImage(
               imagePathOrUrl: 'assets/images/sample_01.jpg',
-              targetWidth: 200,
-              targetHeight: 200,
+              targetDimension: ThumbnailDimension.card,
             ),
           ),
         ),

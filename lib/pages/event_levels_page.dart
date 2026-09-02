@@ -175,8 +175,6 @@ class _EventLevelsPageState extends State<EventLevelsPage> {
             AppCachedImage(
               imagePathOrUrl: level.imagePathOrUrl,
               fit: BoxFit.cover,
-              targetWidth: 360,
-              targetHeight: 360,
             ),
             Container(
               decoration: BoxDecoration(

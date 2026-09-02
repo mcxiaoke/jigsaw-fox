@@ -198,7 +198,7 @@ class _DailyTabViewState extends State<DailyTabView> {
                       const SizedBox(width: 12),
                       ClipRRect(
                         borderRadius: BorderRadius.circular(16),
-                        child: SizedBox(width: 130, height: 120, child: AppCachedImage(imagePathOrUrl: todayItem.assetPath, fit: BoxFit.cover, targetWidth: 360, targetHeight: 360, errorWidget: Image.asset(assetSamples[0], fit: BoxFit.cover))),
+                        child: SizedBox(width: 130, height: 120, child: AppCachedImage(imagePathOrUrl: todayItem.assetPath, fit: BoxFit.cover, errorWidget: Image.asset(assetSamples[0], fit: BoxFit.cover))),
                       ),
                     ],
                   ),
@@ -281,7 +281,7 @@ class _DailyTabViewState extends State<DailyTabView> {
         child: Stack(
           fit: StackFit.expand,
           children: [
-            AppCachedImage(imagePathOrUrl: item.assetPath, fit: BoxFit.cover, targetWidth: 360, targetHeight: 360, errorWidget: Image.asset(assetSamples[0], fit: BoxFit.cover)),
+            AppCachedImage(imagePathOrUrl: item.assetPath, fit: BoxFit.cover, errorWidget: Image.asset(assetSamples[0], fit: BoxFit.cover)),
             Container(decoration: BoxDecoration(gradient: LinearGradient(colors: [Colors.black.withValues(alpha: 0.35), Colors.transparent], begin: Alignment.topCenter, end: Alignment.center))),
             Positioned(top: 10, left: 10, child: Container(width: 34, height: 34, decoration: BoxDecoration(color: palette.surface.withValues(alpha: 0.94), shape: BoxShape.circle), alignment: Alignment.center, child: Text('${item.dayNumber}', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: palette.primaryText)))),
             if (item.isCompleted)

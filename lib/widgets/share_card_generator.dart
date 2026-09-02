@@ -263,6 +263,10 @@ class _ShareCardGeneratorState extends State<ShareCardGenerator>
                                             child: Image.memory(
                                               widget.imageBytes,
                                               fit: BoxFit.cover,
+                                              // 解码期降采样。分享卡导出用 pixelRatio: 2.0，
+                                              // 卡面图区实际渲染约 270px → 导出约 540px，
+                                              // 1080 已留足 2 倍余量，不影响导出清晰度。
+                                              cacheWidth: 1080,
                                             ),
                                           ),
                                         ),

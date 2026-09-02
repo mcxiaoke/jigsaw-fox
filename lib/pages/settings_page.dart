@@ -3,6 +3,7 @@ import 'package:phosphoricons_flutter/phosphoricons_flutter.dart';
 
 import '../data/game_repository.dart';
 import '../data/progress_store.dart';
+import '../logic/cache/image_cache_manager.dart';
 import '../services/economy_service.dart';
 import '../services/sound_service.dart';
 import '../theme/app_palette.dart';
@@ -30,11 +31,14 @@ class _SettingsPageState extends State<SettingsPage> {
   int _totalSolved = 0;
   int _totalStars = 0;
   int _coins = 0;
+  String _cacheSize = '计算中…';
+  bool _clearingCache = false;
 
   @override
   void initState() {
     super.initState();
     _loadStats();
+    _loadCacheSize();
   }
 
   Future<void> _loadStats() async {
@@ -46,6 +50,42 @@ class _SettingsPageState extends State<SettingsPage> {
         _totalStars = stars;
         _coins = EconomyService.instance.coins;
       });
+    }
+  }
+
+  /// 异步统计缩略图磁盘缓存占用（列表目录累加字节数，可能耗时数百毫秒）
+  Future<void> _loadCacheSize() async {
+    final size = await ImageCacheManager.instance.getFormattedCacheSize();
+    if (mounted) {
+      setState(() => _cacheSize = size);
+    }
+  }
+
+  Future<void> _clearThumbnailCache() async {
+    if (_clearingCache) return;
+    setState(() => _clearingCache = true);
+    try {
+      await ImageCacheManager.instance.clearCache();
+      await _loadCacheSize();
+      if (mounted) {
+        GameToast.show(
+          context,
+          icon: PhosphorIconsFill.broom,
+          message: '缩略图缓存已清空，下次浏览时会自动重新生成',
+          type: GameToastType.success,
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        GameToast.show(
+          context,
+          icon: PhosphorIconsRegular.warning,
+          message: '清理缓存失败: $e',
+          type: GameToastType.error,
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _clearingCache = false);
     }
   }
 
@@ -190,6 +230,23 @@ class _SettingsPageState extends State<SettingsPage> {
               // Group 4: Data Management
               _buildSectionHeader('数据管理', palette, styles),
               _buildCardContainer([
+                ListTile(
+                  leading: Icon(PhosphorIconsBold.database, color: palette.info),
+                  title: Text('缩略图缓存', style: styles.bodyBold),
+                  subtitle: Text('卡片预览图的本地缓存，当前占用 $_cacheSize', style: styles.caption),
+                  trailing: _clearingCache
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : TextButton.icon(
+                          onPressed: _clearThumbnailCache,
+                          icon: Icon(PhosphorIconsBold.broom, size: 16),
+                          label: const Text('清理'),
+                        ),
+                ),
+                Divider(height: 1, indent: 56, color: palette.divider),
                 ListTile(
                   leading: Icon(PhosphorIconsBold.trashSimple, color: palette.error),
                   title: Text('重置所有游戏数据', style: styles.bodyBold.copyWith(color: palette.error)),

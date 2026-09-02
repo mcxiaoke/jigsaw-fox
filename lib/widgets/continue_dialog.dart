@@ -110,6 +110,9 @@ class ContinueDialog extends StatelessWidget {
                 child: Image.memory(
                   imageBytes,
                   fit: BoxFit.cover,
+                  // 解码期降采样：内容区宽 360px × 3 倍 DPR 足够清晰，
+                  // 避免按原图分辨率全量解码（超分图可达数十 MB）
+                  cacheWidth: 1080,
                   errorBuilder: (_, _, _) => Container(
                     color: palette.surfaceContainerLow,
                     child: Icon(PhosphorIconsRegular.image, size: 32, color: palette.disabledText),

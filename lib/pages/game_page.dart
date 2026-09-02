@@ -120,10 +120,11 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
   /// 并按合成色亮度自动选择前景（深/浅），保证标题与图标可读。
   Future<void> _loadHeaderColor() async {
     final assetPath = _selectedBackground;
+    ui.Codec? codec;
     try {
       final data = await rootBundle.load(assetPath);
       final buffer = data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes);
-      final codec = await ui.instantiateImageCodec(buffer, targetWidth: 48, targetHeight: 48);
+      codec = await ui.instantiateImageCodec(buffer, targetWidth: 48, targetHeight: 48);
       final frame = await codec.getNextFrame();
       final image = frame.image;
       final w = image.width;
@@ -163,6 +164,8 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
       });
     } catch (_) {
       // 解析失败时保持默认白底/深色前景
+    } finally {
+      codec?.dispose();
     }
   }
 
@@ -652,6 +655,9 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
                   height: 160,
                   width: 300,
                   fit: BoxFit.cover,
+                  // 解码期降采样：展示区 300px × 3倍DPR ≈900，1080已足，
+                  // 避免超分原图全量解码数十MB
+                  cacheWidth: 1080,
                 ),
               ),
               const SizedBox(height: 14),
@@ -1156,6 +1162,9 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
                             child: Image.memory(
                               widget.imageBytes,
                               fit: BoxFit.contain,
+                              // 解码期降采样：全屏预览 0.92W×0.72H 约 1000~1400px，
+                              // 1440 已留足余量，避免超分图全量解码（可达50MiB）
+                              cacheWidth: 1440,
                             ),
                           ),
                           const SizedBox(height: 14),
