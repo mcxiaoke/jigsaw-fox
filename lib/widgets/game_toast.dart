@@ -149,7 +149,10 @@ class _GameToastWidgetState extends State<_GameToastWidget>
             decoration: BoxDecoration(
               color: p.surfaceContainerLow,
               borderRadius: BorderRadius.circular(24),
-              border: Border.all(color: p.brand.withValues(alpha: 0.25), width: 1),
+              border: Border.all(
+                color: p.brand.withValues(alpha: 0.25),
+                width: 1,
+              ),
               boxShadow: [
                 BoxShadow(
                   color: Colors.black.withValues(alpha: 0.35),

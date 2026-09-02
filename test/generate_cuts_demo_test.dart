@@ -17,7 +17,12 @@ Future<ui.Image> _loadImage(String path) async {
   return frame.image;
 }
 
-Future<void> _savePictureToPng(ui.Picture picture, int width, int height, String outputPath) async {
+Future<void> _savePictureToPng(
+  ui.Picture picture,
+  int width,
+  int height,
+  String outputPath,
+) async {
   final image = await picture.toImage(width, height);
   final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
   final buffer = byteData!.buffer.asUint8List();
@@ -33,7 +38,10 @@ void main() {
     final image1 = await _loadImage('assets/images/sample_01.jpg');
     final image2 = await _loadImage('assets/images/sample_02.jpg');
 
-    final bgPaint = Paint()..color = const Color(0xFF5A728A); // Classic Jigsaw Explorer blue desk background
+    final bgPaint = Paint()
+      ..color = const Color(
+        0xFF5A728A,
+      ); // Classic Jigsaw Explorer blue desk background
     final contactShadowPaint = Paint()
       ..color = const Color(0x30000000)
       ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 1.0)
@@ -80,17 +88,27 @@ void main() {
       const canvasW = 1600;
       const canvasH = 1200;
       final recorder = ui.PictureRecorder();
-      final canvas = ui.Canvas(recorder, const Rect.fromLTWH(0, 0, canvasW + 0.0, canvasH + 0.0));
+      final canvas = ui.Canvas(
+        recorder,
+        const Rect.fromLTWH(0, 0, canvasW + 0.0, canvasH + 0.0),
+      );
 
       // Draw background desk
-      canvas.drawRect(const Rect.fromLTWH(0, 0, canvasW + 0.0, canvasH + 0.0), bgPaint);
+      canvas.drawRect(
+        const Rect.fromLTWH(0, 0, canvasW + 0.0, canvasH + 0.0),
+        bgPaint,
+      );
 
       // Scatter pieces nicely across desk with random slight offsets and angles
       final rng = Random(seed);
       for (var r = 0; r < rows; r++) {
         for (var c = 0; c < cols; c++) {
           final edges = edgeLayout.edgesFor(r, c);
-          final shape = PieceShape(edges: edges, width: pieceW * 0.7, height: pieceH * 0.7);
+          final shape = PieceShape(
+            edges: edges,
+            width: pieceW * 0.7,
+            height: pieceH * 0.7,
+          );
           final srcRect = shape.srcRect(
             row: r,
             col: c,
@@ -98,11 +116,19 @@ void main() {
             srcHeightPerRow: pieceH,
           );
 
-          final isElevated = (r == 1 && c == 2) || (r == 2 && c == 1); // Simulate picked-up/floating pieces
+          final isElevated =
+              (r == 1 && c == 2) ||
+              (r == 2 && c == 1); // Simulate picked-up/floating pieces
 
           // Grid placement with scattered organic jitter
-          final colX = 100.0 + c * (pieceW * 0.7 + 90.0) + (rng.nextDouble() - 0.5) * 40.0;
-          final rowY = 80.0 + r * (pieceH * 0.7 + 80.0) + (rng.nextDouble() - 0.5) * 30.0;
+          final colX =
+              100.0 +
+              c * (pieceW * 0.7 + 90.0) +
+              (rng.nextDouble() - 0.5) * 40.0;
+          final rowY =
+              80.0 +
+              r * (pieceH * 0.7 + 80.0) +
+              (rng.nextDouble() - 0.5) * 30.0;
 
           canvas.save();
           canvas.translate(colX, rowY);
@@ -145,7 +171,12 @@ void main() {
       }
 
       final picture = recorder.endRecording();
-      await _savePictureToPng(picture, canvasW, canvasH, 'temp/sample_cuts_scattered_tabletop.png');
+      await _savePictureToPng(
+        picture,
+        canvasW,
+        canvasH,
+        'temp/sample_cuts_scattered_tabletop.png',
+      );
     }
 
     // -------------------------------------------------------------
@@ -165,9 +196,15 @@ void main() {
       final canvasW = (imgW + 120).toInt();
       final canvasH = (imgH + 120).toInt();
       final recorder = ui.PictureRecorder();
-      final canvas = ui.Canvas(recorder, Rect.fromLTWH(0, 0, canvasW + 0.0, canvasH + 0.0));
+      final canvas = ui.Canvas(
+        recorder,
+        Rect.fromLTWH(0, 0, canvasW + 0.0, canvasH + 0.0),
+      );
 
-      canvas.drawRect(Rect.fromLTWH(0, 0, canvasW + 0.0, canvasH + 0.0), Paint()..color = const Color(0xFF22262B));
+      canvas.drawRect(
+        Rect.fromLTWH(0, 0, canvasW + 0.0, canvasH + 0.0),
+        Paint()..color = const Color(0xFF22262B),
+      );
 
       canvas.save();
       canvas.translate(60.0, 60.0);
@@ -211,7 +248,12 @@ void main() {
       canvas.restore();
 
       final picture = recorder.endRecording();
-      await _savePictureToPng(picture, canvasW, canvasH, 'temp/sample_cuts_assembled_6x6.png');
+      await _savePictureToPng(
+        picture,
+        canvasW,
+        canvasH,
+        'temp/sample_cuts_assembled_6x6.png',
+      );
     }
 
     // -------------------------------------------------------------
@@ -221,9 +263,15 @@ void main() {
       const canvasW = 1000;
       const canvasH = 460;
       final recorder = ui.PictureRecorder();
-      final canvas = ui.Canvas(recorder, const Rect.fromLTWH(0, 0, canvasW + 0.0, canvasH + 0.0));
+      final canvas = ui.Canvas(
+        recorder,
+        const Rect.fromLTWH(0, 0, canvasW + 0.0, canvasH + 0.0),
+      );
 
-      canvas.drawRect(const Rect.fromLTWH(0, 0, canvasW + 0.0, canvasH + 0.0), Paint()..color = const Color(0xFF1E2833));
+      canvas.drawRect(
+        const Rect.fromLTWH(0, 0, canvasW + 0.0, canvasH + 0.0),
+        Paint()..color = const Color(0xFF1E2833),
+      );
 
       const rows = 3;
       const cols = 4;
@@ -280,7 +328,12 @@ void main() {
       }
 
       final picture = recorder.endRecording();
-      await _savePictureToPng(picture, canvasW, canvasH, 'temp/sample_cuts_closeup_shapes.png');
+      await _savePictureToPng(
+        picture,
+        canvasW,
+        canvasH,
+        'temp/sample_cuts_closeup_shapes.png',
+      );
     }
   });
 }

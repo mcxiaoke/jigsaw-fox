@@ -63,7 +63,9 @@ class _LazyLevelImageState extends State<LazyLevelImage> {
     }
 
     try {
-      final localPath = await LevelImageResolver.instance.resolveLevelLocalPath(widget.level);
+      final localPath = await LevelImageResolver.instance.resolveLevelLocalPath(
+        widget.level,
+      );
       if (!mounted) return;
       // 若解析后仍是 http（下载失败），标记失败走 errorWidget
       if (localPath.startsWith('http')) {

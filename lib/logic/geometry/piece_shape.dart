@@ -103,11 +103,11 @@ class PieceShape {
   /// 局部坐标系下的完整渲染绘制外包矩形。
   /// 原点 (0, 0) 对应碎片基础矩形单元格的左上角。
   Rect get fillRect => Rect.fromLTWH(
-        -overhang.left * width,
-        -overhang.top * height,
-        (1.0 + overhang.left + overhang.right) * width,
-        (1.0 + overhang.top + overhang.bottom) * height,
-      );
+    -overhang.left * width,
+    -overhang.top * height,
+    (1.0 + overhang.left + overhang.right) * width,
+    (1.0 + overhang.top + overhang.bottom) * height,
+  );
 
   /// 对应原图像素坐标系下的纹理采样矩形。
   ///

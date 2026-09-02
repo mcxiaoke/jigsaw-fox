@@ -102,7 +102,9 @@ class EconomyService {
 
     final today = _todayDateStr();
     final savedDate = _prefs?.getString(_keyDailyDate) ?? '';
-    var currentDaily = (savedDate == today) ? (_prefs?.getInt(_keyDailyEarned) ?? 0) : 0;
+    var currentDaily = (savedDate == today)
+        ? (_prefs?.getInt(_keyDailyEarned) ?? 0)
+        : 0;
 
     int actualEarned;
     if (bypassCap) {
@@ -117,7 +119,9 @@ class EconomyService {
 
     final newTotal = coins + actualEarned;
     await _prefs?.setInt(_keyCoins, newTotal);
-    AppLogger.repo.info('EconomyService.addCoins +$actualEarned (total=$newTotal daily=$currentDaily bypass=$bypassCap)');
+    AppLogger.repo.info(
+      'EconomyService.addCoins +$actualEarned (total=$newTotal daily=$currentDaily bypass=$bypassCap)',
+    );
     return actualEarned;
   }
 
@@ -127,7 +131,9 @@ class EconomyService {
     if (count <= 0) return;
     final newTotal = hintCoupons + count;
     await _prefs?.setInt(_keyCoupons, newTotal);
-    AppLogger.repo.info('EconomyService.addHintCoupons +$count (total=$newTotal)');
+    AppLogger.repo.info(
+      'EconomyService.addHintCoupons +$count (total=$newTotal)',
+    );
   }
 
   /// 通关结算发奖（增量制 + 复玩保底 20% Base + 日上限 200）
@@ -153,7 +159,8 @@ class EconomyService {
     } else if (deltaStars > 0) {
       // 提升星级增量：rewardFor(newStars) - rewardFor(bestStars)
       final bestStars = stars - deltaStars;
-      targetAmount = rewardFor(safeTier, stars) - rewardFor(safeTier, bestStars);
+      targetAmount =
+          rewardFor(safeTier, stars) - rewardFor(safeTier, bestStars);
       if (targetAmount < 0) targetAmount = 0;
     } else {
       // 重复通关且无星数突破：保底奖励 20% Base（向下取整，防死锁）
@@ -178,7 +185,9 @@ class EconomyService {
     // 1. 优先扣免费提示券
     if (hintCoupons > 0) {
       await _prefs?.setInt(_keyCoupons, hintCoupons - 1);
-      AppLogger.repo.info('EconomyService.consumeHint used coupon (remaining=${hintCoupons - 1})');
+      AppLogger.repo.info(
+        'EconomyService.consumeHint used coupon (remaining=${hintCoupons - 1})',
+      );
       return true;
     }
 
@@ -188,12 +197,16 @@ class EconomyService {
     if (coins >= price) {
       final newTotal = coins - price;
       await _prefs?.setInt(_keyCoins, newTotal);
-      AppLogger.repo.info('EconomyService.consumeHint used coins -$price (remaining=$newTotal)');
+      AppLogger.repo.info(
+        'EconomyService.consumeHint used coins -$price (remaining=$newTotal)',
+      );
       return true;
     }
 
     // 3. 余额不足
-    AppLogger.repo.info('EconomyService.consumeHint fail: coins=$coins < price=$price');
+    AppLogger.repo.info(
+      'EconomyService.consumeHint fail: coins=$coins < price=$price',
+    );
     return false;
   }
 }

@@ -29,8 +29,10 @@ class _ImportPackPageState extends State<ImportPackPage> {
   bool _isImporting = false;
   String _statusMessage = '';
 
-  static const String _sampleTestUrl = 'http://192.168.1.118/data/www/game/test/packs/cyberpunk_with_manifest.zip';
-  static const String _samplePureUrl = 'http://192.168.1.118/data/www/game/test/packs/cats_pure_images.zip';
+  static const String _sampleTestUrl =
+      'http://192.168.1.118/data/www/game/test/packs/cyberpunk_with_manifest.zip';
+  static const String _samplePureUrl =
+      'http://192.168.1.118/data/www/game/test/packs/cats_pure_images.zip';
 
   @override
   void dispose() {
@@ -54,7 +56,11 @@ class _ImportPackPageState extends State<ImportPackPage> {
       }
     } catch (e) {
       if (mounted) {
-        GameToast.show(context, message: '选择文件失败: $e', type: GameToastType.error);
+        GameToast.show(
+          context,
+          message: '选择文件失败: $e',
+          type: GameToastType.error,
+        );
       }
     }
   }
@@ -64,13 +70,19 @@ class _ImportPackPageState extends State<ImportPackPage> {
     final networkUrl = _networkUrlController.text.trim();
 
     if (localPath.isEmpty && networkUrl.isEmpty) {
-      GameToast.show(context, message: '请选择本地 ZIP 文件或输入网络下载地址', type: GameToastType.warning);
+      GameToast.show(
+        context,
+        message: '请选择本地 ZIP 文件或输入网络下载地址',
+        type: GameToastType.warning,
+      );
       return;
     }
 
     setState(() {
       _isImporting = true;
-      _statusMessage = localPath.isNotEmpty ? '正在解压并解析本地图包...' : '正在下载并解压网络图包...';
+      _statusMessage = localPath.isNotEmpty
+          ? '正在解压并解析本地图包...'
+          : '正在下载并解压网络图包...';
     });
 
     try {
@@ -116,7 +128,10 @@ class _ImportPackPageState extends State<ImportPackPage> {
         backgroundColor: palette.surface,
         foregroundColor: palette.primaryText,
         elevation: 0,
-        title: Text('导入扩展图包 (.zip)', style: styles.h3.copyWith(fontWeight: FontWeight.bold)),
+        title: Text(
+          '导入扩展图包 (.zip)',
+          style: styles.h3.copyWith(fontWeight: FontWeight.bold),
+        ),
         centerTitle: true,
       ),
       body: SingleChildScrollView(
@@ -162,10 +177,16 @@ class _ImportPackPageState extends State<ImportPackPage> {
                     style: TextStyle(color: palette.primaryText, fontSize: 13),
                     decoration: InputDecoration(
                       hintText: '点击右侧按钮选择 .zip 文件',
-                      hintStyle: TextStyle(fontSize: 13, color: palette.disabledText),
+                      hintStyle: TextStyle(
+                        fontSize: 13,
+                        color: palette.disabledText,
+                      ),
                       filled: true,
                       fillColor: palette.surfaceContainerLow,
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 12,
+                      ),
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(12),
                         borderSide: BorderSide(color: palette.divider),
@@ -185,8 +206,13 @@ class _ImportPackPageState extends State<ImportPackPage> {
                   style: ElevatedButton.styleFrom(
                     backgroundColor: palette.brand,
                     foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 13,
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
                   ),
                 ),
               ],
@@ -205,11 +231,19 @@ class _ImportPackPageState extends State<ImportPackPage> {
                 hintStyle: TextStyle(fontSize: 13, color: palette.disabledText),
                 filled: true,
                 fillColor: palette.surfaceContainerLow,
-                contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 12,
+                ),
                 suffixIcon: _networkUrlController.text.isNotEmpty
                     ? IconButton(
-                        icon: Icon(Icons.clear, size: 18, color: palette.secondaryText),
-                        onPressed: () => setState(() => _networkUrlController.clear()),
+                        icon: Icon(
+                          Icons.clear,
+                          size: 18,
+                          color: palette.secondaryText,
+                        ),
+                        onPressed: () =>
+                            setState(() => _networkUrlController.clear()),
                       )
                     : null,
                 border: OutlineInputBorder(
@@ -235,8 +269,15 @@ class _ImportPackPageState extends State<ImportPackPage> {
               spacing: 8,
               children: [
                 ActionChip(
-                  avatar: Icon(PhosphorIconsRegular.lightning, size: 14, color: palette.warning),
-                  label: const Text('测试包: 赛博霓虹', style: TextStyle(fontSize: 11.5)),
+                  avatar: Icon(
+                    PhosphorIconsRegular.lightning,
+                    size: 14,
+                    color: palette.warning,
+                  ),
+                  label: const Text(
+                    '测试包: 赛博霓虹',
+                    style: TextStyle(fontSize: 11.5),
+                  ),
                   backgroundColor: palette.warning.withValues(alpha: 0.12),
                   onPressed: _isImporting
                       ? null
@@ -248,8 +289,15 @@ class _ImportPackPageState extends State<ImportPackPage> {
                         },
                 ),
                 ActionChip(
-                  avatar: Icon(PhosphorIconsRegular.lightning, size: 14, color: palette.info),
-                  label: const Text('测试包: 纯图片猫咪', style: TextStyle(fontSize: 11.5)),
+                  avatar: Icon(
+                    PhosphorIconsRegular.lightning,
+                    size: 14,
+                    color: palette.info,
+                  ),
+                  label: const Text(
+                    '测试包: 纯图片猫咪',
+                    style: TextStyle(fontSize: 11.5),
+                  ),
                   backgroundColor: palette.info.withValues(alpha: 0.12),
                   onPressed: _isImporting
                       ? null
@@ -272,7 +320,9 @@ class _ImportPackPageState extends State<ImportPackPage> {
                 style: ElevatedButton.styleFrom(
                   backgroundColor: palette.brand,
                   foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14),
+                  ),
                   elevation: 2,
                 ),
                 child: _isImporting
@@ -282,12 +332,18 @@ class _ImportPackPageState extends State<ImportPackPage> {
                           const SizedBox(
                             width: 18,
                             height: 18,
-                            child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.5),
+                            child: CircularProgressIndicator(
+                              color: Colors.white,
+                              strokeWidth: 2.5,
+                            ),
                           ),
                           const SizedBox(width: 12),
                           Text(
                             _statusMessage,
-                            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+                            style: const TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.bold,
+                            ),
                           ),
                         ],
                       )
@@ -298,7 +354,10 @@ class _ImportPackPageState extends State<ImportPackPage> {
                           SizedBox(width: 8),
                           Text(
                             '开始导入并解析',
-                            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                            ),
                           ),
                         ],
                       ),
@@ -310,7 +369,11 @@ class _ImportPackPageState extends State<ImportPackPage> {
     );
   }
 
-  Widget _buildSectionHeader(String title, AppPalette palette, AppTextStyles styles) {
+  Widget _buildSectionHeader(
+    String title,
+    AppPalette palette,
+    AppTextStyles styles,
+  ) {
     return Text(
       title,
       style: styles.body.copyWith(

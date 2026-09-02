@@ -17,9 +17,9 @@ class SettingsPage extends StatefulWidget {
   const SettingsPage({super.key});
 
   static Future<void> open(BuildContext context) {
-    return Navigator.of(context).push(
-      MaterialPageRoute<void>(builder: (_) => const SettingsPage()),
-    );
+    return Navigator.of(
+      context,
+    ).push(MaterialPageRoute<void>(builder: (_) => const SettingsPage()));
   }
 
   @override
@@ -136,7 +136,10 @@ class _SettingsPageState extends State<SettingsPage> {
                 SwitchListTile(
                   title: Text('拼图吸附音效', style: styles.bodyBold),
                   subtitle: Text('碎片对齐磁吸时播放清脆音效', style: styles.caption),
-                  secondary: Icon(PhosphorIconsBold.speakerHigh, color: palette.brand),
+                  secondary: Icon(
+                    PhosphorIconsBold.speakerHigh,
+                    color: palette.brand,
+                  ),
                   activeThumbColor: palette.brand,
                   value: _repo.soundEnabled,
                   onChanged: (v) {
@@ -154,7 +157,10 @@ class _SettingsPageState extends State<SettingsPage> {
                 SwitchListTile(
                   title: Text('触感震动反馈', style: styles.bodyBold),
                   subtitle: Text('拼图吸附与操作时的触觉微震', style: styles.caption),
-                  secondary: Icon(PhosphorIconsBold.vibrate, color: palette.brand),
+                  secondary: Icon(
+                    PhosphorIconsBold.vibrate,
+                    color: palette.brand,
+                  ),
                   activeThumbColor: palette.brand,
                   value: _repo.hapticEnabled,
                   onChanged: (v) => setState(() => _repo.hapticEnabled = v),
@@ -163,18 +169,28 @@ class _SettingsPageState extends State<SettingsPage> {
                 SwitchListTile(
                   title: Text('选关切图网格预览', style: styles.bodyBold),
                   subtitle: Text('在难度选择预览图上叠加异形切线', style: styles.caption),
-                  secondary: Icon(PhosphorIconsBold.gridFour, color: palette.brand),
+                  secondary: Icon(
+                    PhosphorIconsBold.gridFour,
+                    color: palette.brand,
+                  ),
                   activeThumbColor: palette.brand,
                   value: _repo.gridPreviewEnabled,
-                  onChanged: (v) => setState(() => _repo.gridPreviewEnabled = v),
+                  onChanged: (v) =>
+                      setState(() => _repo.gridPreviewEnabled = v),
                 ),
                 Divider(height: 1, indent: 56, color: palette.divider),
                 ListTile(
-                  leading: Icon(PhosphorIconsBold.squaresFour, color: palette.brand),
+                  leading: Icon(
+                    PhosphorIconsBold.squaresFour,
+                    color: palette.brand,
+                  ),
                   title: Text('碎片初始排布模式', style: styles.bodyBold),
-                  subtitle: Text(_repo.pieceScatterMode == 'tabletop'
-                      ? '桌面环形散落（推荐宽屏/平板）'
-                      : '底部托盘收纳（默认/推荐手机）', style: styles.caption),
+                  subtitle: Text(
+                    _repo.pieceScatterMode == 'tabletop'
+                        ? '桌面环形散落（推荐宽屏/平板）'
+                        : '底部托盘收纳（默认/推荐手机）',
+                    style: styles.caption,
+                  ),
                   trailing: SegmentedButton<String>(
                     showSelectedIcon: false,
                     segments: const [
@@ -198,7 +214,11 @@ class _SettingsPageState extends State<SettingsPage> {
                   leading: Icon(PhosphorIconsBold.image, color: palette.info),
                   title: Text('默认壁纸背景', style: styles.bodyBold),
                   subtitle: Text('选择拼图对局时的全屏桌面背景', style: styles.caption),
-                  trailing: Icon(PhosphorIconsBold.caretRight, size: 18, color: palette.secondaryText),
+                  trailing: Icon(
+                    PhosphorIconsBold.caretRight,
+                    size: 18,
+                    color: palette.secondaryText,
+                  ),
                   onTap: () {
                     ChooseBackgroundSheet.show(
                       context: context,
@@ -217,10 +237,20 @@ class _SettingsPageState extends State<SettingsPage> {
               _buildSectionHeader('玩法与帮助', palette, styles),
               _buildCardContainer([
                 ListTile(
-                  leading: Icon(PhosphorIconsBold.question, color: palette.success),
+                  leading: Icon(
+                    PhosphorIconsBold.question,
+                    color: palette.success,
+                  ),
                   title: Text('玩法技巧与操作指引', style: styles.bodyBold),
-                  subtitle: Text('手势操作、组队拖拽、底图透视、整理工具说明', style: styles.caption),
-                  trailing: Icon(PhosphorIconsBold.caretRight, size: 18, color: palette.secondaryText),
+                  subtitle: Text(
+                    '手势操作、组队拖拽、底图透视、整理工具说明',
+                    style: styles.caption,
+                  ),
+                  trailing: Icon(
+                    PhosphorIconsBold.caretRight,
+                    size: 18,
+                    color: palette.secondaryText,
+                  ),
                   onTap: () => HowToPlayPage.open(context),
                 ),
               ], palette),
@@ -231,9 +261,15 @@ class _SettingsPageState extends State<SettingsPage> {
               _buildSectionHeader('数据管理', palette, styles),
               _buildCardContainer([
                 ListTile(
-                  leading: Icon(PhosphorIconsBold.database, color: palette.info),
+                  leading: Icon(
+                    PhosphorIconsBold.database,
+                    color: palette.info,
+                  ),
                   title: Text('缩略图缓存', style: styles.bodyBold),
-                  subtitle: Text('卡片预览图的本地缓存，当前占用 $_cacheSize', style: styles.caption),
+                  subtitle: Text(
+                    '卡片预览图的本地缓存，当前占用 $_cacheSize',
+                    style: styles.caption,
+                  ),
                   trailing: _clearingCache
                       ? const SizedBox(
                           width: 20,
@@ -248,15 +284,27 @@ class _SettingsPageState extends State<SettingsPage> {
                 ),
                 Divider(height: 1, indent: 56, color: palette.divider),
                 ListTile(
-                  leading: Icon(PhosphorIconsBold.trashSimple, color: palette.error),
-                  title: Text('重置所有游戏数据', style: styles.bodyBold.copyWith(color: palette.error)),
+                  leading: Icon(
+                    PhosphorIconsBold.trashSimple,
+                    color: palette.error,
+                  ),
+                  title: Text(
+                    '重置所有游戏数据',
+                    style: styles.bodyBold.copyWith(color: palette.error),
+                  ),
                   subtitle: Text('清除所有关卡记录、每日挑战与自制拼图', style: styles.caption),
-                  trailing: Icon(PhosphorIconsBold.caretRight, size: 18, color: palette.error),
+                  trailing: Icon(
+                    PhosphorIconsBold.caretRight,
+                    size: 18,
+                    color: palette.error,
+                  ),
                   onTap: () async {
                     final ok = await showDialog<bool>(
                       context: context,
                       builder: (ctx) => AlertDialog(
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16),
+                        ),
                         title: const Text('确认重置全部数据？'),
                         content: const Text('该操作不可逆，将清除所有主线关卡进度、每日挑战与自制拼图记录。'),
                         actions: [
@@ -266,7 +314,9 @@ class _SettingsPageState extends State<SettingsPage> {
                           ),
                           FilledButton(
                             onPressed: () => Navigator.pop(ctx, true),
-                            style: FilledButton.styleFrom(backgroundColor: palette.error),
+                            style: FilledButton.styleFrom(
+                              backgroundColor: palette.error,
+                            ),
                             child: const Text('确定重置'),
                           ),
                         ],
@@ -301,17 +351,25 @@ class _SettingsPageState extends State<SettingsPage> {
                         color: palette.brand.withValues(alpha: 0.12),
                         borderRadius: BorderRadius.circular(14),
                       ),
-                      child: Icon(PhosphorIconsFill.puzzlePiece, color: palette.brand, size: 28),
+                      child: Icon(
+                        PhosphorIconsFill.puzzlePiece,
+                        color: palette.brand,
+                        size: 28,
+                      ),
                     ),
                     const SizedBox(height: 6),
                     Text(
                       '异形拼图 Jigsaw Puzzle',
-                      style: styles.captionBold.copyWith(color: palette.secondaryText),
+                      style: styles.captionBold.copyWith(
+                        color: palette.secondaryText,
+                      ),
                     ),
                     const SizedBox(height: 2),
                     Text(
                       '版本 1.0.0',
-                      style: styles.caption.copyWith(color: palette.disabledText),
+                      style: styles.caption.copyWith(
+                        color: palette.disabledText,
+                      ),
                     ),
                   ],
                 ),
@@ -324,7 +382,11 @@ class _SettingsPageState extends State<SettingsPage> {
     );
   }
 
-  Widget _buildSectionHeader(String title, AppPalette palette, AppTextStyles styles) {
+  Widget _buildSectionHeader(
+    String title,
+    AppPalette palette,
+    AppTextStyles styles,
+  ) {
     return Padding(
       padding: const EdgeInsets.only(left: 4, bottom: 8),
       child: Text(
@@ -345,9 +407,7 @@ class _SettingsPageState extends State<SettingsPage> {
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: palette.divider, width: 1),
       ),
-      child: Column(
-        children: children,
-      ),
+      child: Column(children: children),
     );
   }
 
@@ -356,15 +416,15 @@ class _SettingsPageState extends State<SettingsPage> {
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         gradient: LinearGradient(
-          colors: [
-            palette.surfaceContainer,
-            palette.surfaceContainerLow,
-          ],
+          colors: [palette.surfaceContainer, palette.surfaceContainerLow],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
         borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: palette.brand.withValues(alpha: 0.25), width: 1.5),
+        border: Border.all(
+          color: palette.brand.withValues(alpha: 0.25),
+          width: 1.5,
+        ),
         boxShadow: [
           BoxShadow(
             color: palette.brand.withValues(alpha: 0.08),
@@ -382,7 +442,10 @@ class _SettingsPageState extends State<SettingsPage> {
             decoration: BoxDecoration(
               color: palette.brand.withValues(alpha: 0.15),
               borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: palette.brand.withValues(alpha: 0.4), width: 2),
+              border: Border.all(
+                color: palette.brand.withValues(alpha: 0.4),
+                width: 2,
+              ),
             ),
             child: const Center(
               child: Text('🦊', style: TextStyle(fontSize: 32)),

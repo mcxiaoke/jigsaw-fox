@@ -57,7 +57,13 @@ class DifficultyRecord {
   }
 
   factory DifficultyRecord.fromJson(Map<String, dynamic> json) {
-    const known = {'bestStars', 'bestTimeSeconds', 'isCompleted', 'playCount', 'minHintsUsed'};
+    const known = {
+      'bestStars',
+      'bestTimeSeconds',
+      'isCompleted',
+      'playCount',
+      'minHintsUsed',
+    };
     final extra = <String, dynamic>{};
     for (final e in json.entries) {
       if (!known.contains(e.key)) extra[e.key] = e.value;
@@ -141,7 +147,11 @@ class ProgressStore {
       final map = jsonDecode(str) as Map<String, dynamic>;
       return LevelProgress.fromJson(map);
     } catch (e, st) {
-      AppLogger.repo.warning('ProgressStore.load parse fail cid=$canonicalId', e, st);
+      AppLogger.repo.warning(
+        'ProgressStore.load parse fail cid=$canonicalId',
+        e,
+        st,
+      );
       return LevelProgress(canonicalId: canonicalId);
     }
   }
@@ -151,7 +161,11 @@ class ProgressStore {
     try {
       await _prefs?.setString(_keyFor(p.canonicalId), jsonEncode(p.toJson()));
     } catch (e, st) {
-      AppLogger.repo.warning('ProgressStore.save fail cid=${p.canonicalId}', e, st);
+      AppLogger.repo.warning(
+        'ProgressStore.save fail cid=${p.canonicalId}',
+        e,
+        st,
+      );
     }
   }
 
@@ -239,10 +253,14 @@ class ProgressStore {
 
     final newBestTime = oldRecord.bestTimeSeconds == 0
         ? timeSeconds
-        : (timeSeconds > 0 ? math.min(oldRecord.bestTimeSeconds, timeSeconds) : oldRecord.bestTimeSeconds);
+        : (timeSeconds > 0
+              ? math.min(oldRecord.bestTimeSeconds, timeSeconds)
+              : oldRecord.bestTimeSeconds);
 
     // minHintsUsed 状态机：初始 -1；取更小值；首次变为 0 时触发 isFirstNoHintWin
-    final isFirstNoHintWin = hintsUsed == 0 && (oldRecord.minHintsUsed == -1 || oldRecord.minHintsUsed > 0);
+    final isFirstNoHintWin =
+        hintsUsed == 0 &&
+        (oldRecord.minHintsUsed == -1 || oldRecord.minHintsUsed > 0);
     final newMinHints = oldRecord.minHintsUsed == -1
         ? hintsUsed
         : math.min(oldRecord.minHintsUsed, hintsUsed);
@@ -267,7 +285,9 @@ class ProgressStore {
       completedPieceCounts: updatedCounts.toList(),
       records: existingMap,
       stars: math.max(cur.stars, newBestStars),
-      bestTimeSeconds: cur.bestTimeSeconds == 0 ? newBestTime : math.min(cur.bestTimeSeconds, newBestTime),
+      bestTimeSeconds: cur.bestTimeSeconds == 0
+          ? newBestTime
+          : math.min(cur.bestTimeSeconds, newBestTime),
       hasSnapshot: false,
       lastSavedAt: DateTime.now(),
     );
@@ -308,13 +328,18 @@ class ProgressStore {
     }
 
     // 同步更新 records 字典（若指定了 activeDifficultyKey 且已通关）
-    var nextRecords = records ?? Map<String, DifficultyRecord>.from(cur.records);
-    if (isCompleted == true && activeDifficultyKey != null && activeDifficultyKey.isNotEmpty) {
+    var nextRecords =
+        records ?? Map<String, DifficultyRecord>.from(cur.records);
+    if (isCompleted == true &&
+        activeDifficultyKey != null &&
+        activeDifficultyKey.isNotEmpty) {
       final oldR = nextRecords[activeDifficultyKey] ?? const DifficultyRecord();
       final newStars = math.max(oldR.bestStars, stars ?? 0);
       final newTime = oldR.bestTimeSeconds == 0
           ? (bestTimeSeconds ?? 0)
-          : ((bestTimeSeconds ?? 0) > 0 ? math.min(oldR.bestTimeSeconds, bestTimeSeconds!) : oldR.bestTimeSeconds);
+          : ((bestTimeSeconds ?? 0) > 0
+                ? math.min(oldR.bestTimeSeconds, bestTimeSeconds!)
+                : oldR.bestTimeSeconds);
       nextRecords[activeDifficultyKey] = oldR.copyWith(
         bestStars: newStars,
         bestTimeSeconds: newTime,
@@ -327,8 +352,8 @@ class ProgressStore {
         : (stars ?? cur.stars);
     final nextBestTime = (isCompleted == true && bestTimeSeconds != null)
         ? (cur.bestTimeSeconds == 0 || bestTimeSeconds < cur.bestTimeSeconds
-            ? bestTimeSeconds
-            : cur.bestTimeSeconds)
+              ? bestTimeSeconds
+              : cur.bestTimeSeconds)
         : (bestTimeSeconds ?? cur.bestTimeSeconds);
 
     final next = cur.copyWith(
@@ -349,7 +374,11 @@ class ProgressStore {
     );
   }
 
-  Future<void> setHasSnapshot(String canonicalId, String difficultyKey, bool has) async {
+  Future<void> setHasSnapshot(
+    String canonicalId,
+    String difficultyKey,
+    bool has,
+  ) async {
     final cur = await load(canonicalId);
     final keys = Set<String>.from(cur.snapshotKeys);
     if (has) {
@@ -360,7 +389,9 @@ class ProgressStore {
     final next = cur.copyWith(
       hasSnapshot: keys.isNotEmpty,
       snapshotKeys: keys.toList(),
-      activeDifficultyKey: has ? difficultyKey : (keys.isNotEmpty ? keys.first : cur.activeDifficultyKey),
+      activeDifficultyKey: has
+          ? difficultyKey
+          : (keys.isNotEmpty ? keys.first : cur.activeDifficultyKey),
     );
     await save(next);
   }
@@ -370,15 +401,28 @@ class ProgressStore {
     final cur = await load(canonicalId);
     // 若该难度是 active，则尝试切换到剩余的第一个
     if (cur.activeDifficultyKey == difficultyKey) {
-      final remaining = cur.snapshotKeys.where((k) => k != difficultyKey).toList();
+      final remaining = cur.snapshotKeys
+          .where((k) => k != difficultyKey)
+          .toList();
       final nextActive = remaining.isNotEmpty ? remaining.first : '';
-      await save(cur.copyWith(activeDifficultyKey: nextActive, hasSnapshot: remaining.isNotEmpty));
+      await save(
+        cur.copyWith(
+          activeDifficultyKey: nextActive,
+          hasSnapshot: remaining.isNotEmpty,
+        ),
+      );
     }
   }
 
   Future<void> clearAllSnapshots(String canonicalId) async {
     final cur = await load(canonicalId);
-    await save(cur.copyWith(hasSnapshot: false, snapshotKeys: const [], activeDifficultyKey: ''));
+    await save(
+      cur.copyWith(
+        hasSnapshot: false,
+        snapshotKeys: const [],
+        activeDifficultyKey: '',
+      ),
+    );
   }
 
   Future<bool> hasSnapshot(String canonicalId) async {
@@ -391,16 +435,23 @@ class ProgressStore {
     final keys = await SnapshotStore.instance.listDifficultyKeys(canonicalId);
     final has = keys.isNotEmpty;
     final cur = await load(canonicalId);
-    if (cur.hasSnapshot != has || (has && !keys.contains(cur.activeDifficultyKey))) {
+    if (cur.hasSnapshot != has ||
+        (has && !keys.contains(cur.activeDifficultyKey))) {
       final nextActive = has
-          ? (keys.contains(cur.activeDifficultyKey) ? cur.activeDifficultyKey : keys.first)
+          ? (keys.contains(cur.activeDifficultyKey)
+                ? cur.activeDifficultyKey
+                : keys.first)
           : '';
-      await save(cur.copyWith(
-        hasSnapshot: has,
-        snapshotKeys: keys,
-        activeDifficultyKey: nextActive,
-      ));
-      AppLogger.repo.info('ProgressStore.reconcile cid=$canonicalId has=$has keys=$keys active=$nextActive');
+      await save(
+        cur.copyWith(
+          hasSnapshot: has,
+          snapshotKeys: keys,
+          activeDifficultyKey: nextActive,
+        ),
+      );
+      AppLogger.repo.info(
+        'ProgressStore.reconcile cid=$canonicalId has=$has keys=$keys active=$nextActive',
+      );
     }
   }
 }
@@ -445,7 +496,8 @@ class LevelProgress {
   }
 
   /// 是否在任一档位获得过 3 星
-  bool get hasAny3Star => maxStars >= 3 || records.values.any((r) => r.bestStars >= 3);
+  bool get hasAny3Star =>
+      maxStars >= 3 || records.values.any((r) => r.bestStars >= 3);
 
   LevelProgress copyWith({
     String? canonicalId,
@@ -523,7 +575,9 @@ class LevelProgress {
     if (rawRecords != null) {
       for (final e in rawRecords.entries) {
         if (e.value is Map<String, dynamic>) {
-          parsedRecords[e.key] = DifficultyRecord.fromJson(e.value as Map<String, dynamic>);
+          parsedRecords[e.key] = DifficultyRecord.fromJson(
+            e.value as Map<String, dynamic>,
+          );
         }
       }
     }
@@ -532,7 +586,8 @@ class LevelProgress {
       canonicalId: json['canonicalId'] as String? ?? '',
       progressPercent: (json['progressPercent'] as int?) ?? 0,
       isCompleted: (json['isCompleted'] as bool?) ?? false,
-      completedPieceCounts: (json['completedPieceCounts'] as List<dynamic>?)
+      completedPieceCounts:
+          (json['completedPieceCounts'] as List<dynamic>?)
               ?.map((e) => e as int)
               .toList() ??
           const [],
@@ -540,7 +595,8 @@ class LevelProgress {
       stars: (json['stars'] as int?) ?? 0,
       hasSnapshot: (json['hasSnapshot'] as bool?) ?? false,
       activeDifficultyKey: (json['activeDifficultyKey'] as String?) ?? '',
-      snapshotKeys: (json['snapshotKeys'] as List<dynamic>?)
+      snapshotKeys:
+          (json['snapshotKeys'] as List<dynamic>?)
               ?.map((e) => e.toString())
               .toList() ??
           const [],

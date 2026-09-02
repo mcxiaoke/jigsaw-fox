@@ -40,7 +40,10 @@ class ResumeHelper {
     final dkey = progress.activeDifficultyKey.isNotEmpty
         ? progress.activeDifficultyKey
         : SnapshotStore.difficultyKeyFor(fallbackDifficulty);
-    PuzzleBoardState? snapshot = await SnapshotStore.instance.load(canonicalId, dkey);
+    PuzzleBoardState? snapshot = await SnapshotStore.instance.load(
+      canonicalId,
+      dkey,
+    );
     String usedDkey = dkey;
     int percent = 0;
     if (snapshot != null) {
@@ -65,14 +68,20 @@ class ResumeHelper {
     }
     if (percent >= 100 || snapshot.isSolved) return null;
     // 过滤“点进去即退”的无意义残局：0% 且无合并/提示/时长<5s则不视为可续玩，避免“只要点进去就有记录”
-    final isTrivial = percent == 0 &&
+    final isTrivial =
+        percent == 0 &&
         snapshot.hintsUsed == 0 &&
         snapshot.elapsedSeconds < 5 &&
         snapshot.pieces.every((p) => p.clusterId == p.id);
     if (isTrivial) return null;
 
     // 直接复用 progress，消除多余的第二次 load IO（P2-16）
-    return ResumeInfo(snapshot: snapshot, dkey: usedDkey, percent: percent, progress: progress);
+    return ResumeInfo(
+      snapshot: snapshot,
+      dkey: usedDkey,
+      percent: percent,
+      progress: progress,
+    );
   }
 
   /// 若存在可续玩存档，则弹出 ContinueDialog 二选一；返回原始 `ContinueDialog.show` 的 `result` 字符串
@@ -111,14 +120,21 @@ class ResumeHelper {
 
   /// 快捷获取展示用进度百分比（优先 ProgressStore 索引，兜底旧字段）
   /// 已通关重玩的残局也应显示进度，故 hasSnapshot 优先于 isCompleted
-  static int displayProgress(LevelProgress progress, int legacyPercent, bool isCompleted) {
+  static int displayProgress(
+    LevelProgress progress,
+    int legacyPercent,
+    bool isCompleted,
+  ) {
     if (progress.hasSnapshot) return progress.progressPercent;
     if (isCompleted) return 0;
     return legacyPercent;
   }
 
   /// 根据 difficultyKey 找回 PuzzleDifficulty，找不到则回退
-  static Future<PuzzleDifficulty> diffForKey(String k, PuzzleDifficulty fallback) async {
+  static Future<PuzzleDifficulty> diffForKey(
+    String k,
+    PuzzleDifficulty fallback,
+  ) async {
     for (final d in PuzzleDifficulty.presets) {
       if (SnapshotStore.difficultyKeyFor(d) == k) return d;
     }
@@ -137,7 +153,8 @@ class ResumeHelper {
     required PuzzleDifficulty fallbackDifficulty,
     required Uint8List imageBytes,
     required Future<void> Function(String dkey) onClearRepo,
-    required Future<void> Function(PuzzleDifficulty diff, String? jsonStr) onPushGame,
+    required Future<void> Function(PuzzleDifficulty diff, String? jsonStr)
+    onPushGame,
     required VoidCallback onCancelled,
   }) async {
     if (!context.mounted) return true;
@@ -148,7 +165,10 @@ class ResumeHelper {
     if (result.startsWith('continue:')) {
       final k = result.substring('continue:'.length);
       final diff = await diffForKey(k, fallbackDifficulty);
-      final jsonStr = await SnapshotStore.instance.loadJsonString(canonicalId, k);
+      final jsonStr = await SnapshotStore.instance.loadJsonString(
+        canonicalId,
+        k,
+      );
       if (!context.mounted) return true;
       await onPushGame(diff, jsonStr);
       return true;
@@ -173,7 +193,8 @@ class ResumeHelper {
     required String title,
     required Uint8List imageBytes,
     required Future<void> Function(String dkey) onClearRepo,
-    required Future<void> Function(PuzzleDifficulty diff, String? jsonStr) onPushGame,
+    required Future<void> Function(PuzzleDifficulty diff, String? jsonStr)
+    onPushGame,
     required VoidCallback onCancelled,
   }) async {
     final result = await maybeShowResumeDialog(

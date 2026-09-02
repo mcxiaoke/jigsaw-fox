@@ -53,7 +53,9 @@ void main() {
             rows: 2,
             cols: 2,
             seed: 1,
-            pieces: [PieceState(id: 0, r: 0, c: 0, nx: i * 0.1, ny: 0, clusterId: 0)],
+            pieces: [
+              PieceState(id: 0, r: 0, c: 0, nx: i * 0.1, ny: 0, clusterId: 0),
+            ],
           ),
         );
       }

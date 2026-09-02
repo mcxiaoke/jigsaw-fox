@@ -42,7 +42,10 @@ class CustomPuzzleItem {
 
   /// 规范合规的来源显示：仅输出 '相册' 或 '网络' (杜绝具体第三方网站名称防侵权)
   String get displaySource {
-    if (sourceType == 'gallery' || sourceType == 'local' || sourcePlatform == '相册' || sourcePlatform == '本地相册') {
+    if (sourceType == 'gallery' ||
+        sourceType == 'local' ||
+        sourcePlatform == '相册' ||
+        sourcePlatform == '本地相册') {
       return '相册';
     }
     return '网络';
@@ -75,7 +78,9 @@ class CustomPuzzleItem {
       isCompleted: isCompleted ?? this.isCompleted,
       progressPercent: progressPercent ?? this.progressPercent,
       bestTimeSeconds: bestTimeSeconds ?? this.bestTimeSeconds,
-      savedSnapshotJson: clearSnapshot ? null : (savedSnapshotJson ?? this.savedSnapshotJson),
+      savedSnapshotJson: clearSnapshot
+          ? null
+          : (savedSnapshotJson ?? this.savedSnapshotJson),
       completedPieceCounts: completedPieceCounts ?? this.completedPieceCounts,
       sourceType: sourceType ?? this.sourceType,
       sourcePlatform: sourcePlatform ?? this.sourcePlatform,
@@ -84,22 +89,22 @@ class CustomPuzzleItem {
   }
 
   Map<String, dynamic> toJson() => {
-        'id': id,
-        'title': title,
-        'imagePathOrUrl': imagePathOrUrl,
-        'isLocalFile': isLocalFile,
-        'rows': difficulty.rows,
-        'cols': difficulty.cols,
-        'createdAt': createdAt?.toIso8601String(),
-        'isCompleted': isCompleted || completedPieceCounts.isNotEmpty,
-        'progressPercent': progressPercent,
-        'bestTimeSeconds': bestTimeSeconds,
-        'savedSnapshotJson': savedSnapshotJson,
-        'completedPieceCounts': completedPieceCounts,
-        'sourceType': sourceType,
-        'sourcePlatform': sourcePlatform,
-        'sourceUrl': sourceUrl,
-      };
+    'id': id,
+    'title': title,
+    'imagePathOrUrl': imagePathOrUrl,
+    'isLocalFile': isLocalFile,
+    'rows': difficulty.rows,
+    'cols': difficulty.cols,
+    'createdAt': createdAt?.toIso8601String(),
+    'isCompleted': isCompleted || completedPieceCounts.isNotEmpty,
+    'progressPercent': progressPercent,
+    'bestTimeSeconds': bestTimeSeconds,
+    'savedSnapshotJson': savedSnapshotJson,
+    'completedPieceCounts': completedPieceCounts,
+    'sourceType': sourceType,
+    'sourcePlatform': sourcePlatform,
+    'sourceUrl': sourceUrl,
+  };
 
   factory CustomPuzzleItem.fromJson(Map<String, dynamic> json) {
     final rows = json['rows'] as int? ?? 4;
@@ -117,8 +122,8 @@ class CustomPuzzleItem {
         ?.map((e) => e as int)
         .toList();
     final isCompletedVal = json['isCompleted'] as bool? ?? false;
-    final completedCounts = rawCompletedCounts ??
-        (isCompletedVal ? [diff.pieceCount] : <int>[]);
+    final completedCounts =
+        rawCompletedCounts ?? (isCompletedVal ? [diff.pieceCount] : <int>[]);
 
     final imagePathOrUrl = json['imagePathOrUrl'] as String? ?? '';
     final isLocal = json['isLocalFile'] as bool? ?? false;

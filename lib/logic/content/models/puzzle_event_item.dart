@@ -113,7 +113,11 @@ class PuzzleEventItem {
       coverUrl: json['coverUrl']?.toString(),
       zipUrl: json['zipUrl']?.toString(),
       zipSha256: json['zipSha256']?.toString(),
-      levels: (json['levels'] as List<dynamic>?)?.map((e) => e.toString()).toList() ?? const [],
+      levels:
+          (json['levels'] as List<dynamic>?)
+              ?.map((e) => e.toString())
+              .toList() ??
+          const [],
       startTime: parseDate(json['startTime']),
       endTime: parseDate(json['endTime']),
       displayOrder: (json['displayOrder'] as num?)?.toInt() ?? 0,
@@ -140,5 +144,6 @@ class PuzzleEventItem {
   }
 
   @override
-  String toString() => 'PuzzleEventItem(id: $id, title: $title, status: $status, type: $type)';
+  String toString() =>
+      'PuzzleEventItem(id: $id, title: $title, status: $status, type: $type)';
 }

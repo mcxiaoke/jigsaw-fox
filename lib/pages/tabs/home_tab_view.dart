@@ -48,7 +48,13 @@ class _HomeTabViewState extends State<HomeTabView> {
         list = list.where((l) => l.difficulty.pieceCount <= 16).toList();
         break;
       case LevelFilter.intermediate:
-        list = list.where((l) => l.difficulty.pieceCount >= 24 && l.difficulty.pieceCount <= 36).toList();
+        list = list
+            .where(
+              (l) =>
+                  l.difficulty.pieceCount >= 24 &&
+                  l.difficulty.pieceCount <= 36,
+            )
+            .toList();
         break;
       case LevelFilter.master:
         list = list.where((l) => l.difficulty.pieceCount >= 48).toList();
@@ -57,13 +63,17 @@ class _HomeTabViewState extends State<HomeTabView> {
         list = list.where((l) => l.isCompleted).toList();
         break;
       case LevelFilter.inProgress:
-        list = list.where((l) => l.progressPercent > 0 && !l.isCompleted).toList();
+        list = list
+            .where((l) => l.progressPercent > 0 && !l.isCompleted)
+            .toList();
         break;
     }
     if (_selectedTag != 'all') {
       list = list.where((l) {
-        if (_selectedTag == 'animal') return l.index % 5 == 1 || l.index % 5 == 3;
-        if (_selectedTag == 'landscape') return l.index % 5 == 2 || l.index % 5 == 0;
+        if (_selectedTag == 'animal')
+          return l.index % 5 == 1 || l.index % 5 == 3;
+        if (_selectedTag == 'landscape')
+          return l.index % 5 == 2 || l.index % 5 == 0;
         if (_selectedTag == 'bird') return l.index % 5 == 2;
         if (_selectedTag == 'art') return l.index % 5 == 4;
         if (_selectedTag == 'architecture') return l.index % 5 == 0;
@@ -85,10 +95,23 @@ class _HomeTabViewState extends State<HomeTabView> {
       isCompleted: level.isCompleted,
       title: '第 ${level.index} 关',
       imageBytes: imgBytes,
-      onClearRepo: (k) => _repo.updateLevelProgress(levelIndex: level.index, progressPercent: 0, snapshotJson: null),
+      onClearRepo: (k) => _repo.updateLevelProgress(
+        levelIndex: level.index,
+        progressPercent: 0,
+        snapshotJson: null,
+      ),
       onPushGame: (diff, jsonStr) async {
         if (!mounted) return;
-        await Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => GamePage(imageBytes: imgBytes, difficulty: diff, levelIndex: level.index, initialSnapshotJson: jsonStr)));
+        await Navigator.of(context).push(
+          MaterialPageRoute<void>(
+            builder: (_) => GamePage(
+              imageBytes: imgBytes,
+              difficulty: diff,
+              levelIndex: level.index,
+              initialSnapshotJson: jsonStr,
+            ),
+          ),
+        );
       },
       onCancelled: () {
         if (mounted) setState(() {});
@@ -100,7 +123,11 @@ class _HomeTabViewState extends State<HomeTabView> {
     }
     if (!mounted) return;
     final progress = await ResumeHelper.loadProgress(canonicalId);
-    final displayPercent = ResumeHelper.displayProgress(progress, level.progressPercent, level.isCompleted);
+    final displayPercent = ResumeHelper.displayProgress(
+      progress,
+      level.progressPercent,
+      level.isCompleted,
+    );
     if (!mounted) return;
     await ChooseDifficultySheet.show(
       context: context,
@@ -116,17 +143,46 @@ class _HomeTabViewState extends State<HomeTabView> {
         if (prog.activeDifficultyKey.isNotEmpty) {
           await ResumeHelper.clearResume(canonicalId, prog.activeDifficultyKey);
         }
-        await _repo.updateLevelProgress(levelIndex: level.index, progressPercent: 0, snapshotJson: null);
+        await _repo.updateLevelProgress(
+          levelIndex: level.index,
+          progressPercent: 0,
+          snapshotJson: null,
+        );
         if (!mounted) return;
-        await Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => GamePage(imageBytes: imgBytes, difficulty: level.difficulty, levelIndex: level.index, initialSnapshotJson: null)));
+        await Navigator.of(context).push(
+          MaterialPageRoute<void>(
+            builder: (_) => GamePage(
+              imageBytes: imgBytes,
+              difficulty: level.difficulty,
+              levelIndex: level.index,
+              initialSnapshotJson: null,
+            ),
+          ),
+        );
         setState(() {});
       },
       onStart: (diff) async {
         final dkey = SnapshotStore.difficultyKeyFor(diff);
-        final snapJson = await SnapshotStore.instance.loadJsonString(canonicalId, dkey);
-        final fallbackLegacy = (diff.pieceCount == level.difficulty.pieceCount && !level.isCompleted) ? level.savedSnapshotJson : null;
+        final snapJson = await SnapshotStore.instance.loadJsonString(
+          canonicalId,
+          dkey,
+        );
+        final fallbackLegacy =
+            (diff.pieceCount == level.difficulty.pieceCount &&
+                !level.isCompleted)
+            ? level.savedSnapshotJson
+            : null;
         if (!mounted) return;
-        await Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => GamePage(imageBytes: imgBytes, difficulty: diff, levelIndex: level.index, initialSnapshotJson: snapJson ?? fallbackLegacy)));
+        await Navigator.of(context).push(
+          MaterialPageRoute<void>(
+            builder: (_) => GamePage(
+              imageBytes: imgBytes,
+              difficulty: diff,
+              levelIndex: level.index,
+              initialSnapshotJson: snapJson ?? fallbackLegacy,
+            ),
+          ),
+        );
         setState(() {});
       },
     );
@@ -139,7 +195,8 @@ class _HomeTabViewState extends State<HomeTabView> {
     final allLevels = _repo.levels;
     final filteredLevels = _getFilteredLevels(allLevels);
     final now = DateTime.now();
-    final todayStr = '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
+    final todayStr =
+        '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
     final todayDaily = _repo.dailyChallenges.firstWhere(
       (d) => d.date == todayStr,
       orElse: () => _repo.dailyChallenges.first,
@@ -214,18 +271,15 @@ class _HomeTabViewState extends State<HomeTabView> {
                   mainAxisSpacing: 14,
                   childAspectRatio: 1.0,
                 ),
-                delegate: SliverChildBuilderDelegate(
-                  (context, index) {
-                    final level = filteredLevels[index];
-                    return _LevelCard(
-                      level: level,
-                      palette: palette,
-                      styles: styles,
-                      onTap: () => _openLevel(level),
-                    );
-                  },
-                  childCount: filteredLevels.length,
-                ),
+                delegate: SliverChildBuilderDelegate((context, index) {
+                  final level = filteredLevels[index];
+                  return _LevelCard(
+                    level: level,
+                    palette: palette,
+                    styles: styles,
+                    onTap: () => _openLevel(level),
+                  );
+                }, childCount: filteredLevels.length),
               ),
             ),
 
@@ -303,7 +357,10 @@ class _DailyBanner extends StatelessWidget {
                   Row(
                     children: [
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 4,
+                        ),
                         decoration: BoxDecoration(
                           color: palette.brand,
                           borderRadius: BorderRadius.circular(8),
@@ -327,7 +384,10 @@ class _DailyBanner extends StatelessWidget {
                       if (todayDaily.isCompleted) ...[
                         const SizedBox(width: 8),
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 4,
+                          ),
                           decoration: BoxDecoration(
                             color: palette.success,
                             borderRadius: BorderRadius.circular(8),
@@ -355,7 +415,11 @@ class _DailyBanner extends StatelessWidget {
                   const SizedBox(height: 4),
                   Row(
                     children: [
-                      Icon(PhosphorIconsFill.puzzlePiece, size: 12, color: Colors.white70),
+                      Icon(
+                        PhosphorIconsFill.puzzlePiece,
+                        size: 12,
+                        color: Colors.white70,
+                      ),
                       const SizedBox(width: 4),
                       Text(
                         '${todayDaily.difficulty.pieceCount} 块拼图',
@@ -363,7 +427,10 @@ class _DailyBanner extends StatelessWidget {
                       ),
                       const SizedBox(width: 12),
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 2,
+                        ),
                         decoration: BoxDecoration(
                           color: Colors.white.withValues(alpha: 0.15),
                           borderRadius: BorderRadius.circular(6),
@@ -551,7 +618,9 @@ class _TagChip extends StatelessWidget {
               : palette.surfaceContainer,
           borderRadius: BorderRadius.circular(10),
           border: Border.all(
-            color: isActive ? palette.brand.withValues(alpha: 0.4) : palette.divider,
+            color: isActive
+                ? palette.brand.withValues(alpha: 0.4)
+                : palette.divider,
             width: isActive ? 1.5 : 1,
           ),
         ),
@@ -606,17 +675,30 @@ class _LevelCard extends StatelessWidget {
           children: [
             // Image — greyscale for locked levels (reference: temp/homeunlock.jpg)
             if (level.isUnlocked)
-              AppCachedImage(
-                imagePathOrUrl: level.assetPath,
-                fit: BoxFit.cover,
-              )
+              AppCachedImage(imagePathOrUrl: level.assetPath, fit: BoxFit.cover)
             else
               ColorFiltered(
                 colorFilter: const ColorFilter.matrix([
-                  0.33, 0.33, 0.33, 0, 0,
-                  0.33, 0.33, 0.33, 0, 0,
-                  0.33, 0.33, 0.33, 0, 0,
-                  0,    0,    0,    1, 0,
+                  0.33,
+                  0.33,
+                  0.33,
+                  0,
+                  0,
+                  0.33,
+                  0.33,
+                  0.33,
+                  0,
+                  0,
+                  0.33,
+                  0.33,
+                  0.33,
+                  0,
+                  0,
+                  0,
+                  0,
+                  0,
+                  1,
+                  0,
                 ]),
                 child: AppCachedImage(
                   imagePathOrUrl: level.assetPath,
@@ -647,7 +729,10 @@ class _LevelCard extends StatelessWidget {
             Container(
               decoration: BoxDecoration(
                 gradient: LinearGradient(
-                  colors: [Colors.transparent, Colors.black.withValues(alpha: 0.6)],
+                  colors: [
+                    Colors.transparent,
+                    Colors.black.withValues(alpha: 0.6),
+                  ],
                   begin: Alignment.center,
                   end: Alignment.bottomCenter,
                 ),
@@ -659,7 +744,10 @@ class _LevelCard extends StatelessWidget {
               left: 10,
               top: 10,
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 4,
+                ),
                 decoration: BoxDecoration(
                   color: Colors.black.withValues(alpha: 0.55),
                   borderRadius: BorderRadius.circular(20),
@@ -689,7 +777,11 @@ class _LevelCard extends StatelessWidget {
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(PhosphorIconsFill.puzzlePiece, size: 11, color: palette.secondaryText),
+                    Icon(
+                      PhosphorIconsFill.puzzlePiece,
+                      size: 11,
+                      color: palette.secondaryText,
+                    ),
                     const SizedBox(width: 3),
                     Text(
                       '${level.difficulty.pieceCount}',
@@ -705,10 +797,15 @@ class _LevelCard extends StatelessWidget {
             ),
 
             // ── Center: play button (unlocked, not started) ──
-            if (level.isUnlocked && !level.isCompleted && level.progressPercent == 0)
+            if (level.isUnlocked &&
+                !level.isCompleted &&
+                level.progressPercent == 0)
               Center(
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 8,
+                  ),
                   decoration: BoxDecoration(
                     gradient: AppPalette.brandGradient,
                     borderRadius: BorderRadius.circular(20),
@@ -723,7 +820,11 @@ class _LevelCard extends StatelessWidget {
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(PhosphorIconsFill.play, color: palette.surface, size: 14),
+                      Icon(
+                        PhosphorIconsFill.play,
+                        color: palette.surface,
+                        size: 14,
+                      ),
                       const SizedBox(width: 4),
                       Text(
                         '开始',
@@ -754,8 +855,16 @@ class _LevelCard extends StatelessWidget {
                         return Padding(
                           padding: const EdgeInsets.only(right: 2),
                           child: i < level.stars
-                              ? Icon(PhosphorIconsFill.star, color: palette.gold, size: 16)
-                              : Icon(PhosphorIconsRegular.star, color: Colors.white.withValues(alpha: 0.4), size: 16),
+                              ? Icon(
+                                  PhosphorIconsFill.star,
+                                  color: palette.gold,
+                                  size: 16,
+                                )
+                              : Icon(
+                                  PhosphorIconsRegular.star,
+                                  color: Colors.white.withValues(alpha: 0.4),
+                                  size: 16,
+                                ),
                         );
                       }),
                     )
@@ -767,7 +876,9 @@ class _LevelCard extends StatelessWidget {
                         value: level.progressPercent / 100.0,
                         minHeight: 4,
                         backgroundColor: Colors.white.withValues(alpha: 0.25),
-                        valueColor: AlwaysStoppedAnimation<Color>(palette.brand),
+                        valueColor: AlwaysStoppedAnimation<Color>(
+                          palette.brand,
+                        ),
                       ),
                     )
                   else if (!level.isUnlocked)
@@ -775,7 +886,11 @@ class _LevelCard extends StatelessWidget {
                     Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Icon(PhosphorIconsFill.lockKey, color: palette.disabledText, size: 14),
+                        Icon(
+                          PhosphorIconsFill.lockKey,
+                          color: palette.disabledText,
+                          size: 14,
+                        ),
                         const SizedBox(width: 4),
                         Text(
                           '需 ${level.index * 2} 星解锁',

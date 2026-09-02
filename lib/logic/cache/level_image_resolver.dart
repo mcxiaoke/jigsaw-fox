@@ -76,7 +76,9 @@ class LevelImageResolver {
             ? AppContent.instance.manager.mainPipeline.levels
             : <PuzzleLevelItem>[];
         final existing = mainLevels.where((l) => l.id == level.id).toList();
-        if (existing.isNotEmpty && existing.first.isLocalFile && File(existing.first.imagePathOrUrl).existsSync()) {
+        if (existing.isNotEmpty &&
+            existing.first.isLocalFile &&
+            File(existing.first.imagePathOrUrl).existsSync()) {
           return existing.first.imagePathOrUrl;
         }
       } catch (_) {}
@@ -86,8 +88,10 @@ class LevelImageResolver {
         // 若管线侧 ensure 已支持，直接复用（保持 _levelsMap 同步）
         if (AppContent.instance.isInitialized) {
           try {
-            final ensured = await AppContent.instance.manager.ensureMainLevelDownloaded(level);
-            if (ensured.isLocalFile && File(ensured.imagePathOrUrl).existsSync()) {
+            final ensured = await AppContent.instance.manager
+                .ensureMainLevelDownloaded(level);
+            if (ensured.isLocalFile &&
+                File(ensured.imagePathOrUrl).existsSync()) {
               return ensured.imagePathOrUrl;
             }
           } catch (_) {
@@ -104,14 +108,22 @@ class LevelImageResolver {
           return targetPath;
         }
 
-        AppLogger.content.info('LevelImageResolver downloading $hash -> $targetPath url=${AppLogger.sanitizeUrl(path)}');
+        AppLogger.content.info(
+          'LevelImageResolver downloading $hash -> $targetPath url=${AppLogger.sanitizeUrl(path)}',
+        );
         final downloaded = await _httpClient.downloadFile(path, targetPath);
         if (downloaded.existsSync() && await downloaded.length() > 0) {
-          AppLogger.content.info('LevelImageResolver done $hash bytes=${await downloaded.length()}');
+          AppLogger.content.info(
+            'LevelImageResolver done $hash bytes=${await downloaded.length()}',
+          );
           return downloaded.path;
         }
       } catch (e, st) {
-        AppLogger.content.warning('LevelImageResolver failed url=${AppLogger.sanitizeUrl(path)}', e, st);
+        AppLogger.content.warning(
+          'LevelImageResolver failed url=${AppLogger.sanitizeUrl(path)}',
+          e,
+          st,
+        );
       }
 
       // 失败回退原 URL（让上层显示占位）

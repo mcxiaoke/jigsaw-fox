@@ -28,7 +28,8 @@ void main() async {
 
   // Tune Flutter engine global ImageCache to optimize memory and prevent OOM
   PaintingBinding.instance.imageCache.maximumSize = 500;
-  PaintingBinding.instance.imageCache.maximumSizeBytes = 150 * 1024 * 1024; // 150 MB
+  PaintingBinding.instance.imageCache.maximumSizeBytes =
+      150 * 1024 * 1024; // 150 MB
   AppLogger.system.info('ImageCache tuned maxSize=500 maxBytes=150MB');
 
   // Initialize WebViewEnvironment on Windows desktop to prevent blank screen and crash
@@ -40,37 +41,49 @@ void main() async {
         await envDir.create(recursive: true);
       }
       globalWebViewEnvironment = await WebViewEnvironment.create(
-        settings: WebViewEnvironmentSettings(
-          userDataFolder: envDir.path,
-        ),
+        settings: WebViewEnvironmentSettings(userDataFolder: envDir.path),
       );
-      AppLogger.webview.info('Global WebViewEnvironment initialized dir=${envDir.path}');
+      AppLogger.webview.info(
+        'Global WebViewEnvironment initialized dir=${envDir.path}',
+      );
     } catch (e, stack) {
-      AppLogger.webview.severe('Failed to initialize WebViewEnvironment', e, stack);
+      AppLogger.webview.severe(
+        'Failed to initialize WebViewEnvironment',
+        e,
+        stack,
+      );
     }
   }
 
   final sw = Stopwatch()..start();
   await ImageCacheManager.instance.init();
-  AppLogger.system.info('ImageCacheManager init done ${sw.elapsedMilliseconds}ms');
+  AppLogger.system.info(
+    'ImageCacheManager init done ${sw.elapsedMilliseconds}ms',
+  );
   sw.reset();
   await GameRepository.instance.init();
   AppLogger.system.info('GameRepository init done ${sw.elapsedMilliseconds}ms');
   sw.reset();
   await DownloadManager.instance.init();
-  AppLogger.system.info('DownloadManager init done ${sw.elapsedMilliseconds}ms');
+  AppLogger.system.info(
+    'DownloadManager init done ${sw.elapsedMilliseconds}ms',
+  );
   sw.reset();
   await AppContent.instance.init();
   AppLogger.system.info('AppContent init done ${sw.elapsedMilliseconds}ms');
   sw.reset();
   await SoundService.I.init();
-  AppLogger.system.info('SoundService init done ${sw.elapsedMilliseconds}ms total=${sw.elapsedMilliseconds}ms');
+  AppLogger.system.info(
+    'SoundService init done ${sw.elapsedMilliseconds}ms total=${sw.elapsedMilliseconds}ms',
+  );
   sw.reset();
   // 经济/成就存储预热：新手赠送（5 券 + 100 币）与成就计数在首帧前就绪，
   // 避免首帧读 coins 返回 0 或成就事件首次触发时阻塞
   await EconomyService.instance.init();
   await AchievementStore.instance.init();
-  AppLogger.system.info('Economy/Achievement init done ${sw.elapsedMilliseconds}ms');
+  AppLogger.system.info(
+    'Economy/Achievement init done ${sw.elapsedMilliseconds}ms',
+  );
   AppLogger.system.info('App launch completed runApp');
   runApp(const JigsawPuzzleApp());
 }
@@ -81,11 +94,11 @@ class AppScrollBehavior extends MaterialScrollBehavior {
 
   @override
   Set<PointerDeviceKind> get dragDevices => {
-        PointerDeviceKind.touch,
-        PointerDeviceKind.mouse,
-        PointerDeviceKind.trackpad,
-        PointerDeviceKind.stylus,
-      };
+    PointerDeviceKind.touch,
+    PointerDeviceKind.mouse,
+    PointerDeviceKind.trackpad,
+    PointerDeviceKind.stylus,
+  };
 }
 
 class JigsawPuzzleApp extends StatelessWidget {
@@ -94,8 +107,14 @@ class JigsawPuzzleApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     const seed = Color(0xFFD4963C);
-    final lightScheme = ColorScheme.fromSeed(seedColor: seed, brightness: Brightness.light);
-    final darkScheme  = ColorScheme.fromSeed(seedColor: seed, brightness: Brightness.dark);
+    final lightScheme = ColorScheme.fromSeed(
+      seedColor: seed,
+      brightness: Brightness.light,
+    );
+    final darkScheme = ColorScheme.fromSeed(
+      seedColor: seed,
+      brightness: Brightness.dark,
+    );
 
     return MaterialApp(
       title: '异形拼图 Jigsaw Puzzle',
@@ -113,7 +132,11 @@ class JigsawPuzzleApp extends StatelessWidget {
       brightness: brightness,
       colorScheme: scheme,
       useMaterial3: true,
-      fontFamilyFallback: const ['Microsoft YaHei', 'PingFang SC', 'sans-serif'],
+      fontFamilyFallback: const [
+        'Microsoft YaHei',
+        'PingFang SC',
+        'sans-serif',
+      ],
       scaffoldBackgroundColor: scheme.surface,
       appBarTheme: AppBarTheme(
         backgroundColor: scheme.surface,
@@ -129,7 +152,9 @@ class JigsawPuzzleApp extends StatelessWidget {
       ),
       filledButtonTheme: FilledButtonThemeData(
         style: FilledButton.styleFrom(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
           padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 24),
         ),
       ),
@@ -139,7 +164,9 @@ class JigsawPuzzleApp extends StatelessWidget {
           selectedForegroundColor: scheme.onPrimary,
           backgroundColor: scheme.surfaceContainer,
           foregroundColor: scheme.onSurfaceVariant,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
           visualDensity: VisualDensity.compact,
         ),
       ),

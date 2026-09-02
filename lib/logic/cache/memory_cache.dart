@@ -18,7 +18,8 @@ class MemoryCache {
   final int maxSizeBytes;
 
   /// 使用 LinkedHashMap 保存 LRU 访问序 (头部为最久未用，尾部为最近使用)
-  final LinkedHashMap<String, Uint8List> _entries = LinkedHashMap<String, Uint8List>();
+  final LinkedHashMap<String, Uint8List> _entries =
+      LinkedHashMap<String, Uint8List>();
 
   int _currentSizeBytes = 0;
 

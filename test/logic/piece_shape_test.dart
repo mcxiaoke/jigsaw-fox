@@ -89,11 +89,7 @@ void main() {
         left: EdgeCurveDescriptor(edgeType: EdgeType.flat),
       );
 
-      final shape = PieceShape(
-        edges: edges,
-        width: 100.0,
-        height: 100.0,
-      );
+      final shape = PieceShape(edges: edges, width: 100.0, height: 100.0);
 
       // Center of base cell should always be inside
       expect(shape.containsLocalPoint(const Offset(50, 50), 0), isTrue);
@@ -110,11 +106,7 @@ void main() {
         left: EdgeCurveDescriptor(edgeType: EdgeType.flat),
       );
 
-      final shape = PieceShape(
-        edges: edges,
-        width: 100.0,
-        height: 100.0,
-      );
+      final shape = PieceShape(edges: edges, width: 100.0, height: 100.0);
 
       expect(shape.path, isNotNull);
     });

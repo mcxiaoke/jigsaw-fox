@@ -41,6 +41,7 @@ class GamePage extends StatefulWidget {
   final String? dailyDateStr;
   final String? customId;
   final String? initialSnapshotJson;
+
   /// 通用扩展包/活动等使用的全局唯一主键，优先级高于 levelIndex/daily/customId
   final String? canonicalId;
   final String? packTitle;
@@ -62,6 +63,7 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
   Timer? _timer;
   DateTime? _hintPauseUntil;
   int _solvedPieces = 0;
+
   /// 已上报的游玩秒数游标（playSeconds 生命周期增量上报，设计 §8.1）
   int _reportedPlaySeconds = 0;
   bool _showOriginalImage = false;
@@ -70,7 +72,8 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
   Color _headerBarColor = Colors.white;
   Color _headerIconColor = const Color(0xFF1F2937);
   PuzzleDifficulty? _effectiveDifficulty;
-  int get _totalPieces => (_effectiveDifficulty ?? widget.difficulty).pieceCount;
+  int get _totalPieces =>
+      (_effectiveDifficulty ?? widget.difficulty).pieceCount;
 
   // Multi-touch tracking for pinch-to-zoom & two-finger pan
   final Map<int, Offset> _pointerPositions = {};
@@ -123,13 +126,22 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
     ui.Codec? codec;
     try {
       final data = await rootBundle.load(assetPath);
-      final buffer = data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes);
-      codec = await ui.instantiateImageCodec(buffer, targetWidth: 48, targetHeight: 48);
+      final buffer = data.buffer.asUint8List(
+        data.offsetInBytes,
+        data.lengthInBytes,
+      );
+      codec = await ui.instantiateImageCodec(
+        buffer,
+        targetWidth: 48,
+        targetHeight: 48,
+      );
       final frame = await codec.getNextFrame();
       final image = frame.image;
       final w = image.width;
       final h = image.height;
-      final pixelData = await image.toByteData(format: ui.ImageByteFormat.rawRgba);
+      final pixelData = await image.toByteData(
+        format: ui.ImageByteFormat.rawRgba,
+      );
       image.dispose();
       if (pixelData == null) return;
       final bytes = pixelData.buffer.asUint8List();
@@ -141,7 +153,12 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
         g += bytes[i + 1];
         b += bytes[i + 2];
       }
-      final avg = Color.fromARGB(255, r ~/ pixelCount, g ~/ pixelCount, b ~/ pixelCount);
+      final avg = Color.fromARGB(
+        255,
+        r ~/ pixelCount,
+        g ~/ pixelCount,
+        b ~/ pixelCount,
+      );
       if (!mounted) return;
       final scheme = Theme.of(context).colorScheme;
       final blended = Color.lerp(scheme.primaryContainer, avg, 0.45)!;
@@ -152,10 +169,14 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
       SystemChrome.setSystemUIOverlayStyle(
         SystemUiOverlayStyle(
           statusBarColor: blended,
-          statusBarIconBrightness: isDarkBar ? Brightness.light : Brightness.dark,
+          statusBarIconBrightness: isDarkBar
+              ? Brightness.light
+              : Brightness.dark,
           statusBarBrightness: isDarkBar ? Brightness.dark : Brightness.light,
           systemNavigationBarColor: blended,
-          systemNavigationBarIconBrightness: isDarkBar ? Brightness.light : Brightness.dark,
+          systemNavigationBarIconBrightness: isDarkBar
+              ? Brightness.light
+              : Brightness.dark,
         ),
       );
       setState(() {
@@ -190,7 +211,8 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
     // 若有快照，优先使用快照中的 rows/cols，避免 adaptive 覆盖导致 _applyBoardState 静默丢弃（P0-1）
     if (widget.initialSnapshotJson != null) {
       try {
-        final map = jsonDecode(widget.initialSnapshotJson!) as Map<String, dynamic>;
+        final map =
+            jsonDecode(widget.initialSnapshotJson!) as Map<String, dynamic>;
         if (map['elapsedSeconds'] is int) {
           _seconds = map['elapsedSeconds'] as int;
           _secondsNotifier.value = _seconds;
@@ -200,18 +222,33 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
           final c = map['cols'] as int;
           effectiveDiff = PuzzleDifficulty.presets.firstWhere(
             (d) => d.rows == r && d.cols == c,
-            orElse: () => PuzzleDifficulty(label: '$r x $c (${r * c}块)', rows: r, cols: c),
+            orElse: () => PuzzleDifficulty(
+              label: '$r x $c (${r * c}块)',
+              rows: r,
+              cols: c,
+            ),
           );
-          AppLogger.game.info('Use snapshot rows/cols r=$r c=$c for effectiveDiff, skip adaptive (P0-1)');
+          AppLogger.game.info(
+            'Use snapshot rows/cols r=$r c=$c for effectiveDiff, skip adaptive (P0-1)',
+          );
         } else {
-          effectiveDiff = widget.difficulty.adaptiveForSize(img.width.toDouble(), img.height.toDouble());
+          effectiveDiff = widget.difficulty.adaptiveForSize(
+            img.width.toDouble(),
+            img.height.toDouble(),
+          );
         }
       } catch (e, st) {
         AppLogger.game.warning('Failed to parse initialSnapshotJson', e, st);
-        effectiveDiff = widget.difficulty.adaptiveForSize(img.width.toDouble(), img.height.toDouble());
+        effectiveDiff = widget.difficulty.adaptiveForSize(
+          img.width.toDouble(),
+          img.height.toDouble(),
+        );
       }
     } else {
-      effectiveDiff = widget.difficulty.adaptiveForSize(img.width.toDouble(), img.height.toDouble());
+      effectiveDiff = widget.difficulty.adaptiveForSize(
+        img.width.toDouble(),
+        img.height.toDouble(),
+      );
     }
     _effectiveDifficulty = effectiveDiff;
 
@@ -289,7 +326,11 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
       final liveSolved = _game!.solvedCount;
       final percent = total > 0 ? (liveSolved * 100 ~/ total) : 0;
       final boardForCheck = _game!.boardState;
-      final isTrivial = percent == 0 && boardForCheck.hintsUsed == 0 && _seconds < 5 && boardForCheck.pieces.every((p) => p.clusterId == p.id);
+      final isTrivial =
+          percent == 0 &&
+          boardForCheck.hintsUsed == 0 &&
+          _seconds < 5 &&
+          boardForCheck.pieces.every((p) => p.clusterId == p.id);
       if (isTrivial) return;
       final snapshot = _game!.exportSnapshotJson(elapsedSeconds: _seconds);
       final map = jsonDecode(snapshot) as Map<String, dynamic>;
@@ -309,10 +350,14 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
   }
 
   String _canonicalIdForSave() {
-    if (widget.canonicalId != null && widget.canonicalId!.isNotEmpty) return widget.canonicalId!;
-    if (widget.levelIndex != null) return GameRepository.canonicalForLevel(widget.levelIndex!);
-    if (widget.dailyDateStr != null) return GameRepository.canonicalForDaily(widget.dailyDateStr!);
-    if (widget.customId != null) return GameRepository.canonicalForCustom(widget.customId!);
+    if (widget.canonicalId != null && widget.canonicalId!.isNotEmpty)
+      return widget.canonicalId!;
+    if (widget.levelIndex != null)
+      return GameRepository.canonicalForLevel(widget.levelIndex!);
+    if (widget.dailyDateStr != null)
+      return GameRepository.canonicalForDaily(widget.dailyDateStr!);
+    if (widget.customId != null)
+      return GameRepository.canonicalForCustom(widget.customId!);
     return '';
   }
 
@@ -333,7 +378,11 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
     final percent = total > 0 ? (liveSolved * 100 ~/ total) : 0;
     // 过滤"点进去即退"的无意义残局，避免"只要点进去就有记录"
     final boardForCheck = _game!.boardState;
-    final isTrivial = percent == 0 && boardForCheck.hintsUsed == 0 && _seconds < 5 && boardForCheck.pieces.every((p) => p.clusterId == p.id);
+    final isTrivial =
+        percent == 0 &&
+        boardForCheck.hintsUsed == 0 &&
+        _seconds < 5 &&
+        boardForCheck.pieces.every((p) => p.clusterId == p.id);
     if (isTrivial) {
       _isSaving = false;
       return;
@@ -385,8 +434,10 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
 
   int _calculateStars() {
     final hints = _game?.boardState.hintsUsed ?? 0;
-    final actualPieces = _effectiveDifficulty?.pieceCount ?? widget.difficulty.pieceCount;
-    final secPerPiece = _effectiveDifficulty?.secPerPiece ?? widget.difficulty.secPerPiece;
+    final actualPieces =
+        _effectiveDifficulty?.pieceCount ?? widget.difficulty.pieceCount;
+    final secPerPiece =
+        _effectiveDifficulty?.secPerPiece ?? widget.difficulty.secPerPiece;
     return StarCalculator.calcStars(
       actualPieces: actualPieces,
       secPerPiece: secPerPiece,
@@ -405,8 +456,10 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
     }
 
     final hints = _game?.boardState.hintsUsed ?? 0;
-    final actualPieces = _effectiveDifficulty?.pieceCount ?? widget.difficulty.pieceCount;
-    final secPerPiece = _effectiveDifficulty?.secPerPiece ?? widget.difficulty.secPerPiece;
+    final actualPieces =
+        _effectiveDifficulty?.pieceCount ?? widget.difficulty.pieceCount;
+    final secPerPiece =
+        _effectiveDifficulty?.secPerPiece ?? widget.difficulty.secPerPiece;
 
     // 双轴评星打分
     final stars = StarCalculator.calcStars(
@@ -426,18 +479,21 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
     });
 
     _repo.recordSnapStats(durationSeconds: _seconds);
-    final dkey = SnapshotStore.difficultyKeyFor(_effectiveDifficulty ?? widget.difficulty);
+    final dkey = SnapshotStore.difficultyKeyFor(
+      _effectiveDifficulty ?? widget.difficulty,
+    );
     final cid = _canonicalIdForSave();
 
     // 1. 原子更新 ProgressStore 档位记录并获得 deltaStars 与 minHintsUsed 状态
-    final updateResult = await ProgressStore.instance.recordDifficultyCompletion(
-      canonicalId: cid,
-      difficultyKey: dkey,
-      stars: stars,
-      timeSeconds: _seconds,
-      hintsUsed: hints,
-      completedPieceCount: actualPieces,
-    );
+    final updateResult = await ProgressStore.instance
+        .recordDifficultyCompletion(
+          canonicalId: cid,
+          difficultyKey: dkey,
+          stars: stars,
+          timeSeconds: _seconds,
+          hintsUsed: hints,
+          completedPieceCount: actualPieces,
+        );
 
     // 2. 同步更新 GameRepository 关卡状态与内存列表
     if (widget.canonicalId != null && widget.canonicalId!.isNotEmpty) {
@@ -494,7 +550,9 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
     _reportPlaySeconds();
     final ptype = widget.dailyDateStr != null
         ? 'daily'
-        : (widget.customId != null ? 'custom' : (widget.packTitle != null ? 'pack' : 'main'));
+        : (widget.customId != null
+              ? 'custom'
+              : (widget.packTitle != null ? 'pack' : 'main'));
     final newAchievements = await AchievementService.instance.onPuzzleSolved(
       actualPieces: actualPieces,
       elapsedSeconds: _seconds,
@@ -527,10 +585,13 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
     final canUse = await EconomyService.instance.consumeHint(tierIndex: tier);
     if (!canUse) {
       if (mounted) {
-        final price = EconomyService.kHintPrices[tier.clamp(0, EconomyService.kHintPrices.length - 1)];
+        final price = EconomyService
+            .kHintPrices[tier.clamp(0, EconomyService.kHintPrices.length - 1)];
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('金币不足（当前难度提示需 $price 金币，当前拥有 ${EconomyService.instance.coins}）'),
+            content: Text(
+              '金币不足（当前难度提示需 $price 金币，当前拥有 ${EconomyService.instance.coins}）',
+            ),
             duration: const Duration(seconds: 2),
             behavior: SnackBarBehavior.floating,
           ),
@@ -590,7 +651,10 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
     // 尝试从文件级快照读取（新链路优先）
     String? snapJson = nextLevel.savedSnapshotJson;
     try {
-      final s = await _repo.loadLevelSnapshotJson(nextIndex, nextLevel.difficulty);
+      final s = await _repo.loadLevelSnapshotJson(
+        nextIndex,
+        nextLevel.difficulty,
+      );
       if (s != null) snapJson = s;
     } catch (_) {}
     if (!mounted) return;
@@ -614,7 +678,8 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
   }) {
     setState(() => _isPaused = true);
     final earnedStars = stars ?? _calculateStars();
-    final hasNext = widget.levelIndex != null && widget.levelIndex! < _repo.levels.length;
+    final hasNext =
+        widget.levelIndex != null && widget.levelIndex! < _repo.levels.length;
 
     showDialog<void>(
       context: context,
@@ -629,7 +694,11 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
             children: [
               const Text(
                 '🎉 恭喜通关！',
-                style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Color(0xFF2E7D32)),
+                style: TextStyle(
+                  fontSize: 22,
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFF2E7D32),
+                ),
               ),
               const SizedBox(height: 8),
 
@@ -641,8 +710,16 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
                   (i) => Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 4),
                     child: i < earnedStars
-                        ? Image.asset('assets/icons/star_3d.png', width: 36, height: 36)
-                        : const Icon(PhosphorIconsRegular.star, color: Colors.amber, size: 36),
+                        ? Image.asset(
+                            'assets/icons/star_3d.png',
+                            width: 36,
+                            height: 36,
+                          )
+                        : const Icon(
+                            PhosphorIconsRegular.star,
+                            color: Colors.amber,
+                            size: 36,
+                          ),
                   ),
                 ),
               ),
@@ -663,7 +740,10 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
               const SizedBox(height: 14),
 
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 8,
+                ),
                 decoration: BoxDecoration(
                   color: const Color(0xFFF1F8E9),
                   borderRadius: BorderRadius.circular(12),
@@ -673,26 +753,52 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
                   children: [
                     Column(
                       children: [
-                        const Text('总用时', style: TextStyle(fontSize: 12, color: Colors.black54)),
+                        const Text(
+                          '总用时',
+                          style: TextStyle(fontSize: 12, color: Colors.black54),
+                        ),
                         ValueListenableBuilder<int>(
                           valueListenable: _secondsNotifier,
-                          builder: (context, _, _) => Text(_timeString,
-                              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                          builder: (context, _, _) => Text(
+                            _timeString,
+                            style: const TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
                         ),
                       ],
                     ),
                     Column(
                       children: [
-                        const Text('获得金币', style: TextStyle(fontSize: 12, color: Colors.black54)),
-                        Text('+$earnedCoins 💰',
-                            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.amber)),
+                        const Text(
+                          '获得金币',
+                          style: TextStyle(fontSize: 12, color: Colors.black54),
+                        ),
+                        Text(
+                          '+$earnedCoins 💰',
+                          style: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.amber,
+                          ),
+                        ),
                       ],
                     ),
                     Column(
                       children: [
-                        const Text('规格', style: TextStyle(fontSize: 12, color: Colors.black54)),
-                        Text('$_totalPieces 块',
-                            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF2E7D32))),
+                        const Text(
+                          '规格',
+                          style: TextStyle(fontSize: 12, color: Colors.black54),
+                        ),
+                        Text(
+                          '$_totalPieces 块',
+                          style: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xFF2E7D32),
+                          ),
+                        ),
                       ],
                     ),
                   ],
@@ -701,7 +807,10 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
               if (newAchievements.isNotEmpty) ...[
                 const SizedBox(height: 10),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 6,
+                  ),
                   decoration: BoxDecoration(
                     color: const Color(0xFFFFF8E1),
                     borderRadius: BorderRadius.circular(10),
@@ -709,12 +818,20 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
                   ),
                   child: Row(
                     children: [
-                      const Icon(PhosphorIconsFill.trophy, color: Colors.amber, size: 20),
+                      const Icon(
+                        PhosphorIconsFill.trophy,
+                        color: Colors.amber,
+                        size: 20,
+                      ),
                       const SizedBox(width: 8),
                       Expanded(
                         child: Text(
                           '解锁成就: ${newAchievements.map((a) => a.title).join("、")}',
-                          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF795548)),
+                          style: const TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: Color(0xFF795548),
+                          ),
                           overflow: TextOverflow.ellipsis,
                         ),
                       ),
@@ -745,7 +862,9 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
               label: const Text('下一关'),
               style: FilledButton.styleFrom(
                 backgroundColor: const Color(0xFF2E7D32),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14),
+                ),
               ),
             )
           else
@@ -757,7 +876,9 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
               },
               style: FilledButton.styleFrom(
                 backgroundColor: const Color(0xFF2E7D32),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14),
+                ),
               ),
               child: const Text('返回列表'),
             ),
@@ -805,7 +926,8 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
 
         // 精准定点缩放几何变换：保持两指中心点在缩放过程中与棋盘内容像素严格锁定
         final baseTopLeft = _game!.boardTopLeft + _basePan;
-        final focalOffset = _baseFocalPoint - Offset(baseTopLeft.x, baseTopLeft.y);
+        final focalOffset =
+            _baseFocalPoint - Offset(baseTopLeft.x, baseTopLeft.y);
         final zoomRatio = newZoom / _baseZoom;
         final newTopLeftX = curFocal.dx - focalOffset.dx * zoomRatio;
         final newTopLeftY = curFocal.dy - focalOffset.dy * zoomRatio;
@@ -857,7 +979,8 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
 
   void _onPointerSignal(PointerSignalEvent event) {
     if (event is PointerScrollEvent && _game != null) {
-      final isCtrl = HardwareKeyboard.instance.isControlPressed ||
+      final isCtrl =
+          HardwareKeyboard.instance.isControlPressed ||
           HardwareKeyboard.instance.isMetaPressed;
       final mousePos = event.localPosition;
       final inTray = !_game!.isTabletop && mousePos.dy >= _game!.trayPosition.y;
@@ -921,16 +1044,14 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
           if (mounted) Navigator.of(context).pop();
         },
       ),
-      title: Text(
-        _pageTitle,
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-      ),
+      title: Text(_pageTitle, maxLines: 1, overflow: TextOverflow.ellipsis),
       actions: [
         // 1. 只显示边缘碎片
         IconButton(
           icon: Icon(
-            isBorderActive ? PhosphorIconsFill.cornersOut : PhosphorIconsBold.cornersOut,
+            isBorderActive
+                ? PhosphorIconsFill.cornersOut
+                : PhosphorIconsBold.cornersOut,
             size: 21,
             color: isBorderActive ? const Color(0xFF2E7D32) : _headerIconColor,
           ),
@@ -944,7 +1065,11 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
         ),
         // 2. 提示
         IconButton(
-          icon: const Icon(PhosphorIconsFill.lightbulb, size: 21, color: Colors.amber),
+          icon: const Icon(
+            PhosphorIconsFill.lightbulb,
+            size: 21,
+            color: Colors.amber,
+          ),
           tooltip: '智能提示',
           onPressed: _onHintPressed,
         ),
@@ -954,8 +1079,12 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
             alignment: Alignment.center,
             children: [
               Icon(
-                ghostOpacity > 0.01 ? PhosphorIconsFill.stack : PhosphorIconsBold.stack,
-                color: ghostOpacity > 0.01 ? const Color(0xFF2E7D32) : _headerIconColor,
+                ghostOpacity > 0.01
+                    ? PhosphorIconsFill.stack
+                    : PhosphorIconsBold.stack,
+                color: ghostOpacity > 0.01
+                    ? const Color(0xFF2E7D32)
+                    : _headerIconColor,
                 size: 21,
               ),
               if (ghostOpacity > 0.01)
@@ -963,14 +1092,21 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
                   bottom: -1,
                   right: -2,
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 0),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 2,
+                      vertical: 0,
+                    ),
                     decoration: BoxDecoration(
                       color: const Color(0xFF2E7D32),
                       borderRadius: BorderRadius.circular(4),
                     ),
                     child: Text(
                       '${(ghostOpacity * 100).toInt()}',
-                      style: const TextStyle(fontSize: 7, color: Colors.white, fontWeight: FontWeight.bold),
+                      style: const TextStyle(
+                        fontSize: 7,
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                   ),
                 ),
@@ -985,7 +1121,11 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
         ),
         // 4. 扫把一键整理
         IconButton(
-          icon: Icon(PhosphorIconsBold.broom, size: 21, color: _headerIconColor),
+          icon: Icon(
+            PhosphorIconsBold.broom,
+            size: 21,
+            color: _headerIconColor,
+          ),
           tooltip: '一键整理托盘',
           onPressed: () {
             _game?.organizeTray();
@@ -1010,7 +1150,11 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
             color: _headerBarColor.withValues(alpha: 0.94),
             borderRadius: BorderRadius.circular(16),
             boxShadow: const [
-              BoxShadow(color: Colors.black12, blurRadius: 4, offset: Offset(0, 2)),
+              BoxShadow(
+                color: Colors.black12,
+                blurRadius: 4,
+                offset: Offset(0, 2),
+              ),
             ],
           ),
           child: Row(
@@ -1020,7 +1164,11 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
                 visualDensity: VisualDensity.compact,
                 padding: const EdgeInsets.symmetric(horizontal: 6),
                 constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
-                icon: const Icon(PhosphorIconsBold.image, size: 19, color: Color(0xFF2E7D32)),
+                icon: const Icon(
+                  PhosphorIconsBold.image,
+                  size: 19,
+                  color: Color(0xFF2E7D32),
+                ),
                 tooltip: '更换壁纸背景',
                 onPressed: _openBackgroundSelector,
               ),
@@ -1029,9 +1177,13 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
                 padding: const EdgeInsets.symmetric(horizontal: 6),
                 constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
                 icon: Icon(
-                  _showOriginalImage ? PhosphorIconsFill.eye : PhosphorIconsBold.eye,
+                  _showOriginalImage
+                      ? PhosphorIconsFill.eye
+                      : PhosphorIconsBold.eye,
                   size: 19,
-                  color: _showOriginalImage ? const Color(0xFF0288D1) : _headerIconColor,
+                  color: _showOriginalImage
+                      ? const Color(0xFF0288D1)
+                      : _headerIconColor,
                 ),
                 tooltip: '查看原图',
                 onPressed: () {
@@ -1072,61 +1224,63 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
       child: Scaffold(
         backgroundColor: const Color(0xFFE2E6EA),
         appBar: _buildAppBar(),
-      body: Stack(
-        children: [
-          // 1. Full-Screen Seamless Tiled Background
-          Positioned.fill(
-            child: Image.asset(
-              _selectedBackground,
-              repeat: ImageRepeat.repeat,
-              errorBuilder: (ctx, err, stack) => Container(color: const Color(0xFFE2E6EA)),
-            ),
-          ),
-
-          // 2. Short right-aligned status bar + progress + Flame Game Canvas
-          Column(
-            children: [
-              _buildShortStatusBar(),
-              Padding(
-                padding: const EdgeInsets.only(top: 4),
-                child: _buildProgressLine(),
+        body: Stack(
+          children: [
+            // 1. Full-Screen Seamless Tiled Background
+            Positioned.fill(
+              child: Image.asset(
+                _selectedBackground,
+                repeat: ImageRepeat.repeat,
+                errorBuilder: (ctx, err, stack) =>
+                    Container(color: const Color(0xFFE2E6EA)),
               ),
-              Expanded(
-                child: _game != null
-                    ? KeyboardListener(
-                        focusNode: _focusNode,
-                        autofocus: true,
-                        onKeyEvent: (keyEvent) {
-                          if (keyEvent is KeyDownEvent &&
-                              keyEvent.logicalKey == LogicalKeyboardKey.escape &&
-                              _game?.holdingPiece != null) {
-                            _game?.cancelHoldingPiece();
-                            if (mounted) setState(() {});
-                          }
-                        },
-                        child: Listener(
-                          onPointerDown: _onPointerDown,
-                          onPointerMove: _onPointerMove,
-                          onPointerUp: _onPointerUp,
-                          onPointerCancel: _onPointerCancel,
-                          onPointerSignal: _onPointerSignal,
-                          behavior: HitTestBehavior.translucent,
-                          child: AnimatedOpacity(
-                            opacity: _gameFadeIn ? 1.0 : 0.0,
-                            duration: const Duration(milliseconds: 300),
-                            curve: Curves.easeOutCubic,
-                            child: ClipRect(
-                              child: GameWidget(game: _game!),
+            ),
+
+            // 2. Short right-aligned status bar + progress + Flame Game Canvas
+            Column(
+              children: [
+                _buildShortStatusBar(),
+                Padding(
+                  padding: const EdgeInsets.only(top: 4),
+                  child: _buildProgressLine(),
+                ),
+                Expanded(
+                  child: _game != null
+                      ? KeyboardListener(
+                          focusNode: _focusNode,
+                          autofocus: true,
+                          onKeyEvent: (keyEvent) {
+                            if (keyEvent is KeyDownEvent &&
+                                keyEvent.logicalKey ==
+                                    LogicalKeyboardKey.escape &&
+                                _game?.holdingPiece != null) {
+                              _game?.cancelHoldingPiece();
+                              if (mounted) setState(() {});
+                            }
+                          },
+                          child: Listener(
+                            onPointerDown: _onPointerDown,
+                            onPointerMove: _onPointerMove,
+                            onPointerUp: _onPointerUp,
+                            onPointerCancel: _onPointerCancel,
+                            onPointerSignal: _onPointerSignal,
+                            behavior: HitTestBehavior.translucent,
+                            child: AnimatedOpacity(
+                              opacity: _gameFadeIn ? 1.0 : 0.0,
+                              duration: const Duration(milliseconds: 300),
+                              curve: Curves.easeOutCubic,
+                              child: ClipRect(child: GameWidget(game: _game!)),
                             ),
                           ),
+                        )
+                      : const Center(
+                          child: CircularProgressIndicator(
+                            color: Color(0xFF2E7D32),
+                          ),
                         ),
-                      )
-                    : const Center(
-                        child: CircularProgressIndicator(color: Color(0xFF2E7D32)),
-                      ),
-              ),
-            ],
-          ),
+                ),
+              ],
+            ),
 
             // 3. Full-Screen Original Image Overlay (toggled via eye icon)
             if (_showOriginalImage)
@@ -1145,7 +1299,8 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
                         children: [
                           Container(
                             constraints: BoxConstraints(
-                              maxHeight: MediaQuery.sizeOf(context).height * 0.72,
+                              maxHeight:
+                                  MediaQuery.sizeOf(context).height * 0.72,
                               maxWidth: MediaQuery.sizeOf(context).width * 0.92,
                             ),
                             decoration: BoxDecoration(
@@ -1169,14 +1324,21 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
                           ),
                           const SizedBox(height: 14),
                           Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 16,
+                              vertical: 8,
+                            ),
                             decoration: BoxDecoration(
                               color: Colors.black54,
                               borderRadius: BorderRadius.circular(20),
                             ),
                             child: const Text(
                               '点击任意处返回拼图',
-                              style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w500),
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 13,
+                                fontWeight: FontWeight.w500,
+                              ),
                             ),
                           ),
                         ],
@@ -1204,11 +1366,18 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
                           _game?.resetZoom();
                         },
                         child: Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 6,
+                          ),
                           child: Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              const Icon(PhosphorIconsBold.magnifyingGlassPlus, color: Colors.white, size: 16),
+                              const Icon(
+                                PhosphorIconsBold.magnifyingGlassPlus,
+                                color: Colors.white,
+                                size: 16,
+                              ),
                               const SizedBox(width: 4),
                               Text(
                                 '${(zoom * 100).toInt()}%',
@@ -1243,12 +1412,19 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
                 left: 20,
                 right: 20,
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 20,
+                    vertical: 12,
+                  ),
                   decoration: BoxDecoration(
                     color: const Color(0xFF2E7D32),
                     borderRadius: BorderRadius.circular(24),
                     boxShadow: const [
-                      BoxShadow(color: Colors.black38, blurRadius: 10, offset: Offset(0, 4)),
+                      BoxShadow(
+                        color: Colors.black38,
+                        blurRadius: 10,
+                        offset: Offset(0, 4),
+                      ),
                     ],
                   ),
                   child: Row(
@@ -1266,12 +1442,20 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
                         children: [
                           TextButton(
                             onPressed: _showVictoryDialog,
-                            child: const Text('结算成绩', style: TextStyle(color: Colors.white70)),
+                            child: const Text(
+                              '结算成绩',
+                              style: TextStyle(color: Colors.white70),
+                            ),
                           ),
                           FilledButton(
                             onPressed: () => Navigator.pop(context),
-                            style: FilledButton.styleFrom(backgroundColor: Colors.white),
-                            child: const Text('返回', style: TextStyle(color: Color(0xFF2E7D32))),
+                            style: FilledButton.styleFrom(
+                              backgroundColor: Colors.white,
+                            ),
+                            child: const Text(
+                              '返回',
+                              style: TextStyle(color: Color(0xFF2E7D32)),
+                            ),
                           ),
                         ],
                       ),

@@ -80,11 +80,7 @@ class PieceEdges {
 ///    对每条内部边独立随机分配卡扣形状（Ball, Stub, Sock, Finger）与水平镜像状态（Bend），
 ///    使整个拼图盘面千姿百态、极富手切工艺的自然趣味性。
 class EdgeLayout {
-  EdgeLayout({
-    required this.rows,
-    required this.cols,
-    int? seed,
-  }) {
+  EdgeLayout({required this.rows, required this.cols, int? seed}) {
     _generate(seed ?? 42);
   }
 
@@ -153,23 +149,14 @@ class EdgeLayout {
         ? EdgeCurveDescriptor.flat
         : _h[row - 1][col].complementary();
 
-    final bottom = (row == rows - 1)
-        ? EdgeCurveDescriptor.flat
-        : _h[row][col];
+    final bottom = (row == rows - 1) ? EdgeCurveDescriptor.flat : _h[row][col];
 
     final left = (col == 0)
         ? EdgeCurveDescriptor.flat
         : _v[row][col - 1].complementary();
 
-    final right = (col == cols - 1)
-        ? EdgeCurveDescriptor.flat
-        : _v[row][col];
+    final right = (col == cols - 1) ? EdgeCurveDescriptor.flat : _v[row][col];
 
-    return PieceEdges(
-      top: top,
-      right: right,
-      bottom: bottom,
-      left: left,
-    );
+    return PieceEdges(top: top, right: right, bottom: bottom, left: left);
   }
 }

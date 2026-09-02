@@ -116,5 +116,6 @@ class CanonicalIdInfo {
   final String name;
 
   @override
-  String toString() => 'CanonicalIdInfo(module: $module, context: $context, name: $name)';
+  String toString() =>
+      'CanonicalIdInfo(module: $module, context: $context, name: $name)';
 }

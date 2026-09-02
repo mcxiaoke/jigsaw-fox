@@ -56,26 +56,28 @@ class DailyChallengeItem {
       isCompleted: isCompleted ?? this.isCompleted,
       progressPercent: progressPercent ?? this.progressPercent,
       bestTimeSeconds: bestTimeSeconds ?? this.bestTimeSeconds,
-      savedSnapshotJson: clearSnapshot ? null : (savedSnapshotJson ?? this.savedSnapshotJson),
+      savedSnapshotJson: clearSnapshot
+          ? null
+          : (savedSnapshotJson ?? this.savedSnapshotJson),
       completedPieceCounts: completedPieceCounts ?? this.completedPieceCounts,
     );
   }
 
   Map<String, dynamic> toJson() => {
-        'id': id,
-        'date': date,
-        'dayNumber': dayNumber,
-        'title': title,
-        'author': author,
-        'assetPath': assetPath,
-        'rows': difficulty.rows,
-        'cols': difficulty.cols,
-        'isCompleted': isCompleted || completedPieceCounts.isNotEmpty,
-        'progressPercent': progressPercent,
-        'bestTimeSeconds': bestTimeSeconds,
-        'savedSnapshotJson': savedSnapshotJson,
-        'completedPieceCounts': completedPieceCounts,
-      };
+    'id': id,
+    'date': date,
+    'dayNumber': dayNumber,
+    'title': title,
+    'author': author,
+    'assetPath': assetPath,
+    'rows': difficulty.rows,
+    'cols': difficulty.cols,
+    'isCompleted': isCompleted || completedPieceCounts.isNotEmpty,
+    'progressPercent': progressPercent,
+    'bestTimeSeconds': bestTimeSeconds,
+    'savedSnapshotJson': savedSnapshotJson,
+    'completedPieceCounts': completedPieceCounts,
+  };
 
   factory DailyChallengeItem.fromJson(Map<String, dynamic> json) {
     final rows = json['rows'] as int? ?? 4;
@@ -93,8 +95,8 @@ class DailyChallengeItem {
         ?.map((e) => e as int)
         .toList();
     final isCompletedVal = json['isCompleted'] as bool? ?? false;
-    final completedCounts = rawCompletedCounts ??
-        (isCompletedVal ? [diff.pieceCount] : <int>[]);
+    final completedCounts =
+        rawCompletedCounts ?? (isCompletedVal ? [diff.pieceCount] : <int>[]);
 
     return DailyChallengeItem(
       id: json['id'] as String,

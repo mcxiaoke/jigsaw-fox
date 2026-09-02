@@ -33,7 +33,8 @@ class AppImageKey {
   int get hashCode => Object.hash(filePath, dimension, scale);
 
   @override
-  String toString() => '${describeIdentity(this)}("$filePath", dim: ${dimension.pixels}, scale: $scale)';
+  String toString() =>
+      '${describeIdentity(this)}("$filePath", dim: ${dimension.pixels}, scale: $scale)';
 }
 
 /// 基于工业级三级分级缓存系统实现的 Flutter 原生 [ImageProvider]
@@ -57,11 +58,7 @@ class AppCachedImageProvider extends ImageProvider<AppImageKey> {
   @override
   Future<AppImageKey> obtainKey(ImageConfiguration configuration) {
     return SynchronousFuture<AppImageKey>(
-      AppImageKey(
-        filePath: filePath,
-        dimension: dimension,
-        scale: scale,
-      ),
+      AppImageKey(filePath: filePath, dimension: dimension, scale: scale),
     );
   }
 
@@ -78,7 +75,10 @@ class AppCachedImageProvider extends ImageProvider<AppImageKey> {
     );
   }
 
-  Future<ui.Codec> _loadAsync(AppImageKey key, ImageDecoderCallback decode) async {
+  Future<ui.Codec> _loadAsync(
+    AppImageKey key,
+    ImageDecoderCallback decode,
+  ) async {
     try {
       // 1. 通过分级缓存系统获取缩略图字节 (L1 内存 -> L2 磁盘 -> L3 调度生成)
       Uint8List? bytes = await ImageCacheManager.instance.getThumbnailBytes(
@@ -107,17 +107,28 @@ class AppCachedImageProvider extends ImageProvider<AppImageKey> {
           }
           final targetDim = key.dimension.pixels;
           if (intrinsicWidth > targetDim || intrinsicHeight > targetDim) {
-            final double ratio = targetDim / (intrinsicWidth > intrinsicHeight ? intrinsicWidth : intrinsicHeight);
+            final double ratio =
+                targetDim /
+                (intrinsicWidth > intrinsicHeight
+                    ? intrinsicWidth
+                    : intrinsicHeight);
             return ui.TargetImageSize(
               width: (intrinsicWidth * ratio).round(),
               height: (intrinsicHeight * ratio).round(),
             );
           }
-          return ui.TargetImageSize(width: intrinsicWidth, height: intrinsicHeight);
+          return ui.TargetImageSize(
+            width: intrinsicWidth,
+            height: intrinsicHeight,
+          );
         },
       );
     } catch (e, st) {
-      AppLogger.imageCache.severe('Failed to load image ${AppLogger.sanitizePath(key.filePath)}', e, st);
+      AppLogger.imageCache.severe(
+        'Failed to load image ${AppLogger.sanitizePath(key.filePath)}',
+        e,
+        st,
+      );
       rethrow;
     }
   }
@@ -135,5 +146,6 @@ class AppCachedImageProvider extends ImageProvider<AppImageKey> {
   int get hashCode => Object.hash(filePath, dimension, scale);
 
   @override
-  String toString() => '${describeIdentity(this)}("$filePath", dim: ${dimension.pixels})';
+  String toString() =>
+      '${describeIdentity(this)}("$filePath", dim: ${dimension.pixels})';
 }

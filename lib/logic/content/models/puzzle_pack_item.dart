@@ -92,10 +92,13 @@ class PuzzlePackItem {
       coverPath: json['coverPath'] as String? ?? '',
       levelCount: json['levelCount'] as int? ?? 0,
       fileSizeBytes: json['fileSizeBytes'] as int? ?? 0,
-      importedAt: json['importedAt'] as String? ?? DateTime.now().toIso8601String(),
+      importedAt:
+          json['importedAt'] as String? ?? DateTime.now().toIso8601String(),
       sourceType: json['sourceType'] as String? ?? 'local_file',
       sourceOrigin: json['sourceOrigin'] as String? ?? '',
-      tags: (json['tags'] as List<dynamic>?)?.map((e) => e.toString()).toList() ?? const [],
+      tags:
+          (json['tags'] as List<dynamic>?)?.map((e) => e.toString()).toList() ??
+          const [],
     );
   }
 

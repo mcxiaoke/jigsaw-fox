@@ -26,8 +26,14 @@ final Uint8List kTestTransparentImage = base64Decode(
 
 Future<ui.Image> createTestImage(int width, int height) async {
   final recorder = ui.PictureRecorder();
-  final canvas = ui.Canvas(recorder, Rect.fromLTWH(0, 0, width.toDouble(), height.toDouble()));
-  canvas.drawRect(Rect.fromLTWH(0, 0, width.toDouble(), height.toDouble()), Paint()..color = const Color(0xFF4CAF50));
+  final canvas = ui.Canvas(
+    recorder,
+    Rect.fromLTWH(0, 0, width.toDouble(), height.toDouble()),
+  );
+  canvas.drawRect(
+    Rect.fromLTWH(0, 0, width.toDouble(), height.toDouble()),
+    Paint()..color = const Color(0xFF4CAF50),
+  );
   final picture = recorder.endRecording();
   return picture.toImage(width, height);
 }
@@ -41,36 +47,39 @@ void main() {
   });
 
   group('New UI/UX Features & Mechanics Tests', () {
-    test('BoardGhostComponent opacity cycling and transform synchrony', () async {
-      final img = await createTestImage(400, 300);
-      final game = JigsawPuzzleGame(
-        image: img,
-        rows: 3,
-        cols: 3,
-        onSolved: () {},
-      );
+    test(
+      'BoardGhostComponent opacity cycling and transform synchrony',
+      () async {
+        final img = await createTestImage(400, 300);
+        final game = JigsawPuzzleGame(
+          image: img,
+          rows: 3,
+          cols: 3,
+          onSolved: () {},
+        );
 
-      game.onGameResize(Vector2(400, 800));
-      await game.onLoad();
+        game.onGameResize(Vector2(400, 800));
+        await game.onLoad();
 
-      expect(game.boardGhostOpacity, 0.0);
+        expect(game.boardGhostOpacity, 0.0);
 
-      // Cycle 1: 0.0 -> 0.20
-      game.toggleGhostOpacity();
-      expect(game.boardGhostOpacity, 0.20);
+        // Cycle 1: 0.0 -> 0.20
+        game.toggleGhostOpacity();
+        expect(game.boardGhostOpacity, 0.20);
 
-      // Cycle 2: 0.20 -> 0.45
-      game.toggleGhostOpacity();
-      expect(game.boardGhostOpacity, 0.45);
+        // Cycle 2: 0.20 -> 0.45
+        game.toggleGhostOpacity();
+        expect(game.boardGhostOpacity, 0.45);
 
-      // Cycle 3: 0.45 -> 0.0
-      game.toggleGhostOpacity();
-      expect(game.boardGhostOpacity, 0.0);
+        // Cycle 3: 0.45 -> 0.0
+        game.toggleGhostOpacity();
+        expect(game.boardGhostOpacity, 0.0);
 
-      // Direct set
-      game.setGhostOpacity(0.35);
-      expect(game.boardGhostOpacity, 0.35);
-    });
+        // Direct set
+        game.setGhostOpacity(0.35);
+        expect(game.boardGhostOpacity, 0.35);
+      },
+    );
 
     test('Undo / Redo state tracking and level reset', () async {
       final img = await createTestImage(400, 300);
@@ -106,54 +115,47 @@ void main() {
     });
 
     testWidgets('HowToPlayPage renders instructions properly', (tester) async {
-      await tester.pumpWidget(
-        const MaterialApp(
-          home: HowToPlayPage(),
-        ),
-      );
+      await tester.pumpWidget(const MaterialApp(home: HowToPlayPage()));
 
       expect(find.text('玩法与操作技巧'), findsOneWidget);
       expect(find.text('轻松上手异形拼图'), findsOneWidget);
       expect(find.text('拖拽与磁吸'), findsOneWidget);
       expect(find.text('双指缩放与平移'), findsOneWidget);
       expect(find.text('底图透视参考 (Ghost)'), findsOneWidget);
-      
+
       await tester.scrollUntilVisible(find.text('一键整理托盘'), 100);
       expect(find.text('一键整理托盘'), findsOneWidget);
     });
 
-    testWidgets('AchievementsPage renders statistics with total stars and data-driven badges', (tester) async {
-      tester.view.physicalSize = const Size(1000, 2000);
-      addTearDown(tester.view.resetPhysicalSize);
+    testWidgets(
+      'AchievementsPage renders statistics with total stars and data-driven badges',
+      (tester) async {
+        tester.view.physicalSize = const Size(1000, 2000);
+        addTearDown(tester.view.resetPhysicalSize);
 
-      await tester.pumpWidget(
-        const MaterialApp(
-          home: AchievementsPage(),
-        ),
-      );
-      await tester.pumpAndSettle();
+        await tester.pumpWidget(const MaterialApp(home: AchievementsPage()));
+        await tester.pumpAndSettle();
 
-      expect(find.text('成就与统计'), findsOneWidget);
-      expect(find.text('数据统计看板'), findsOneWidget);
-      expect(find.text('关卡累积星星'), findsOneWidget);
-      expect(find.text('已通关图数'), findsOneWidget);
-      expect(find.text('已拼碎片'), findsOneWidget);
-      expect(find.text('总游玩时长'), findsOneWidget);
-      expect(find.text('成就勋章墙'), findsOneWidget);
-      expect(find.text('初露锋芒'), findsOneWidget);
-      expect(find.text('熟能生巧'), findsOneWidget);
-      expect(find.text('拼图达人'), findsOneWidget);
-    });
+        expect(find.text('成就与统计'), findsOneWidget);
+        expect(find.text('数据统计看板'), findsOneWidget);
+        expect(find.text('关卡累积星星'), findsOneWidget);
+        expect(find.text('已通关图数'), findsOneWidget);
+        expect(find.text('已拼碎片'), findsOneWidget);
+        expect(find.text('总游玩时长'), findsOneWidget);
+        expect(find.text('成就勋章墙'), findsOneWidget);
+        expect(find.text('初露锋芒'), findsOneWidget);
+        expect(find.text('熟能生巧'), findsOneWidget);
+        expect(find.text('拼图达人'), findsOneWidget);
+      },
+    );
 
-    testWidgets('SettingsPage renders switches, options, and HowToPlay entry', (tester) async {
+    testWidgets('SettingsPage renders switches, options, and HowToPlay entry', (
+      tester,
+    ) async {
       tester.view.physicalSize = const Size(1000, 1600);
       addTearDown(tester.view.resetPhysicalSize);
 
-      await tester.pumpWidget(
-        const MaterialApp(
-          home: SettingsPage(),
-        ),
-      );
+      await tester.pumpWidget(const MaterialApp(home: SettingsPage()));
 
       expect(find.text('游戏设置'), findsOneWidget);
       expect(find.text('音效与交互'), findsOneWidget);
@@ -161,50 +163,49 @@ void main() {
       expect(find.text('触感震动反馈'), findsOneWidget);
       expect(find.text('选关切图网格预览'), findsOneWidget);
       expect(find.text('碎片初始排布模式'), findsOneWidget);
-      
+
       await tester.scrollUntilVisible(find.text('玩法技巧与操作指引'), 200);
       expect(find.text('玩法与帮助'), findsOneWidget);
       expect(find.text('玩法技巧与操作指引'), findsOneWidget);
-      
+
       await tester.scrollUntilVisible(find.text('重置所有游戏数据'), 200);
       expect(find.text('重置所有游戏数据'), findsOneWidget);
     });
 
-    testWidgets('MainScreen renders streamlined AppBar with Achievements and Settings actions only', (tester) async {
-      await tester.pumpWidget(
-        const MaterialApp(
-          home: MainScreen(),
-        ),
-      );
+    testWidgets(
+      'MainScreen renders streamlined AppBar with Achievements and Settings actions only',
+      (tester) async {
+        await tester.pumpWidget(const MaterialApp(home: MainScreen()));
 
-      expect(find.text('主页'), findsWidgets);
-      expect(find.text('每日'), findsOneWidget);
-      expect(find.text('活动'), findsOneWidget);
-      expect(find.text('自制'), findsOneWidget);
-      // Verify help icon is no longer directly in AppBar
-      expect(find.byTooltip('玩法指引'), findsNothing);
-      // Verify achievements & 更多选项 (PopupMenuButton) exist in AppBar
-      expect(find.byTooltip('成就与统计'), findsOneWidget);
-      expect(find.byTooltip('更多选项'), findsOneWidget);
+        expect(find.text('主页'), findsWidgets);
+        expect(find.text('每日'), findsOneWidget);
+        expect(find.text('活动'), findsOneWidget);
+        expect(find.text('自制'), findsOneWidget);
+        // Verify help icon is no longer directly in AppBar
+        expect(find.byTooltip('玩法指引'), findsNothing);
+        // Verify achievements & 更多选项 (PopupMenuButton) exist in AppBar
+        expect(find.byTooltip('成就与统计'), findsOneWidget);
+        expect(find.byTooltip('更多选项'), findsOneWidget);
 
-      // Open popup menu
-      await tester.tap(find.byTooltip('更多选项'));
-      await tester.pump(const Duration(milliseconds: 300));
-      expect(find.text('导入关卡包'), findsOneWidget);
-      expect(find.text('游戏设置'), findsOneWidget);
-      expect(find.text('玩法手册'), findsOneWidget);
+        // Open popup menu
+        await tester.tap(find.byTooltip('更多选项'));
+        await tester.pump(const Duration(milliseconds: 300));
+        expect(find.text('导入关卡包'), findsOneWidget);
+        expect(find.text('游戏设置'), findsOneWidget);
+        expect(find.text('玩法手册'), findsOneWidget);
 
-      // Close popup menu to avoid blocking following tests
-      await tester.tapAt(const Offset(10, 10));
-      await tester.pump(const Duration(milliseconds: 300));
-    });
+        // Close popup menu to avoid blocking following tests
+        await tester.tapAt(const Offset(10, 10));
+        await tester.pump(const Duration(milliseconds: 300));
+      },
+    );
 
-    testWidgets('HomeTabView renders category filters and reacts to taps', (tester) async {
+    testWidgets('HomeTabView renders category filters and reacts to taps', (
+      tester,
+    ) async {
       await tester.pumpWidget(
         MaterialApp(
-          home: Scaffold(
-            body: HomeTabView(onSwitchToDaily: () {}),
-          ),
+          home: Scaffold(body: HomeTabView(onSwitchToDaily: () {})),
         ),
       );
 
@@ -222,11 +223,7 @@ void main() {
 
     testWidgets('DailyTabView renders streak stats and header', (tester) async {
       await tester.pumpWidget(
-        const MaterialApp(
-          home: Scaffold(
-            body: DailyTabView(),
-          ),
-        ),
+        const MaterialApp(home: Scaffold(body: DailyTabView())),
       );
 
       expect(find.text('TODAY'), findsOneWidget);
@@ -242,43 +239,52 @@ void main() {
       expect(find.textContaining('2026年7月'), findsOneWidget);
     });
 
-    testWidgets('ChooseDifficultySheet renders locked state and disables start button', (tester) async {
-      await tester.pumpWidget(
-        MaterialApp(
-          home: Scaffold(
-            body: Builder(
-              builder: (context) => ElevatedButton(
-                onPressed: () {
-                  ChooseDifficultySheet.show(
-                    context: context,
-                    imageBytes: kTestTransparentImage,
-                    initialDifficulty: const PuzzleDifficulty(label: '3 × 3 (9 块)', rows: 3, cols: 3),
-                    title: '第 5 关 · 关卡预览(未解锁)',
-                    isUnlocked: false,
-                    lockedMessage: '请先通关第 4 关解锁此关卡',
-                    onStart: (_) {},
-                  );
-                },
-                child: const Text('Open Locked Sheet'),
+    testWidgets(
+      'ChooseDifficultySheet renders locked state and disables start button',
+      (tester) async {
+        await tester.pumpWidget(
+          MaterialApp(
+            home: Scaffold(
+              body: Builder(
+                builder: (context) => ElevatedButton(
+                  onPressed: () {
+                    ChooseDifficultySheet.show(
+                      context: context,
+                      imageBytes: kTestTransparentImage,
+                      initialDifficulty: const PuzzleDifficulty(
+                        label: '3 × 3 (9 块)',
+                        rows: 3,
+                        cols: 3,
+                      ),
+                      title: '第 5 关 · 关卡预览(未解锁)',
+                      isUnlocked: false,
+                      lockedMessage: '请先通关第 4 关解锁此关卡',
+                      onStart: (_) {},
+                    );
+                  },
+                  child: const Text('Open Locked Sheet'),
+                ),
               ),
             ),
           ),
-        ),
-      );
+        );
 
-      await tester.tap(find.text('Open Locked Sheet'));
-      await tester.pumpAndSettle();
+        await tester.tap(find.text('Open Locked Sheet'));
+        await tester.pumpAndSettle();
 
-      expect(find.text('第 5 关 · 关卡预览(未解锁)'), findsOneWidget);
-      expect(find.text('请先通关第 4 关解锁此关卡'), findsOneWidget);
-      expect(find.text('关卡未解锁'), findsOneWidget);
+        expect(find.text('第 5 关 · 关卡预览(未解锁)'), findsOneWidget);
+        expect(find.text('请先通关第 4 关解锁此关卡'), findsOneWidget);
+        expect(find.text('关卡未解锁'), findsOneWidget);
 
-      // Button should be disabled
-      final button = tester.widget<FilledButton>(find.byType(FilledButton));
-      expect(button.onPressed, isNull);
-    });
+        // Button should be disabled
+        final button = tester.widget<FilledButton>(find.byType(FilledButton));
+        expect(button.onPressed, isNull);
+      },
+    );
 
-    testWidgets('ChooseDifficultySheet supports custom puzzle deletion', (tester) async {
+    testWidgets('ChooseDifficultySheet supports custom puzzle deletion', (
+      tester,
+    ) async {
       var deleteCalled = false;
 
       await tester.pumpWidget(
@@ -290,7 +296,11 @@ void main() {
                   ChooseDifficultySheet.show(
                     context: context,
                     imageBytes: kTestTransparentImage,
-                    initialDifficulty: const PuzzleDifficulty(label: '6 × 6 (36 块)', rows: 6, cols: 6),
+                    initialDifficulty: const PuzzleDifficulty(
+                      label: '6 × 6 (36 块)',
+                      rows: 6,
+                      cols: 6,
+                    ),
                     title: '我的爱犬照片',
                     onDelete: () async {
                       deleteCalled = true;
@@ -325,13 +335,11 @@ void main() {
       expect(deleteCalled, isTrue);
     });
 
-    testWidgets('MyPuzzlesTabView renders UGC header and empty state', (tester) async {
+    testWidgets('MyPuzzlesTabView renders UGC header and empty state', (
+      tester,
+    ) async {
       await tester.pumpWidget(
-        const MaterialApp(
-          home: Scaffold(
-            body: MyPuzzlesTabView(),
-          ),
-        ),
+        const MaterialApp(home: Scaffold(body: MyPuzzlesTabView())),
       );
 
       expect(find.text('相册选图'), findsOneWidget);
@@ -341,67 +349,80 @@ void main() {
       expect(find.text('自制关卡'), findsOneWidget);
     });
 
-    testWidgets('ChooseDifficultySheet renders saved progress banner & continue button', (tester) async {
-      var resetCalled = false;
-      await tester.pumpWidget(
-        MaterialApp(
-          home: Scaffold(
-            body: Builder(
-              builder: (context) => ElevatedButton(
-                onPressed: () {
-                  ChooseDifficultySheet.show(
-                    context: context,
-                    imageBytes: kTestTransparentImage,
-                    initialDifficulty: const PuzzleDifficulty(label: '6 × 6 (36 块)', rows: 6, cols: 6),
-                    title: '第 5 关 · 难度选择',
-                    savedProgressPercent: 85,
-                    onResetProgress: () {
-                      resetCalled = true;
-                    },
-                    onStart: (_) {},
-                  );
-                },
-                child: const Text('Open Sheet'),
+    testWidgets(
+      'ChooseDifficultySheet renders saved progress banner & continue button',
+      (tester) async {
+        var resetCalled = false;
+        await tester.pumpWidget(
+          MaterialApp(
+            home: Scaffold(
+              body: Builder(
+                builder: (context) => ElevatedButton(
+                  onPressed: () {
+                    ChooseDifficultySheet.show(
+                      context: context,
+                      imageBytes: kTestTransparentImage,
+                      initialDifficulty: const PuzzleDifficulty(
+                        label: '6 × 6 (36 块)',
+                        rows: 6,
+                        cols: 6,
+                      ),
+                      title: '第 5 关 · 难度选择',
+                      savedProgressPercent: 85,
+                      onResetProgress: () {
+                        resetCalled = true;
+                      },
+                      onStart: (_) {},
+                    );
+                  },
+                  child: const Text('Open Sheet'),
+                ),
               ),
             ),
           ),
-        ),
-      );
+        );
 
-      await tester.tap(find.text('Open Sheet'));
-      await tester.pumpAndSettle();
+        await tester.tap(find.text('Open Sheet'));
+        await tester.pumpAndSettle();
 
-      // Check saved progress indicator banner
-      expect(find.text('⚡ 检测到未完成存档 (已拼 85%)'), findsOneWidget);
-      expect(find.text('继续游玩 (进度 85%)'), findsOneWidget);
-      expect(find.text('放弃进度并重新开始'), findsOneWidget);
+        // Check saved progress indicator banner
+        expect(find.text('⚡ 检测到未完成存档 (已拼 85%)'), findsOneWidget);
+        expect(find.text('继续游玩 (进度 85%)'), findsOneWidget);
+        expect(find.text('放弃进度并重新开始'), findsOneWidget);
 
-      // Tap reset button
-      await tester.tap(find.text('放弃进度并重新开始'));
-      await tester.pumpAndSettle();
-      expect(resetCalled, isTrue);
-    });
+        // Tap reset button
+        await tester.tap(find.text('放弃进度并重新开始'));
+        await tester.pumpAndSettle();
+        expect(resetCalled, isTrue);
+      },
+    );
 
-    testWidgets('DownloadedDrawerSheet renders Material Box title and empty state', (tester) async {
-      await tester.pumpWidget(
-        MaterialApp(
-          home: Scaffold(
-            body: Builder(
-              builder: (context) => ElevatedButton(
-                onPressed: () => DownloadedDrawerSheet.show(context),
-                child: const Text('Open Material Box'),
+    testWidgets(
+      'DownloadedDrawerSheet renders Material Box title and empty state',
+      (tester) async {
+        await tester.pumpWidget(
+          MaterialApp(
+            home: Scaffold(
+              body: Builder(
+                builder: (context) => ElevatedButton(
+                  onPressed: () => DownloadedDrawerSheet.show(context),
+                  child: const Text('Open Material Box'),
+                ),
               ),
             ),
           ),
-        ),
-      );
+        );
 
-      await tester.tap(find.text('Open Material Box'));
-      await tester.pumpAndSettle();
+        await tester.tap(find.text('Open Material Box'));
+        await tester.pumpAndSettle();
 
-      expect(find.text('素材库'), findsOneWidget);
-      expect(find.text('素材库暂无图片'), findsOneWidget);
-      expect(find.text('点击「相册选图」批量导入本地照片，或在「在线搜图」中一键下载，即可将图片加入素材库随时制作拼图。'), findsOneWidget);
-    });
+        expect(find.text('素材库'), findsOneWidget);
+        expect(find.text('素材库暂无图片'), findsOneWidget);
+        expect(
+          find.text('点击「相册选图」批量导入本地照片，或在「在线搜图」中一键下载，即可将图片加入素材库随时制作拼图。'),
+          findsOneWidget,
+        );
+      },
+    );
   });
 }

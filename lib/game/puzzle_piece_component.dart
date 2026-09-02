@@ -35,11 +35,7 @@ class PuzzlePieceComponent extends PositionComponent
     required this.srcRect,
     required Vector2 initialPosition,
     required Vector2 baseSize,
-  }) : super(
-          position: initialPosition,
-          size: baseSize,
-          anchor: Anchor.topLeft,
-        );
+  }) : super(position: initialPosition, size: baseSize, anchor: Anchor.topLeft);
 
   /// 碎片唯一编号 ID
   final int id;
@@ -212,12 +208,7 @@ class PuzzlePieceComponent extends PositionComponent
     // 3. 第三层：正面图案纹理层与亚麻漫反射层（使用精确二次贝塞尔曲线 Path 剪裁画布）
     canvas.save();
     canvas.clipPath(shape.path);
-    canvas.drawImageRect(
-      image,
-      srcRect,
-      shape.fillRect,
-      _imagePaint,
-    );
+    canvas.drawImageRect(image, srcRect, shape.fillRect, _imagePaint);
     // 方案 4：亚麻布纹压花 / 纸质漫反射微纹理（消除数码塑料反光）
     final linenPaint = LinenTextureManager.paint;
     if (LinenTextureManager.enabled && linenPaint != null) {
@@ -271,7 +262,8 @@ class PuzzlePieceComponent extends PositionComponent
 
     // 若已有正在拖拽的碎片，同集群保持跟随，不打断不重入
     if (game.holdingPiece != null) {
-      if (game.holdingPiece == this || game.holdingPiece!.clusterId == clusterId) {
+      if (game.holdingPiece == this ||
+          game.holdingPiece!.clusterId == clusterId) {
         return;
       }
       game.dropHoldingPiece();
@@ -411,10 +403,7 @@ class PuzzlePieceComponent extends PositionComponent
     add(
       MoveToEffect(
         targetPos,
-        EffectController(
-          duration: duration,
-          curve: Curves.easeOutQuad,
-        ),
+        EffectController(duration: duration, curve: Curves.easeOutQuad),
       ),
     );
   }
@@ -429,10 +418,7 @@ class PuzzlePieceComponent extends PositionComponent
     add(
       ScaleEffect.to(
         targetScale,
-        EffectController(
-          duration: duration,
-          curve: Curves.easeOutQuad,
-        ),
+        EffectController(duration: duration, curve: Curves.easeOutQuad),
       ),
     );
   }
@@ -442,8 +428,8 @@ class PuzzlePieceComponent extends PositionComponent
     isHighlight = true;
     Future.delayed(const Duration(milliseconds: 380), () {
       if (isRemoved) return;
-      isHighlight = game.isBorderFilterActive &&
-          game.edgeLayout.edgesFor(r, c).isBorder;
+      isHighlight =
+          game.isBorderFilterActive && game.edgeLayout.edgesFor(r, c).isBorder;
     });
   }
 }

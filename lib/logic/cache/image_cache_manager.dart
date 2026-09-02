@@ -39,7 +39,8 @@ class ImageCacheManager {
   static final ImageCacheManager instance = ImageCacheManager._();
 
   /// 默认缩略图档位
-  static const ThumbnailDimension kDefaultThumbnailDimension = ThumbnailDimension.card;
+  static const ThumbnailDimension kDefaultThumbnailDimension =
+      ThumbnailDimension.card;
 
   /// L1 纯内存 LRU 缓存 (150 张 / 30MB)
   final MemoryCache _memoryCache = MemoryCache();
@@ -87,7 +88,9 @@ class ImageCacheManager {
       await _rebuildDiskKeyIndexAsync();
 
       _isInitialized = true;
-      AppLogger.imageCache.info('Initialized indexed=${_diskKeyIndex.length} concurrency=${_taskQueue.maxConcurrency} dir=${_cacheDir?.path}');
+      AppLogger.imageCache.info(
+        'Initialized indexed=${_diskKeyIndex.length} concurrency=${_taskQueue.maxConcurrency} dir=${_cacheDir?.path}',
+      );
     } catch (e, st) {
       AppLogger.imageCache.severe('Failed to initialize', e, st);
     }
@@ -136,7 +139,10 @@ class ImageCacheManager {
   }
 
   /// 计算确定性的缓存文件名 (例如 thumb_4a7b3c2e1f890123_360.jpg)
-  String getCacheKey(String sourcePath, {ThumbnailDimension dimension = kDefaultThumbnailDimension}) {
+  String getCacheKey(
+    String sourcePath, {
+    ThumbnailDimension dimension = kDefaultThumbnailDimension,
+  }) {
     final cleanPath = sourcePath.replaceAll(r'\', '/');
     final dim = dimension.pixels;
 
@@ -158,20 +164,29 @@ class ImageCacheManager {
   }
 
   /// 获取缩略图在磁盘上的目标路径
-  String getThumbnailFilePath(String sourcePath, {ThumbnailDimension dimension = kDefaultThumbnailDimension}) {
+  String getThumbnailFilePath(
+    String sourcePath, {
+    ThumbnailDimension dimension = kDefaultThumbnailDimension,
+  }) {
     final cacheKey = getCacheKey(sourcePath, dimension: dimension);
     final baseDir = _cacheDir?.path ?? '';
     return '$baseDir/$cacheKey';
   }
 
   /// 纯内存快速检查缩略图是否已存在于磁盘 (耗时 0 纳秒，杜绝主线程 existsSync)
-  bool isThumbnailCached(String sourcePath, {ThumbnailDimension dimension = kDefaultThumbnailDimension}) {
+  bool isThumbnailCached(
+    String sourcePath, {
+    ThumbnailDimension dimension = kDefaultThumbnailDimension,
+  }) {
     final cacheKey = getCacheKey(sourcePath, dimension: dimension);
     return _diskKeyIndex.contains(cacheKey);
   }
 
   /// 从 L1 内存中秒级获取缩略图字节 (若命中耗时 < 0.001ms，未命中返回 null)
-  Uint8List? getCachedThumbnailBytesFromMemory(String sourcePath, {ThumbnailDimension dimension = kDefaultThumbnailDimension}) {
+  Uint8List? getCachedThumbnailBytesFromMemory(
+    String sourcePath, {
+    ThumbnailDimension dimension = kDefaultThumbnailDimension,
+  }) {
     final cacheKey = getCacheKey(sourcePath, dimension: dimension);
     return _memoryCache.get(cacheKey);
   }
@@ -214,7 +229,10 @@ class ImageCacheManager {
         final doubleCheckMem = _memoryCache.get(cacheKey);
         if (doubleCheckMem != null) return doubleCheckMem;
 
-        final targetPath = getThumbnailFilePath(sourcePath, dimension: dimension);
+        final targetPath = getThumbnailFilePath(
+          sourcePath,
+          dimension: dimension,
+        );
 
         // 在独立后台 Isolate 生成缩略图字节
         final generatedBytes = await ThumbnailGenerator.generateThumbnailBytes(
@@ -234,7 +252,11 @@ class ImageCacheManager {
             await targetFile.writeAsBytes(generatedBytes, flush: true);
             _diskKeyIndex.add(cacheKey);
           } catch (e, st) {
-            AppLogger.imageCache.warning('Failed to write thumbnail file key=$cacheKey', e, st);
+            AppLogger.imageCache.warning(
+              'Failed to write thumbnail file key=$cacheKey',
+              e,
+              st,
+            );
           }
 
           // 写入 L1 内存缓存
@@ -377,7 +399,8 @@ class ImageCacheManager {
             options: Options(
               responseType: ResponseType.bytes,
               headers: {
-                'Accept': 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8',
+                'Accept':
+                    'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8',
                 'User-Agent':
                     'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
               },
@@ -389,14 +412,16 @@ class ImageCacheManager {
           }
         } on DioException catch (dioErr) {
           // 403/401 时尝试带 Referer 重试一次
-          if (dioErr.response?.statusCode == 403 || dioErr.response?.statusCode == 401) {
+          if (dioErr.response?.statusCode == 403 ||
+              dioErr.response?.statusCode == 401) {
             try {
               final retryResponse = await _dio.get<List<int>>(
                 url,
                 options: Options(
                   responseType: ResponseType.bytes,
                   headers: {
-                    'Accept': 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8',
+                    'Accept':
+                        'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8',
                     'User-Agent':
                         'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
                   },
@@ -407,24 +432,35 @@ class ImageCacheManager {
                 rawBytes = Uint8List.fromList(data);
               }
             } catch (e, st) {
-              AppLogger.imageCache.warning('Network thumbnail retry failed url=${AppLogger.sanitizeUrl(url)}', e, st);
+              AppLogger.imageCache.warning(
+                'Network thumbnail retry failed url=${AppLogger.sanitizeUrl(url)}',
+                e,
+                st,
+              );
             }
           } else {
             AppLogger.imageCache.warning(
-                'Network thumbnail download failed url=${AppLogger.sanitizeUrl(url)} status=${dioErr.response?.statusCode}', dioErr);
+              'Network thumbnail download failed url=${AppLogger.sanitizeUrl(url)} status=${dioErr.response?.statusCode}',
+              dioErr,
+            );
           }
         } catch (e, st) {
-          AppLogger.imageCache.warning('Network thumbnail download error url=${AppLogger.sanitizeUrl(url)}', e, st);
+          AppLogger.imageCache.warning(
+            'Network thumbnail download error url=${AppLogger.sanitizeUrl(url)}',
+            e,
+            st,
+          );
         }
 
         if (rawBytes == null || rawBytes.isEmpty) return null;
 
         // 后台 Isolate 下采样生成缩略图 JPEG
-        final generatedBytes = await ThumbnailGenerator.generateThumbnailFromBytes(
-          rawBytes: rawBytes,
-          targetDimension: dimension.pixels,
-          quality: quality,
-        );
+        final generatedBytes =
+            await ThumbnailGenerator.generateThumbnailFromBytes(
+              rawBytes: rawBytes,
+              targetDimension: dimension.pixels,
+              quality: quality,
+            );
 
         if (generatedBytes != null && generatedBytes.isNotEmpty) {
           try {
@@ -437,7 +473,11 @@ class ImageCacheManager {
             await targetFile.writeAsBytes(generatedBytes, flush: true);
             _diskKeyIndex.add(cacheKey);
           } catch (e, st) {
-            AppLogger.imageCache.warning('Failed to write network thumbnail key=$cacheKey', e, st);
+            AppLogger.imageCache.warning(
+              'Failed to write network thumbnail key=$cacheKey',
+              e,
+              st,
+            );
           }
           _memoryCache.put(cacheKey, generatedBytes);
           return generatedBytes;

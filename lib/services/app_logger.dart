@@ -68,8 +68,7 @@ class AppLogger {
     hierarchicalLoggingEnabled = true;
 
     // 级别：debug 全量，release 仅 INFO+
-    Logger.root.level = level ??
-        (kDebugMode ? Level.ALL : Level.INFO);
+    Logger.root.level = level ?? (kDebugMode ? Level.ALL : Level.INFO);
 
     // 监听所有 Logger
     Logger.root.onRecord.listen(_handleRecord);
@@ -83,7 +82,8 @@ class AppLogger {
     _initCompleter!.complete();
     // 自检日志
     system.info(
-        'AppLogger initialized level=${Logger.root.level.name} fileEnabled=$_fileEnabled kDebugMode=$kDebugMode');
+      'AppLogger initialized level=${Logger.root.level.name} fileEnabled=$_fileEnabled kDebugMode=$kDebugMode',
+    );
   }
 
   /// 动态调整全局级别（可接设置页开关）
@@ -97,31 +97,62 @@ class AppLogger {
       logger.isLoggable(level);
 
   // ---- 快捷静态方法（可选） ----
-  static void trace(Logger logger, String msg,
-          [Object? err, StackTrace? st, Map<String, Object?>? data]) =>
-      _log(logger, Level.FINEST, msg, err, st, data);
-  static void debug(Logger logger, String msg,
-          [Object? err, StackTrace? st, Map<String, Object?>? data]) =>
-      _log(logger, Level.FINE, msg, err, st, data);
-  static void info(Logger logger, String msg,
-          [Object? err, StackTrace? st, Map<String, Object?>? data]) =>
-      _log(logger, Level.INFO, msg, err, st, data);
-  static void warn(Logger logger, String msg,
-          [Object? err, StackTrace? st, Map<String, Object?>? data]) =>
-      _log(logger, Level.WARNING, msg, err, st, data);
-  static void error(Logger logger, String msg,
-          [Object? err, StackTrace? st, Map<String, Object?>? data]) =>
-      _log(logger, Level.SEVERE, msg, err, st, data);
-  static void fatal(Logger logger, String msg,
-          [Object? err, StackTrace? st, Map<String, Object?>? data]) =>
-      _log(logger, Level.SHOUT, msg, err, st, data);
+  static void trace(
+    Logger logger,
+    String msg, [
+    Object? err,
+    StackTrace? st,
+    Map<String, Object?>? data,
+  ]) => _log(logger, Level.FINEST, msg, err, st, data);
+  static void debug(
+    Logger logger,
+    String msg, [
+    Object? err,
+    StackTrace? st,
+    Map<String, Object?>? data,
+  ]) => _log(logger, Level.FINE, msg, err, st, data);
+  static void info(
+    Logger logger,
+    String msg, [
+    Object? err,
+    StackTrace? st,
+    Map<String, Object?>? data,
+  ]) => _log(logger, Level.INFO, msg, err, st, data);
+  static void warn(
+    Logger logger,
+    String msg, [
+    Object? err,
+    StackTrace? st,
+    Map<String, Object?>? data,
+  ]) => _log(logger, Level.WARNING, msg, err, st, data);
+  static void error(
+    Logger logger,
+    String msg, [
+    Object? err,
+    StackTrace? st,
+    Map<String, Object?>? data,
+  ]) => _log(logger, Level.SEVERE, msg, err, st, data);
+  static void fatal(
+    Logger logger,
+    String msg, [
+    Object? err,
+    StackTrace? st,
+    Map<String, Object?>? data,
+  ]) => _log(logger, Level.SHOUT, msg, err, st, data);
 
-  static void _log(Logger logger, Level level, String msg,
-      [Object? err, StackTrace? st, Map<String, Object?>? data]) {
+  static void _log(
+    Logger logger,
+    Level level,
+    String msg, [
+    Object? err,
+    StackTrace? st,
+    Map<String, Object?>? data,
+  ]) {
     if (!logger.isLoggable(level)) return;
     var fullMsg = msg;
     if (data != null && data.isNotEmpty) {
-      fullMsg = '$msg | ${data.entries.map((e) => '${e.key}=${e.value}').join(' ')}';
+      fullMsg =
+          '$msg | ${data.entries.map((e) => '${e.key}=${e.value}').join(' ')}';
     }
     logger.log(level, fullMsg, err, st);
   }
@@ -133,8 +164,7 @@ class AppLogger {
     final loggerName = rec.loggerName;
     final msg = rec.message;
     final errStr = rec.error != null ? ' | error=${rec.error}' : '';
-    final stackStr =
-        rec.stackTrace != null ? '\n${rec.stackTrace}' : '';
+    final stackStr = rec.stackTrace != null ? '\n${rec.stackTrace}' : '';
 
     final line = '$timeStr [$levelStr] [$loggerName] $msg$errStr$stackStr';
 
@@ -172,8 +202,12 @@ class AppLogger {
         debugPrint(line);
       } else {
         for (var i = 0; i < line.length; i += chunk) {
-          debugPrint(line.substring(
-              i, i + chunk > line.length ? line.length : i + chunk));
+          debugPrint(
+            line.substring(
+              i,
+              i + chunk > line.length ? line.length : i + chunk,
+            ),
+          );
         }
       }
     }
@@ -267,7 +301,8 @@ class AppLogger {
     final now = DateTime.now();
     final dayStr =
         '${now.year.toString().padLeft(4, '0')}${now.month.toString().padLeft(2, '0')}${now.day.toString().padLeft(2, '0')}';
-    final needNewDay = forceNewDay || _currentDay != dayStr || _currentFile == null;
+    final needNewDay =
+        forceNewDay || _currentDay != dayStr || _currentFile == null;
     if (needNewDay) {
       _currentDay = dayStr;
       // 查找当日已有最大索引
@@ -302,10 +337,14 @@ class AppLogger {
         } else {
           // 已有超限，找下一个可用索引
           _currentFileIndex = maxIdx;
-          var f = File(p.join(_logDir!.path, 'app_${dayStr}_$_currentFileIndex.log'));
+          var f = File(
+            p.join(_logDir!.path, 'app_${dayStr}_$_currentFileIndex.log'),
+          );
           while (await f.exists() && await f.length() > _maxFileBytes) {
             _currentFileIndex++;
-            f = File(p.join(_logDir!.path, 'app_${dayStr}_$_currentFileIndex.log'));
+            f = File(
+              p.join(_logDir!.path, 'app_${dayStr}_$_currentFileIndex.log'),
+            );
           }
           _currentFile = f;
         }
@@ -328,7 +367,9 @@ class AppLogger {
     } catch (_) {}
     _sink = null;
     _currentFileIndex++;
-    final next = File(p.join(_logDir!.path, 'app_${_currentDay}_$_currentFileIndex.log'));
+    final next = File(
+      p.join(_logDir!.path, 'app_${_currentDay}_$_currentFileIndex.log'),
+    );
     _currentFile = next;
     if (!await next.exists()) {
       await next.create(recursive: true);
@@ -345,7 +386,9 @@ class AppLogger {
           .where((f) => p.basename(f.path).startsWith('app_'))
           .toList();
       // 按修改时间排序
-      files.sort((a, b) => a.lastModifiedSync().compareTo(b.lastModifiedSync()));
+      files.sort(
+        (a, b) => a.lastModifiedSync().compareTo(b.lastModifiedSync()),
+      );
       // 1. 按天数清理
       for (final f in List<File>.from(files)) {
         final stat = await f.stat();

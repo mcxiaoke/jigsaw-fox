@@ -38,10 +38,21 @@ void main() async {
     final startX = (original.width - cropW) ~/ 2;
     final startY = (original.height - cropH) ~/ 2;
 
-    final smallSrc = img.copyCrop(original, x: startX, y: startY, width: cropW, height: cropH);
+    final smallSrc = img.copyCrop(
+      original,
+      x: startX,
+      y: startY,
+      width: cropW,
+      height: cropH,
+    );
 
     // 1. 基准：仅双三次放大 2x（无锐化）
-    final baseline2x = img.copyResize(smallSrc, width: cropW * 2, height: cropH * 2, interpolation: img.Interpolation.cubic);
+    final baseline2x = img.copyResize(
+      smallSrc,
+      width: cropW * 2,
+      height: cropH * 2,
+      interpolation: img.Interpolation.cubic,
+    );
 
     // 2. 旧版 CAS：包含平坦区锐化噪点
     final oldCAS = ImageUpscaler.processPipeline(
@@ -90,9 +101,24 @@ void main() async {
     final dX = (baseline2x.width - detailW) ~/ 2;
     final dY = (baseline2x.height - detailH) ~/ 2;
 
-    final detail1 = img.copyResize(img.copyCrop(baseline2x, x: dX, y: dY, width: detailW, height: detailH), width: 320, height: 320, interpolation: img.Interpolation.nearest);
-    final detail2 = img.copyResize(img.copyCrop(oldCAS, x: dX, y: dY, width: detailW, height: detailH), width: 320, height: 320, interpolation: img.Interpolation.nearest);
-    final detail3 = img.copyResize(img.copyCrop(newGatedCAS, x: dX, y: dY, width: detailW, height: detailH), width: 320, height: 320, interpolation: img.Interpolation.nearest);
+    final detail1 = img.copyResize(
+      img.copyCrop(baseline2x, x: dX, y: dY, width: detailW, height: detailH),
+      width: 320,
+      height: 320,
+      interpolation: img.Interpolation.nearest,
+    );
+    final detail2 = img.copyResize(
+      img.copyCrop(oldCAS, x: dX, y: dY, width: detailW, height: detailH),
+      width: 320,
+      height: 320,
+      interpolation: img.Interpolation.nearest,
+    );
+    final detail3 = img.copyResize(
+      img.copyCrop(newGatedCAS, x: dX, y: dY, width: detailW, height: detailH),
+      width: 320,
+      height: 320,
+      interpolation: img.Interpolation.nearest,
+    );
 
     final detailComparison = _createSideBySide3(
       detail1,
@@ -131,13 +157,39 @@ img.Image _createSideBySide3(
   final yOffset = headerH + 8;
   img.compositeImage(canvas, img1, dstX: 8, dstY: yOffset);
   img.compositeImage(canvas, img2, dstX: 8 + img1.width + gap, dstY: yOffset);
-  img.compositeImage(canvas, img3, dstX: 8 + img1.width + gap + img2.width + gap, dstY: yOffset);
+  img.compositeImage(
+    canvas,
+    img3,
+    dstX: 8 + img1.width + gap + img2.width + gap,
+    dstY: yOffset,
+  );
 
   // 绘制标签
   final font = img.arial14;
-  img.drawString(canvas, label1, font: font, x: 12, y: 12, color: img.ColorRgba8(200, 200, 200, 255));
-  img.drawString(canvas, label2, font: font, x: 12 + img1.width + gap, y: 12, color: img.ColorRgba8(255, 120, 120, 255));
-  img.drawString(canvas, label3, font: font, x: 12 + img1.width + gap + img2.width + gap, y: 12, color: img.ColorRgba8(100, 230, 120, 255));
+  img.drawString(
+    canvas,
+    label1,
+    font: font,
+    x: 12,
+    y: 12,
+    color: img.ColorRgba8(200, 200, 200, 255),
+  );
+  img.drawString(
+    canvas,
+    label2,
+    font: font,
+    x: 12 + img1.width + gap,
+    y: 12,
+    color: img.ColorRgba8(255, 120, 120, 255),
+  );
+  img.drawString(
+    canvas,
+    label3,
+    font: font,
+    x: 12 + img1.width + gap + img2.width + gap,
+    y: 12,
+    color: img.ColorRgba8(100, 230, 120, 255),
+  );
 
   return canvas;
 }

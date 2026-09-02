@@ -17,11 +17,39 @@ import '../theme/app_palette.dart';
 import '../widgets/game_toast.dart';
 
 enum CropRatio {
-  square('1:1 正方形', 1.0, 1080, 1080, PuzzleAspectRatio.square1x1, PhosphorIconsBold.square),
-  portrait2x3('2:3 竖屏', 2 / 3, 960, 1440, PuzzleAspectRatio.portrait2x3, PhosphorIconsBold.rectangle),
-  landscape3x2('3:2 横屏', 3 / 2, 1440, 960, PuzzleAspectRatio.landscape3x2, PhosphorIconsBold.rectangle);
+  square(
+    '1:1 正方形',
+    1.0,
+    1080,
+    1080,
+    PuzzleAspectRatio.square1x1,
+    PhosphorIconsBold.square,
+  ),
+  portrait2x3(
+    '2:3 竖屏',
+    2 / 3,
+    960,
+    1440,
+    PuzzleAspectRatio.portrait2x3,
+    PhosphorIconsBold.rectangle,
+  ),
+  landscape3x2(
+    '3:2 横屏',
+    3 / 2,
+    1440,
+    960,
+    PuzzleAspectRatio.landscape3x2,
+    PhosphorIconsBold.rectangle,
+  );
 
-  const CropRatio(this.label, this.ratio, this.targetWidth, this.targetHeight, this.aspectRatio, this.icon);
+  const CropRatio(
+    this.label,
+    this.ratio,
+    this.targetWidth,
+    this.targetHeight,
+    this.aspectRatio,
+    this.icon,
+  );
   final String label;
   final double ratio; // width / height
   final double targetWidth;
@@ -69,7 +97,8 @@ class CropPuzzlePage extends StatefulWidget {
 }
 
 class _CropPuzzlePageState extends State<CropPuzzlePage> {
-  final TransformationController _transformController = TransformationController();
+  final TransformationController _transformController =
+      TransformationController();
 
   CropRatio _selectedRatio = CropRatio.square;
   late PuzzleDifficulty _selectedDifficulty;
@@ -81,10 +110,12 @@ class _CropPuzzlePageState extends State<CropPuzzlePage> {
   void initState() {
     super.initState();
     final defaultTiers = _selectedRatio.aspectRatio.tiers;
-    _selectedDifficulty = defaultTiers.firstWhere(
-      (t) => t.difficulty.recommended,
-      orElse: () => defaultTiers[0],
-    ).difficulty;
+    _selectedDifficulty = defaultTiers
+        .firstWhere(
+          (t) => t.difficulty.recommended,
+          orElse: () => defaultTiers[0],
+        )
+        .difficulty;
     _decodeImage();
   }
 
@@ -108,10 +139,12 @@ class _CropPuzzlePageState extends State<CropPuzzlePage> {
             orElse: () => CropRatio.square,
           );
           final tiers = _selectedRatio.aspectRatio.tiers;
-          _selectedDifficulty = tiers.firstWhere(
-            (t) => t.difficulty.recommended,
-            orElse: () => tiers[0],
-          ).difficulty;
+          _selectedDifficulty = tiers
+              .firstWhere(
+                (t) => t.difficulty.recommended,
+                orElse: () => tiers[0],
+              )
+              .difficulty;
           _needsResetMatrix = true;
         });
       } else {
@@ -175,22 +208,28 @@ class _CropPuzzlePageState extends State<CropPuzzlePage> {
       _selectedRatio = ratio;
       _needsResetMatrix = true;
       final tiers = ratio.aspectRatio.tiers;
-      _selectedDifficulty = tiers.firstWhere(
-        (t) => t.difficulty.recommended,
-        orElse: () => tiers[0],
-      ).difficulty;
+      _selectedDifficulty = tiers
+          .firstWhere((t) => t.difficulty.recommended, orElse: () => tiers[0])
+          .difficulty;
     });
   }
 
   void _resetTransform(Size viewportSize) {
     if (_decodedImage != null) {
-      _transformController.value = _getInitialMatrix(viewportSize, _decodedImage);
+      _transformController.value = _getInitialMatrix(
+        viewportSize,
+        _decodedImage,
+      );
     } else {
       _transformController.value = Matrix4.identity();
     }
   }
 
-  void _handlePointerScroll(PointerScrollEvent event, Size viewportSize, Size baseSize) {
+  void _handlePointerScroll(
+    PointerScrollEvent event,
+    Size viewportSize,
+    Size baseSize,
+  ) {
     final matrix = _transformController.value;
     final currentScale = matrix.getMaxScaleOnAxis();
 
@@ -268,7 +307,12 @@ class _CropPuzzlePageState extends State<CropPuzzlePage> {
       final recorder = ui.PictureRecorder();
       final canvas = ui.Canvas(
         recorder,
-        ui.Rect.fromLTWH(0, 0, targetWidthInt.toDouble(), targetHeightInt.toDouble()),
+        ui.Rect.fromLTWH(
+          0,
+          0,
+          targetWidthInt.toDouble(),
+          targetHeightInt.toDouble(),
+        ),
       );
 
       // 视口到目标画布的导出缩放因子
@@ -294,7 +338,9 @@ class _CropPuzzlePageState extends State<CropPuzzlePage> {
         targetHeightInt,
       );
 
-      final byteData = await croppedImage.toByteData(format: ui.ImageByteFormat.png);
+      final byteData = await croppedImage.toByteData(
+        format: ui.ImageByteFormat.png,
+      );
       if (byteData == null) throw Exception('图片导出失败');
       Uint8List pngBytes = byteData.buffer.asUint8List();
 
@@ -367,311 +413,425 @@ class _CropPuzzlePageState extends State<CropPuzzlePage> {
         elevation: 0,
         title: Text(
           '裁剪与自制拼图',
-          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: palette.primaryText),
+          style: TextStyle(
+            fontWeight: FontWeight.bold,
+            fontSize: 18,
+            color: palette.primaryText,
+          ),
         ),
       ),
       body: Stack(
         children: [
           Column(
-        children: [
-          const SizedBox(height: 8),
+            children: [
+              const SizedBox(height: 8),
 
-          // Standard 5 Aspect Ratios Horizontal Scroll Bar
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: Row(
-              children: [
-                for (final ratio in CropRatio.values) ...[
-                  Padding(
-                    padding: const EdgeInsets.only(right: 8),
-                    child: ChoiceChip(
-                      avatar: Icon(
-                        ratio.icon,
-                        size: 16,
-                        color: _selectedRatio == ratio ? Colors.white : Colors.white70,
-                      ),
-                      label: Text(ratio.label),
-                      selected: _selectedRatio == ratio,
-                      selectedColor: palette.brand,
-                      backgroundColor: palette.surfaceContainerLow,
-                      labelStyle: TextStyle(
-                        color: _selectedRatio == ratio ? Colors.white : Colors.white70,
-                        fontWeight: FontWeight.w600,
-                        fontSize: 12.5,
-                      ),
-                      onSelected: (selected) {
-                        if (selected) _onRatioChanged(ratio);
-                      },
-                    ),
-                  ),
-                ],
-              ],
-            ),
-          ),
-
-          const SizedBox(height: 10),
-
-          // Large Interactive Cropping Viewport
-          Expanded(
-            child: LayoutBuilder(
-              builder: (context, constraints) {
-                final maxW = max(50.0, constraints.maxWidth - 32);
-                final maxH = max(50.0, constraints.maxHeight - 72);
-
-                double boxW, boxH;
-                if (targetRatio >= maxW / maxH) {
-                  boxW = maxW;
-                  boxH = boxW / targetRatio;
-                } else {
-                  boxH = maxH;
-                  boxW = boxH * targetRatio;
-                }
-
-                final viewportSize = Size(boxW, boxH);
-                _currentViewportSize = viewportSize;
-
-                final baseSize = _decodedImage != null
-                    ? _calculateBaseSize(viewportSize, _decodedImage!)
-                    : viewportSize;
-
-                if (_needsResetMatrix && _decodedImage != null) {
-                  _needsResetMatrix = false;
-                  _transformController.value = _getInitialMatrix(viewportSize, _decodedImage);
-                }
-
-                final maxAllowedScale = _calculateMaxScale(viewportSize, _decodedImage);
-
-                return Center(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      // 实时显示当前裁切物理像素分辨率 (例如: 1930 × 1343)
-                      ValueListenableBuilder<Matrix4>(
-                        valueListenable: _transformController,
-                        builder: (context, matrix, _) {
-                          if (_decodedImage == null) return const SizedBox(height: 24);
-                          final currentScale = matrix.getMaxScaleOnAxis();
-                          final imgW = _decodedImage!.width.toDouble();
-                          final baseSize = _calculateBaseSize(viewportSize, _decodedImage!);
-                          final baseScale = baseSize.width / imgW;
-                          final realCropW = max(1, (viewportSize.width / (baseScale * currentScale)).round());
-                          final realCropH = max(1, (viewportSize.height / (baseScale * currentScale)).round());
-                          return Padding(
-                            padding: const EdgeInsets.only(bottom: 8),
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
-                              decoration: BoxDecoration(
-                                color: Colors.black45,
-                                borderRadius: BorderRadius.circular(12),
-                                border: Border.all(color: Colors.white12, width: 1),
-                              ),
-                              child: Text(
-                                '裁切区域: $realCropW × $realCropH',
-                                style: const TextStyle(
-                                  color: Colors.white70,
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w500,
-                                  letterSpacing: 0.3,
-                                ),
-                              ),
-                            ),
-                          );
-                        },
-                      ),
-                      Container(
-                        width: boxW,
-                        height: boxH,
-                        decoration: const BoxDecoration(
-                          color: Colors.black,
-                          boxShadow: [
-                            BoxShadow(color: Colors.black87, blurRadius: 18, offset: Offset(0, 4)),
-                          ],
+              // Standard 5 Aspect Ratios Horizontal Scroll Bar
+              SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Row(
+                  children: [
+                    for (final ratio in CropRatio.values) ...[
+                      Padding(
+                        padding: const EdgeInsets.only(right: 8),
+                        child: ChoiceChip(
+                          avatar: Icon(
+                            ratio.icon,
+                            size: 16,
+                            color: _selectedRatio == ratio
+                                ? Colors.white
+                                : Colors.white70,
+                          ),
+                          label: Text(ratio.label),
+                          selected: _selectedRatio == ratio,
+                          selectedColor: palette.brand,
+                          backgroundColor: palette.surfaceContainerLow,
+                          labelStyle: TextStyle(
+                            color: _selectedRatio == ratio
+                                ? Colors.white
+                                : Colors.white70,
+                            fontWeight: FontWeight.w600,
+                            fontSize: 12.5,
+                          ),
+                          onSelected: (selected) {
+                            if (selected) _onRatioChanged(ratio);
+                          },
                         ),
-                        child: _decodedImage != null
-                            ? Stack(
-                                fit: StackFit.expand,
-                                children: [
-                                  // 1. 直角精准裁剪的拖拽缩放图片区域
-                                  ClipRect(
-                                    child: MouseRegion(
-                                      cursor: SystemMouseCursors.grab,
-                                      child: Listener(
-                                        onPointerSignal: (event) {
-                                          if (event is PointerScrollEvent) {
-                                            _handlePointerScroll(event, viewportSize, baseSize);
-                                          }
-                                        },
-                                        child: InteractiveViewer(
-                                          key: ValueKey('$_selectedRatio-${viewportSize.width.toStringAsFixed(1)}-${viewportSize.height.toStringAsFixed(1)}'),
-                                          transformationController: _transformController,
-                                          minScale: 1.0,
-                                          maxScale: maxAllowedScale,
-                                          boundaryMargin: EdgeInsets.zero,
-                                          clipBehavior: Clip.none,
-                                          constrained: false,
-                                          child: SizedBox(
-                                            width: baseSize.width,
-                                            height: baseSize.height,
-                                            child: RawImage(
-                                              image: _decodedImage,
-                                              fit: BoxFit.fill,
-                                            ),
-                                          ),
-                                        ),
-                                      ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+
+              const SizedBox(height: 10),
+
+              // Large Interactive Cropping Viewport
+              Expanded(
+                child: LayoutBuilder(
+                  builder: (context, constraints) {
+                    final maxW = max(50.0, constraints.maxWidth - 32);
+                    final maxH = max(50.0, constraints.maxHeight - 72);
+
+                    double boxW, boxH;
+                    if (targetRatio >= maxW / maxH) {
+                      boxW = maxW;
+                      boxH = boxW / targetRatio;
+                    } else {
+                      boxH = maxH;
+                      boxW = boxH * targetRatio;
+                    }
+
+                    final viewportSize = Size(boxW, boxH);
+                    _currentViewportSize = viewportSize;
+
+                    final baseSize = _decodedImage != null
+                        ? _calculateBaseSize(viewportSize, _decodedImage!)
+                        : viewportSize;
+
+                    if (_needsResetMatrix && _decodedImage != null) {
+                      _needsResetMatrix = false;
+                      _transformController.value = _getInitialMatrix(
+                        viewportSize,
+                        _decodedImage,
+                      );
+                    }
+
+                    final maxAllowedScale = _calculateMaxScale(
+                      viewportSize,
+                      _decodedImage,
+                    );
+
+                    return Center(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          // 实时显示当前裁切物理像素分辨率 (例如: 1930 × 1343)
+                          ValueListenableBuilder<Matrix4>(
+                            valueListenable: _transformController,
+                            builder: (context, matrix, _) {
+                              if (_decodedImage == null)
+                                return const SizedBox(height: 24);
+                              final currentScale = matrix.getMaxScaleOnAxis();
+                              final imgW = _decodedImage!.width.toDouble();
+                              final baseSize = _calculateBaseSize(
+                                viewportSize,
+                                _decodedImage!,
+                              );
+                              final baseScale = baseSize.width / imgW;
+                              final realCropW = max(
+                                1,
+                                (viewportSize.width /
+                                        (baseScale * currentScale))
+                                    .round(),
+                              );
+                              final realCropH = max(
+                                1,
+                                (viewportSize.height /
+                                        (baseScale * currentScale))
+                                    .round(),
+                              );
+                              return Padding(
+                                padding: const EdgeInsets.only(bottom: 8),
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 10,
+                                    vertical: 3,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: Colors.black45,
+                                    borderRadius: BorderRadius.circular(12),
+                                    border: Border.all(
+                                      color: Colors.white12,
+                                      width: 1,
                                     ),
                                   ),
-
-                                  // 2. 顶层直角绿色裁切框 (不阻挡手势，四边四角 100% 完整清晰显示)
-                                  Positioned.fill(
-                                    child: IgnorePointer(
-                                      child: Container(
-                                        decoration: BoxDecoration(
-                                          border: Border.all(
-                                            color: palette.brandLight,
-                                            width: 2.5,
-                                          ),
-                                        ),
-                                      ),
+                                  child: Text(
+                                    '裁切区域: $realCropW × $realCropH',
+                                    style: const TextStyle(
+                                      color: Colors.white70,
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w500,
+                                      letterSpacing: 0.3,
                                     ),
                                   ),
-
-                                  // 3. Compact Top-Right Scale Percentage Pill (Click to reset 100% & center)
-                                  Positioned(
-                                    top: 10,
-                                    right: 10,
-                                    child: ValueListenableBuilder<Matrix4>(
-                                      valueListenable: _transformController,
-                                      builder: (context, matrix, _) {
-                                        final scalePercent = (matrix.getMaxScaleOnAxis() * 100).round();
-                                        final initMatrix = _getInitialMatrix(viewportSize, _decodedImage);
-                                        final isChanged = scalePercent > 100 ||
-                                            (matrix.storage[12] - initMatrix.storage[12]).abs() > 1.0 ||
-                                            (matrix.storage[13] - initMatrix.storage[13]).abs() > 1.0;
-                                        return Material(
-                                          color: Colors.transparent,
-                                          child: InkWell(
-                                            onTap: isChanged ? () => _resetTransform(viewportSize) : null,
-                                            borderRadius: BorderRadius.circular(16),
-                                            child: Container(
-                                              padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
-                                              decoration: BoxDecoration(
-                                                color: Colors.black.withValues(alpha: 0.65),
-                                                borderRadius: BorderRadius.circular(16),
-                                                border: Border.all(
-                                                  color: isChanged ? palette.brandLight : Colors.white24,
-                                                  width: 1.2,
+                                ),
+                              );
+                            },
+                          ),
+                          Container(
+                            width: boxW,
+                            height: boxH,
+                            decoration: const BoxDecoration(
+                              color: Colors.black,
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black87,
+                                  blurRadius: 18,
+                                  offset: Offset(0, 4),
+                                ),
+                              ],
+                            ),
+                            child: _decodedImage != null
+                                ? Stack(
+                                    fit: StackFit.expand,
+                                    children: [
+                                      // 1. 直角精准裁剪的拖拽缩放图片区域
+                                      ClipRect(
+                                        child: MouseRegion(
+                                          cursor: SystemMouseCursors.grab,
+                                          child: Listener(
+                                            onPointerSignal: (event) {
+                                              if (event is PointerScrollEvent) {
+                                                _handlePointerScroll(
+                                                  event,
+                                                  viewportSize,
+                                                  baseSize,
+                                                );
+                                              }
+                                            },
+                                            child: InteractiveViewer(
+                                              key: ValueKey(
+                                                '$_selectedRatio-${viewportSize.width.toStringAsFixed(1)}-${viewportSize.height.toStringAsFixed(1)}',
+                                              ),
+                                              transformationController:
+                                                  _transformController,
+                                              minScale: 1.0,
+                                              maxScale: maxAllowedScale,
+                                              boundaryMargin: EdgeInsets.zero,
+                                              clipBehavior: Clip.none,
+                                              constrained: false,
+                                              child: SizedBox(
+                                                width: baseSize.width,
+                                                height: baseSize.height,
+                                                child: RawImage(
+                                                  image: _decodedImage,
+                                                  fit: BoxFit.fill,
                                                 ),
                                               ),
-                                              child: Row(
-                                                mainAxisSize: MainAxisSize.min,
-                                                children: [
-                                                  Icon(
-                                                    isChanged ? PhosphorIconsBold.arrowsOutCardinal : PhosphorIconsRegular.magnifyingGlass,
-                                                    size: 13,
-                                                    color: isChanged ? palette.brandLight : Colors.white70,
-                                                  ),
-                                                  const SizedBox(width: 4),
-                                                  Text(
-                                                    '$scalePercent%',
-                                                    style: TextStyle(
-                                                      color: isChanged ? palette.brandLight : Colors.white,
-                                                      fontSize: 11.5,
-                                                      fontWeight: FontWeight.bold,
-                                                    ),
-                                                  ),
-                                                  if (isChanged) ...[
-                                                    const SizedBox(width: 4),
-                                                    const Icon(PhosphorIconsBold.arrowCounterClockwise, size: 11, color: Colors.white70),
-                                                  ],
-                                                ],
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+
+                                      // 2. 顶层直角绿色裁切框 (不阻挡手势，四边四角 100% 完整清晰显示)
+                                      Positioned.fill(
+                                        child: IgnorePointer(
+                                          child: Container(
+                                            decoration: BoxDecoration(
+                                              border: Border.all(
+                                                color: palette.brandLight,
+                                                width: 2.5,
                                               ),
                                             ),
                                           ),
-                                        );
-                                      },
+                                        ),
+                                      ),
+
+                                      // 3. Compact Top-Right Scale Percentage Pill (Click to reset 100% & center)
+                                      Positioned(
+                                        top: 10,
+                                        right: 10,
+                                        child: ValueListenableBuilder<Matrix4>(
+                                          valueListenable: _transformController,
+                                          builder: (context, matrix, _) {
+                                            final scalePercent =
+                                                (matrix.getMaxScaleOnAxis() *
+                                                        100)
+                                                    .round();
+                                            final initMatrix =
+                                                _getInitialMatrix(
+                                                  viewportSize,
+                                                  _decodedImage,
+                                                );
+                                            final isChanged =
+                                                scalePercent > 100 ||
+                                                (matrix.storage[12] -
+                                                            initMatrix
+                                                                .storage[12])
+                                                        .abs() >
+                                                    1.0 ||
+                                                (matrix.storage[13] -
+                                                            initMatrix
+                                                                .storage[13])
+                                                        .abs() >
+                                                    1.0;
+                                            return Material(
+                                              color: Colors.transparent,
+                                              child: InkWell(
+                                                onTap: isChanged
+                                                    ? () => _resetTransform(
+                                                        viewportSize,
+                                                      )
+                                                    : null,
+                                                borderRadius:
+                                                    BorderRadius.circular(16),
+                                                child: Container(
+                                                  padding:
+                                                      const EdgeInsets.symmetric(
+                                                        horizontal: 9,
+                                                        vertical: 4,
+                                                      ),
+                                                  decoration: BoxDecoration(
+                                                    color: Colors.black
+                                                        .withValues(
+                                                          alpha: 0.65,
+                                                        ),
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                          16,
+                                                        ),
+                                                    border: Border.all(
+                                                      color: isChanged
+                                                          ? palette.brandLight
+                                                          : Colors.white24,
+                                                      width: 1.2,
+                                                    ),
+                                                  ),
+                                                  child: Row(
+                                                    mainAxisSize:
+                                                        MainAxisSize.min,
+                                                    children: [
+                                                      Icon(
+                                                        isChanged
+                                                            ? PhosphorIconsBold
+                                                                  .arrowsOutCardinal
+                                                            : PhosphorIconsRegular
+                                                                  .magnifyingGlass,
+                                                        size: 13,
+                                                        color: isChanged
+                                                            ? palette.brandLight
+                                                            : Colors.white70,
+                                                      ),
+                                                      const SizedBox(width: 4),
+                                                      Text(
+                                                        '$scalePercent%',
+                                                        style: TextStyle(
+                                                          color: isChanged
+                                                              ? palette
+                                                                    .brandLight
+                                                              : Colors.white,
+                                                          fontSize: 11.5,
+                                                          fontWeight:
+                                                              FontWeight.bold,
+                                                        ),
+                                                      ),
+                                                      if (isChanged) ...[
+                                                        const SizedBox(
+                                                          width: 4,
+                                                        ),
+                                                        const Icon(
+                                                          PhosphorIconsBold
+                                                              .arrowCounterClockwise,
+                                                          size: 11,
+                                                          color: Colors.white70,
+                                                        ),
+                                                      ],
+                                                    ],
+                                                  ),
+                                                ),
+                                              ),
+                                            );
+                                          },
+                                        ),
+                                      ),
+                                    ],
+                                  )
+                                : const Center(
+                                    child: CircularProgressIndicator(
+                                      color: Colors.white,
                                     ),
                                   ),
-                                ],
-                              )
-                            : const Center(child: CircularProgressIndicator(color: Colors.white)),
-                      ),
-                      const SizedBox(height: 8),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: const [
-                          Icon(PhosphorIconsBold.handGrabbing, size: 13, color: Colors.white54),
-                          SizedBox(width: 5),
-                          Text(
-                            '按住拖动调整裁切位置 · 双指或滚轮缩放',
-                            style: TextStyle(color: Colors.white54, fontSize: 11.5),
+                          ),
+                          const SizedBox(height: 8),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: const [
+                              Icon(
+                                PhosphorIconsBold.handGrabbing,
+                                size: 13,
+                                color: Colors.white54,
+                              ),
+                              SizedBox(width: 5),
+                              Text(
+                                '按住拖动调整裁切位置 · 双指或滚轮缩放',
+                                style: TextStyle(
+                                  color: Colors.white54,
+                                  fontSize: 11.5,
+                                ),
+                              ),
+                            ],
                           ),
                         ],
                       ),
-                    ],
-                  ),
-                );
-              },
-            ),
-          ),
-
-          // Simplified Bottom Action Bar
-          Container(
-            padding: const EdgeInsets.fromLTRB(20, 14, 20, 20),
-            decoration: BoxDecoration(
-              color: palette.surfaceContainer,
-              borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-            ),
-            child: SizedBox(
-              width: double.infinity,
-              height: 48,
-              child: FilledButton.icon(
-                onPressed: _isSaving ? null : () => _saveAndCreate(_currentViewportSize),
-                style: FilledButton.styleFrom(
-                  backgroundColor: palette.brand,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                ),
-                icon: const Icon(PhosphorIconsBold.checkCircle),
-                label: Text(
-                  _isSaving ? '正在保存...' : '保存自制关卡',
-                  style: const TextStyle(fontSize: 15.5, fontWeight: FontWeight.bold),
+                    );
+                  },
                 ),
               ),
-            ),
-          ),
-        ],
-      ),
-      if (_isSaving)
-        Positioned.fill(
-          child: Container(
-            color: Colors.black.withValues(alpha: 0.65),
-            child: Center(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  CircularProgressIndicator(
-                    color: palette.brandLight,
-                    strokeWidth: 3,
+
+              // Simplified Bottom Action Bar
+              Container(
+                padding: const EdgeInsets.fromLTRB(20, 14, 20, 20),
+                decoration: BoxDecoration(
+                  color: palette.surfaceContainer,
+                  borderRadius: const BorderRadius.vertical(
+                    top: Radius.circular(20),
                   ),
-                  SizedBox(height: 16),
-                  Text(
-                    '正在优化画质并生成自制关卡...',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 14.5,
-                      fontWeight: FontWeight.w600,
+                ),
+                child: SizedBox(
+                  width: double.infinity,
+                  height: 48,
+                  child: FilledButton.icon(
+                    onPressed: _isSaving
+                        ? null
+                        : () => _saveAndCreate(_currentViewportSize),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: palette.brand,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                    ),
+                    icon: const Icon(PhosphorIconsBold.checkCircle),
+                    label: Text(
+                      _isSaving ? '正在保存...' : '保存自制关卡',
+                      style: const TextStyle(
+                        fontSize: 15.5,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                   ),
-                ],
+                ),
+              ),
+            ],
+          ),
+          if (_isSaving)
+            Positioned.fill(
+              child: Container(
+                color: Colors.black.withValues(alpha: 0.65),
+                child: Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      CircularProgressIndicator(
+                        color: palette.brandLight,
+                        strokeWidth: 3,
+                      ),
+                      SizedBox(height: 16),
+                      Text(
+                        '正在优化画质并生成自制关卡...',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 14.5,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               ),
             ),
-          ),
-        ),
-    ],
-  ),
-);
+        ],
+      ),
+    );
   }
 }

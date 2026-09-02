@@ -152,17 +152,11 @@ class AppCachedImage extends StatelessWidget {
     );
 
     if (colorFilter != null) {
-      content = ColorFiltered(
-        colorFilter: colorFilter!,
-        child: content,
-      );
+      content = ColorFiltered(colorFilter: colorFilter!, child: content);
     }
 
     if (borderRadius != null) {
-      content = ClipRRect(
-        borderRadius: borderRadius!,
-        child: content,
-      );
+      content = ClipRRect(borderRadius: borderRadius!, child: content);
     }
 
     return content;

@@ -28,13 +28,21 @@ enum GallerySite {
 /// featuring in-page Back/Forward navigation, explicit Close (X) button,
 /// PopScope safety back interception, anti-scraping 403 bypass, and structured logging.
 class OnlineImagePickerPage extends StatefulWidget {
-  const OnlineImagePickerPage({super.key, this.initialSite = GallerySite.pixabay});
+  const OnlineImagePickerPage({
+    super.key,
+    this.initialSite = GallerySite.pixabay,
+  });
 
   final GallerySite initialSite;
 
-  static Future<void> push(BuildContext context, {GallerySite initialSite = GallerySite.pixabay}) {
+  static Future<void> push(
+    BuildContext context, {
+    GallerySite initialSite = GallerySite.pixabay,
+  }) {
     return Navigator.of(context).push<void>(
-      MaterialPageRoute(builder: (_) => OnlineImagePickerPage(initialSite: initialSite)),
+      MaterialPageRoute(
+        builder: (_) => OnlineImagePickerPage(initialSite: initialSite),
+      ),
     );
   }
 
@@ -62,7 +70,9 @@ class _OnlineImagePickerPageState extends State<OnlineImagePickerPage> {
     super.initState();
     _currentSite = widget.initialSite;
     DownloadManager.instance.init();
-    AppLogger.webview.info('[WebView:Init] Platform: ${defaultTargetPlatform.name}, InitialSite: ${_currentSite.label} (${_currentSite.url})');
+    AppLogger.webview.info(
+      '[WebView:Init] Platform: ${defaultTargetPlatform.name}, InitialSite: ${_currentSite.label} (${_currentSite.url})',
+    );
   }
 
   @override
@@ -87,14 +97,14 @@ class _OnlineImagePickerPageState extends State<OnlineImagePickerPage> {
 
   void _switchSite(GallerySite site) {
     if (_currentSite == site) return;
-    AppLogger.webview.info('[WebView:SiteSwitch] Switching from ${_currentSite.label} to ${site.label} (${site.url})');
+    AppLogger.webview.info(
+      '[WebView:SiteSwitch] Switching from ${_currentSite.label} to ${site.label} (${site.url})',
+    );
     setState(() {
       _currentSite = site;
       _loadingProgress = 0.1;
     });
-    _webViewController?.loadUrl(
-      urlRequest: URLRequest(url: WebUri(site.url)),
-    );
+    _webViewController?.loadUrl(urlRequest: URLRequest(url: WebUri(site.url)));
   }
 
   /// Trigger the 5-second auto-dismissing download banner
@@ -114,9 +124,12 @@ class _OnlineImagePickerPageState extends State<OnlineImagePickerPage> {
   /// Bypasses anti-scraping Cloudflare 403 by executing fetch inside the webview's authenticated session.
   Future<Uint8List?> _fetchImageBytesInsideWebView(String targetUrl) async {
     if (_webViewController == null) return null;
-    AppLogger.webview.info('[WebView:InAppFetch:Start] Executing authenticated in-webview fetch for: $targetUrl');
+    AppLogger.webview.info(
+      '[WebView:InAppFetch:Start] Executing authenticated in-webview fetch for: $targetUrl',
+    );
     final escapedUrl = targetUrl.replaceAll("'", "\\'");
-    final jsCode = '''
+    final jsCode =
+        '''
       (async function() {
         try {
           const controller = new AbortController();
@@ -147,7 +160,9 @@ class _OnlineImagePickerPageState extends State<OnlineImagePickerPage> {
       })();
     ''';
     try {
-      final result = await _webViewController!.evaluateJavascript(source: jsCode);
+      final result = await _webViewController!.evaluateJavascript(
+        source: jsCode,
+      );
       if (result != null) {
         final str = result.toString();
         if (str.startsWith('data:image')) {
@@ -155,15 +170,21 @@ class _OnlineImagePickerPageState extends State<OnlineImagePickerPage> {
           if (commaIdx != -1) {
             final base64Data = str.substring(commaIdx + 1);
             final bytes = base64Decode(base64Data);
-            AppLogger.webview.info('[WebView:InAppFetch:Success] Decoded ${bytes.length} bytes from in-webview fetch.');
+            AppLogger.webview.info(
+              '[WebView:InAppFetch:Success] Decoded ${bytes.length} bytes from in-webview fetch.',
+            );
             return bytes;
           }
         } else {
-          AppLogger.webview.warning('[WebView:InAppFetch:Warning] JS returned non-image result: $str');
+          AppLogger.webview.warning(
+            '[WebView:InAppFetch:Warning] JS returned non-image result: $str',
+          );
         }
       }
     } catch (e) {
-      AppLogger.webview.severe('[WebView:InAppFetch:Error] In-webview fetch error: $e');
+      AppLogger.webview.severe(
+        '[WebView:InAppFetch:Error] In-webview fetch error: $e',
+      );
     }
     return null;
   }
@@ -303,20 +324,31 @@ class _OnlineImagePickerPageState extends State<OnlineImagePickerPage> {
       AppLogger.webview.info('[WebView:Sniff:Result] Sniffed URL: $raw');
       return raw;
     } catch (e) {
-      AppLogger.webview.severe('[WebView:Sniff:Error] Sniff execution failed: $e');
+      AppLogger.webview.severe(
+        '[WebView:Sniff:Error] Sniff execution failed: $e',
+      );
       return '';
     }
   }
 
   /// Handle download triggered either via in-page download button interception or FAB extraction
-  Future<void> _handleDownload({required String rawUrl, bool isFromInterception = false}) async {
-    final currentWebUrl = (await _webViewController?.getUrl())?.toString() ?? _currentSite.url;
+  Future<void> _handleDownload({
+    required String rawUrl,
+    bool isFromInterception = false,
+  }) async {
+    final currentWebUrl =
+        (await _webViewController?.getUrl())?.toString() ?? _currentSite.url;
     final targetUrl = _upgradeImageUrlToHighRes(rawUrl, _currentSite.label);
 
-    AppLogger.webview.info('[WebView:DownloadAction] Raw: $rawUrl -> Target: $targetUrl (fromInterception: $isFromInterception)');
+    AppLogger.webview.info(
+      '[WebView:DownloadAction] Raw: $rawUrl -> Target: $targetUrl (fromInterception: $isFromInterception)',
+    );
 
-    if (DownloadManager.instance.isDownloaded(targetUrl) || DownloadManager.instance.isDownloaded(rawUrl)) {
-      AppLogger.webview.info('[WebView:DownloadAction] Image already in download cache.');
+    if (DownloadManager.instance.isDownloaded(targetUrl) ||
+        DownloadManager.instance.isDownloaded(rawUrl)) {
+      AppLogger.webview.info(
+        '[WebView:DownloadAction] Image already in download cache.',
+      );
       if (mounted) {
         GameToast.show(context, message: '该图片已在下载箱中', type: GameToastType.info);
       }
@@ -342,15 +374,23 @@ class _OnlineImagePickerPageState extends State<OnlineImagePickerPage> {
         directBytes: fetchedBytes,
       );
 
-      AppLogger.webview.info('[WebView:DownloadAction:Success] Successfully added to drawer: ${item.id} (${item.width}x${item.height})');
+      AppLogger.webview.info(
+        '[WebView:DownloadAction:Success] Successfully added to drawer: ${item.id} (${item.width}x${item.height})',
+      );
 
       if (mounted) {
         _triggerDownloadBanner(item);
       }
     } catch (e) {
-      AppLogger.webview.severe('[WebView:DownloadAction:Error] Download failed: $e');
+      AppLogger.webview.severe(
+        '[WebView:DownloadAction:Error] Download failed: $e',
+      );
       if (mounted) {
-        GameToast.show(context, message: '下载图片失败: $e', type: GameToastType.error);
+        GameToast.show(
+          context,
+          message: '下载图片失败: $e',
+          type: GameToastType.error,
+        );
       }
     }
   }
@@ -359,15 +399,23 @@ class _OnlineImagePickerPageState extends State<OnlineImagePickerPage> {
   Future<void> _extractCurrentImage() async {
     if (_isExtracting) return;
     setState(() => _isExtracting = true);
-    AppLogger.webview.info('[WebView:Extract:Start] Triggered image extraction button');
+    AppLogger.webview.info(
+      '[WebView:Extract:Start] Triggered image extraction button',
+    );
 
     try {
       final detectedUrl = await _sniffBestHighResImageUrl();
 
       if (detectedUrl.isEmpty || detectedUrl == 'null') {
-        AppLogger.webview.warning('[WebView:Extract:NotFound] No suitable image detected on current page.');
+        AppLogger.webview.warning(
+          '[WebView:Extract:NotFound] No suitable image detected on current page.',
+        );
         if (mounted) {
-          GameToast.show(context, message: '未在当前页面检测到高清大图，请点击进入照片详情页后再试', type: GameToastType.warning);
+          GameToast.show(
+            context,
+            message: '未在当前页面检测到高清大图，请点击进入照片详情页后再试',
+            type: GameToastType.warning,
+          );
         }
         return;
       }
@@ -386,7 +434,9 @@ class _OnlineImagePickerPageState extends State<OnlineImagePickerPage> {
       onPopInvokedWithResult: (didPop, result) async {
         if (didPop) return;
         if (_canGoBack && _webViewController != null) {
-          AppLogger.webview.info('[WebView:PopScope] User pressed system back -> Navigating back inside webview');
+          AppLogger.webview.info(
+            '[WebView:PopScope] User pressed system back -> Navigating back inside webview',
+          );
           await _webViewController!.goBack();
           _updateHistoryState();
         }
@@ -396,7 +446,9 @@ class _OnlineImagePickerPageState extends State<OnlineImagePickerPage> {
           leading: IconButton(
             icon: const Icon(PhosphorIconsBold.x, size: 20),
             onPressed: () {
-              AppLogger.webview.info('[WebView:Action] User clicked Close (X) button');
+              AppLogger.webview.info(
+                '[WebView:Action] User clicked Close (X) button',
+              );
               Navigator.of(context).pop();
             },
             tooltip: '关闭在线选图',
@@ -420,7 +472,9 @@ class _OnlineImagePickerPageState extends State<OnlineImagePickerPage> {
               ),
               onPressed: _canGoBack
                   ? () async {
-                      AppLogger.webview.info('[WebView:Action] User clicked In-Page Back');
+                      AppLogger.webview.info(
+                        '[WebView:Action] User clicked In-Page Back',
+                      );
                       await _webViewController?.goBack();
                       _updateHistoryState();
                     }
@@ -449,7 +503,10 @@ class _OnlineImagePickerPageState extends State<OnlineImagePickerPage> {
                   children: [
                     IconButton(
                       padding: EdgeInsets.zero,
-                      constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+                      constraints: const BoxConstraints(
+                        minWidth: 36,
+                        minHeight: 36,
+                      ),
                       icon: const Icon(PhosphorIconsBold.archive, size: 19),
                       tooltip: '素材库',
                       onPressed: () => DownloadedDrawerSheet.show(context),
@@ -464,7 +521,10 @@ class _OnlineImagePickerPageState extends State<OnlineImagePickerPage> {
                             color: palette.success,
                             shape: BoxShape.circle,
                           ),
-                          constraints: const BoxConstraints(minWidth: 16, minHeight: 16),
+                          constraints: const BoxConstraints(
+                            minWidth: 16,
+                            minHeight: 16,
+                          ),
                           child: Text(
                             '${items.length}',
                             style: const TextStyle(
@@ -488,7 +548,9 @@ class _OnlineImagePickerPageState extends State<OnlineImagePickerPage> {
                   child: LinearProgressIndicator(
                     value: _loadingProgress,
                     backgroundColor: Colors.transparent,
-                    valueColor: AlwaysStoppedAnimation<Color>(palette.brandLight),
+                    valueColor: AlwaysStoppedAnimation<Color>(
+                      palette.brandLight,
+                    ),
                     minHeight: 3,
                   ),
                 )
@@ -507,7 +569,8 @@ class _OnlineImagePickerPageState extends State<OnlineImagePickerPage> {
                 javaScriptCanOpenWindowsAutomatically: true,
                 supportMultipleWindows: false,
                 mediaPlaybackRequiresUserGesture: false,
-                userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+                userAgent:
+                    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
                 isInspectable: kDebugMode,
                 supportZoom: true,
                 transparentBackground: false,
@@ -516,7 +579,9 @@ class _OnlineImagePickerPageState extends State<OnlineImagePickerPage> {
               ),
               onWebViewCreated: (controller) {
                 _webViewController = controller;
-                AppLogger.webview.info('[WebView:Created] InAppWebViewController initialized successfully.');
+                AppLogger.webview.info(
+                  '[WebView:Created] InAppWebViewController initialized successfully.',
+                );
               },
               onLoadStart: (controller, url) {
                 AppLogger.webview.info('[WebView:LoadStart] URL: $url');
@@ -535,14 +600,17 @@ class _OnlineImagePickerPageState extends State<OnlineImagePickerPage> {
                 _updateHistoryState();
               },
               onLoadStop: (controller, url) async {
-                AppLogger.webview.info('[WebView:LoadStop] Finished loading: $url');
+                AppLogger.webview.info(
+                  '[WebView:LoadStop] Finished loading: $url',
+                );
                 if (mounted) {
                   setState(() => _loadingProgress = 1.0);
                 }
                 _updateHistoryState();
 
                 // Inject CSS to clean mobile ads
-                await controller.evaluateJavascript(source: '''
+                await controller.evaluateJavascript(
+                  source: '''
                   (function() {
                     const style = document.createElement('style');
                     style.innerHTML = `
@@ -553,18 +621,25 @@ class _OnlineImagePickerPageState extends State<OnlineImagePickerPage> {
                     `;
                     document.head.appendChild(style);
                   })();
-                ''');
+                ''',
+                );
               },
               onReceivedError: (controller, request, error) {
-                AppLogger.webview.severe('[WebView:Error] Type: ${error.type}, Description: ${error.description}, FailingURL: ${request.url}');
+                AppLogger.webview.severe(
+                  '[WebView:Error] Type: ${error.type}, Description: ${error.description}, FailingURL: ${request.url}',
+                );
               },
               onReceivedHttpError: (controller, request, errorResponse) {
-                AppLogger.webview.severe('[WebView:HttpError] Status: ${errorResponse.statusCode}, Reason: ${errorResponse.reasonPhrase}, URL: ${request.url}');
+                AppLogger.webview.severe(
+                  '[WebView:HttpError] Status: ${errorResponse.statusCode}, Reason: ${errorResponse.reasonPhrase}, URL: ${request.url}',
+                );
               },
               shouldOverrideUrlLoading: (controller, navigationAction) async {
                 final uri = navigationAction.request.url;
                 final urlStr = uri?.toString() ?? '';
-                AppLogger.webview.fine('[WebView:Navigation] URL: $urlStr, isMainFrame: ${navigationAction.isForMainFrame}');
+                AppLogger.webview.fine(
+                  '[WebView:Navigation] URL: $urlStr, isMainFrame: ${navigationAction.isForMainFrame}',
+                );
 
                 if (urlStr.isEmpty) {
                   return NavigationActionPolicy.ALLOW;
@@ -573,21 +648,30 @@ class _OnlineImagePickerPageState extends State<OnlineImagePickerPage> {
                 final lower = urlStr.toLowerCase();
                 final pathLower = uri?.path.toLowerCase() ?? '';
 
-                final isImageFile = pathLower.endsWith('.jpg') ||
+                final isImageFile =
+                    pathLower.endsWith('.jpg') ||
                     pathLower.endsWith('.jpeg') ||
                     pathLower.endsWith('.png') ||
                     pathLower.endsWith('.webp') ||
                     pathLower.endsWith('.avif');
 
                 // Check if URL is an explicit binary image download trigger
-                final isDirectDownload = (lower.contains('pixabay.com/get/')) ||
-                    (lower.contains('unsplash.com/photos/') && lower.contains('/download')) ||
-                    (lower.contains('images.pexels.com/') && (lower.contains('dl=') || lower.contains('download'))) ||
+                final isDirectDownload =
+                    (lower.contains('pixabay.com/get/')) ||
+                    (lower.contains('unsplash.com/photos/') &&
+                        lower.contains('/download')) ||
+                    (lower.contains('images.pexels.com/') &&
+                        (lower.contains('dl=') ||
+                            lower.contains('download'))) ||
                     (lower.contains('pexels.com/') && lower.contains('dl=')) ||
-                    (lower.contains('images.pexels.com/photos/') && isImageFile && navigationAction.isForMainFrame);
+                    (lower.contains('images.pexels.com/photos/') &&
+                        isImageFile &&
+                        navigationAction.isForMainFrame);
 
                 if (isDirectDownload) {
-                  AppLogger.webview.fine('[WebView:Navigation:Intercept] Direct download intercepted: $urlStr');
+                  AppLogger.webview.fine(
+                    '[WebView:Navigation:Intercept] Direct download intercepted: $urlStr',
+                  );
                   _handleDownload(rawUrl: urlStr, isFromInterception: true);
                   return NavigationActionPolicy.CANCEL;
                 }
@@ -597,7 +681,9 @@ class _OnlineImagePickerPageState extends State<OnlineImagePickerPage> {
               },
               onCreateWindow: (controller, createWindowAction) async {
                 final targetUrl = createWindowAction.request.url;
-                AppLogger.webview.info('[WebView:CreateWindow] Target URL: $targetUrl');
+                AppLogger.webview.info(
+                  '[WebView:CreateWindow] Target URL: $targetUrl',
+                );
                 if (targetUrl != null) {
                   controller.loadUrl(urlRequest: URLRequest(url: targetUrl));
                 }
@@ -605,7 +691,9 @@ class _OnlineImagePickerPageState extends State<OnlineImagePickerPage> {
               },
               onDownloadStartRequest: (controller, downloadStartRequest) async {
                 final url = downloadStartRequest.url.toString();
-                AppLogger.webview.info('[WebView:DownloadRequest] Intercepted onDownloadStartRequest: $url (MIME: ${downloadStartRequest.mimeType})');
+                AppLogger.webview.info(
+                  '[WebView:DownloadRequest] Intercepted onDownloadStartRequest: $url (MIME: ${downloadStartRequest.mimeType})',
+                );
                 await _handleDownload(rawUrl: url, isFromInterception: true);
               },
             ),
@@ -620,12 +708,19 @@ class _OnlineImagePickerPageState extends State<OnlineImagePickerPage> {
                   opacity: _showDownloadBanner ? 1.0 : 0.0,
                   duration: const Duration(milliseconds: 250),
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 10,
+                    ),
                     decoration: BoxDecoration(
                       color: palette.brand,
                       borderRadius: BorderRadius.circular(16),
                       boxShadow: const [
-                        BoxShadow(color: Colors.black45, blurRadius: 10, offset: Offset(0, 4)),
+                        BoxShadow(
+                          color: Colors.black45,
+                          blurRadius: 10,
+                          offset: Offset(0, 4),
+                        ),
                       ],
                       border: Border.all(color: palette.brandLight, width: 1.2),
                     ),
@@ -634,7 +729,11 @@ class _OnlineImagePickerPageState extends State<OnlineImagePickerPage> {
                         CircleAvatar(
                           radius: 14,
                           backgroundColor: palette.success,
-                          child: const Icon(PhosphorIconsBold.check, size: 16, color: Colors.white),
+                          child: const Icon(
+                            PhosphorIconsBold.check,
+                            size: 16,
+                            color: Colors.white,
+                          ),
                         ),
                         const SizedBox(width: 10),
                         Expanded(
@@ -654,7 +753,10 @@ class _OnlineImagePickerPageState extends State<OnlineImagePickerPage> {
                               ),
                               const Text(
                                 '来源: 网络 · 点击查看',
-                                style: TextStyle(color: Colors.white70, fontSize: 11),
+                                style: TextStyle(
+                                  color: Colors.white70,
+                                  fontSize: 11,
+                                ),
                               ),
                             ],
                           ),
@@ -667,20 +769,34 @@ class _OnlineImagePickerPageState extends State<OnlineImagePickerPage> {
                           style: TextButton.styleFrom(
                             backgroundColor: Colors.white24,
                             visualDensity: VisualDensity.compact,
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 4,
+                            ),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
                           ),
                           child: const Text(
                             '制作拼图',
-                            style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                            ),
                           ),
                         ),
                         const SizedBox(width: 4),
                         IconButton(
-                          icon: const Icon(PhosphorIconsBold.x, size: 16, color: Colors.white70),
+                          icon: const Icon(
+                            PhosphorIconsBold.x,
+                            size: 16,
+                            color: Colors.white70,
+                          ),
                           tooltip: '关闭提示',
                           visualDensity: VisualDensity.compact,
-                          onPressed: () => setState(() => _showDownloadBanner = false),
+                          onPressed: () =>
+                              setState(() => _showDownloadBanner = false),
                         ),
                       ],
                     ),
@@ -698,7 +814,10 @@ class _OnlineImagePickerPageState extends State<OnlineImagePickerPage> {
                   onTap: _isExtracting ? null : _extractCurrentImage,
                   borderRadius: BorderRadius.circular(18),
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 6,
+                    ),
                     decoration: BoxDecoration(
                       color: palette.brand.withValues(alpha: 0.92),
                       borderRadius: BorderRadius.circular(18),
@@ -718,10 +837,17 @@ class _OnlineImagePickerPageState extends State<OnlineImagePickerPage> {
                           const SizedBox(
                             width: 13,
                             height: 13,
-                            child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                            child: CircularProgressIndicator(
+                              color: Colors.white,
+                              strokeWidth: 2,
+                            ),
                           )
                         else
-                          const Icon(PhosphorIconsBold.magnifyingGlassPlus, size: 14, color: Colors.white),
+                          const Icon(
+                            PhosphorIconsBold.magnifyingGlassPlus,
+                            size: 14,
+                            color: Colors.white,
+                          ),
                         const SizedBox(width: 6),
                         Text(
                           _isExtracting ? '正在提取...' : '提取本页大图',

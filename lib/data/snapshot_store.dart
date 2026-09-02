@@ -31,15 +31,20 @@ class SnapshotStore {
         await _snapshotsDir!.create(recursive: true);
       }
       _initialized = true;
-      AppLogger.repo.info('SnapshotStore init dir=${AppLogger.sanitizePath(_snapshotsDir!.path)}');
+      AppLogger.repo.info(
+        'SnapshotStore init dir=${AppLogger.sanitizePath(_snapshotsDir!.path)}',
+      );
       // 启动时清理残留临时文件
       _cleanupTempFiles();
     } catch (e, st) {
       AppLogger.repo.warning('SnapshotStore init failed', e, st);
       // 回退到临时目录（测试环境）
-      _snapshotsDir = Directory(p.join(Directory.systemTemp.path, 'jigsaw_snapshots'));
+      _snapshotsDir = Directory(
+        p.join(Directory.systemTemp.path, 'jigsaw_snapshots'),
+      );
       try {
-        if (!await _snapshotsDir!.exists()) await _snapshotsDir!.create(recursive: true);
+        if (!await _snapshotsDir!.exists())
+          await _snapshotsDir!.create(recursive: true);
       } catch (_) {}
       _initialized = true;
       _cleanupTempFiles();
@@ -90,14 +95,18 @@ class SnapshotStore {
   }
 
   File _fileFor(String canonicalId, String difficultyKey) {
-    final dir = _snapshotsDir ?? Directory(p.join(Directory.systemTemp.path, 'jigsaw_snapshots'));
+    final dir =
+        _snapshotsDir ??
+        Directory(p.join(Directory.systemTemp.path, 'jigsaw_snapshots'));
     return File(p.join(dir.path, _safeFileName(canonicalId, difficultyKey)));
   }
 
   /// 供外部构造 canonicalId 时的辅助
   static String difficultyKeyFor(PuzzleDifficulty d) => '${d.rows}x${d.cols}';
   static String difficultyKeyForBoard(PuzzleBoardState s) =>
-      s.effectiveDifficultyKey.isNotEmpty ? s.effectiveDifficultyKey : '${s.rows}x${s.cols}';
+      s.effectiveDifficultyKey.isNotEmpty
+      ? s.effectiveDifficultyKey
+      : '${s.rows}x${s.cols}';
 
   Future<void> _ensureInit() async {
     if (!_initialized) await init();
@@ -109,7 +118,9 @@ class SnapshotStore {
     final cid = state.effectiveCanonicalId;
     final dkey = state.effectiveDifficultyKey;
     if (cid.isEmpty || dkey.isEmpty) {
-      AppLogger.repo.warning('SnapshotStore.save skip empty cid/dkey cid=$cid dkey=$dkey');
+      AppLogger.repo.warning(
+        'SnapshotStore.save skip empty cid/dkey cid=$cid dkey=$dkey',
+      );
       return;
     }
     final file = _fileFor(cid, dkey);
@@ -151,9 +162,15 @@ class SnapshotStore {
       }
 
       // 方案 A：save 专注做单文件高效原子落盘，移出热路径全目录扫描（P1-6）
-      AppLogger.repo.info('SnapshotStore.save ok cid=$cid dkey=$dkey bytes=${jsonStr.length} ${sw.elapsedMilliseconds}ms file=${AppLogger.sanitizePath(file.path)}');
+      AppLogger.repo.info(
+        'SnapshotStore.save ok cid=$cid dkey=$dkey bytes=${jsonStr.length} ${sw.elapsedMilliseconds}ms file=${AppLogger.sanitizePath(file.path)}',
+      );
     } catch (e, st) {
-      AppLogger.repo.severe('SnapshotStore.save failed cid=$cid dkey=$dkey', e, st);
+      AppLogger.repo.severe(
+        'SnapshotStore.save failed cid=$cid dkey=$dkey',
+        e,
+        st,
+      );
       try {
         if (await tmp.exists()) await tmp.delete();
       } catch (_) {}
@@ -212,9 +229,15 @@ class SnapshotStore {
         }
         rethrow;
       }
-      AppLogger.repo.info('SnapshotStore.saveSync ok cid=$cid dkey=$dkey bytes=${jsonStr.length}');
+      AppLogger.repo.info(
+        'SnapshotStore.saveSync ok cid=$cid dkey=$dkey bytes=${jsonStr.length}',
+      );
     } catch (e, st) {
-      AppLogger.repo.warning('SnapshotStore.saveSync failed cid=$cid dkey=$dkey', e, st);
+      AppLogger.repo.warning(
+        'SnapshotStore.saveSync failed cid=$cid dkey=$dkey',
+        e,
+        st,
+      );
       try {
         if (tmp.existsSync()) tmp.deleteSync();
       } catch (_) {}
@@ -222,7 +245,11 @@ class SnapshotStore {
   }
 
   /// 便利用 boardState + canonicalId 保存（自动补 canonicalId/difficultyKey）
-  Future<void> saveFor(String canonicalId, PuzzleDifficulty difficulty, PuzzleBoardState state) async {
+  Future<void> saveFor(
+    String canonicalId,
+    PuzzleDifficulty difficulty,
+    PuzzleBoardState state,
+  ) async {
     final dkey = difficultyKeyFor(difficulty);
     final enriched = state.copyWith(
       canonicalId: canonicalId,
@@ -232,7 +259,10 @@ class SnapshotStore {
   }
 
   /// 加载快照，损坏则删除并返回 null
-  Future<PuzzleBoardState?> load(String canonicalId, String difficultyKey) async {
+  Future<PuzzleBoardState?> load(
+    String canonicalId,
+    String difficultyKey,
+  ) async {
     await _ensureInit();
     final file = _fileFor(canonicalId, difficultyKey);
     if (!await file.exists()) return null;
@@ -240,10 +270,16 @@ class SnapshotStore {
       final str = await file.readAsString();
       final map = jsonDecode(str) as Map<String, dynamic>;
       final state = PuzzleBoardState.fromJson(map);
-      AppLogger.repo.fine('SnapshotStore.load hit cid=$canonicalId dkey=$difficultyKey pieces=${state.pieces.length} ver=${state.version}');
+      AppLogger.repo.fine(
+        'SnapshotStore.load hit cid=$canonicalId dkey=$difficultyKey pieces=${state.pieces.length} ver=${state.version}',
+      );
       return state;
     } catch (e, st) {
-      AppLogger.repo.warning('SnapshotStore.load corrupted delete cid=$canonicalId dkey=$difficultyKey', e, st);
+      AppLogger.repo.warning(
+        'SnapshotStore.load corrupted delete cid=$canonicalId dkey=$difficultyKey',
+        e,
+        st,
+      );
       try {
         await file.delete();
       } catch (_) {}
@@ -251,11 +287,16 @@ class SnapshotStore {
     }
   }
 
-  Future<PuzzleBoardState?> loadForDifficulty(String canonicalId, PuzzleDifficulty d) =>
-      load(canonicalId, difficultyKeyFor(d));
+  Future<PuzzleBoardState?> loadForDifficulty(
+    String canonicalId,
+    PuzzleDifficulty d,
+  ) => load(canonicalId, difficultyKeyFor(d));
 
   /// 直接以 JSON 字符串加载（用于 GamePage initialSnapshotJson 透传，消除重复编解码开销）
-  Future<String?> loadJsonString(String canonicalId, String difficultyKey) async {
+  Future<String?> loadJsonString(
+    String canonicalId,
+    String difficultyKey,
+  ) async {
     await _ensureInit();
     final file = _fileFor(canonicalId, difficultyKey);
     if (!await file.exists()) return null;
@@ -265,7 +306,11 @@ class SnapshotStore {
       PuzzleBoardState.fromJson(map); // 校验格式与完整性
       return str;
     } catch (e, st) {
-      AppLogger.repo.warning('SnapshotStore.loadJsonString corrupted delete cid=$canonicalId dkey=$difficultyKey', e, st);
+      AppLogger.repo.warning(
+        'SnapshotStore.loadJsonString corrupted delete cid=$canonicalId dkey=$difficultyKey',
+        e,
+        st,
+      );
       try {
         await file.delete();
       } catch (_) {}
@@ -285,7 +330,9 @@ class SnapshotStore {
     if (dir == null || !await dir.exists()) return false;
     final prefix = '${_safePrefix(canonicalId)}__';
     await for (final f in dir.list()) {
-      if (f is File && p.basename(f.path).startsWith(prefix) && f.path.endsWith('.snapshot')) {
+      if (f is File &&
+          p.basename(f.path).startsWith(prefix) &&
+          f.path.endsWith('.snapshot')) {
         return true;
       }
     }
@@ -304,7 +351,10 @@ class SnapshotStore {
       if (f is File) {
         final name = p.basename(f.path);
         if (name.startsWith(prefix) && name.endsWith(suffix)) {
-          final inner = name.substring(prefix.length, name.length - suffix.length);
+          final inner = name.substring(
+            prefix.length,
+            name.length - suffix.length,
+          );
           keys.add(inner);
         }
       }
@@ -318,10 +368,16 @@ class SnapshotStore {
     try {
       if (await file.exists()) {
         await file.delete();
-        AppLogger.repo.info('SnapshotStore.delete cid=$canonicalId dkey=$difficultyKey');
+        AppLogger.repo.info(
+          'SnapshotStore.delete cid=$canonicalId dkey=$difficultyKey',
+        );
       }
     } catch (e, st) {
-      AppLogger.repo.warning('SnapshotStore.delete failed cid=$canonicalId dkey=$difficultyKey', e, st);
+      AppLogger.repo.warning(
+        'SnapshotStore.delete failed cid=$canonicalId dkey=$difficultyKey',
+        e,
+        st,
+      );
     }
   }
 

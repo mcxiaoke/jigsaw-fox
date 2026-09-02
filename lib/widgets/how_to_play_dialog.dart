@@ -107,12 +107,19 @@ class HowToPlayDialog extends StatelessWidget {
             children: [
               Text(
                 title,
-                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                style: const TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 14,
+                ),
               ),
               const SizedBox(height: 2),
               Text(
                 desc,
-                style: const TextStyle(fontSize: 12.5, color: Colors.black87, height: 1.3),
+                style: const TextStyle(
+                  fontSize: 12.5,
+                  color: Colors.black87,
+                  height: 1.3,
+                ),
               ),
             ],
           ),

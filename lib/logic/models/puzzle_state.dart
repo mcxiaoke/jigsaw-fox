@@ -193,7 +193,9 @@ class PuzzleBoardState {
     for (final p in pieces) {
       if (p.id == id) return p;
     }
-    throw StateError('PieceState with id=$id not found in PuzzleBoardState (total=${pieces.length})');
+    throw StateError(
+      'PieceState with id=$id not found in PuzzleBoardState (total=${pieces.length})',
+    );
   }
 
   /// Piece lookup by ID, returning null if not found.
@@ -222,7 +224,8 @@ class PuzzleBoardState {
   /// Returns true if all border (outer edge) pieces are in their solved positions.
   bool get isEdgeComplete {
     for (final p in pieces) {
-      final isBorder = p.r == 0 || p.r == rows - 1 || p.c == 0 || p.c == cols - 1;
+      final isBorder =
+          p.r == 0 || p.r == rows - 1 || p.c == 0 || p.c == cols - 1;
       if (isBorder && !p.isSolved(rows, cols)) return false;
     }
     return true;
@@ -343,21 +346,29 @@ class PuzzleBoardState {
     final rows = json['rows'] as int;
     final cols = json['cols'] as int;
     if (pieceList.length != rows * cols) {
-      throw FormatException('PuzzleBoardState pieces length (${pieceList.length}) != rows*cols ($rows * $cols = ${rows * cols})');
+      throw FormatException(
+        'PuzzleBoardState pieces length (${pieceList.length}) != rows*cols ($rows * $cols = ${rows * cols})',
+      );
     }
 
     // 兼容 v2：无 version/canonicalId/difficultyKey
     final ver = (json['version'] as int?) ?? 2;
     if (ver < minSupportedVersion) {
-      throw FormatException('PuzzleBoardState version ($ver) < minSupportedVersion ($minSupportedVersion)');
+      throw FormatException(
+        'PuzzleBoardState version ($ver) < minSupportedVersion ($minSupportedVersion)',
+      );
     }
     if (ver > currentVersion) {
-      AppLogger.game.warning('PuzzleBoardState version ($ver) is newer than supported ($currentVersion)');
+      AppLogger.game.warning(
+        'PuzzleBoardState version ($ver) is newer than supported ($currentVersion)',
+      );
     }
 
-    final cid = (json['canonicalId'] as String?) ??
+    final cid =
+        (json['canonicalId'] as String?) ??
         (json['levelId'] as String? ?? 'default_level');
-    final dkey = (json['difficultyKey'] as String?) ??
+    final dkey =
+        (json['difficultyKey'] as String?) ??
         (json['rows'] != null && json['cols'] != null
             ? '${json['rows']}x${json['cols']}'
             : '');

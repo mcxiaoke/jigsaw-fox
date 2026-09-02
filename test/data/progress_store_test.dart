@@ -1,4 +1,4 @@
-﻿import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter_test/flutter_test.dart';
 import 'package:jigsawpuzzle/data/progress_store.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -32,58 +32,61 @@ void main() {
       expect(fromJson.minHintsUsed, equals(0));
     });
 
-    test('recordDifficultyCompletion updates records and minHintsUsed state machine', () async {
-      const cid = 'main:001';
-      final store = ProgressStore.instance;
+    test(
+      'recordDifficultyCompletion updates records and minHintsUsed state machine',
+      () async {
+        const cid = 'main:001';
+        final store = ProgressStore.instance;
 
-      // 1. First play with 2 hints, 2 stars, 60s
-      final res1 = await store.recordDifficultyCompletion(
-        canonicalId: cid,
-        difficultyKey: '5x5',
-        stars: 2,
-        timeSeconds: 60,
-        hintsUsed: 2,
-        completedPieceCount: 25,
-      );
+        // 1. First play with 2 hints, 2 stars, 60s
+        final res1 = await store.recordDifficultyCompletion(
+          canonicalId: cid,
+          difficultyKey: '5x5',
+          stars: 2,
+          timeSeconds: 60,
+          hintsUsed: 2,
+          completedPieceCount: 25,
+        );
 
-      expect(res1.stars, equals(2));
-      expect(res1.isNewBestStars, isTrue);
-      expect(res1.deltaStars, equals(2));
-      expect(res1.isFirstNoHintWin, isFalse);
-      expect(res1.record.minHintsUsed, equals(2));
-      expect(res1.record.playCount, equals(1));
+        expect(res1.stars, equals(2));
+        expect(res1.isNewBestStars, isTrue);
+        expect(res1.deltaStars, equals(2));
+        expect(res1.isFirstNoHintWin, isFalse);
+        expect(res1.record.minHintsUsed, equals(2));
+        expect(res1.record.playCount, equals(1));
 
-      // 2. Second play with 0 hints, 3 stars, 40s -> triggers first noHintWin!
-      final res2 = await store.recordDifficultyCompletion(
-        canonicalId: cid,
-        difficultyKey: '5x5',
-        stars: 3,
-        timeSeconds: 40,
-        hintsUsed: 0,
-      );
+        // 2. Second play with 0 hints, 3 stars, 40s -> triggers first noHintWin!
+        final res2 = await store.recordDifficultyCompletion(
+          canonicalId: cid,
+          difficultyKey: '5x5',
+          stars: 3,
+          timeSeconds: 40,
+          hintsUsed: 0,
+        );
 
-      expect(res2.stars, equals(3));
-      expect(res2.isNewBestStars, isTrue);
-      expect(res2.deltaStars, equals(1)); // 3 - 2 = 1
-      expect(res2.isFirstNoHintWin, isTrue);
-      expect(res2.record.minHintsUsed, equals(0));
-      expect(res2.record.playCount, equals(2));
-      expect(res2.record.bestTimeSeconds, equals(40));
+        expect(res2.stars, equals(3));
+        expect(res2.isNewBestStars, isTrue);
+        expect(res2.deltaStars, equals(1)); // 3 - 2 = 1
+        expect(res2.isFirstNoHintWin, isTrue);
+        expect(res2.record.minHintsUsed, equals(0));
+        expect(res2.record.playCount, equals(2));
+        expect(res2.record.bestTimeSeconds, equals(40));
 
-      // 3. Third play with 0 hints again -> does not trigger first noHintWin again
-      final res3 = await store.recordDifficultyCompletion(
-        canonicalId: cid,
-        difficultyKey: '5x5',
-        stars: 3,
-        timeSeconds: 38,
-        hintsUsed: 0,
-      );
-      expect(res3.isNewBestStars, isFalse);
-      expect(res3.deltaStars, equals(0));
-      expect(res3.isFirstNoHintWin, isFalse);
-      expect(res3.record.playCount, equals(3));
-      expect(res3.record.bestTimeSeconds, equals(38));
-    });
+        // 3. Third play with 0 hints again -> does not trigger first noHintWin again
+        final res3 = await store.recordDifficultyCompletion(
+          canonicalId: cid,
+          difficultyKey: '5x5',
+          stars: 3,
+          timeSeconds: 38,
+          hintsUsed: 0,
+        );
+        expect(res3.isNewBestStars, isFalse);
+        expect(res3.deltaStars, equals(0));
+        expect(res3.isFirstNoHintWin, isFalse);
+        expect(res3.record.playCount, equals(3));
+        expect(res3.record.bestTimeSeconds, equals(38));
+      },
+    );
 
     test('Aggregate metrics: distinctImagesWith3Star and totalStars', () async {
       final store = ProgressStore.instance;

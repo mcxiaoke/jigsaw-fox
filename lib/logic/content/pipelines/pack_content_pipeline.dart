@@ -21,9 +21,13 @@ class PackContentPipeline {
   final String packsBaseDir;
   final ContentHttpClient _httpClient;
 
-  final ValueNotifier<List<PuzzlePackItem>> packsNotifier = ValueNotifier<List<PuzzlePackItem>>([]);
+  final ValueNotifier<List<PuzzlePackItem>> packsNotifier =
+      ValueNotifier<List<PuzzlePackItem>>([]);
 
-  static final RegExp _imageRegex = RegExp(r'\.(webp|jpg|jpeg|png)$', caseSensitive: false);
+  static final RegExp _imageRegex = RegExp(
+    r'\.(webp|jpg|jpeg|png)$',
+    caseSensitive: false,
+  );
 
   /// 初始化并加载本地所有已导入的图包
   Future<List<PuzzlePackItem>> loadAllPacks() async {
@@ -31,10 +35,14 @@ class PackContentPipeline {
     if (!baseDir.existsSync()) {
       baseDir.createSync(recursive: true);
       packsNotifier.value = const [];
-      AppLogger.pack.info('loadAllPacks base dir created empty ${AppLogger.sanitizePath(packsBaseDir)}');
+      AppLogger.pack.info(
+        'loadAllPacks base dir created empty ${AppLogger.sanitizePath(packsBaseDir)}',
+      );
       return const [];
     }
-    AppLogger.pack.fine('loadAllPacks scanning ${AppLogger.sanitizePath(packsBaseDir)}');
+    AppLogger.pack.fine(
+      'loadAllPacks scanning ${AppLogger.sanitizePath(packsBaseDir)}',
+    );
 
     final packs = <PuzzlePackItem>[];
     final subDirs = baseDir.listSync().whereType<Directory>();
@@ -47,12 +55,17 @@ class PackContentPipeline {
           final jsonMap = jsonDecode(content) as Map<String, dynamic>;
           final item = PuzzlePackItem.fromJson(jsonMap);
           // 确保封面存在或重新推导
-          final coverPath = item.coverPath.isNotEmpty && File(item.coverPath).existsSync()
+          final coverPath =
+              item.coverPath.isNotEmpty && File(item.coverPath).existsSync()
               ? item.coverPath
               : _findFirstImage(dir.path);
           packs.add(item.copyWith(coverPath: coverPath));
         } catch (e, st) {
-          AppLogger.pack.warning('Failed to parse pack.json in ${AppLogger.sanitizePath(dir.path)}', e, st);
+          AppLogger.pack.warning(
+            'Failed to parse pack.json in ${AppLogger.sanitizePath(dir.path)}',
+            e,
+            st,
+          );
         }
       }
     }
@@ -66,10 +79,14 @@ class PackContentPipeline {
 
   /// 从本地 ZIP 压缩包导入扩展图包
   Future<PuzzlePackItem> importFromLocalZip(String zipFilePath) async {
-    AppLogger.pack.info('importFromLocalZip ${AppLogger.sanitizePath(zipFilePath)}');
+    AppLogger.pack.info(
+      'importFromLocalZip ${AppLogger.sanitizePath(zipFilePath)}',
+    );
     final zipFile = File(zipFilePath);
     if (!zipFile.existsSync()) {
-      AppLogger.pack.warning('importFromLocalZip not found ${AppLogger.sanitizePath(zipFilePath)}');
+      AppLogger.pack.warning(
+        'importFromLocalZip not found ${AppLogger.sanitizePath(zipFilePath)}',
+      );
       throw Exception('指定的 ZIP 文件不存在: $zipFilePath');
     }
 
@@ -86,13 +103,18 @@ class PackContentPipeline {
 
   /// 从网络下载 URL 导入扩展图包
   Future<PuzzlePackItem> importFromNetworkZip(String zipUrl) async {
-    AppLogger.pack.info('importFromNetworkZip ${AppLogger.sanitizeUrl(zipUrl)}');
+    AppLogger.pack.info(
+      'importFromNetworkZip ${AppLogger.sanitizeUrl(zipUrl)}',
+    );
     if (zipUrl.isEmpty || !zipUrl.startsWith('http')) {
       AppLogger.pack.warning('importFromNetworkZip invalid url $zipUrl');
       throw Exception('无效的网络下载 URL: $zipUrl');
     }
 
-    final tempZipPath = p.join(packsBaseDir, 'temp_download_${DateTime.now().millisecondsSinceEpoch}.zip');
+    final tempZipPath = p.join(
+      packsBaseDir,
+      'temp_download_${DateTime.now().millisecondsSinceEpoch}.zip',
+    );
     try {
       final downloadedZip = await _httpClient.downloadFile(zipUrl, tempZipPath);
       final bytes = await downloadedZip.readAsBytes();
@@ -112,7 +134,11 @@ class PackContentPipeline {
       }
       return pack;
     } catch (e, st) {
-      AppLogger.pack.severe('importFromNetworkZip failed ${AppLogger.sanitizeUrl(zipUrl)}', e, st);
+      AppLogger.pack.severe(
+        'importFromNetworkZip failed ${AppLogger.sanitizeUrl(zipUrl)}',
+        e,
+        st,
+      );
       final tf = File(tempZipPath);
       if (tf.existsSync()) {
         try {
@@ -130,16 +156,21 @@ class PackContentPipeline {
     required String sourceType,
     required String sourceOrigin,
   }) async {
-    AppLogger.pack.info('_processZipBytes title=$defaultTitle source=$sourceType bytes=${bytes.length}');
+    AppLogger.pack.info(
+      '_processZipBytes title=$defaultTitle source=$sourceType bytes=${bytes.length}',
+    );
     final archive = ZipDecoder().decodeBytes(bytes);
     if (archive.isEmpty) {
-      AppLogger.pack.warning('_processZipBytes empty archive title=$defaultTitle');
+      AppLogger.pack.warning(
+        '_processZipBytes empty archive title=$defaultTitle',
+      );
       throw Exception('压缩包内容为空');
     }
 
     // 1. 生成全局唯一物理 ID (彻底防同名物理冲突)
     final randomSuffix = (Random().nextInt(9000) + 1000).toRadixString(16);
-    final packId = 'pack_${DateTime.now().millisecondsSinceEpoch}_$randomSuffix';
+    final packId =
+        'pack_${DateTime.now().millisecondsSinceEpoch}_$randomSuffix';
     final targetDir = Directory(p.join(packsBaseDir, packId));
     if (targetDir.existsSync()) {
       targetDir.deleteSync(recursive: true);
@@ -170,7 +201,8 @@ class PackContentPipeline {
         final baseName = p.basename(filename);
 
         // 如果包含 pack.json 或 manifest.json
-        if (baseName.toLowerCase() == 'pack.json' || baseName.toLowerCase() == 'manifest.json') {
+        if (baseName.toLowerCase() == 'pack.json' ||
+            baseName.toLowerCase() == 'manifest.json') {
           try {
             final str = utf8.decode(file.content as List<int>);
             manifestJson = jsonDecode(str) as Map<String, dynamic>;
@@ -187,9 +219,15 @@ class PackContentPipeline {
           // 后台 Isolate 执行，不阻塞 UI 线程。
           Uint8List? processed;
           try {
-            processed = await ThumbnailGenerator.generateCroppedBytesFromBytes(rawBytes: rawBytes);
+            processed = await ThumbnailGenerator.generateCroppedBytesFromBytes(
+              rawBytes: rawBytes,
+            );
           } catch (e, st) {
-            AppLogger.pack.warning('crop failed for $baseName, keep original', e, st);
+            AppLogger.pack.warning(
+              'crop failed for $baseName, keep original',
+              e,
+              st,
+            );
           }
 
           final outFile = File(p.join(targetDir.path, baseName));
@@ -203,10 +241,14 @@ class PackContentPipeline {
     if (validImageFiles.isEmpty) {
       // 若无有效图片，清理目录并抛出异常
       targetDir.deleteSync(recursive: true);
-      AppLogger.pack.warning('_processZipBytes no valid images title=$defaultTitle totalFiles=${archive.length}');
+      AppLogger.pack.warning(
+        '_processZipBytes no valid images title=$defaultTitle totalFiles=${archive.length}',
+      );
       throw Exception('压缩包内未找到支持的图片文件 (支持 jpg, png, webp)');
     }
-    AppLogger.pack.info('_processZipBytes extracted ${validImageFiles.length} images bytes=$totalBytes packId=$packId');
+    AppLogger.pack.info(
+      '_processZipBytes extracted ${validImageFiles.length} images bytes=$totalBytes packId=$packId',
+    );
 
     // 排序图片
     validImageFiles.sort();
@@ -218,7 +260,8 @@ class PackContentPipeline {
     var tags = <String>[];
 
     if (manifestJson != null) {
-      if (manifestJson['title'] != null && manifestJson['title'].toString().trim().isNotEmpty) {
+      if (manifestJson['title'] != null &&
+          manifestJson['title'].toString().trim().isNotEmpty) {
         title = manifestJson['title'].toString().trim();
       }
       if (manifestJson['description'] != null) {
@@ -260,7 +303,10 @@ class PackContentPipeline {
 
     // 4. 将标准 pack.json 落盘至图包沙盒目录
     final packJsonFile = File(p.join(targetDir.path, 'pack.json'));
-    await packJsonFile.writeAsString(jsonEncode(packItem.toJson()), flush: true);
+    await packJsonFile.writeAsString(
+      jsonEncode(packItem.toJson()),
+      flush: true,
+    );
 
     // 5. 刷新内存列表
     await loadAllPacks();
@@ -270,7 +316,9 @@ class PackContentPipeline {
   /// 一键整包物理删除 (释放磁盘存储并从索引中移除)
   Future<bool> deletePack(String packId) async {
     final packDir = Directory(p.join(packsBaseDir, packId));
-    AppLogger.pack.info('deletePack $packId dir=${AppLogger.sanitizePath(packDir.path)}');
+    AppLogger.pack.info(
+      'deletePack $packId dir=${AppLogger.sanitizePath(packDir.path)}',
+    );
     try {
       if (packDir.existsSync()) {
         packDir.deleteSync(recursive: true);
@@ -289,7 +337,11 @@ class PackContentPipeline {
     final packDir = Directory(p.join(packsBaseDir, pack.id));
     if (!packDir.existsSync()) return const [];
 
-    final files = packDir.listSync().whereType<File>().where((f) => _imageRegex.hasMatch(f.path)).toList();
+    final files = packDir
+        .listSync()
+        .whereType<File>()
+        .where((f) => _imageRegex.hasMatch(f.path))
+        .toList();
     files.sort((a, b) => p.basename(a.path).compareTo(p.basename(b.path)));
 
     final levels = <PuzzleLevelItem>[];
@@ -316,7 +368,11 @@ class PackContentPipeline {
   String _findFirstImage(String dirPath) {
     final dir = Directory(dirPath);
     if (!dir.existsSync()) return '';
-    final files = dir.listSync().whereType<File>().where((f) => _imageRegex.hasMatch(f.path)).toList();
+    final files = dir
+        .listSync()
+        .whereType<File>()
+        .where((f) => _imageRegex.hasMatch(f.path))
+        .toList();
     if (files.isEmpty) return '';
     files.sort((a, b) => p.basename(a.path).compareTo(p.basename(b.path)));
     return files.first.path;

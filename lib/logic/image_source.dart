@@ -26,16 +26,19 @@ class AssetSource implements PuzzleSource {
   final String assetPath;
 
   @override
-  Future<Uint8List> loadBytes() => rootBundle.load(assetPath).then(
-        (b) => b.buffer.asUint8List(b.offsetInBytes, b.lengthInBytes),
-      );
+  Future<Uint8List> loadBytes() => rootBundle
+      .load(assetPath)
+      .then((b) => b.buffer.asUint8List(b.offsetInBytes, b.lengthInBytes));
 }
 
 class GallerySource implements PuzzleSource {
   @override
   Future<Uint8List> loadBytes() async {
     final picker = ImagePicker();
-    final file = await picker.pickImage(source: ImageSource.gallery, imageQuality: 90);
+    final file = await picker.pickImage(
+      source: ImageSource.gallery,
+      imageQuality: 90,
+    );
     if (file == null) throw const UserCancelledException();
     return file.readAsBytes();
   }

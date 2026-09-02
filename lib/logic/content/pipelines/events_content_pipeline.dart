@@ -22,7 +22,10 @@ class EventsContentPipeline {
 
   final Map<String, PuzzleEventItem> _eventsMap = {};
 
-  static final RegExp _imageFileRegex = RegExp(r'\.(webp|jpg|jpeg|png)$', caseSensitive: false);
+  static final RegExp _imageFileRegex = RegExp(
+    r'\.(webp|jpg|jpeg|png)$',
+    caseSensitive: false,
+  );
 
   /// 获取面向玩家的所有非禁用活动列表 (按 displayOrder 升序排列)
   List<PuzzleEventItem> get visibleEvents {
@@ -47,14 +50,20 @@ class EventsContentPipeline {
             if (raw is Map<String, dynamic>) {
               final item = PuzzleEventItem.fromJson(raw);
               final isDownloaded = _isEventLocalDownloaded(item);
-              _eventsMap[item.id] = item.copyWith(isLocalDownloaded: isDownloaded);
+              _eventsMap[item.id] = item.copyWith(
+                isLocalDownloaded: isDownloaded,
+              );
               loaded++;
             }
           }
-          AppLogger.events.info('initializeFromCache loaded=$loaded file=${AppLogger.sanitizePath(cacheFilePath)}');
+          AppLogger.events.info(
+            'initializeFromCache loaded=$loaded file=${AppLogger.sanitizePath(cacheFilePath)}',
+          );
         }
       } else {
-        AppLogger.events.fine('initializeFromCache no cache ${AppLogger.sanitizePath(cacheFilePath)}');
+        AppLogger.events.fine(
+          'initializeFromCache no cache ${AppLogger.sanitizePath(cacheFilePath)}',
+        );
       }
     } catch (e, st) {
       AppLogger.events.warning('initializeFromCache failed', e, st);
@@ -67,11 +76,15 @@ class EventsContentPipeline {
       AppLogger.events.warning('syncWithRemote empty url');
       return false;
     }
-    AppLogger.events.info('syncWithRemote url=${AppLogger.sanitizeUrl(remoteUrl)}');
+    AppLogger.events.info(
+      'syncWithRemote url=${AppLogger.sanitizeUrl(remoteUrl)}',
+    );
     try {
       final json = await _httpClient.fetchJson(remoteUrl);
       if (json is! List<dynamic>) {
-        AppLogger.events.warning('syncWithRemote unexpected type ${json.runtimeType}');
+        AppLogger.events.warning(
+          'syncWithRemote unexpected type ${json.runtimeType}',
+        );
         return false;
       }
 
@@ -87,18 +100,25 @@ class EventsContentPipeline {
             updatedEvents.add(updatedItem);
           } catch (e, st) {
             skipped++;
-            AppLogger.events.warning('syncWithRemote skip malformed event $raw', e, st);
+            AppLogger.events.warning(
+              'syncWithRemote skip malformed event $raw',
+              e,
+              st,
+            );
           }
         }
       }
 
       // 触发 Auto-GC 垃圾回收：自动清理 disabled 活动的本地沙盒目录
       final gcCount = await performAutoGc();
-      if (gcCount > 0) AppLogger.events.info('Auto-GC deleted $gcCount disabled events');
+      if (gcCount > 0)
+        AppLogger.events.info('Auto-GC deleted $gcCount disabled events');
 
       // 持久化到缓存
       await _persistToCache();
-      AppLogger.events.info('syncWithRemote done events=${_eventsMap.length} updated=${updatedEvents.length} skipped=$skipped gc=$gcCount');
+      AppLogger.events.info(
+        'syncWithRemote done events=${_eventsMap.length} updated=${updatedEvents.length} skipped=$skipped gc=$gcCount',
+      );
       return true;
     } catch (e, st) {
       AppLogger.events.warning('syncWithRemote failed', e, st);
@@ -135,17 +155,29 @@ class EventsContentPipeline {
 
     if (event.isZipType) {
       if (event.zipUrl == null || event.zipUrl!.isEmpty) {
-        AppLogger.events.warning('ensureEventDownloaded empty zipUrl ${event.id}');
+        AppLogger.events.warning(
+          'ensureEventDownloaded empty zipUrl ${event.id}',
+        );
         return false;
       }
-      AppLogger.events.info('ensureEventDownloaded zip ${event.id} url=${AppLogger.sanitizeUrl(event.zipUrl!)}');
-      final tempZipPath = p.join(eventsStorageBaseDir, 'temp_${event.id}_${DateTime.now().millisecondsSinceEpoch}.zip');
+      AppLogger.events.info(
+        'ensureEventDownloaded zip ${event.id} url=${AppLogger.sanitizeUrl(event.zipUrl!)}',
+      );
+      final tempZipPath = p.join(
+        eventsStorageBaseDir,
+        'temp_${event.id}_${DateTime.now().millisecondsSinceEpoch}.zip',
+      );
       final targetDir = Directory(p.join(eventsStorageBaseDir, event.id));
-      final tempExtractDir = Directory(p.join(eventsStorageBaseDir, 'temp_extract_${event.id}'));
+      final tempExtractDir = Directory(
+        p.join(eventsStorageBaseDir, 'temp_extract_${event.id}'),
+      );
 
       try {
         // 1. 下载 Zip 包
-        final zipFile = await _httpClient.downloadFile(event.zipUrl!, tempZipPath);
+        final zipFile = await _httpClient.downloadFile(
+          event.zipUrl!,
+          tempZipPath,
+        );
         final bytes = await zipFile.readAsBytes();
 
         // 2. 解压到临时目录
@@ -179,7 +211,11 @@ class EventsContentPipeline {
         AppLogger.events.info('ensureEventDownloaded success ${event.id}');
         return true;
       } catch (e, st) {
-        AppLogger.events.severe('ensureEventDownloaded failed ${event.id}', e, st);
+        AppLogger.events.severe(
+          'ensureEventDownloaded failed ${event.id}',
+          e,
+          st,
+        );
         if (tempExtractDir.existsSync()) {
           try {
             tempExtractDir.deleteSync(recursive: true);
@@ -207,7 +243,11 @@ class EventsContentPipeline {
       final eventDir = Directory(p.join(eventsStorageBaseDir, event.id));
       if (!eventDir.existsSync()) return const [];
 
-      final files = eventDir.listSync().whereType<File>().where((f) => _imageFileRegex.hasMatch(f.path)).toList();
+      final files = eventDir
+          .listSync()
+          .whereType<File>()
+          .where((f) => _imageFileRegex.hasMatch(f.path))
+          .toList();
       // 自然排序
       files.sort((a, b) => p.basename(a.path).compareTo(p.basename(b.path)));
 
@@ -261,7 +301,9 @@ class EventsContentPipeline {
       }
       final payload = _eventsMap.values.map((e) => e.toJson()).toList();
       await file.writeAsString(jsonEncode(payload), flush: true);
-      AppLogger.events.fine('Persisted events cache count=${_eventsMap.length}');
+      AppLogger.events.fine(
+        'Persisted events cache count=${_eventsMap.length}',
+      );
     } catch (e, st) {
       AppLogger.events.warning('Persist events cache failed', e, st);
     }

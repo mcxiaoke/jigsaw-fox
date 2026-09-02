@@ -1,4 +1,4 @@
-﻿/// Dual-axis multi-tiered star rating calculator (v3.3.1 design).
+/// Dual-axis multi-tiered star rating calculator (v3.3.1 design).
 ///
 /// Combines TimeScore (speed relative to non-linear BaseSeconds) and
 /// HintScore (hint usage vs scalable allowance) taking the minimum,

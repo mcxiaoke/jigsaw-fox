@@ -90,7 +90,9 @@ void main() {
       expect(json3['version'], 2);
       expect(json3['canonicalId'], 'level_07');
       // 手动升级后
-      final upgraded = s.copyWith(version: PuzzleBoardState.currentVersion).toJson();
+      final upgraded = s
+          .copyWith(version: PuzzleBoardState.currentVersion)
+          .toJson();
       expect(upgraded['version'], PuzzleBoardState.currentVersion);
     });
 
@@ -109,7 +111,16 @@ void main() {
         'futureField': 'futureValue',
         'futureObj': {'a': 1},
         'pieces': [
-          {'id': 0, 'r': 0, 'c': 0, 'nx': 0.0, 'ny': 0.0, 'g': 0, 'rot': 0, 'futurePieceField': 123},
+          {
+            'id': 0,
+            'r': 0,
+            'c': 0,
+            'nx': 0.0,
+            'ny': 0.0,
+            'g': 0,
+            'rot': 0,
+            'futurePieceField': 123,
+          },
         ],
       };
       final s = PuzzleBoardState.fromJson(jsonWithFuture);
@@ -136,7 +147,10 @@ void main() {
           {'id': 0, 'r': 0, 'c': 0, 'nx': 0.0, 'ny': 0.0, 'g': 0, 'rot': 0},
         ],
       };
-      expect(() => PuzzleBoardState.fromJson(invalidJson), throwsA(isA<FormatException>()));
+      expect(
+        () => PuzzleBoardState.fromJson(invalidJson),
+        throwsA(isA<FormatException>()),
+      );
     });
   });
 }

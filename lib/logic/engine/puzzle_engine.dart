@@ -32,7 +32,9 @@ class PuzzleEngine {
     bool rotationEnabled = false,
     String levelId = 'default_level',
   }) {
-    AppLogger.engine.info('createInitialState rows=$rows cols=$cols seed=$seed rotation=$rotationEnabled levelId=$levelId');
+    AppLogger.engine.info(
+      'createInitialState rows=$rows cols=$cols seed=$seed rotation=$rotationEnabled levelId=$levelId',
+    );
     final rng = Random(seed);
     final pieces = <PieceState>[];
 
@@ -74,7 +76,11 @@ class PuzzleEngine {
   /// 计算归一化坐标系下的实际吸附距离阈值。
   ///
   /// 【公式】：`min(1.0 / cols, 1.0 / rows) * ratio`
-  static double calculateSnapThreshold(int rows, int cols, [double ratio = defaultSnapRatio]) {
+  static double calculateSnapThreshold(
+    int rows,
+    int cols, [
+    double ratio = defaultSnapRatio,
+  ]) {
     final pieceW = 1.0 / cols;
     final pieceH = 1.0 / rows;
     return min(pieceW, pieceH) * ratio;
@@ -93,7 +99,7 @@ class PuzzleEngine {
     final rows = state.rows, cols = state.cols;
     final snapped = state.pieces.where((p) => p.isSolved(rows, cols)).toList();
     final byCell = {for (final p in snapped) '${p.r},${p.c}': p.id};
-    const offsets = [( -1, 0), (1, 0), (0, -1), (0, 1)];
+    const offsets = [(-1, 0), (1, 0), (0, -1), (0, 1)];
     final planted = <int>{};
     final visited = <int>{};
     for (final seed in snapped) {
@@ -124,9 +130,12 @@ class PuzzleEngine {
   /// 允许吸附需满足：集群含**边缘碎片**（触边），或集群某成员的目标正交邻格
   /// 已被“已植入装配体”占据（能顺势接上边框长出的装配体）。孤立内部碎片/岛屿
   /// 既不在边缘也不邻接已植入装配体 → 拒绝吸附，保持自由拖动（对应 WebJigex 的“无邻居不吸附”）。
-  static bool canSnapCluster(PuzzleBoardState state, Iterable<PieceState> clusterPieces) {
+  static bool canSnapCluster(
+    PuzzleBoardState state,
+    Iterable<PieceState> clusterPieces,
+  ) {
     final planted = computePlantedPieceIds(state);
-    const offsets = [( -1, 0), (1, 0), (0, -1), (0, 1)];
+    const offsets = [(-1, 0), (1, 0), (0, -1), (0, 1)];
     for (final p in clusterPieces) {
       if (isBorderPiece(state.rows, state.cols, p.r, p.c)) return true;
       for (final (dr, dc) in offsets) {
@@ -155,10 +164,12 @@ class PuzzleEngine {
     Set<int>? onBoardPieceIds,
     double? customSnapDistance,
   }) {
-    final snapDist = customSnapDistance ??
-        calculateSnapThreshold(state.rows, state.cols);
+    final snapDist =
+        customSnapDistance ?? calculateSnapThreshold(state.rows, state.cols);
     if (AppLogger.engine.isLoggable(Level.FINE)) {
-      AppLogger.engine.fine('resolveSnap start dragged=$draggedPieceId cluster snapDist=$snapDist onBoard=${onBoardPieceIds?.length ?? 0} rows=${state.rows} cols=${state.cols}');
+      AppLogger.engine.fine(
+        'resolveSnap start dragged=$draggedPieceId cluster snapDist=$snapDist onBoard=${onBoardPieceIds?.length ?? 0} rows=${state.rows} cols=${state.cols}',
+      );
     }
 
     final draggedPiece = state.pieceById(draggedPieceId);
@@ -167,7 +178,9 @@ class PuzzleEngine {
 
     // 如果指定了棋盘有效碎片且当前被拖拽碎片不在其中，直接返回
     if (onBoardPieceIds != null && !onBoardPieceIds.contains(draggedPieceId)) {
-      AppLogger.engine.fine('resolveSnap skipped piece $draggedPieceId not on board (tray)');
+      AppLogger.engine.fine(
+        'resolveSnap skipped piece $draggedPieceId not on board (tray)',
+      );
       return BoardTransitionResult(
         state: state,
         didSnap: false,
@@ -193,7 +206,10 @@ class PuzzleEngine {
       }
       final targetNx = piece.targetNx(state.cols);
       final targetNy = piece.targetNy(state.rows);
-      final dist = Point(piece.nx, piece.ny).distanceTo(Point(targetNx, targetNy));
+      final dist = Point(
+        piece.nx,
+        piece.ny,
+      ).distanceTo(Point(targetNx, targetNy));
 
       if (dist <= snapDist) {
         // 集群未与边缘装配体连通 → 拒绝吸附到槽位，保持游离可移动（仍可走阶段二与邻居试合并）
@@ -204,17 +220,13 @@ class PuzzleEngine {
         final dx = targetNx - piece.nx;
         final dy = targetNy - piece.ny;
 
-        currentPieces = _translateCluster(
-          currentPieces,
-          clusterId,
-          dx,
-          dy,
-        );
+        currentPieces = _translateCluster(currentPieces, clusterId, dx, dy);
 
         // 锁定归一化标准坐标，消除累积浮点误差
         var lockCount = 0;
         currentPieces = currentPieces.map((p) {
-          if (p.clusterId == clusterId && (!state.rotationEnabled || p.rot % 4 == 0)) {
+          if (p.clusterId == clusterId &&
+              (!state.rotationEnabled || p.rot % 4 == 0)) {
             final tnx = p.targetNx(state.cols);
             final tny = p.targetNy(state.rows);
             final dx = (p.nx - tnx).abs();
@@ -228,13 +240,17 @@ class PuzzleEngine {
         }).toList();
 
         didSnap = true;
-        AppLogger.engine.info('BoardSlot snap piece=${piece.id} r=${piece.r} c=${piece.c} dist=${dist.toStringAsFixed(4)} snapDist=${snapDist.toStringAsFixed(4)} cluster=$clusterId lockCascadeCount=$lockCount');
+        AppLogger.engine.info(
+          'BoardSlot snap piece=${piece.id} r=${piece.r} c=${piece.c} dist=${dist.toStringAsFixed(4)} snapDist=${snapDist.toStringAsFixed(4)} cluster=$clusterId lockCascadeCount=$lockCount',
+        );
         break;
       }
     }
 
     // 2. 检查与空中其他碎片的邻居正交相对吸附与集群合并（严禁合并托盘碎片）
-    final activeClusterPieces = currentPieces.where((p) => p.clusterId == clusterId).toList();
+    final activeClusterPieces = currentPieces
+        .where((p) => p.clusterId == clusterId)
+        .toList();
 
     for (final pA in activeClusterPieces) {
       for (final pB in currentPieces) {
@@ -258,7 +274,10 @@ class PuzzleEngine {
         final actualDx = pB.nx - pA.nx;
         final actualDy = pB.ny - pA.ny;
 
-        final offsetError = Point(actualDx, actualDy).distanceTo(Point(expectedDx, expectedDy));
+        final offsetError = Point(
+          actualDx,
+          actualDy,
+        ).distanceTo(Point(expectedDx, expectedDy));
 
         if (offsetError <= snapDist) {
           final alignDx = actualDx - expectedDx;
@@ -266,7 +285,9 @@ class PuzzleEngine {
 
           // 主装配体保护判定：小集群平移对齐向大集群（定海神针机制）
           final countA = activeClusterPieces.length;
-          final countB = currentPieces.where((p) => p.clusterId == pB.clusterId).length;
+          final countB = currentPieces
+              .where((p) => p.clusterId == pB.clusterId)
+              .length;
 
           if (countB >= countA) {
             // 集群 B 规模更大（为主装配体），平移集群 A 向集群 B 对齐
@@ -286,7 +307,11 @@ class PuzzleEngine {
               return p;
             }).toList();
 
-            affectedIds.addAll(currentPieces.where((p) => p.clusterId == targetClusterId).map((p) => p.id));
+            affectedIds.addAll(
+              currentPieces
+                  .where((p) => p.clusterId == targetClusterId)
+                  .map((p) => p.id),
+            );
           } else {
             // 集群 A 规模更大（为主装配体），平移小集群 B 向集群 A 对齐，集群 A 纹丝不动
             currentPieces = _translateCluster(
@@ -305,12 +330,18 @@ class PuzzleEngine {
               return p;
             }).toList();
 
-            affectedIds.addAll(currentPieces.where((p) => p.clusterId == clusterId).map((p) => p.id));
+            affectedIds.addAll(
+              currentPieces
+                  .where((p) => p.clusterId == clusterId)
+                  .map((p) => p.id),
+            );
           }
 
           didSnap = true;
           didMerge = true;
-          AppLogger.engine.info('ClusterMerge pA=${pA.id}(${pA.r},${pA.c}) pB=${pB.id}(${pB.r},${pB.c}) offsetErr=${offsetError.toStringAsFixed(4)} snapDist=${snapDist.toStringAsFixed(4)} countA=$countA countB=$countB');
+          AppLogger.engine.info(
+            'ClusterMerge pA=${pA.id}(${pA.r},${pA.c}) pB=${pB.id}(${pB.r},${pB.c}) offsetErr=${offsetError.toStringAsFixed(4)} snapDist=${snapDist.toStringAsFixed(4)} countA=$countA countB=$countB',
+          );
           break;
         }
       }
@@ -328,7 +359,9 @@ class PuzzleEngine {
 
     final newState = state.copyWith(pieces: currentPieces);
     if (didSnap || didMerge || newState.isSolved) {
-      AppLogger.engine.info('resolveSnap result dragged=$draggedPieceId didSnap=$didSnap didMerge=$didMerge affected=${affectedIds.length} isCompleted=${newState.isSolved}');
+      AppLogger.engine.info(
+        'resolveSnap result dragged=$draggedPieceId didSnap=$didSnap didMerge=$didMerge affected=${affectedIds.length} isCompleted=${newState.isSolved}',
+      );
     } else if (AppLogger.engine.isLoggable(Level.FINE)) {
       AppLogger.engine.fine('resolveSnap no snap dragged=$draggedPieceId');
     }
@@ -350,10 +383,7 @@ class PuzzleEngine {
   ) {
     return pieces.map((p) {
       if (p.clusterId == clusterId) {
-        return p.copyWith(
-          nx: p.nx + dx,
-          ny: p.ny + dy,
-        );
+        return p.copyWith(nx: p.nx + dx, ny: p.ny + dy);
       }
       return p;
     }).toList();
@@ -386,7 +416,8 @@ class PuzzleEngine {
           final pB = result[j];
           if (pA.clusterId == pB.clusterId) continue;
           if (onBoardPieceIds != null &&
-              (!onBoardPieceIds.contains(pA.id) || !onBoardPieceIds.contains(pB.id))) {
+              (!onBoardPieceIds.contains(pA.id) ||
+                  !onBoardPieceIds.contains(pB.id))) {
             continue; // 托盘碎片绝不参与级联合并
           }
 
@@ -415,7 +446,8 @@ class PuzzleEngine {
               }
             }
             // Update cluster sizes incrementally
-            clusterSizes[targetId] = (clusterSizes[targetId] ?? 0) + (clusterSizes[sourceId] ?? 0);
+            clusterSizes[targetId] =
+                (clusterSizes[targetId] ?? 0) + (clusterSizes[sourceId] ?? 0);
             clusterSizes.remove(sourceId);
             changed = true;
             break;
@@ -440,7 +472,9 @@ class PuzzleEngine {
     final targetPiece = state.pieceById(pieceId);
     final clusterId = targetPiece.clusterId;
     final clusterPieces = state.piecesInCluster(clusterId);
-    AppLogger.engine.info('rotateCluster piece=$pieceId cluster=$clusterId size=${clusterPieces.length}');
+    AppLogger.engine.info(
+      'rotateCluster piece=$pieceId cluster=$clusterId size=${clusterPieces.length}',
+    );
 
     // 计算集群几何中心
     var minNx = 1.0, maxNx = 0.0, minNy = 1.0, maxNy = 0.0;
@@ -466,11 +500,7 @@ class PuzzleEngine {
       final newNx = centerNx + newRelX - (0.5 / state.cols);
       final newNy = centerNy + newRelY - (0.5 / state.rows);
 
-      return p.copyWith(
-        nx: newNx,
-        ny: newNy,
-        rot: (p.rot + 1) % 4,
-      );
+      return p.copyWith(nx: newNx, ny: newNy, rot: (p.rot + 1) % 4);
     }).toList();
 
     return state.copyWith(pieces: updated);
@@ -479,14 +509,24 @@ class PuzzleEngine {
   /// 智能提示（Hint）算法：优先挑选最具策略价值的未归位碎片（如角块、边块）。
   static HintResult hintFor(PuzzleBoardState state) {
     // 1. 找出所有未到达目标正确槽位的碎片
-    final unplaced = state.pieces.where((p) => !p.isSolved(state.rows, state.cols)).toList();
+    final unplaced = state.pieces
+        .where((p) => !p.isSolved(state.rows, state.cols))
+        .toList();
     if (unplaced.isEmpty) {
       AppLogger.engine.info('hintFor all solved pieces=${state.pieces.length}');
-      return HintResult(pieceId: state.pieces.first.id, targetNx: 0, targetNy: 0);
+      return HintResult(
+        pieceId: state.pieces.first.id,
+        targetNx: 0,
+        targetNy: 0,
+      );
     }
 
     // 2. 策略优先级排序：角块 (Corner) > 边块 (Border) > 内部块 (Center)
-    final edgeLayout = EdgeLayout(rows: state.rows, cols: state.cols, seed: state.seed);
+    final edgeLayout = EdgeLayout(
+      rows: state.rows,
+      cols: state.cols,
+      seed: state.seed,
+    );
     unplaced.sort((a, b) {
       final aEdges = edgeLayout.edgesFor(a.r, a.c);
       final bEdges = edgeLayout.edgesFor(b.r, b.c);
@@ -498,7 +538,9 @@ class PuzzleEngine {
     });
 
     final targetPiece = unplaced.first;
-    AppLogger.engine.info('hintFor target=${targetPiece.id} r=${targetPiece.r} c=${targetPiece.c} unplaced=${unplaced.length}');
+    AppLogger.engine.info(
+      'hintFor target=${targetPiece.id} r=${targetPiece.r} c=${targetPiece.c} unplaced=${unplaced.length}',
+    );
     return HintResult(
       pieceId: targetPiece.id,
       targetNx: targetPiece.targetNx(state.cols),

@@ -17,29 +17,29 @@ class ContentManager {
     required String appSupportDir,
     required String appDocumentsDir,
     ContentHttpClient? httpClient,
-  })  : manifestRouter = ManifestRouter(
-          bootstrapUrls: bootstrapUrls,
-          cacheFilePath: p.join(appSupportDir, 'manifest_cache.json'),
-          httpClient: httpClient,
-        ),
-        mainPipeline = MainContentPipeline(
-          cacheFilePath: p.join(appSupportDir, 'main_levels_cache.json'),
-          imagesStorageDir: p.join(appDocumentsDir, 'levels', 'main'),
-          httpClient: httpClient,
-        ),
-        dailyPipeline = DailyContentPipeline(
-          dailyStorageBaseDir: p.join(appDocumentsDir, 'daily'),
-          httpClient: httpClient,
-        ),
-        eventsPipeline = EventsContentPipeline(
-          cacheFilePath: p.join(appSupportDir, 'events_cache.json'),
-          eventsStorageBaseDir: p.join(appDocumentsDir, 'events'),
-          httpClient: httpClient,
-        ),
-        packPipeline = PackContentPipeline(
-          packsBaseDir: p.join(appDocumentsDir, 'packs'),
-          httpClient: httpClient,
-        );
+  }) : manifestRouter = ManifestRouter(
+         bootstrapUrls: bootstrapUrls,
+         cacheFilePath: p.join(appSupportDir, 'manifest_cache.json'),
+         httpClient: httpClient,
+       ),
+       mainPipeline = MainContentPipeline(
+         cacheFilePath: p.join(appSupportDir, 'main_levels_cache.json'),
+         imagesStorageDir: p.join(appDocumentsDir, 'levels', 'main'),
+         httpClient: httpClient,
+       ),
+       dailyPipeline = DailyContentPipeline(
+         dailyStorageBaseDir: p.join(appDocumentsDir, 'daily'),
+         httpClient: httpClient,
+       ),
+       eventsPipeline = EventsContentPipeline(
+         cacheFilePath: p.join(appSupportDir, 'events_cache.json'),
+         eventsStorageBaseDir: p.join(appDocumentsDir, 'events'),
+         httpClient: httpClient,
+       ),
+       packPipeline = PackContentPipeline(
+         packsBaseDir: p.join(appDocumentsDir, 'packs'),
+         httpClient: httpClient,
+       );
 
   final ManifestRouter manifestRouter;
   final MainContentPipeline mainPipeline;
@@ -60,7 +60,9 @@ class ContentManager {
         eventsPipeline.initializeFromCache(),
         packPipeline.loadAllPacks(),
       ]);
-      AppLogger.content.info('ContentManager initialize done ${sw.elapsedMilliseconds}ms main=${mainPipeline.levels.length} events=${eventsPipeline.visibleEvents.length} packs=${packPipeline.packsNotifier.value.length}');
+      AppLogger.content.info(
+        'ContentManager initialize done ${sw.elapsedMilliseconds}ms main=${mainPipeline.levels.length} events=${eventsPipeline.visibleEvents.length} packs=${packPipeline.packsNotifier.value.length}',
+      );
     } catch (e, st) {
       AppLogger.content.severe('ContentManager initialize failed', e, st);
       rethrow;
@@ -73,20 +75,32 @@ class ContentManager {
     final sw = Stopwatch()..start();
     // 1. 获取最新 Root Manifest
     final manifest = await manifestRouter.resolveManifest(forceRefresh: true);
-    AppLogger.content.info('syncAll manifest resolved version=${manifest.schemaVersion} main=${AppLogger.sanitizeUrl(manifest.mainModule.url)} events=${AppLogger.sanitizeUrl(manifest.eventsModule.url)}');
+    AppLogger.content.info(
+      'syncAll manifest resolved version=${manifest.schemaVersion} main=${AppLogger.sanitizeUrl(manifest.mainModule.url)} events=${AppLogger.sanitizeUrl(manifest.eventsModule.url)}',
+    );
 
     // 2. 并发同步各模块元数据
     try {
       await Future.wait([
         // 同步首页关卡
-        mainPipeline.syncWithRemote(
-          remoteUrl: manifest.mainModule.url,
-          remoteVersion: manifest.mainModule.version,
-        ).then((v) => AppLogger.content.info('main sync done hasNew=$v levels=${mainPipeline.levels.length}')),
+        mainPipeline
+            .syncWithRemote(
+              remoteUrl: manifest.mainModule.url,
+              remoteVersion: manifest.mainModule.version,
+            )
+            .then(
+              (v) => AppLogger.content.info(
+                'main sync done hasNew=$v levels=${mainPipeline.levels.length}',
+              ),
+            ),
         // 同步活动列表 (自动触发 Auto-GC)
-        eventsPipeline.syncWithRemote(
-          remoteUrl: manifest.eventsModule.url,
-        ).then((v) => AppLogger.content.info('events sync done $v events=${eventsPipeline.visibleEvents.length}')),
+        eventsPipeline
+            .syncWithRemote(remoteUrl: manifest.eventsModule.url)
+            .then(
+              (v) => AppLogger.content.info(
+                'events sync done $v events=${eventsPipeline.visibleEvents.length}',
+              ),
+            ),
         // 预备当月每日挑战
         () async {
           final currentMonth = manifest.dailyModule.currentMonth.isNotEmpty
@@ -98,15 +112,23 @@ class ContentManager {
               zipUrlPattern: manifest.dailyModule.zipUrlPattern,
               overrideToday: overrideToday,
             );
-            AppLogger.content.info('daily ensureMonthReady $currentMonth ok=$ok levels=${dailyPipeline.getLevelsForMonth(currentMonth, overrideToday: overrideToday).length}');
+            AppLogger.content.info(
+              'daily ensureMonthReady $currentMonth ok=$ok levels=${dailyPipeline.getLevelsForMonth(currentMonth, overrideToday: overrideToday).length}',
+            );
           } else {
-            AppLogger.content.fine('daily zipUrlPattern empty skip month $currentMonth');
+            AppLogger.content.fine(
+              'daily zipUrlPattern empty skip month $currentMonth',
+            );
           }
         }(),
       ]);
       AppLogger.content.info('syncAll done ${sw.elapsedMilliseconds}ms');
     } catch (e, st) {
-      AppLogger.content.severe('syncAll failed ${sw.elapsedMilliseconds}ms', e, st);
+      AppLogger.content.severe(
+        'syncAll failed ${sw.elapsedMilliseconds}ms',
+        e,
+        st,
+      );
       rethrow;
     }
   }
@@ -120,7 +142,8 @@ class ContentManager {
   List<String> getMainTags() => mainPipeline.availableTags;
 
   /// 按标签过滤首页关卡
-  List<PuzzleLevelItem> filterMainByTag(String tag) => mainPipeline.filterByTag(tag);
+  List<PuzzleLevelItem> filterMainByTag(String tag) =>
+      mainPipeline.filterByTag(tag);
 
   /// 确保指定首页关卡图片已下载
   Future<PuzzleLevelItem> ensureMainLevelDownloaded(PuzzleLevelItem level) =>
@@ -129,8 +152,10 @@ class ContentManager {
   // --- 每日挑战 Daily 模块便捷代理 ---
 
   /// 获取指定月份每日关卡 (带时间锁)
-  List<PuzzleLevelItem> getDailyLevelsForMonth(String yyyyMm, {DateTime? overrideToday}) =>
-      dailyPipeline.getLevelsForMonth(yyyyMm, overrideToday: overrideToday);
+  List<PuzzleLevelItem> getDailyLevelsForMonth(
+    String yyyyMm, {
+    DateTime? overrideToday,
+  }) => dailyPipeline.getLevelsForMonth(yyyyMm, overrideToday: overrideToday);
 
   /// 获取今日挑战关卡
   PuzzleLevelItem? getTodayDailyLevel({DateTime? overrideToday}) =>

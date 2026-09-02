@@ -9,9 +9,9 @@ class HowToPlayPage extends StatelessWidget {
   const HowToPlayPage({super.key});
 
   static Future<void> open(BuildContext context) {
-    return Navigator.of(context).push(
-      MaterialPageRoute<void>(builder: (_) => const HowToPlayPage()),
-    );
+    return Navigator.of(
+      context,
+    ).push(MaterialPageRoute<void>(builder: (_) => const HowToPlayPage()));
   }
 
   @override
@@ -83,15 +83,23 @@ class HowToPlayPage extends StatelessWidget {
             children: [
               // Welcome Banner
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 14,
+                ),
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
-                    colors: [palette.brand.withValues(alpha: 0.12), palette.info.withValues(alpha: 0.12)],
+                    colors: [
+                      palette.brand.withValues(alpha: 0.12),
+                      palette.info.withValues(alpha: 0.12),
+                    ],
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
                   ),
                   borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: palette.brand.withValues(alpha: 0.2)),
+                  border: Border.all(
+                    color: palette.brand.withValues(alpha: 0.2),
+                  ),
                 ),
                 child: Row(
                   children: [
@@ -102,16 +110,29 @@ class HowToPlayPage extends StatelessWidget {
                         color: palette.brand.withValues(alpha: 0.15),
                         borderRadius: BorderRadius.circular(12),
                       ),
-                      child: Icon(PhosphorIconsFill.sparkle, color: palette.brand, size: 24),
+                      child: Icon(
+                        PhosphorIconsFill.sparkle,
+                        color: palette.brand,
+                        size: 24,
+                      ),
                     ),
                     const SizedBox(width: 12),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text('轻松上手异形拼图', style: styles.bodyBold.copyWith(fontSize: 15, color: palette.brand)),
+                          Text(
+                            '轻松上手异形拼图',
+                            style: styles.bodyBold.copyWith(
+                              fontSize: 15,
+                              color: palette.brand,
+                            ),
+                          ),
                           const SizedBox(height: 2),
-                          Text('熟悉以下核心操作手势与辅助工具，能让你在挑战高难度拼图时事半功倍！', style: styles.caption.copyWith(height: 1.3)),
+                          Text(
+                            '熟悉以下核心操作手势与辅助工具，能让你在挑战高难度拼图时事半功倍！',
+                            style: styles.caption.copyWith(height: 1.3),
+                          ),
                         ],
                       ),
                     ),
@@ -135,7 +156,11 @@ class HowToPlayPage extends StatelessWidget {
     );
   }
 
-  Widget _buildTipCard(_TipItemData tip, AppPalette palette, AppTextStyles styles) {
+  Widget _buildTipCard(
+    _TipItemData tip,
+    AppPalette palette,
+    AppTextStyles styles,
+  ) {
     return Container(
       decoration: BoxDecoration(
         color: palette.surfaceContainer,
@@ -160,7 +185,10 @@ class HowToPlayPage extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(tip.title, style: styles.bodyBold.copyWith(fontSize: 15)),
+                  Text(
+                    tip.title,
+                    style: styles.bodyBold.copyWith(fontSize: 15),
+                  ),
                   const SizedBox(height: 4),
                   Text(tip.desc, style: styles.body.copyWith(height: 1.4)),
                 ],

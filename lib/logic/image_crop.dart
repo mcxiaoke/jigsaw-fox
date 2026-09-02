@@ -53,7 +53,11 @@ bool needsCenterCropFor({
 /// 计算居中裁剪区域（纯数学，便于单测）：
 /// `imageRatio > targetRatio` 裁宽（左右各半），否则裁高（上下各半）。
 /// 返回源图坐标系下的裁剪矩形。
-Rect centerCropRect({required int imageWidth, required int imageHeight, required double targetRatio}) {
+Rect centerCropRect({
+  required int imageWidth,
+  required int imageHeight,
+  required double targetRatio,
+}) {
   final w = imageWidth.toDouble();
   final h = imageHeight.toDouble();
   final srcRatio = w / h;

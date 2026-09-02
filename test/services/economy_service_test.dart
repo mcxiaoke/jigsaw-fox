@@ -1,4 +1,4 @@
-﻿import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter_test/flutter_test.dart';
 import 'package:jigsawpuzzle/services/economy_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -32,73 +32,86 @@ void main() {
       expect(EconomyService.rewardFor(6, 3), 55); // L6 +3星
     });
 
-    test('Hint price invariant: hintPrice <= 2-star reward for all tiers (§6.2)', () {
-      for (var t = 0; t < 7; t++) {
-        final twoStarReward = EconomyService.rewardFor(t, 2);
-        expect(
-          EconomyService.kHintPrices[t],
-          lessThanOrEqualTo(twoStarReward),
-          reason: 'tier $t hint price ${EconomyService.kHintPrices[t]} exceeds 2-star reward $twoStarReward',
-        );
-      }
-    });
+    test(
+      'Hint price invariant: hintPrice <= 2-star reward for all tiers (§6.2)',
+      () {
+        for (var t = 0; t < 7; t++) {
+          final twoStarReward = EconomyService.rewardFor(t, 2);
+          expect(
+            EconomyService.kHintPrices[t],
+            lessThanOrEqualTo(twoStarReward),
+            reason:
+                'tier $t hint price ${EconomyService.kHintPrices[t]} exceeds 2-star reward $twoStarReward',
+          );
+        }
+      },
+    );
   });
 
   group('EconomyService Settlement', () {
-    test('First completion pays full Base + StarBonus (L1 3-star = 10 coins)', () async {
-      final eco = EconomyService.instance;
-      final before = eco.coins;
+    test(
+      'First completion pays full Base + StarBonus (L1 3-star = 10 coins)',
+      () async {
+        final eco = EconomyService.instance;
+        final before = eco.coins;
 
-      final res = await eco.calculateAndAwardCompletion(
-        tierIndex: 0,
-        stars: 3,
-        isFirstCompletion: true,
-        deltaStars: 3,
-      );
+        final res = await eco.calculateAndAwardCompletion(
+          tierIndex: 0,
+          stars: 3,
+          isFirstCompletion: true,
+          deltaStars: 3,
+        );
 
-      expect(res.baseCoins, equals(5));
-      expect(res.starCoins, equals(5)); // +3星 阶梯加成
-      expect(res.earnedCoins, equals(10));
-      expect(eco.coins - before, equals(10));
-    });
+        expect(res.baseCoins, equals(5));
+        expect(res.starCoins, equals(5)); // +3星 阶梯加成
+        expect(res.earnedCoins, equals(10));
+        expect(eco.coins - before, equals(10));
+      },
+    );
 
-    test('Incremental star reward = rewardFor(new) - rewardFor(best)', () async {
-      final eco = EconomyService.instance;
-      final before = eco.coins;
+    test(
+      'Incremental star reward = rewardFor(new) - rewardFor(best)',
+      () async {
+        final eco = EconomyService.instance;
+        final before = eco.coins;
 
-      // L1 首通 2 星 = 5 + 2 = 7
-      final r1 = await eco.calculateAndAwardCompletion(
-        tierIndex: 0,
-        stars: 2,
-        isFirstCompletion: true,
-        deltaStars: 2,
-      );
-      expect(r1.earnedCoins, equals(7));
+        // L1 首通 2 星 = 5 + 2 = 7
+        final r1 = await eco.calculateAndAwardCompletion(
+          tierIndex: 0,
+          stars: 2,
+          isFirstCompletion: true,
+          deltaStars: 2,
+        );
+        expect(r1.earnedCoins, equals(7));
 
-      // 2星 -> 3星：增量 = rewardFor(3) - rewardFor(2) = 10 - 7 = 3
-      final r2 = await eco.calculateAndAwardCompletion(
-        tierIndex: 0,
-        stars: 3,
-        isFirstCompletion: false,
-        deltaStars: 1,
-      );
-      expect(r2.earnedCoins, equals(3));
-      // 两局合计增量 = 7 + 3 = 10（不重复发 1 星 0 加成）
-      expect(eco.coins - before, equals(10));
-    });
+        // 2星 -> 3星：增量 = rewardFor(3) - rewardFor(2) = 10 - 7 = 3
+        final r2 = await eco.calculateAndAwardCompletion(
+          tierIndex: 0,
+          stars: 3,
+          isFirstCompletion: false,
+          deltaStars: 1,
+        );
+        expect(r2.earnedCoins, equals(3));
+        // 两局合计增量 = 7 + 3 = 10（不重复发 1 星 0 加成）
+        expect(eco.coins - before, equals(10));
+      },
+    );
 
-    test('Repeat play with same stars awards guaranteed 20% Base (L3 = 2 coins)', () async {
-      final eco = EconomyService.instance;
-      // L3 (tier 3): Base = 12 -> 20% = 2.4 floor = 2（设计 §6.1 复玩保底）
-      final res = await eco.calculateAndAwardCompletion(
-        tierIndex: 3,
-        stars: 3,
-        isFirstCompletion: false,
-        deltaStars: 0,
-      );
-      expect(res.earnedCoins, equals(2));
-      expect(res.starCoins, equals(10)); // 22 - 12
-    });
+    test(
+      'Repeat play with same stars awards guaranteed 20% Base (L3 = 2 coins)',
+      () async {
+        final eco = EconomyService.instance;
+        // L3 (tier 3): Base = 12 -> 20% = 2.4 floor = 2（设计 §6.1 复玩保底）
+        final res = await eco.calculateAndAwardCompletion(
+          tierIndex: 3,
+          stars: 3,
+          isFirstCompletion: false,
+          deltaStars: 0,
+        );
+        expect(res.earnedCoins, equals(2));
+        expect(res.starCoins, equals(10)); // 22 - 12
+      },
+    );
 
     test('Daily coin cap 200 is strictly enforced', () async {
       final eco = EconomyService.instance;
@@ -120,11 +133,14 @@ void main() {
   });
 
   group('EconomyService Hint & Starter Gift', () {
-    test('Starter gift grants 5 hint coupons + 100 coins on first init (§6.2)', () async {
-      final eco = EconomyService.instance;
-      expect(eco.hintCoupons, equals(5));
-      expect(eco.coins, equals(100));
-    });
+    test(
+      'Starter gift grants 5 hint coupons + 100 coins on first init (§6.2)',
+      () async {
+        final eco = EconomyService.instance;
+        expect(eco.hintCoupons, equals(5));
+        expect(eco.coins, equals(100));
+      },
+    );
 
     test('Hint consumption priority: Coupon first, then Coins', () async {
       final eco = EconomyService.instance;

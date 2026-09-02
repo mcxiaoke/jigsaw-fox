@@ -28,7 +28,11 @@ void main() {
       expect(item4K.resolutionLabel, '3840 × 2160');
       expect(item4K.fileSizeLabel, '3.5 MB');
 
-      final itemFHD = item4K.copyWith(width: 1920, height: 1080, fileSizeBytes: 800 * 1024);
+      final itemFHD = item4K.copyWith(
+        width: 1920,
+        height: 1080,
+        fileSizeBytes: 800 * 1024,
+      );
       expect(itemFHD.qualityTag, 'FHD 全高清');
       expect(itemFHD.fileSizeLabel, '800.0 KB');
     });

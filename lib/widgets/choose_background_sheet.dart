@@ -55,13 +55,15 @@ class ChooseBackgroundSheet extends StatelessWidget {
               children: [
                 Row(
                   children: [
-                    Icon(PhosphorIconsBold.image, color: palette.brand, size: 22),
+                    Icon(
+                      PhosphorIconsBold.image,
+                      color: palette.brand,
+                      size: 22,
+                    ),
                     const SizedBox(width: 8),
                     Text(
                       '更换拼图背景',
-                      style: styles.h3.copyWith(
-                        fontWeight: FontWeight.bold,
-                      ),
+                      style: styles.h3.copyWith(fontWeight: FontWeight.bold),
                     ),
                   ],
                 ),
@@ -124,7 +126,10 @@ class ChooseBackgroundSheet extends StatelessWidget {
                           errorBuilder: (ctx, err, stack) => Container(
                             color: palette.surfaceContainerLow,
                             child: Center(
-                              child: Icon(PhosphorIconsBold.imageBroken, color: palette.disabledText),
+                              child: Icon(
+                                PhosphorIconsBold.imageBroken,
+                                color: palette.disabledText,
+                              ),
                             ),
                           ),
                         ),

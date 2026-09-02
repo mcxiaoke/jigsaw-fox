@@ -37,7 +37,8 @@ class AppNetworkImageKey {
   int get hashCode => Object.hash(url, dimension, scale);
 
   @override
-  String toString() => '${describeIdentity(this)}("$url", dim: ${dimension.pixels}, scale: $scale)';
+  String toString() =>
+      '${describeIdentity(this)}("$url", dim: ${dimension.pixels}, scale: $scale)';
 }
 
 /// 基于 `ImageCacheManager.getNetworkThumbnailBytes` 的网络缩略图 Provider
@@ -63,7 +64,10 @@ class AppCachedNetworkImageProvider extends ImageProvider<AppNetworkImageKey> {
   }
 
   @override
-  ImageStreamCompleter loadImage(AppNetworkImageKey key, ImageDecoderCallback decode) {
+  ImageStreamCompleter loadImage(
+    AppNetworkImageKey key,
+    ImageDecoderCallback decode,
+  ) {
     return MultiFrameImageStreamCompleter(
       codec: _loadAsync(key, decode),
       scale: key.scale,
@@ -75,13 +79,14 @@ class AppCachedNetworkImageProvider extends ImageProvider<AppNetworkImageKey> {
     );
   }
 
-  Future<ui.Codec> _loadAsync(AppNetworkImageKey key, ImageDecoderCallback decode) async {
+  Future<ui.Codec> _loadAsync(
+    AppNetworkImageKey key,
+    ImageDecoderCallback decode,
+  ) async {
     try {
       // 优先走三级缓存（L1→L2→L3 下载+生成）
-      Uint8List? bytes = await ImageCacheManager.instance.getNetworkThumbnailBytes(
-        key.url,
-        dimension: key.dimension,
-      );
+      Uint8List? bytes = await ImageCacheManager.instance
+          .getNetworkThumbnailBytes(key.url, dimension: key.dimension);
 
       if (bytes == null || bytes.isEmpty) {
         throw StateError('Failed to load network thumbnail: ${key.url}');
@@ -96,17 +101,28 @@ class AppCachedNetworkImageProvider extends ImageProvider<AppNetworkImageKey> {
           }
           final targetDim = key.dimension.pixels;
           if (intrinsicWidth > targetDim || intrinsicHeight > targetDim) {
-            final ratio = targetDim / (intrinsicWidth > intrinsicHeight ? intrinsicWidth : intrinsicHeight);
+            final ratio =
+                targetDim /
+                (intrinsicWidth > intrinsicHeight
+                    ? intrinsicWidth
+                    : intrinsicHeight);
             return ui.TargetImageSize(
               width: (intrinsicWidth * ratio).round(),
               height: (intrinsicHeight * ratio).round(),
             );
           }
-          return ui.TargetImageSize(width: intrinsicWidth, height: intrinsicHeight);
+          return ui.TargetImageSize(
+            width: intrinsicWidth,
+            height: intrinsicHeight,
+          );
         },
       );
     } catch (e, st) {
-      AppLogger.imageCache.severe('Failed to load network image ${AppLogger.sanitizeUrl(key.url)}', e, st);
+      AppLogger.imageCache.severe(
+        'Failed to load network image ${AppLogger.sanitizeUrl(key.url)}',
+        e,
+        st,
+      );
       rethrow;
     }
   }
@@ -124,5 +140,6 @@ class AppCachedNetworkImageProvider extends ImageProvider<AppNetworkImageKey> {
   int get hashCode => Object.hash(url, dimension, scale);
 
   @override
-  String toString() => '${describeIdentity(this)}("$url", dim: ${dimension.pixels})';
+  String toString() =>
+      '${describeIdentity(this)}("$url", dim: ${dimension.pixels})';
 }

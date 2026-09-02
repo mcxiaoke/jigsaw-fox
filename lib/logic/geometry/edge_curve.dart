@@ -60,17 +60,17 @@ class JigexCurves {
   /// 经典对称圆球形 (Ball) 12 点矩阵
   static const List<CurvePoint> ball = [
     CurvePoint(0.0643939393939394, -0.00378787878787879), // Ctrl 0
-    CurvePoint(0.162878787878788, -0.0265151515151515),  // Anchor 0
-    CurvePoint(0.534090909090909, -0.0984848484848485),  // Ctrl 1 (颈部内凹引导)
-    CurvePoint(0.431818181818182, 0.0568181818181818),   // Anchor 1 (左颈节点)
-    CurvePoint(0.265151515151515, 0.287878787878788),   // Ctrl 2 (大肚外扩)
-    CurvePoint(0.500000000000000, 0.295454545454545),   // Anchor 2 (对称峰顶 +29.5%)
-    CurvePoint(0.715909090909091, 0.287878787878788),   // Ctrl 3 (大肚外扩)
-    CurvePoint(0.575757575757576, 0.0568181818181818),   // Anchor 3 (右颈节点)
-    CurvePoint(0.515151515151515, -0.0795454545454545),  // Ctrl 4 (颈部内凹引导)
-    CurvePoint(0.761363636363636, -0.0189393939393939),  // Anchor 4
-    CurvePoint(0.905303030303030, 0.0113636363636364),   // Ctrl 5
-    CurvePoint(1.000000000000000, 0.0000000000000000),   // Anchor 5 (终点)
+    CurvePoint(0.162878787878788, -0.0265151515151515), // Anchor 0
+    CurvePoint(0.534090909090909, -0.0984848484848485), // Ctrl 1 (颈部内凹引导)
+    CurvePoint(0.431818181818182, 0.0568181818181818), // Anchor 1 (左颈节点)
+    CurvePoint(0.265151515151515, 0.287878787878788), // Ctrl 2 (大肚外扩)
+    CurvePoint(0.500000000000000, 0.295454545454545), // Anchor 2 (对称峰顶 +29.5%)
+    CurvePoint(0.715909090909091, 0.287878787878788), // Ctrl 3 (大肚外扩)
+    CurvePoint(0.575757575757576, 0.0568181818181818), // Anchor 3 (右颈节点)
+    CurvePoint(0.515151515151515, -0.0795454545454545), // Ctrl 4 (颈部内凹引导)
+    CurvePoint(0.761363636363636, -0.0189393939393939), // Anchor 4
+    CurvePoint(0.905303030303030, 0.0113636363636364), // Ctrl 5
+    CurvePoint(1.000000000000000, 0.0000000000000000), // Anchor 5 (终点)
   ];
 
   /// 宽矮粗壮形 (Stub) 12 点矩阵：峰顶深度约 +23.48%
@@ -234,10 +234,12 @@ class EdgeCurveDescriptor {
         final ctrlPt = rawPts[s * 2];
         final anchorPt = rawPts[s * 2 + 1];
 
-        final cp = start +
+        final cp =
+            start +
             u * (ctrlPt.along * length) +
             directedNormal * (ctrlPt.from * length * depthScale);
-        final p = start +
+        final p =
+            start +
             u * (anchorPt.along * length) +
             directedNormal * (anchorPt.from * length * depthScale);
 
@@ -260,10 +262,12 @@ class EdgeCurveDescriptor {
         final anchorAlong = (s == 5) ? 1.0 : 1.0 - rawPts[8 - s * 2 + 1].along;
         final anchorFrom = (s == 5) ? 0.0 : rawPts[8 - s * 2 + 1].from;
 
-        final cp = start +
+        final cp =
+            start +
             u * (cpAlong * length) +
             directedNormal * (ctrlPt.from * length * depthScale);
-        final p = start +
+        final p =
+            start +
             u * (anchorAlong * length) +
             directedNormal * (anchorFrom * length * depthScale);
 

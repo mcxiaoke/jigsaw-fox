@@ -13,44 +13,64 @@ import 'app_logger.dart';
 enum Sfx {
   /// 碎片吸附（磁吸）- 随机 glue1/2/3
   snap,
+
   /// 轻落位（未吸附）
   place,
+
   /// 小完成 sting
   clearShort,
+
   /// 普通胜利
   win,
+
   /// 大胜利（TrophySound）
   winBig,
+
   /// 华丽 jingle
   jingle,
+
   /// 主点击
   tap,
+
   /// 锁定/确认
   lock,
+
   /// 开关切换
   switchToggle,
+
   /// 旋转（预留）
   rotate,
+
   /// 预览切换（随机 preview1/2/3）
   preview,
+
   /// 提示
   hint,
+
   /// 错误否定
   negative,
+
   /// 边缘显
   edgesIn,
+
   /// 边缘隐
   edgesOut,
+
   /// 界面进入
   moveIn,
+
   /// 界面退出
   moveOut,
+
   /// 金币飞
   coinsFly,
+
   /// 金币消费
   coinsSpend,
+
   /// 单金币
   coinSingle,
+
   /// 数字跳变
   numbers,
 }
@@ -143,11 +163,7 @@ class SoundService {
   /// - 内部检查 `GameRepository.instance.soundEnabled`，静默开关实时生效
   /// - [ignoreMute] 为 true 时即使静音也播放（用于开关从开→关的反馈）
   /// - [volume] 可覆盖默认音量分级
-  void play(
-    Sfx sfx, {
-    bool ignoreMute = false,
-    double? volume,
-  }) {
+  void play(Sfx sfx, {bool ignoreMute = false, double? volume}) {
     if (_isTest) return;
     if (!ignoreMute && !GameRepository.instance.soundEnabled) return;
 
@@ -167,9 +183,12 @@ class SoundService {
     final file = _resolveFile(sfx);
     final vol = volume ?? _volumeFor(sfx);
     AppLogger.sound.info('play $file vol=$vol sfx=$sfx caller=${_caller()}');
-    FlameAudio.play(file, volume: vol).then((_) {}, onError: (Object e, StackTrace st) {
-      AppLogger.sound.warning('play $file failed', e, st);
-    });
+    FlameAudio.play(file, volume: vol).then(
+      (_) {},
+      onError: (Object e, StackTrace st) {
+        AppLogger.sound.warning('play $file failed', e, st);
+      },
+    );
   }
 
   /// 提取本次播放的顶层 UI 调用方（方法+行号），帮助把“某音效”与“触发操作”对上。

@@ -63,19 +63,21 @@ class DownloadedImageItem {
   }
 
   Map<String, dynamic> toJson() => {
-        'id': id,
-        'localPath': localPath,
-        'sourcePlatform': sourcePlatform,
-        'sourceUrl': sourceUrl,
-        'width': width,
-        'height': height,
-        'fileSizeBytes': fileSizeBytes,
-        'downloadedAt': downloadedAt.toIso8601String(),
-      };
+    'id': id,
+    'localPath': localPath,
+    'sourcePlatform': sourcePlatform,
+    'sourceUrl': sourceUrl,
+    'width': width,
+    'height': height,
+    'fileSizeBytes': fileSizeBytes,
+    'downloadedAt': downloadedAt.toIso8601String(),
+  };
 
   factory DownloadedImageItem.fromJson(Map<String, dynamic> json) {
     return DownloadedImageItem(
-      id: json['id'] as String? ?? 'img_${DateTime.now().millisecondsSinceEpoch}',
+      id:
+          json['id'] as String? ??
+          'img_${DateTime.now().millisecondsSinceEpoch}',
       localPath: json['localPath'] as String? ?? '',
       sourcePlatform: json['sourcePlatform'] as String? ?? '网络图库',
       sourceUrl: json['sourceUrl'] as String? ?? '',

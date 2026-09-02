@@ -16,7 +16,10 @@ class DailyContentPipeline {
   final String dailyStorageBaseDir;
   final ContentHttpClient _httpClient;
 
-  static final RegExp _dailyFileRegex = RegExp(r'^(\d{4})(\d{2})(\d{2})\.(webp|jpg|jpeg|png)$', caseSensitive: false);
+  static final RegExp _dailyFileRegex = RegExp(
+    r'^(\d{4})(\d{2})(\d{2})\.(webp|jpg|jpeg|png)$',
+    caseSensitive: false,
+  );
 
   /// 确保某月份的每日关卡已就绪 (若本地不存在则尝试从远端 Zip 下载解压)
   Future<bool> ensureMonthReady({
@@ -26,26 +29,39 @@ class DailyContentPipeline {
   }) async {
     final monthDir = Directory(p.join(dailyStorageBaseDir, yyyyMm));
     if (monthDir.existsSync() && monthDir.listSync().isNotEmpty) {
-      AppLogger.daily.fine('ensureMonthReady $yyyyMm already ready files=${monthDir.listSync().length}');
+      AppLogger.daily.fine(
+        'ensureMonthReady $yyyyMm already ready files=${monthDir.listSync().length}',
+      );
       return true;
     }
 
     if (zipUrlPattern.isEmpty) {
-      AppLogger.daily.warning('ensureMonthReady empty zipUrlPattern for $yyyyMm');
+      AppLogger.daily.warning(
+        'ensureMonthReady empty zipUrlPattern for $yyyyMm',
+      );
       return false;
     }
     final zipUrl = zipUrlPattern.replaceAll('{YYYYMM}', yyyyMm);
-    AppLogger.daily.info('ensureMonthReady $yyyyMm url=${AppLogger.sanitizeUrl(zipUrl)}');
+    AppLogger.daily.info(
+      'ensureMonthReady $yyyyMm url=${AppLogger.sanitizeUrl(zipUrl)}',
+    );
 
-    final tempZipPath = p.join(dailyStorageBaseDir, 'temp_${yyyyMm}_${DateTime.now().millisecondsSinceEpoch}.zip');
-    final tempExtractDir = Directory(p.join(dailyStorageBaseDir, 'temp_extract_$yyyyMm'));
+    final tempZipPath = p.join(
+      dailyStorageBaseDir,
+      'temp_${yyyyMm}_${DateTime.now().millisecondsSinceEpoch}.zip',
+    );
+    final tempExtractDir = Directory(
+      p.join(dailyStorageBaseDir, 'temp_extract_$yyyyMm'),
+    );
 
     try {
       // 1. 下载月度 Zip
       AppLogger.daily.info('Downloading daily zip $yyyyMm');
       final zipFile = await _httpClient.downloadFile(zipUrl, tempZipPath);
       final bytes = await zipFile.readAsBytes();
-      AppLogger.daily.info('Downloaded daily zip $yyyyMm bytes=${bytes.length}');
+      AppLogger.daily.info(
+        'Downloaded daily zip $yyyyMm bytes=${bytes.length}',
+      );
 
       // 2. 解压到临时目录
       final archive = ZipDecoder().decodeBytes(bytes);
@@ -64,7 +80,9 @@ class DailyContentPipeline {
           extracted++;
         }
       }
-      AppLogger.daily.info('Extracted $extracted files for $yyyyMm to ${AppLogger.sanitizePath(tempExtractDir.path)}');
+      AppLogger.daily.info(
+        'Extracted $extracted files for $yyyyMm to ${AppLogger.sanitizePath(tempExtractDir.path)}',
+      );
 
       // 3. 移动/重命名到正式目录
       if (monthDir.existsSync()) {
@@ -76,10 +94,16 @@ class DailyContentPipeline {
       if (zipFile.existsSync()) {
         zipFile.deleteSync();
       }
-      AppLogger.daily.info('ensureMonthReady success $yyyyMm extracted=$extracted');
+      AppLogger.daily.info(
+        'ensureMonthReady success $yyyyMm extracted=$extracted',
+      );
       return true;
     } catch (e, st) {
-      AppLogger.daily.severe('ensureMonthReady failed $yyyyMm url=${AppLogger.sanitizeUrl(zipUrl)}', e, st);
+      AppLogger.daily.severe(
+        'ensureMonthReady failed $yyyyMm url=${AppLogger.sanitizeUrl(zipUrl)}',
+        e,
+        st,
+      );
       // 异常清理残留
       if (tempExtractDir.existsSync()) {
         try {
@@ -112,7 +136,8 @@ class DailyContentPipeline {
     if (!monthDir.existsSync()) return const [];
 
     final now = overrideToday ?? DateTime.now();
-    final todayStr = '${now.year.toString().padLeft(4, '0')}'
+    final todayStr =
+        '${now.year.toString().padLeft(4, '0')}'
         '${now.month.toString().padLeft(2, '0')}'
         '${now.day.toString().padLeft(2, '0')}';
 
@@ -158,7 +183,8 @@ class DailyContentPipeline {
   /// 获取今日的每日挑战关卡 (若已就绪)
   PuzzleLevelItem? getTodayLevel({DateTime? overrideToday}) {
     final now = overrideToday ?? DateTime.now();
-    final yyyyMm = '${now.year.toString().padLeft(4, '0')}${now.month.toString().padLeft(2, '0')}';
+    final yyyyMm =
+        '${now.year.toString().padLeft(4, '0')}${now.month.toString().padLeft(2, '0')}';
     final levels = getLevelsForMonth(yyyyMm, overrideToday: now);
     final todayStr = '$yyyyMm${now.day.toString().padLeft(2, '0')}';
     try {

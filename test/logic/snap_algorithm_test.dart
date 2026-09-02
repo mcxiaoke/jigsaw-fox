@@ -82,36 +82,39 @@ void main() {
       expect(boardState.isSolved, isTrue);
     });
 
-    test('Pieces in tray (not in onBoardPieceIds) must NOT merge with board pieces or neighbor tray pieces', () {
-      // 假设 Piece 0 在棋盘 (0.3, 0.3)，Piece 1 留在托盘 (0.8, 0.3)
-      final pieces = [
-        const PieceState(id: 0, r: 0, c: 0, nx: 0.30, ny: 0.30, clusterId: 0),
-        const PieceState(id: 1, r: 0, c: 1, nx: 0.80, ny: 0.30, clusterId: 1),
-      ];
+    test(
+      'Pieces in tray (not in onBoardPieceIds) must NOT merge with board pieces or neighbor tray pieces',
+      () {
+        // 假设 Piece 0 在棋盘 (0.3, 0.3)，Piece 1 留在托盘 (0.8, 0.3)
+        final pieces = [
+          const PieceState(id: 0, r: 0, c: 0, nx: 0.30, ny: 0.30, clusterId: 0),
+          const PieceState(id: 1, r: 0, c: 1, nx: 0.80, ny: 0.30, clusterId: 1),
+        ];
 
-      final boardState = PuzzleBoardState(
-        rows: 1,
-        cols: 2,
-        seed: 1,
-        pieces: pieces,
-      );
+        final boardState = PuzzleBoardState(
+          rows: 1,
+          cols: 2,
+          seed: 1,
+          pieces: pieces,
+        );
 
-      // 仅 Piece 0 在棋盘上
-      final result = PuzzleEngine.resolveSnap(
-        state: boardState,
-        draggedPieceId: 0,
-        onBoardPieceIds: {0},
-        customSnapDistance: 0.1,
-      );
+        // 仅 Piece 0 在棋盘上
+        final result = PuzzleEngine.resolveSnap(
+          state: boardState,
+          draggedPieceId: 0,
+          onBoardPieceIds: {0},
+          customSnapDistance: 0.1,
+        );
 
-      // Piece 1 不在棋盘上，严禁发生合并
-      expect(result.didMerge, isFalse);
-      final p0 = result.state.pieceById(0);
-      final p1 = result.state.pieceById(1);
-      expect(p0.clusterId, isNot(equals(p1.clusterId)));
-      expect(p0.clusterId, 0);
-      expect(p1.clusterId, 1);
-    });
+        // Piece 1 不在棋盘上，严禁发生合并
+        expect(result.didMerge, isFalse);
+        final p0 = result.state.pieceById(0);
+        final p1 = result.state.pieceById(1);
+        expect(p0.clusterId, isNot(equals(p1.clusterId)));
+        expect(p0.clusterId, 0);
+        expect(p1.clusterId, 1);
+      },
+    );
 
     test('孤立内部碎片即使位置正确也不吸附锁定（连通到边缘规则）', () {
       // 3x3：id=4 是中心内部碎片 (r=1,c=1)，位于其正确槽位 (1/3, 1/3)。
@@ -135,8 +138,11 @@ void main() {
       );
 
       // 孤立内部碎片不属于“边缘长出装配体”
-      expect(PuzzleEngine.computePlantedPieceIds(boardState).contains(4), isFalse,
-          reason: '孤立内部碎片（无边缘、无已就位邻居）不属于已植入装配体');
+      expect(
+        PuzzleEngine.computePlantedPieceIds(boardState).contains(4),
+        isFalse,
+        reason: '孤立内部碎片（无边缘、无已就位邻居）不属于已植入装配体',
+      );
 
       // 松手吸附：即便恰好落在正确槽位（dist=0），也拒绝吸附，保持游离可移动
       final result = PuzzleEngine.resolveSnap(
@@ -157,21 +163,37 @@ void main() {
       final far = <PieceState>[];
       for (var id = 0; id < 16; id++) {
         final r = id ~/ 4, c = id % 4;
-        far.add(PieceState(
-          id: id,
-          r: r,
-          c: c,
-          nx: r == 3 ? 1.9 : -0.9,
-          ny: c == 3 ? 1.9 : -0.9,
-          clusterId: id,
-        ));
+        far.add(
+          PieceState(
+            id: id,
+            r: r,
+            c: c,
+            nx: r == 3 ? 1.9 : -0.9,
+            ny: c == 3 ? 1.9 : -0.9,
+            clusterId: id,
+          ),
+        );
       }
       final pieces = [
         for (final p in far)
           if (p.r == 1 && p.c == 1)
-            const PieceState(id: 5, r: 1, c: 1, nx: 1 / 4, ny: 1 / 4, clusterId: 5)
+            const PieceState(
+              id: 5,
+              r: 1,
+              c: 1,
+              nx: 1 / 4,
+              ny: 1 / 4,
+              clusterId: 5,
+            )
           else if (p.r == 1 && p.c == 2)
-            const PieceState(id: 6, r: 1, c: 2, nx: 2 / 4, ny: 1 / 4, clusterId: 6)
+            const PieceState(
+              id: 6,
+              r: 1,
+              c: 2,
+              nx: 2 / 4,
+              ny: 1 / 4,
+              clusterId: 6,
+            )
           else
             p,
       ];
@@ -194,8 +216,16 @@ void main() {
         customSnapDistance: 0.2,
       );
       final plantedAfter = PuzzleEngine.computePlantedPieceIds(result.state);
-      expect(plantedAfter.contains(5), isFalse, reason: '内部岛屿即便已拼合，仍不连通边缘，不得锁定');
-      expect(plantedAfter.contains(6), isFalse, reason: '内部岛屿即便已拼合，仍不连通边缘，不得锁定');
+      expect(
+        plantedAfter.contains(5),
+        isFalse,
+        reason: '内部岛屿即便已拼合，仍不连通边缘，不得锁定',
+      );
+      expect(
+        plantedAfter.contains(6),
+        isFalse,
+        reason: '内部岛屿即便已拼合，仍不连通边缘，不得锁定',
+      );
     });
 
     test('边缘碎片可独立吸附；与已就位装配体相邻的内部碎片也可吸附', () {
@@ -219,12 +249,21 @@ void main() {
         pieces: pieces,
       );
 
-      expect(PuzzleEngine.isBorderPiece(3, 3, 0, 1), isTrue, reason: 'id=1 是边缘碎片');
+      expect(
+        PuzzleEngine.isBorderPiece(3, 3, 0, 1),
+        isTrue,
+        reason: 'id=1 是边缘碎片',
+      );
       final planted = PuzzleEngine.computePlantedPieceIds(boardState);
       expect(planted.contains(1), isTrue, reason: '边缘碎片在装配体内');
       expect(planted.contains(4), isTrue, reason: '与已就位的边缘碎片连通，故在装配体内');
-      expect(PuzzleEngine.canSnapCluster(boardState, [const PieceState(id: 4, r: 1, c: 1, nx: 0, ny: 0, clusterId: 4)]),
-          isTrue, reason: '可接到装配体，允许吸附');
+      expect(
+        PuzzleEngine.canSnapCluster(boardState, [
+          const PieceState(id: 4, r: 1, c: 1, nx: 0, ny: 0, clusterId: 4),
+        ]),
+        isTrue,
+        reason: '可接到装配体，允许吸附',
+      );
 
       // 内部碎片在连通后可正常吸附到槽位
       final result = PuzzleEngine.resolveSnap(

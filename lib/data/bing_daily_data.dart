@@ -44,7 +44,8 @@ List<BingDailyItem> _generateMonthDaily(int year, int month) {
   return List.generate(daysInMonth, (index) {
     final day = daysInMonth - index;
     final asset = assetSamples[(day + month * 3 - 1) % assetSamples.length];
-    final dateStr = '$year-${month.toString().padLeft(2, '0')}-${day.toString().padLeft(2, '0')}';
+    final dateStr =
+        '$year-${month.toString().padLeft(2, '0')}-${day.toString().padLeft(2, '0')}';
 
     final titles = [
       '高山翡翠湖泊与针叶林',
@@ -79,7 +80,8 @@ List<BingDailyItem> _generateMonthDaily(int year, int month) {
       title: '$day 日 · $title',
       author: 'Bing Featured',
       location: 'Global Nature',
-      imageUrl: 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?w=1200&q=80',
+      imageUrl:
+          'https://images.unsplash.com/photo-1506744038136-46273834b3fb?w=1200&q=80',
       fallbackAsset: asset,
       defaultRows: rows,
       defaultCols: cols,

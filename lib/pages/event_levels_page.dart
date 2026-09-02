@@ -56,7 +56,9 @@ class _EventLevelsPageState extends State<EventLevelsPage> {
     String localPath = '';
     try {
       // 统一经 LevelImageResolver 落原图，保证与卡片缩略同文件，见缩略必可玩
-      localPath = await LevelImageResolver.instance.resolveLevelLocalPath(level);
+      localPath = await LevelImageResolver.instance.resolveLevelLocalPath(
+        level,
+      );
       if (localPath.startsWith('http')) {
         throw Exception('关卡图片下载失败，请检查网络后重试');
       }
@@ -69,7 +71,12 @@ class _EventLevelsPageState extends State<EventLevelsPage> {
       }
     } catch (e) {
       if (mounted) {
-        GameToast.show(context, icon: Icons.error_outline, message: '图片加载失败: $e', type: GameToastType.error);
+        GameToast.show(
+          context,
+          icon: Icons.error_outline,
+          message: '图片加载失败: $e',
+          type: GameToastType.error,
+        );
       }
       return;
     }
@@ -79,14 +86,23 @@ class _EventLevelsPageState extends State<EventLevelsPage> {
     await ChooseDifficultySheet.show(
       context: context,
       imageBytes: imgBytes,
-      initialDifficulty: const PuzzleDifficulty(label: '4 × 4 (16 块)', rows: 4, cols: 4, recommended: true),
+      initialDifficulty: const PuzzleDifficulty(
+        label: '4 × 4 (16 块)',
+        rows: 4,
+        cols: 4,
+        recommended: true,
+      ),
       completedPieceCounts: const {},
       isUnlocked: true,
       title: '${_currentEvent.title} · 第 $index 关',
       onStart: (diff) async {
         await Navigator.of(context).push(
           MaterialPageRoute<void>(
-            builder: (_) => GamePage(imageBytes: imgBytes!, difficulty: diff, levelIndex: index),
+            builder: (_) => GamePage(
+              imageBytes: imgBytes!,
+              difficulty: diff,
+              levelIndex: index,
+            ),
           ),
         );
       },
@@ -105,63 +121,80 @@ class _EventLevelsPageState extends State<EventLevelsPage> {
         foregroundColor: palette.primaryText,
         elevation: 0.5,
         scrolledUnderElevation: 0.5,
-        title: Text(_currentEvent.title, style: styles.h3.copyWith(fontSize: 17)),
+        title: Text(
+          _currentEvent.title,
+          style: styles.h3.copyWith(fontSize: 17),
+        ),
       ),
       body: _isLoading
           ? Center(child: CircularProgressIndicator(color: palette.brand))
           : _levels.isEmpty
-              ? Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(PhosphorIconsRegular.empty, size: 48, color: palette.disabledText),
-                      const SizedBox(height: 12),
-                      Text('暂无可用关卡', style: styles.body.copyWith(color: palette.secondaryText)),
-                      const SizedBox(height: 12),
-                      ElevatedButton(
-                        style: ElevatedButton.styleFrom(backgroundColor: palette.brand, foregroundColor: palette.surface),
-                        onPressed: _loadLevels,
-                        child: const Text('重试下载'),
-                      ),
-                    ],
+          ? Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    PhosphorIconsRegular.empty,
+                    size: 48,
+                    color: palette.disabledText,
                   ),
-                )
-              : CustomScrollView(
-                  slivers: [
-                    if (_currentEvent.desc.isNotEmpty)
-                      SliverToBoxAdapter(
-                        child: Container(
-                          margin: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-                          padding: const EdgeInsets.all(14),
-                          decoration: BoxDecoration(
-                            color: palette.surfaceContainer,
-                            borderRadius: BorderRadius.circular(14),
-                            border: Border.all(color: palette.divider, width: 1),
-                          ),
-                          child: Text(_currentEvent.desc, style: styles.body.copyWith(height: 1.4)),
-                        ),
+                  const SizedBox(height: 12),
+                  Text(
+                    '暂无可用关卡',
+                    style: styles.body.copyWith(color: palette.secondaryText),
+                  ),
+                  const SizedBox(height: 12),
+                  ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: palette.brand,
+                      foregroundColor: palette.surface,
+                    ),
+                    onPressed: _loadLevels,
+                    child: const Text('重试下载'),
+                  ),
+                ],
+              ),
+            )
+          : CustomScrollView(
+              slivers: [
+                if (_currentEvent.desc.isNotEmpty)
+                  SliverToBoxAdapter(
+                    child: Container(
+                      margin: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: palette.surfaceContainer,
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(color: palette.divider, width: 1),
                       ),
-                    SliverPadding(
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                      sliver: SliverGrid(
-                        gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+                      child: Text(
+                        _currentEvent.desc,
+                        style: styles.body.copyWith(height: 1.4),
+                      ),
+                    ),
+                  ),
+                SliverPadding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 8,
+                  ),
+                  sliver: SliverGrid(
+                    gridDelegate:
+                        const SliverGridDelegateWithMaxCrossAxisExtent(
                           maxCrossAxisExtent: 200,
                           crossAxisSpacing: 14,
                           mainAxisSpacing: 14,
                           childAspectRatio: 1.0,
                         ),
-                        delegate: SliverChildBuilderDelegate(
-                          (context, index) {
-                            final level = _levels[index];
-                            return _buildLevelCard(level, index + 1, palette);
-                          },
-                          childCount: _levels.length,
-                        ),
-                      ),
-                    ),
-                    const SliverToBoxAdapter(child: SizedBox(height: 32)),
-                  ],
+                    delegate: SliverChildBuilderDelegate((context, index) {
+                      final level = _levels[index];
+                      return _buildLevelCard(level, index + 1, palette);
+                    }, childCount: _levels.length),
+                  ),
                 ),
+                const SliverToBoxAdapter(child: SizedBox(height: 32)),
+              ],
+            ),
     );
   }
 
@@ -178,14 +211,15 @@ class _EventLevelsPageState extends State<EventLevelsPage> {
         child: Stack(
           fit: StackFit.expand,
           children: [
-            LazyLevelImage(
-              level: level,
-              fit: BoxFit.cover,
-            ),
+            LazyLevelImage(level: level, fit: BoxFit.cover),
             Container(
               decoration: BoxDecoration(
                 gradient: LinearGradient(
-                  colors: [Colors.black.withValues(alpha: 0.3), Colors.transparent, Colors.black.withValues(alpha: 0.4)],
+                  colors: [
+                    Colors.black.withValues(alpha: 0.3),
+                    Colors.transparent,
+                    Colors.black.withValues(alpha: 0.4),
+                  ],
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
                 ),
@@ -200,7 +234,14 @@ class _EventLevelsPageState extends State<EventLevelsPage> {
                   color: Colors.black54,
                   borderRadius: BorderRadius.circular(8),
                 ),
-                child: Text('第 $index 关', style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
+                child: Text(
+                  '第 $index 关',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 11,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
               ),
             ),
             Center(
@@ -210,7 +251,11 @@ class _EventLevelsPageState extends State<EventLevelsPage> {
                   color: palette.brand,
                   shape: BoxShape.circle,
                 ),
-                child: Icon(PhosphorIconsFill.play, color: palette.surface, size: 16),
+                child: Icon(
+                  PhosphorIconsFill.play,
+                  color: palette.surface,
+                  size: 16,
+                ),
               ),
             ),
           ],

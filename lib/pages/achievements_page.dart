@@ -18,9 +18,9 @@ class AchievementsPage extends StatefulWidget {
   const AchievementsPage({super.key});
 
   static Future<void> open(BuildContext context) {
-    return Navigator.of(context).push(
-      MaterialPageRoute<void>(builder: (_) => const AchievementsPage()),
-    );
+    return Navigator.of(
+      context,
+    ).push(MaterialPageRoute<void>(builder: (_) => const AchievementsPage()));
   }
 
   @override
@@ -66,7 +66,9 @@ class _AchievementsPageState extends State<AchievementsPage> {
     if (mounted) {
       setState(() {
         _distinct3Star = d3;
-        _totalStars = ts > 0 ? ts : _repo.levels.fold<int>(0, (sum, l) => sum + l.stars);
+        _totalStars = ts > 0
+            ? ts
+            : _repo.levels.fold<int>(0, (sum, l) => sum + l.stars);
         _totalSolved = sv;
         _loading = false;
       });
@@ -227,11 +229,12 @@ class _AchievementsPageState extends State<AchievementsPage> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  _SectionHeader(title: '成就勋章墙', palette: palette, styles: styles),
-                  Text(
-                    '共 ${allDefs.length} 项成就',
-                    style: styles.caption,
+                  _SectionHeader(
+                    title: '成就勋章墙',
+                    palette: palette,
+                    styles: styles,
                   ),
+                  Text('共 ${allDefs.length} 项成就', style: styles.caption),
                 ],
               ),
               const SizedBox(height: 12),
@@ -241,9 +244,7 @@ class _AchievementsPageState extends State<AchievementsPage> {
                 Center(
                   child: Padding(
                     padding: const EdgeInsets.all(24),
-                    child: CircularProgressIndicator(
-                      color: palette.brand,
-                    ),
+                    child: CircularProgressIndicator(color: palette.brand),
                   ),
                 )
               else
@@ -268,7 +269,11 @@ class _AchievementsPageState extends State<AchievementsPage> {
 
 // ── Section Header ──────────────────────────
 class _SectionHeader extends StatelessWidget {
-  const _SectionHeader({required this.title, required this.palette, required this.styles});
+  const _SectionHeader({
+    required this.title,
+    required this.palette,
+    required this.styles,
+  });
   final String title;
   final AppPalette palette;
   final AppTextStyles styles;
@@ -371,7 +376,9 @@ class _AchievementCard extends StatelessWidget {
     final isUnlocked = store.isUnlocked(def.id);
     final isClaimed = store.isClaimed(def.id);
     final current = def.type == AchievementType.derived
-        ? (AchievementService.allAchievements.where((a) => a.id != 'master_all' && store.isUnlocked(a.id)).length)
+        ? (AchievementService.allAchievements
+              .where((a) => a.id != 'master_all' && store.isUnlocked(a.id))
+              .length)
         : store.getCounter(def.metricKey);
     final progress = (current / def.target).clamp(0.0, 1.0);
 
@@ -381,7 +388,9 @@ class _AchievementCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
           color: isUnlocked
-              ? (isClaimed ? palette.success.withValues(alpha: 0.3) : palette.brand.withValues(alpha: 0.4))
+              ? (isClaimed
+                    ? palette.success.withValues(alpha: 0.3)
+                    : palette.brand.withValues(alpha: 0.4))
               : palette.divider,
           width: isUnlocked ? 1.4 : 1,
         ),
@@ -401,8 +410,16 @@ class _AchievementCard extends StatelessWidget {
                 borderRadius: BorderRadius.circular(12),
               ),
               child: isUnlocked
-                  ? Icon(PhosphorIconsFill.trophy, color: palette.brand, size: 24)
-                  : Icon(PhosphorIconsFill.lockKey, color: palette.disabledText, size: 20),
+                  ? Icon(
+                      PhosphorIconsFill.trophy,
+                      color: palette.brand,
+                      size: 24,
+                    )
+                  : Icon(
+                      PhosphorIconsFill.lockKey,
+                      color: palette.disabledText,
+                      size: 20,
+                    ),
             ),
             const SizedBox(width: 14),
             // Content
@@ -416,7 +433,9 @@ class _AchievementCard extends StatelessWidget {
                       Text(
                         def.title,
                         style: styles.bodyBold.copyWith(
-                          color: isUnlocked ? palette.primaryText : palette.disabledText,
+                          color: isUnlocked
+                              ? palette.primaryText
+                              : palette.disabledText,
                         ),
                       ),
                       if (isUnlocked)
@@ -424,24 +443,35 @@ class _AchievementCard extends StatelessWidget {
                             ? Row(
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
-                                  Icon(PhosphorIconsFill.checkCircle, color: palette.success, size: 15),
+                                  Icon(
+                                    PhosphorIconsFill.checkCircle,
+                                    color: palette.success,
+                                    size: 15,
+                                  ),
                                   const SizedBox(width: 3),
                                   Text(
                                     '已领取',
-                                    style: styles.captionBold.copyWith(color: palette.success),
+                                    style: styles.captionBold.copyWith(
+                                      color: palette.success,
+                                    ),
                                   ),
                                 ],
                               )
                             : GestureDetector(
                                 onTap: onClaim,
                                 child: Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 10,
+                                    vertical: 5,
+                                  ),
                                   decoration: BoxDecoration(
                                     gradient: AppPalette.brandGradient,
                                     borderRadius: BorderRadius.circular(10),
                                     boxShadow: [
                                       BoxShadow(
-                                        color: palette.brand.withValues(alpha: 0.25),
+                                        color: palette.brand.withValues(
+                                          alpha: 0.25,
+                                        ),
                                         blurRadius: 8,
                                         offset: const Offset(0, 2),
                                       ),
@@ -462,15 +492,14 @@ class _AchievementCard extends StatelessWidget {
                           def.metricKey == 'play_seconds'
                               ? '${(current ~/ 60)}/${(def.target ~/ 60)}分'
                               : '$current/${def.target}',
-                          style: styles.caption.copyWith(color: palette.disabledText),
+                          style: styles.caption.copyWith(
+                            color: palette.disabledText,
+                          ),
                         ),
                     ],
                   ),
                   const SizedBox(height: 4),
-                  Text(
-                    def.description,
-                    style: styles.caption,
-                  ),
+                  Text(def.description, style: styles.caption),
                   if (!isUnlocked) ...[
                     const SizedBox(height: 8),
                     ClipRRect(
@@ -479,7 +508,9 @@ class _AchievementCard extends StatelessWidget {
                         value: progress,
                         minHeight: 5,
                         backgroundColor: palette.divider,
-                        valueColor: AlwaysStoppedAnimation<Color>(palette.success),
+                        valueColor: AlwaysStoppedAnimation<Color>(
+                          palette.success,
+                        ),
                       ),
                     ),
                     const SizedBox(height: 4),

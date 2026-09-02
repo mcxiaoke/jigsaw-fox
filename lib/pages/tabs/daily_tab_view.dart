@@ -41,10 +41,23 @@ class _DailyTabViewState extends State<DailyTabView> {
       isCompleted: item.isCompleted,
       title: '${item.date} 挑战',
       imageBytes: imgBytes,
-      onClearRepo: (k) => _repo.updateDailyProgress(dateStr: item.date, progressPercent: 0, snapshotJson: null),
+      onClearRepo: (k) => _repo.updateDailyProgress(
+        dateStr: item.date,
+        progressPercent: 0,
+        snapshotJson: null,
+      ),
       onPushGame: (diff, jsonStr) async {
         if (!mounted) return;
-        await Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => GamePage(imageBytes: imgBytes, difficulty: diff, dailyDateStr: item.date, initialSnapshotJson: jsonStr)));
+        await Navigator.of(context).push(
+          MaterialPageRoute<void>(
+            builder: (_) => GamePage(
+              imageBytes: imgBytes,
+              difficulty: diff,
+              dailyDateStr: item.date,
+              initialSnapshotJson: jsonStr,
+            ),
+          ),
+        );
       },
       onCancelled: () {
         if (mounted) setState(() {});
@@ -56,7 +69,11 @@ class _DailyTabViewState extends State<DailyTabView> {
     }
     if (!mounted) return;
     final progress = await ResumeHelper.loadProgress(canonicalId);
-    final displayPercent = ResumeHelper.displayProgress(progress, item.progressPercent, item.isCompleted);
+    final displayPercent = ResumeHelper.displayProgress(
+      progress,
+      item.progressPercent,
+      item.isCompleted,
+    );
     if (!mounted) return;
     await ChooseDifficultySheet.show(
       context: context,
@@ -70,17 +87,45 @@ class _DailyTabViewState extends State<DailyTabView> {
         if (prog.activeDifficultyKey.isNotEmpty) {
           await ResumeHelper.clearResume(canonicalId, prog.activeDifficultyKey);
         }
-        await _repo.updateDailyProgress(dateStr: item.date, progressPercent: 0, snapshotJson: null);
+        await _repo.updateDailyProgress(
+          dateStr: item.date,
+          progressPercent: 0,
+          snapshotJson: null,
+        );
         if (!mounted) return;
-        await Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => GamePage(imageBytes: imgBytes, difficulty: item.difficulty, dailyDateStr: item.date, initialSnapshotJson: null)));
+        await Navigator.of(context).push(
+          MaterialPageRoute<void>(
+            builder: (_) => GamePage(
+              imageBytes: imgBytes,
+              difficulty: item.difficulty,
+              dailyDateStr: item.date,
+              initialSnapshotJson: null,
+            ),
+          ),
+        );
         setState(() {});
       },
       onStart: (diff) async {
         final dkey = SnapshotStore.difficultyKeyFor(diff);
-        final snapJson = await SnapshotStore.instance.loadJsonString(canonicalId, dkey);
-        final fallbackLegacy = (diff.pieceCount == item.difficulty.pieceCount && !item.isCompleted) ? item.savedSnapshotJson : null;
+        final snapJson = await SnapshotStore.instance.loadJsonString(
+          canonicalId,
+          dkey,
+        );
+        final fallbackLegacy =
+            (diff.pieceCount == item.difficulty.pieceCount && !item.isCompleted)
+            ? item.savedSnapshotJson
+            : null;
         if (!mounted) return;
-        await Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => GamePage(imageBytes: imgBytes, difficulty: diff, dailyDateStr: item.date, initialSnapshotJson: snapJson ?? fallbackLegacy)));
+        await Navigator.of(context).push(
+          MaterialPageRoute<void>(
+            builder: (_) => GamePage(
+              imageBytes: imgBytes,
+              difficulty: diff,
+              dailyDateStr: item.date,
+              initialSnapshotJson: snapJson ?? fallbackLegacy,
+            ),
+          ),
+        );
         setState(() {});
       },
     );
@@ -91,8 +136,12 @@ class _DailyTabViewState extends State<DailyTabView> {
     final now = DateTime.now();
     for (var offset = 0; offset < 365; offset++) {
       final date = now.subtract(Duration(days: offset));
-      final dateStr = '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
-      final match = dailyList.firstWhere((item) => item.date == dateStr, orElse: () => dailyList.first);
+      final dateStr =
+          '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
+      final match = dailyList.firstWhere(
+        (item) => item.date == dateStr,
+        orElse: () => dailyList.first,
+      );
       if (match.date != dateStr) break;
       if (match.isCompleted) {
         streak++;
@@ -120,13 +169,21 @@ class _DailyTabViewState extends State<DailyTabView> {
     final styles = AppTextStyles.of(context);
     final dailyList = _repo.dailyChallenges;
     final now = DateTime.now();
-    final todayStr = '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
+    final todayStr =
+        '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
     final visibleDailyList = dailyList.where((d) {
       if (!isValidDateStr(d.date)) return false;
       return d.date.compareTo(todayStr) <= 0;
     }).toList();
-    final todayItem = dailyList.firstWhere((d) => d.date == todayStr, orElse: () => visibleDailyList.isNotEmpty ? visibleDailyList.first : dailyList.first);
-    final totalCompletedCount = visibleDailyList.where((d) => d.isCompleted).length;
+    final todayItem = dailyList.firstWhere(
+      (d) => d.date == todayStr,
+      orElse: () => visibleDailyList.isNotEmpty
+          ? visibleDailyList.first
+          : dailyList.first,
+    );
+    final totalCompletedCount = visibleDailyList
+        .where((d) => d.isCompleted)
+        .length;
     final streak = _calculateStreak(dailyList);
     final Map<String, List<DailyChallengeItem>> monthGroups = {};
     for (final item in visibleDailyList) {
@@ -146,7 +203,10 @@ class _DailyTabViewState extends State<DailyTabView> {
                 decoration: BoxDecoration(
                   color: palette.surfaceContainer,
                   borderRadius: BorderRadius.circular(22),
-                  border: Border.all(color: palette.brand.withValues(alpha: 0.2), width: 1),
+                  border: Border.all(
+                    color: palette.brand.withValues(alpha: 0.2),
+                    width: 1,
+                  ),
                   boxShadow: [
                     BoxShadow(
                       color: palette.brand.withValues(alpha: 0.08),
@@ -167,29 +227,72 @@ class _DailyTabViewState extends State<DailyTabView> {
                             Row(
                               children: [
                                 Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 8,
+                                    vertical: 2,
+                                  ),
                                   decoration: BoxDecoration(
-                                    color: palette.brand.withValues(alpha: 0.12),
+                                    color: palette.brand.withValues(
+                                      alpha: 0.12,
+                                    ),
                                     borderRadius: BorderRadius.circular(8),
                                   ),
-                                  child: Text('TODAY', style: TextStyle(color: palette.brand, fontSize: 11, fontWeight: FontWeight.bold)),
+                                  child: Text(
+                                    'TODAY',
+                                    style: TextStyle(
+                                      color: palette.brand,
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
                                 ),
                                 const SizedBox(width: 6),
-                                Text('${now.month} 月 ${now.day} 日', style: styles.caption.copyWith(color: palette.secondaryText)),
+                                Text(
+                                  '${now.month} 月 ${now.day} 日',
+                                  style: styles.caption.copyWith(
+                                    color: palette.secondaryText,
+                                  ),
+                                ),
                               ],
                             ),
                             const SizedBox(height: 8),
-                            Text('${now.month}月${now.day}日 · 今日挑战', style: styles.h2.copyWith(color: palette.primaryText), maxLines: 1, overflow: TextOverflow.ellipsis),
+                            Text(
+                              '${now.month}月${now.day}日 · 今日挑战',
+                              style: styles.h2.copyWith(
+                                color: palette.primaryText,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
                             const SizedBox(height: 14),
                             FilledButton.icon(
                               onPressed: () => _openDaily(todayItem),
-                              icon: Icon(todayItem.isCompleted ? PhosphorIconsBold.arrowsClockwise : PhosphorIconsFill.play, size: 18),
-                              label: Text(todayItem.isCompleted ? '已通关 (重玩)' : (todayItem.progressPercent > 0 ? '继续挑战' : '开始挑战'), style: const TextStyle(fontWeight: FontWeight.bold)),
+                              icon: Icon(
+                                todayItem.isCompleted
+                                    ? PhosphorIconsBold.arrowsClockwise
+                                    : PhosphorIconsFill.play,
+                                size: 18,
+                              ),
+                              label: Text(
+                                todayItem.isCompleted
+                                    ? '已通关 (重玩)'
+                                    : (todayItem.progressPercent > 0
+                                          ? '继续挑战'
+                                          : '开始挑战'),
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
                               style: FilledButton.styleFrom(
                                 backgroundColor: palette.brand,
                                 foregroundColor: palette.surface,
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                                padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(20),
+                                ),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 18,
+                                  vertical: 8,
+                                ),
                               ),
                             ),
                           ],
@@ -198,7 +301,18 @@ class _DailyTabViewState extends State<DailyTabView> {
                       const SizedBox(width: 12),
                       ClipRRect(
                         borderRadius: BorderRadius.circular(16),
-                        child: SizedBox(width: 130, height: 120, child: AppCachedImage(imagePathOrUrl: todayItem.assetPath, fit: BoxFit.cover, errorWidget: Image.asset(assetSamples[0], fit: BoxFit.cover))),
+                        child: SizedBox(
+                          width: 130,
+                          height: 120,
+                          child: AppCachedImage(
+                            imagePathOrUrl: todayItem.assetPath,
+                            fit: BoxFit.cover,
+                            errorWidget: Image.asset(
+                              assetSamples[0],
+                              fit: BoxFit.cover,
+                            ),
+                          ),
+                        ),
                       ),
                     ],
                   ),
@@ -212,7 +326,10 @@ class _DailyTabViewState extends State<DailyTabView> {
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 10,
+                ),
                 decoration: BoxDecoration(
                   color: palette.surfaceContainer,
                   borderRadius: BorderRadius.circular(16),
@@ -221,11 +338,48 @@ class _DailyTabViewState extends State<DailyTabView> {
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Row(children: [Icon(PhosphorIconsFill.trophy, color: palette.brand, size: 20), const SizedBox(width: 6), Text('每日总进度: $totalCompletedCount/${visibleDailyList.length}', style: styles.bodyBold)]),
+                    Row(
+                      children: [
+                        Icon(
+                          PhosphorIconsFill.trophy,
+                          color: palette.brand,
+                          size: 20,
+                        ),
+                        const SizedBox(width: 6),
+                        Text(
+                          '每日总进度: $totalCompletedCount/${visibleDailyList.length}',
+                          style: styles.bodyBold,
+                        ),
+                      ],
+                    ),
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
-                      decoration: BoxDecoration(color: palette.warning.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(12)),
-                      child: Row(mainAxisSize: MainAxisSize.min, children: [Icon(PhosphorIconsFill.fire, color: palette.warning, size: 16), const SizedBox(width: 4), Text('连胜 $streak 天', style: TextStyle(color: palette.warning, fontWeight: FontWeight.bold, fontSize: 12))]),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 3,
+                      ),
+                      decoration: BoxDecoration(
+                        color: palette.warning.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            PhosphorIconsFill.fire,
+                            color: palette.warning,
+                            size: 16,
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            '连胜 $streak 天',
+                            style: TextStyle(
+                              color: palette.warning,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ],
                 ),
@@ -234,11 +388,18 @@ class _DailyTabViewState extends State<DailyTabView> {
           ),
           const SliverToBoxAdapter(child: SizedBox(height: 8)),
           for (final entry in monthGroups.entries) ...[
-            SliverToBoxAdapter(child: _buildMonthHeader(entry.key, entry.value, palette, styles)),
+            SliverToBoxAdapter(
+              child: _buildMonthHeader(entry.key, entry.value, palette, styles),
+            ),
             SliverPadding(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
               sliver: SliverGrid(
-                gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(maxCrossAxisExtent: 220, crossAxisSpacing: 14, mainAxisSpacing: 14, childAspectRatio: 1.0),
+                gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+                  maxCrossAxisExtent: 220,
+                  crossAxisSpacing: 14,
+                  mainAxisSpacing: 14,
+                  childAspectRatio: 1.0,
+                ),
                 delegate: SliverChildBuilderDelegate((context, index) {
                   final item = entry.value[index];
                   return _buildDailyCard(item, palette, styles);
@@ -253,7 +414,12 @@ class _DailyTabViewState extends State<DailyTabView> {
     );
   }
 
-  Widget _buildMonthHeader(String monthKey, List<DailyChallengeItem> monthItems, AppPalette palette, AppTextStyles styles) {
+  Widget _buildMonthHeader(
+    String monthKey,
+    List<DailyChallengeItem> monthItems,
+    AppPalette palette,
+    AppTextStyles styles,
+  ) {
     final parts = monthKey.split('-');
     final year = parts.isNotEmpty ? parts[0] : '';
     final month = parts.length > 1 ? int.tryParse(parts[1]) ?? 1 : 1;
@@ -264,30 +430,136 @@ class _DailyTabViewState extends State<DailyTabView> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Row(children: [Container(width: 4, height: 16, decoration: BoxDecoration(color: palette.brand, borderRadius: BorderRadius.circular(2))), const SizedBox(width: 8), Text(headerTitle, style: styles.h3.copyWith(fontSize: 16))]),
-          Container(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3), decoration: BoxDecoration(color: palette.surfaceContainer, borderRadius: BorderRadius.circular(10), border: Border.all(color: palette.divider, width: 0.8)), child: Text('已完成 $completedCount/${monthItems.length}', style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600, color: palette.secondaryText))),
+          Row(
+            children: [
+              Container(
+                width: 4,
+                height: 16,
+                decoration: BoxDecoration(
+                  color: palette.brand,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Text(headerTitle, style: styles.h3.copyWith(fontSize: 16)),
+            ],
+          ),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+            decoration: BoxDecoration(
+              color: palette.surfaceContainer,
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: palette.divider, width: 0.8),
+            ),
+            child: Text(
+              '已完成 $completedCount/${monthItems.length}',
+              style: TextStyle(
+                fontSize: 11.5,
+                fontWeight: FontWeight.w600,
+                color: palette.secondaryText,
+              ),
+            ),
+          ),
         ],
       ),
     );
   }
 
-  Widget _buildDailyCard(DailyChallengeItem item, AppPalette palette, AppTextStyles styles) {
+  Widget _buildDailyCard(
+    DailyChallengeItem item,
+    AppPalette palette,
+    AppTextStyles styles,
+  ) {
     return InkWell(
       onTap: () => _openDaily(item),
       borderRadius: BorderRadius.circular(18),
       child: Container(
-        decoration: BoxDecoration(borderRadius: BorderRadius.circular(18), border: Border.all(color: palette.divider, width: 1)),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: palette.divider, width: 1),
+        ),
         clipBehavior: Clip.antiAlias,
         child: Stack(
           fit: StackFit.expand,
           children: [
-            AppCachedImage(imagePathOrUrl: item.assetPath, fit: BoxFit.cover, errorWidget: Image.asset(assetSamples[0], fit: BoxFit.cover)),
-            Container(decoration: BoxDecoration(gradient: LinearGradient(colors: [Colors.black.withValues(alpha: 0.35), Colors.transparent], begin: Alignment.topCenter, end: Alignment.center))),
-            Positioned(top: 10, left: 10, child: Container(width: 34, height: 34, decoration: BoxDecoration(color: palette.surface.withValues(alpha: 0.94), shape: BoxShape.circle), alignment: Alignment.center, child: Text('${item.dayNumber}', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: palette.primaryText)))),
+            AppCachedImage(
+              imagePathOrUrl: item.assetPath,
+              fit: BoxFit.cover,
+              errorWidget: Image.asset(assetSamples[0], fit: BoxFit.cover),
+            ),
+            Container(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [
+                    Colors.black.withValues(alpha: 0.35),
+                    Colors.transparent,
+                  ],
+                  begin: Alignment.topCenter,
+                  end: Alignment.center,
+                ),
+              ),
+            ),
+            Positioned(
+              top: 10,
+              left: 10,
+              child: Container(
+                width: 34,
+                height: 34,
+                decoration: BoxDecoration(
+                  color: palette.surface.withValues(alpha: 0.94),
+                  shape: BoxShape.circle,
+                ),
+                alignment: Alignment.center,
+                child: Text(
+                  '${item.dayNumber}',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.bold,
+                    color: palette.primaryText,
+                  ),
+                ),
+              ),
+            ),
             if (item.isCompleted)
-              Positioned(top: 10, right: 10, child: Container(padding: const EdgeInsets.all(5), decoration: BoxDecoration(color: palette.success, shape: BoxShape.circle), child: Icon(PhosphorIconsBold.check, color: palette.surface, size: 14)))
+              Positioned(
+                top: 10,
+                right: 10,
+                child: Container(
+                  padding: const EdgeInsets.all(5),
+                  decoration: BoxDecoration(
+                    color: palette.success,
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(
+                    PhosphorIconsBold.check,
+                    color: palette.surface,
+                    size: 14,
+                  ),
+                ),
+              )
             else if (item.progressPercent > 0)
-              Positioned(top: 10, right: 10, child: Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3), decoration: BoxDecoration(color: palette.surface.withValues(alpha: 0.92), borderRadius: BorderRadius.circular(12)), child: Text('${item.progressPercent}%', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: palette.brand)))),
+              Positioned(
+                top: 10,
+                right: 10,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 3,
+                  ),
+                  decoration: BoxDecoration(
+                    color: palette.surface.withValues(alpha: 0.92),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Text(
+                    '${item.progressPercent}%',
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.bold,
+                      color: palette.brand,
+                    ),
+                  ),
+                ),
+              ),
           ],
         ),
       ),

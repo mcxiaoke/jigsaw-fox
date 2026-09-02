@@ -26,7 +26,15 @@ class UnlockService {
 
   /// 7 档难度解锁所需的 3 星不同图片数量门槛
   /// [L1, L1.5, L2, L3, L4, L5, L6]
-  static const List<int> kDifficultyStarImageRequirements = [0, 0, 0, 0, 2, 5, 10];
+  static const List<int> kDifficultyStarImageRequirements = [
+    0,
+    0,
+    0,
+    0,
+    2,
+    5,
+    10,
+  ];
 
   /// 每日挑战所需主线通关数
   static const int kDailyUnlockRequiredMainLevels = 1;
@@ -36,7 +44,10 @@ class UnlockService {
 
   /// 同步检查特定难度档位（0~6）是否已解锁（避免首帧渲染跳变）
   UnlockStatus checkDifficultyUnlockSync(int tierIndex) {
-    final safeTier = tierIndex.clamp(0, kDifficultyStarImageRequirements.length - 1);
+    final safeTier = tierIndex.clamp(
+      0,
+      kDifficultyStarImageRequirements.length - 1,
+    );
     final req = kDifficultyStarImageRequirements[safeTier];
     if (req <= 0) {
       return const UnlockStatus(isUnlocked: true);
@@ -61,13 +72,17 @@ class UnlockService {
 
   /// 检查特定难度档位（0~6）是否已解锁（异步完整版）
   Future<UnlockStatus> checkDifficultyUnlock(int tierIndex) async {
-    final safeTier = tierIndex.clamp(0, kDifficultyStarImageRequirements.length - 1);
+    final safeTier = tierIndex.clamp(
+      0,
+      kDifficultyStarImageRequirements.length - 1,
+    );
     final req = kDifficultyStarImageRequirements[safeTier];
     if (req <= 0) {
       return const UnlockStatus(isUnlocked: true);
     }
 
-    final count3Star = await ProgressStore.instance.getDistinctImagesWith3Star();
+    final count3Star = await ProgressStore.instance
+        .getDistinctImagesWith3Star();
     if (count3Star >= req) {
       return UnlockStatus(
         isUnlocked: true,
@@ -86,7 +101,9 @@ class UnlockService {
 
   /// 检查每日挑战是否已解锁
   Future<UnlockStatus> checkDailyChallengeUnlock() async {
-    final completedCount = GameRepository.instance.levels.where((l) => l.isCompleted).length;
+    final completedCount = GameRepository.instance.levels
+        .where((l) => l.isCompleted)
+        .length;
     if (completedCount >= kDailyUnlockRequiredMainLevels) {
       return UnlockStatus(
         isUnlocked: true,
@@ -105,7 +122,9 @@ class UnlockService {
 
   /// 检查活动与图包是否已解锁
   Future<UnlockStatus> checkEventUnlock() async {
-    final completedCount = GameRepository.instance.levels.where((l) => l.isCompleted).length;
+    final completedCount = GameRepository.instance.levels
+        .where((l) => l.isCompleted)
+        .length;
     if (completedCount >= kEventUnlockRequiredMainLevels) {
       return UnlockStatus(
         isUnlocked: true,
@@ -116,7 +135,8 @@ class UnlockService {
 
     return UnlockStatus(
       isUnlocked: false,
-      reason: '完成 5 关主线即可解锁活动与主题包（当前 $completedCount/$kEventUnlockRequiredMainLevels）',
+      reason:
+          '完成 5 关主线即可解锁活动与主题包（当前 $completedCount/$kEventUnlockRequiredMainLevels）',
       currentProgress: completedCount,
       targetRequired: kEventUnlockRequiredMainLevels,
     );

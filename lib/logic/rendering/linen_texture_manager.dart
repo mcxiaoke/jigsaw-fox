@@ -42,10 +42,22 @@ class LinenTextureManager {
 
       // 4x4 单位矩阵
       final matrix4 = Float64List.fromList([
-        1.0, 0.0, 0.0, 0.0,
-        0.0, 1.0, 0.0, 0.0,
-        0.0, 0.0, 1.0, 0.0,
-        0.0, 0.0, 0.0, 1.0,
+        1.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        1.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        1.0,
       ]);
 
       final shader = ui.ImageShader(
@@ -67,7 +79,10 @@ class LinenTextureManager {
   }
 
   /// 程序化生成无缝平铺的 64x64 亚麻布十字纤维与纸浆微粒贴图
-  static Future<ui.Image> _generateLinenTextureImage(int width, int height) async {
+  static Future<ui.Image> _generateLinenTextureImage(
+    int width,
+    int height,
+  ) async {
     final recorder = ui.PictureRecorder();
     final canvas = ui.Canvas(
       recorder,
@@ -95,14 +110,30 @@ class LinenTextureManager {
 
     // 2. 绘制纵向经线纤维 (Warp Threads)
     for (double x = 0; x < width; x += step) {
-      canvas.drawLine(Offset(x, 0), Offset(x, height.toDouble()), whiteLinePaint);
-      canvas.drawLine(Offset(x + 1.0, 0), Offset(x + 1.0, height.toDouble()), darkLinePaint);
+      canvas.drawLine(
+        Offset(x, 0),
+        Offset(x, height.toDouble()),
+        whiteLinePaint,
+      );
+      canvas.drawLine(
+        Offset(x + 1.0, 0),
+        Offset(x + 1.0, height.toDouble()),
+        darkLinePaint,
+      );
     }
 
     // 3. 绘制横向纬线纤维 (Weft Threads)
     for (double y = 0; y < height; y += step) {
-      canvas.drawLine(Offset(0, y), Offset(width.toDouble(), y), whiteLinePaint);
-      canvas.drawLine(Offset(0, y + 1.0), Offset(width.toDouble(), y + 1.0), darkLinePaint);
+      canvas.drawLine(
+        Offset(0, y),
+        Offset(width.toDouble(), y),
+        whiteLinePaint,
+      );
+      canvas.drawLine(
+        Offset(0, y + 1.0),
+        Offset(width.toDouble(), y + 1.0),
+        darkLinePaint,
+      );
     }
 
     // 4. 绘制经纬交叉编织节点 (Weave Intersection Highlights)

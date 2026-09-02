@@ -37,9 +37,15 @@ class RootManifest {
       updatedAt: parseDate(json['updatedAt']),
       notice: appConfig['notice']?.toString() ?? '',
       minAppVersion: appConfig['minAppVersion']?.toString() ?? '1.0.0',
-      mainModule: MainModuleConfig.fromJson(modules['main'] as Map<String, dynamic>? ?? {}),
-      dailyModule: DailyModuleConfig.fromJson(modules['daily'] as Map<String, dynamic>? ?? {}),
-      eventsModule: EventsModuleConfig.fromJson(modules['events'] as Map<String, dynamic>? ?? {}),
+      mainModule: MainModuleConfig.fromJson(
+        modules['main'] as Map<String, dynamic>? ?? {},
+      ),
+      dailyModule: DailyModuleConfig.fromJson(
+        modules['daily'] as Map<String, dynamic>? ?? {},
+      ),
+      eventsModule: EventsModuleConfig.fromJson(
+        modules['events'] as Map<String, dynamic>? ?? {},
+      ),
     );
   }
 
@@ -47,10 +53,7 @@ class RootManifest {
     return {
       'schemaVersion': schemaVersion,
       'updatedAt': updatedAt.toIso8601String(),
-      'appConfig': {
-        'notice': notice,
-        'minAppVersion': minAppVersion,
-      },
+      'appConfig': {'notice': notice, 'minAppVersion': minAppVersion},
       'modules': {
         'main': mainModule.toJson(),
         'daily': dailyModule.toJson(),
@@ -61,10 +64,7 @@ class RootManifest {
 }
 
 class MainModuleConfig {
-  const MainModuleConfig({
-    required this.url,
-    required this.version,
-  });
+  const MainModuleConfig({required this.url, required this.version});
 
   final String url;
   final int version;
@@ -110,10 +110,7 @@ class DailyModuleConfig {
 }
 
 class EventsModuleConfig {
-  const EventsModuleConfig({
-    required this.url,
-    required this.version,
-  });
+  const EventsModuleConfig({required this.url, required this.version});
 
   final String url;
   final int version;

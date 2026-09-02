@@ -97,7 +97,9 @@ class AchievementStore {
     if (_unlockedCache.containsKey(achievementId)) return false;
     _unlockedCache[achievementId] = DateTime.now().toIso8601String();
     unawaited(_flushUnlocked());
-    AppLogger.repo.info('AchievementStore: unlocked achievement $achievementId');
+    AppLogger.repo.info(
+      'AchievementStore: unlocked achievement $achievementId',
+    );
     return true;
   }
 

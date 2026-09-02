@@ -66,10 +66,7 @@ class _MainScreenState extends State<MainScreen> {
               ),
             ),
             const SizedBox(width: 8),
-            Text(
-              _appBarTitle,
-              style: styles.h3.copyWith(fontSize: 19),
-            ),
+            Text(_appBarTitle, style: styles.h3.copyWith(fontSize: 19)),
           ],
         ),
         actions: [
@@ -174,8 +171,11 @@ class _SettingsButton extends StatelessWidget {
         width: 22,
         height: 22,
         color: palette.secondaryText,
-        errorBuilder: (_, _, _) =>
-            Icon(PhosphorIconsBold.gear, color: palette.secondaryText, size: 22),
+        errorBuilder: (_, _, _) => Icon(
+          PhosphorIconsBold.gear,
+          color: palette.secondaryText,
+          size: 22,
+        ),
       ),
       tooltip: '设置',
       onPressed: () async {
@@ -223,7 +223,10 @@ class _GameBottomNav extends StatelessWidget {
                 child: InkWell(
                   onTap: () => onTap(i),
                   child: Container(
-                    padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+                    padding: const EdgeInsets.symmetric(
+                      vertical: 8,
+                      horizontal: 4,
+                    ),
                     decoration: isActive
                         ? BoxDecoration(
                             color: palette.brand.withValues(alpha: 0.08),
@@ -241,7 +244,9 @@ class _GameBottomNav extends StatelessWidget {
                           child: Icon(
                             item.icon,
                             size: 24,
-                            color: isActive ? palette.brand : palette.secondaryText,
+                            color: isActive
+                                ? palette.brand
+                                : palette.secondaryText,
                           ),
                         ),
                         const SizedBox(height: 4),
@@ -249,8 +254,12 @@ class _GameBottomNav extends StatelessWidget {
                           item.label,
                           style: TextStyle(
                             fontSize: 11,
-                            fontWeight: isActive ? FontWeight.w600 : FontWeight.w500,
-                            color: isActive ? palette.brand : palette.disabledText,
+                            fontWeight: isActive
+                                ? FontWeight.w600
+                                : FontWeight.w500,
+                            color: isActive
+                                ? palette.brand
+                                : palette.disabledText,
                           ),
                         ),
                       ],

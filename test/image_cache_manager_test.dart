@@ -26,13 +26,15 @@ void main() {
   late Directory testTempDir;
 
   setUpAll(() async {
-    testTempDir = await Directory.systemTemp.createTemp('jigsaw_tiered_cache_test_');
+    testTempDir = await Directory.systemTemp.createTemp(
+      'jigsaw_tiered_cache_test_',
+    );
 
     const channel = MethodChannel('plugins.flutter.io/path_provider');
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(channel, (MethodCall methodCall) async {
-      return testTempDir.path;
-    });
+          return testTempDir.path;
+        });
 
     SharedPreferences.setMockInitialValues({});
     await GameRepository.instance.init();
@@ -80,135 +82,171 @@ void main() {
   });
 
   group('EngineTaskQueue Concurrency & Single Flight Tests', () {
-    test('EngineTaskQueue enforces max concurrency and drains queue smoothly', () async {
-      final queue = EngineTaskQueue(maxConcurrency: 2);
-      expect(queue.maxConcurrency, 2);
+    test(
+      'EngineTaskQueue enforces max concurrency and drains queue smoothly',
+      () async {
+        final queue = EngineTaskQueue(maxConcurrency: 2);
+        expect(queue.maxConcurrency, 2);
 
-      var activeWorkers = 0;
-      var peakConcurrency = 0;
-      var completedCount = 0;
+        var activeWorkers = 0;
+        var peakConcurrency = 0;
+        var completedCount = 0;
 
-      Future<int> mockWorker(int id) async {
-        activeWorkers++;
-        if (activeWorkers > peakConcurrency) {
-          peakConcurrency = activeWorkers;
+        Future<int> mockWorker(int id) async {
+          activeWorkers++;
+          if (activeWorkers > peakConcurrency) {
+            peakConcurrency = activeWorkers;
+          }
+          await Future.delayed(const Duration(milliseconds: 30));
+          activeWorkers--;
+          completedCount++;
+          return id;
         }
-        await Future.delayed(const Duration(milliseconds: 30));
-        activeWorkers--;
-        completedCount++;
-        return id;
-      }
 
-      final futures = <Future<int>>[];
-      for (int i = 0; i < 8; i++) {
-        futures.add(
-          queue.schedule(
-            key: 'task_$i',
-            task: () => mockWorker(i),
-          ),
+        final futures = <Future<int>>[];
+        for (int i = 0; i < 8; i++) {
+          futures.add(
+            queue.schedule(key: 'task_$i', task: () => mockWorker(i)),
+          );
+        }
+
+        final results = await Future.wait(futures);
+        expect(results.length, 8);
+        expect(completedCount, 8);
+        expect(peakConcurrency, lessThanOrEqualTo(2));
+        expect(queue.runningCount, 0);
+        expect(queue.queuedCount, 0);
+      },
+    );
+
+    test(
+      'EngineTaskQueue performs Single Flight deduplication for identical keys',
+      () async {
+        final queue = EngineTaskQueue(maxConcurrency: 4);
+
+        var executionCount = 0;
+        Future<String> heavyJob() async {
+          executionCount++;
+          await Future.delayed(const Duration(milliseconds: 20));
+          return 'job_done';
+        }
+
+        // Schedule 6 requests with the exact same key
+        final futures = List.generate(
+          6,
+          (_) => queue.schedule(key: 'shared_key', task: heavyJob),
         );
-      }
 
-      final results = await Future.wait(futures);
-      expect(results.length, 8);
-      expect(completedCount, 8);
-      expect(peakConcurrency, lessThanOrEqualTo(2));
-      expect(queue.runningCount, 0);
-      expect(queue.queuedCount, 0);
-    });
+        final results = await Future.wait(futures);
 
-    test('EngineTaskQueue performs Single Flight deduplication for identical keys', () async {
-      final queue = EngineTaskQueue(maxConcurrency: 4);
-
-      var executionCount = 0;
-      Future<String> heavyJob() async {
-        executionCount++;
-        await Future.delayed(const Duration(milliseconds: 20));
-        return 'job_done';
-      }
-
-      // Schedule 6 requests with the exact same key
-      final futures = List.generate(
-        6,
-        (_) => queue.schedule(key: 'shared_key', task: heavyJob),
-      );
-
-      final results = await Future.wait(futures);
-
-      expect(executionCount, 1); // Only executed ONCE!
-      for (final r in results) {
-        expect(r, 'job_done');
-      }
-    });
+        expect(executionCount, 1); // Only executed ONCE!
+        for (final r in results) {
+          expect(r, 'job_done');
+        }
+      },
+    );
   });
 
   group('ThumbnailGenerator & Pipeline Tests', () {
-    test('ThumbnailGenerator downsamples raw bytes correctly in Isolate', () async {
-      final rawPng = createTestPngBytes(1200, 800);
-      final thumbBytes = await ThumbnailGenerator.generateThumbnailFromBytes(
-        rawBytes: rawPng,
-        targetDimension: 300,
-        quality: 80,
-      );
+    test(
+      'ThumbnailGenerator downsamples raw bytes correctly in Isolate',
+      () async {
+        final rawPng = createTestPngBytes(1200, 800);
+        final thumbBytes = await ThumbnailGenerator.generateThumbnailFromBytes(
+          rawBytes: rawPng,
+          targetDimension: 300,
+          quality: 80,
+        );
 
-      expect(thumbBytes, isNotNull);
-      expect(thumbBytes!.isNotEmpty, isTrue);
+        expect(thumbBytes, isNotNull);
+        expect(thumbBytes!.isNotEmpty, isTrue);
 
-      final decodedThumb = img.decodeImage(thumbBytes);
-      expect(decodedThumb, isNotNull);
-      expect(decodedThumb!.width, 300);
-      expect(decodedThumb.height, 200);
-    });
+        final decodedThumb = img.decodeImage(thumbBytes);
+        expect(decodedThumb, isNotNull);
+        expect(decodedThumb!.width, 300);
+        expect(decodedThumb.height, 200);
+      },
+    );
   });
 
   group('ImageCacheManager Tiered Cache & Zero-Sync I/O Tests', () {
-    test('ImageCacheManager provides tiered lookup (L1 Memory -> L2 Disk -> L3 Worker)', () async {
-      final manager = ImageCacheManager.instance;
-      final testImgFile = File('${testTempDir.path}/tiered_test_origin.png');
-      await testImgFile.writeAsBytes(createTestPngBytes(1000, 600));
+    test(
+      'ImageCacheManager provides tiered lookup (L1 Memory -> L2 Disk -> L3 Worker)',
+      () async {
+        final manager = ImageCacheManager.instance;
+        final testImgFile = File('${testTempDir.path}/tiered_test_origin.png');
+        await testImgFile.writeAsBytes(createTestPngBytes(1000, 600));
 
-      // Initially neither L1 nor L2
-      expect(manager.isThumbnailCached(testImgFile.path), isFalse);
-      expect(manager.getCachedThumbnailBytesFromMemory(testImgFile.path), isNull);
+        // Initially neither L1 nor L2
+        expect(manager.isThumbnailCached(testImgFile.path), isFalse);
+        expect(
+          manager.getCachedThumbnailBytesFromMemory(testImgFile.path),
+          isNull,
+        );
 
-      // Fetch bytes through tiered pipeline (generates & populates L2 disk + L1 memory)
-      final bytes = await manager.getThumbnailBytes(testImgFile.path, dimension: ThumbnailDimension.card);
-      expect(bytes, isNotNull);
-      expect(bytes!.isNotEmpty, isTrue);
+        // Fetch bytes through tiered pipeline (generates & populates L2 disk + L1 memory)
+        final bytes = await manager.getThumbnailBytes(
+          testImgFile.path,
+          dimension: ThumbnailDimension.card,
+        );
+        expect(bytes, isNotNull);
+        expect(bytes!.isNotEmpty, isTrue);
 
-      // Now L1 is populated
-      expect(manager.getCachedThumbnailBytesFromMemory(testImgFile.path), isNotNull);
+        // Now L1 is populated
+        expect(
+          manager.getCachedThumbnailBytesFromMemory(testImgFile.path),
+          isNotNull,
+        );
 
-      // Now L2 in-memory index is populated (0-latency check)
-      expect(manager.isThumbnailCached(testImgFile.path), isTrue);
+        // Now L2 in-memory index is populated (0-latency check)
+        expect(manager.isThumbnailCached(testImgFile.path), isTrue);
 
-      // Clear only L1 memory cache, L2 disk cache remains and can be read back into L1
-      manager.memoryCache.clear();
-      expect(manager.getCachedThumbnailBytesFromMemory(testImgFile.path), isNull);
-      expect(manager.isThumbnailCached(testImgFile.path), isTrue);
+        // Clear only L1 memory cache, L2 disk cache remains and can be read back into L1
+        manager.memoryCache.clear();
+        expect(
+          manager.getCachedThumbnailBytesFromMemory(testImgFile.path),
+          isNull,
+        );
+        expect(manager.isThumbnailCached(testImgFile.path), isTrue);
 
-      // Fetching again reads from L2 disk into L1 memory
-      final bytesFromDisk = await manager.getThumbnailBytes(testImgFile.path, dimension: ThumbnailDimension.card);
-      expect(bytesFromDisk, isNotNull);
-      expect(manager.getCachedThumbnailBytesFromMemory(testImgFile.path), isNotNull);
+        // Fetching again reads from L2 disk into L1 memory
+        final bytesFromDisk = await manager.getThumbnailBytes(
+          testImgFile.path,
+          dimension: ThumbnailDimension.card,
+        );
+        expect(bytesFromDisk, isNotNull);
+        expect(
+          manager.getCachedThumbnailBytesFromMemory(testImgFile.path),
+          isNotNull,
+        );
 
-      final sizeBytes = await manager.getCacheSizeBytes();
-      expect(sizeBytes, greaterThan(0));
-    });
+        final sizeBytes = await manager.getCacheSizeBytes();
+        expect(sizeBytes, greaterThan(0));
+      },
+    );
 
-    test('ImageCacheManager clearCache resets L1 memory, L2 disk, and task queue', () async {
-      final manager = ImageCacheManager.instance;
-      final testImgFile = File('${testTempDir.path}/clear_test_origin.png');
-      await testImgFile.writeAsBytes(createTestPngBytes(600, 400));
+    test(
+      'ImageCacheManager clearCache resets L1 memory, L2 disk, and task queue',
+      () async {
+        final manager = ImageCacheManager.instance;
+        final testImgFile = File('${testTempDir.path}/clear_test_origin.png');
+        await testImgFile.writeAsBytes(createTestPngBytes(600, 400));
 
-      await manager.getThumbnailBytes(testImgFile.path, dimension: ThumbnailDimension.card);
-      expect(manager.isThumbnailCached(testImgFile.path), isTrue);
+        await manager.getThumbnailBytes(
+          testImgFile.path,
+          dimension: ThumbnailDimension.card,
+        );
+        expect(manager.isThumbnailCached(testImgFile.path), isTrue);
 
-      await manager.clearCache();
-      expect(manager.isThumbnailCached(testImgFile.path), isFalse);
-      expect(manager.getCachedThumbnailBytesFromMemory(testImgFile.path), isNull);
-      expect(await manager.getCacheSizeBytes(), equals(0));
-    });
+        await manager.clearCache();
+        expect(manager.isThumbnailCached(testImgFile.path), isFalse);
+        expect(
+          manager.getCachedThumbnailBytesFromMemory(testImgFile.path),
+          isNull,
+        );
+        expect(await manager.getCacheSizeBytes(), equals(0));
+      },
+    );
   });
 
   group('ThumbnailDimension Enum Tests', () {
@@ -217,17 +255,26 @@ void main() {
       expect(ThumbnailDimension.eventCover.pixels, 720);
     });
 
-    test('getCacheKey produces distinct keys per dimension for the same source', () {
-      final manager = ImageCacheManager.instance;
-      final src = '${testTempDir.path}/enum_test_origin.png';
+    test(
+      'getCacheKey produces distinct keys per dimension for the same source',
+      () {
+        final manager = ImageCacheManager.instance;
+        final src = '${testTempDir.path}/enum_test_origin.png';
 
-      final cardKey = manager.getCacheKey(src, dimension: ThumbnailDimension.card);
-      final coverKey = manager.getCacheKey(src, dimension: ThumbnailDimension.eventCover);
+        final cardKey = manager.getCacheKey(
+          src,
+          dimension: ThumbnailDimension.card,
+        );
+        final coverKey = manager.getCacheKey(
+          src,
+          dimension: ThumbnailDimension.eventCover,
+        );
 
-      expect(cardKey, isNot(equals(coverKey)));
-      expect(cardKey, endsWith('_360.jpg'));
-      expect(coverKey, endsWith('_720.jpg'));
-    });
+        expect(cardKey, isNot(equals(coverKey)));
+        expect(cardKey, endsWith('_360.jpg'));
+        expect(coverKey, endsWith('_720.jpg'));
+      },
+    );
 
     test('removeThumbnailForSource cleans up all dimension variants', () async {
       final manager = ImageCacheManager.instance;
@@ -236,61 +283,86 @@ void main() {
 
       // Populate both dimension variants
       await manager.getThumbnailBytes(src, dimension: ThumbnailDimension.card);
-      await manager.getThumbnailBytes(src, dimension: ThumbnailDimension.eventCover);
-      expect(manager.isThumbnailCached(src, dimension: ThumbnailDimension.card), isTrue);
-      expect(manager.isThumbnailCached(src, dimension: ThumbnailDimension.eventCover), isTrue);
+      await manager.getThumbnailBytes(
+        src,
+        dimension: ThumbnailDimension.eventCover,
+      );
+      expect(
+        manager.isThumbnailCached(src, dimension: ThumbnailDimension.card),
+        isTrue,
+      );
+      expect(
+        manager.isThumbnailCached(
+          src,
+          dimension: ThumbnailDimension.eventCover,
+        ),
+        isTrue,
+      );
 
       await manager.removeThumbnailForSource(src);
 
       for (final dim in ThumbnailDimension.values) {
-        expect(manager.isThumbnailCached(src, dimension: dim), isFalse,
-            reason: 'variant ${dim.name} should be removed');
+        expect(
+          manager.isThumbnailCached(src, dimension: dim),
+          isFalse,
+          reason: 'variant ${dim.name} should be removed',
+        );
       }
     });
   });
 
   group('GameRepository customPuzzlesNotifier Reactive Tests', () {
-    test('Adding, updating, and deleting custom puzzle notifies customPuzzlesNotifier', () async {
-      final repo = GameRepository.instance;
-      var notifiedCount = 0;
-      List<CustomPuzzleItem>? lastList;
+    test(
+      'Adding, updating, and deleting custom puzzle notifies customPuzzlesNotifier',
+      () async {
+        final repo = GameRepository.instance;
+        var notifiedCount = 0;
+        List<CustomPuzzleItem>? lastList;
 
-      void listener() {
-        notifiedCount++;
-        lastList = repo.customPuzzlesNotifier.value;
-      }
+        void listener() {
+          notifiedCount++;
+          lastList = repo.customPuzzlesNotifier.value;
+        }
 
-      repo.customPuzzlesNotifier.addListener(listener);
+        repo.customPuzzlesNotifier.addListener(listener);
 
-      final newItem = CustomPuzzleItem(
-        id: 'test_ugc_02',
-        title: '测试自制关卡2',
-        imagePathOrUrl: 'assets/images/sample_01.jpg',
-        isLocalFile: false,
-        difficulty: PuzzleAspectRatio.square1x1.tiers[0].difficulty,
-        createdAt: DateTime.now(),
-      );
+        final newItem = CustomPuzzleItem(
+          id: 'test_ugc_02',
+          title: '测试自制关卡2',
+          imagePathOrUrl: 'assets/images/sample_01.jpg',
+          isLocalFile: false,
+          difficulty: PuzzleAspectRatio.square1x1.tiers[0].difficulty,
+          createdAt: DateTime.now(),
+        );
 
-      await repo.addCustomPuzzle(newItem);
-      expect(notifiedCount, greaterThanOrEqualTo(1));
-      expect(lastList, isNotNull);
-      expect(lastList!.any((p) => p.id == 'test_ugc_02'), isTrue);
+        await repo.addCustomPuzzle(newItem);
+        expect(notifiedCount, greaterThanOrEqualTo(1));
+        expect(lastList, isNotNull);
+        expect(lastList!.any((p) => p.id == 'test_ugc_02'), isTrue);
 
-      await repo.updateCustomProgress(
-        id: 'test_ugc_02',
-        progressPercent: 75,
-      );
-      expect(repo.customPuzzlesNotifier.value.firstWhere((p) => p.id == 'test_ugc_02').progressPercent, 75);
+        await repo.updateCustomProgress(id: 'test_ugc_02', progressPercent: 75);
+        expect(
+          repo.customPuzzlesNotifier.value
+              .firstWhere((p) => p.id == 'test_ugc_02')
+              .progressPercent,
+          75,
+        );
 
-      await repo.deleteCustomPuzzle('test_ugc_02');
-      expect(repo.customPuzzlesNotifier.value.any((p) => p.id == 'test_ugc_02'), isFalse);
+        await repo.deleteCustomPuzzle('test_ugc_02');
+        expect(
+          repo.customPuzzlesNotifier.value.any((p) => p.id == 'test_ugc_02'),
+          isFalse,
+        );
 
-      repo.customPuzzlesNotifier.removeListener(listener);
-    });
+        repo.customPuzzlesNotifier.removeListener(listener);
+      },
+    );
   });
 
   group('AppCachedImage UI Component Tests', () {
-    testWidgets('AppCachedImage builds with asset and handles error fallback', (tester) async {
+    testWidgets('AppCachedImage builds with asset and handles error fallback', (
+      tester,
+    ) async {
       await tester.pumpWidget(
         const MaterialApp(
           home: Scaffold(

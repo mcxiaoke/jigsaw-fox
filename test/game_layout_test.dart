@@ -55,12 +55,15 @@ void main() {
       expect(
         centerOffset.abs(),
         lessThan(1.0),
-        reason: '碎片 base cell 应垂直居中于托盘 (trayTop=$trayTop, '
+        reason:
+            '碎片 base cell 应垂直居中于托盘 (trayTop=$trayTop, '
             'trayHeight=$trayHeight):\n${report.join('\n')}',
       );
     }
     // ignore: avoid_print
-    print('TRAY  layout trayTop=$trayTop trayHeight=$trayHeight\n${report.join('\n')}');
+    print(
+      'TRAY  layout trayTop=$trayTop trayHeight=$trayHeight\n${report.join('\n')}',
+    );
   });
 
   test('连续 hint 每次都应归位新碎片且 id 一致，拖拽结束不应崩溃', () async {
@@ -78,8 +81,11 @@ void main() {
     for (var i = 0; i < 9; i++) {
       game.hint();
       final solved = game.solvedCount;
-      expect(solved, greaterThan(lastSolved),
-          reason: '第 ${i + 1} 次 hint 后已归位数量应从 $lastSolved 增加到更多，实际 $solved');
+      expect(
+        solved,
+        greaterThan(lastSolved),
+        reason: '第 ${i + 1} 次 hint 后已归位数量应从 $lastSolved 增加到更多，实际 $solved',
+      );
       lastSolved = solved;
 
       // 校验所有组件都还在（没有被错误移除）
@@ -117,8 +123,16 @@ void main() {
 
     // 4. 状态应保持合法
     for (final p in game.children.whereType<PuzzlePieceComponent>()) {
-      expect(p.position.x.isFinite, isTrue, reason: '碎片#${p.id} position.x 应为有限值');
-      expect(p.position.y.isFinite, isTrue, reason: '碎片#${p.id} position.y 应为有限值');
+      expect(
+        p.position.x.isFinite,
+        isTrue,
+        reason: '碎片#${p.id} position.x 应为有限值',
+      );
+      expect(
+        p.position.y.isFinite,
+        isTrue,
+        reason: '碎片#${p.id} position.y 应为有限值',
+      );
       expect(p.scale.x.isFinite, isTrue, reason: '碎片#${p.id} scale.x 应为有限值');
       expect(p.scale.y.isFinite, isTrue, reason: '碎片#${p.id} scale.y 应为有限值');
     }
@@ -166,7 +180,11 @@ void main() {
 
     // 连续提示也不应崩溃
     for (var i = 0; i < 5; i++) {
-      expect(() => game.hint(), returnsNormally, reason: '第 ${i + 1} 次 hint 不应崩溃');
+      expect(
+        () => game.hint(),
+        returnsNormally,
+        reason: '第 ${i + 1} 次 hint 不应崩溃',
+      );
     }
   });
 
@@ -243,8 +261,12 @@ void main() {
     const testNx = 0.35;
     const testNy = 0.65;
     final screenPos = Vector2(
-      game.boardTopLeft.x + game.panOffset.x + testNx * game.boardSize.x * game.zoom,
-      game.boardTopLeft.y + game.panOffset.y + testNy * game.boardSize.y * game.zoom,
+      game.boardTopLeft.x +
+          game.panOffset.x +
+          testNx * game.boardSize.x * game.zoom,
+      game.boardTopLeft.y +
+          game.panOffset.y +
+          testNy * game.boardSize.y * game.zoom,
     );
     final pieceComp = game.children.whereType<PuzzlePieceComponent>().first;
     pieceComp.position.setFrom(screenPos);
@@ -316,10 +338,12 @@ void main() {
 
     // 取两块网格相邻的自由碎片 ((0,0) 与 (0,1))，都脱离托盘放到棋盘上，
     // 归一化相对偏移恰好满足“右邻一格”(1/cols=1/3)，但都不落在自身正确槽位上。
-    final a =
-        game.children.whereType<PuzzlePieceComponent>().firstWhere((p) => p.id == 0);
-    final b =
-        game.children.whereType<PuzzlePieceComponent>().firstWhere((p) => p.id == 1);
+    final a = game.children.whereType<PuzzlePieceComponent>().firstWhere(
+      (p) => p.id == 0,
+    );
+    final b = game.children.whereType<PuzzlePieceComponent>().firstWhere(
+      (p) => p.id == 1,
+    );
     const anX = 0.50, anY = 0.55;
     const bnX = anX + 1 / 3; // cols=3 → 1/cols = 1/3，保持网格对齐
     const bnY = anY;
@@ -348,8 +372,16 @@ void main() {
     // 该合并集群 (clusterSize==2) 被跳过 → 复现“碎片粘在棋盘上且扫把也归不了位”
     game.organizeTray();
     game.organizeTray(); // 连点两次依旧无效
-    expect(a.isInTray, isFalse, reason: '集群碎片未被扫把归位 (organizeTray 跳过 clusterSize>1)');
-    expect(b.isInTray, isFalse, reason: '集群碎片未被扫把归位 (organizeTray 跳过 clusterSize>1)');
+    expect(
+      a.isInTray,
+      isFalse,
+      reason: '集群碎片未被扫把归位 (organizeTray 跳过 clusterSize>1)',
+    );
+    expect(
+      b.isInTray,
+      isFalse,
+      reason: '集群碎片未被扫把归位 (organizeTray 跳过 clusterSize>1)',
+    );
   });
 
   test('放大后吸附容差(屏幕像素)恒定且被硬上限锁定，归一化阈值随放大收紧', () async {
@@ -376,8 +408,16 @@ void main() {
 
     // 两种缩放下，吸附半径对应屏幕像素都应被硬上限 48px 约束住
     final screenPx3 = (d3 * minBoardPx * game.zoom).abs();
-    expect(screenPx1, lessThanOrEqualTo(48.0 + 0.5), reason: '1× 吸附半径屏幕像素不应超过 48px');
-    expect(screenPx3, lessThanOrEqualTo(48.0 + 0.5), reason: '放大后吸附半径屏幕像素不应超过 48px');
+    expect(
+      screenPx1,
+      lessThanOrEqualTo(48.0 + 0.5),
+      reason: '1× 吸附半径屏幕像素不应超过 48px',
+    );
+    expect(
+      screenPx3,
+      lessThanOrEqualTo(48.0 + 0.5),
+      reason: '放大后吸附半径屏幕像素不应超过 48px',
+    );
   });
 
   test('边缘碎片逐像素逼近槽位：任何时刻“锁定⇒已贴槽”，远距离不锁定(复现状态·视觉脱节)', () async {
@@ -392,16 +432,22 @@ void main() {
     await game.onLoad();
 
     // 取上边缘非角块 (0,1)：id=1。其余碎片留在托盘，保证它是独立的孤片。
-    final edge = game.children
-        .whereType<PuzzlePieceComponent>()
-        .firstWhere((p) => p.id == 1);
-    final slotScreen = game.normalizedToScreen(edge.c / 4, edge.r / 4); // (0,1) 槽位屏幕坐标
+    final edge = game.children.whereType<PuzzlePieceComponent>().firstWhere(
+      (p) => p.id == 1,
+    );
+    final slotScreen = game.normalizedToScreen(
+      edge.c / 4,
+      edge.r / 4,
+    ); // (0,1) 槽位屏幕坐标
 
     void check() {
       // 任何时刻只要 isLocked，视觉就必须已贴到正确槽位（不得“锁了却没吸过去”）
       if (edge.isLocked) {
-        expect((edge.position - slotScreen).length, lessThanOrEqualTo(2.0),
-            reason: '锁定必须在正确槽位(视觉已贴槽)，绝不允许“锁了却没吸过去”');
+        expect(
+          (edge.position - slotScreen).length,
+          lessThanOrEqualTo(2.0),
+          reason: '锁定必须在正确槽位(视觉已贴槽)，绝不允许“锁了却没吸过去”',
+        );
         expect(edge.position.x, closeTo(slotScreen.x, 2.0));
         expect(edge.position.y, closeTo(slotScreen.y, 2.0));
       }
@@ -430,8 +476,9 @@ void main() {
 
   // 分组：连通/吸附锁定四类典型场景（#1 内部自由拖动、#2 内部组合自由拖动、#3 边缘就位吸附、
   //       #4 边缘组吸附不可动、#5 零散碎片补全边缘组合被吸附不可动）
-  PuzzlePieceComponent pieceOf(JigsawPuzzleGame g, int id) =>
-      g.children.whereType<PuzzlePieceComponent>().firstWhere((p) => p.id == id);
+  PuzzlePieceComponent pieceOf(JigsawPuzzleGame g, int id) => g.children
+      .whereType<PuzzlePieceComponent>()
+      .firstWhere((p) => p.id == id);
   void placeAtSlot(JigsawPuzzleGame g, int id) {
     final p = pieceOf(g, id);
     p.isInTray = false;
@@ -512,7 +559,11 @@ void main() {
         .where((p) => p.isLocked)
         .toList();
     expect(solvedPieces.length, equals(1));
-    expect(solvedPieces.first.priority, equals(5), reason: '已归位碎片应置于底层 Priority=5');
+    expect(
+      solvedPieces.first.priority,
+      equals(5),
+      reason: '已归位碎片应置于底层 Priority=5',
+    );
 
     // 测试已锁定的碎片在拖动时被拦截
     final solvedPiece = solvedPieces.first;
@@ -544,52 +595,63 @@ void main() {
     expect(piece0.priority, equals(20), reason: '棋盘上的未归位碎片 Priority 应为 20');
   });
 
-  test('鼠标单击吸附抓取状态机与动态缩放跟手锁定 (Click-to-Pick, Scale-Independent Tracking, Drop)', () async {
-    final img = await _decodePng();
-    final game = JigsawPuzzleGame(
-      image: img,
-      rows: 3,
-      cols: 3,
-      onSolved: () {},
-    );
-    game.onGameResize(Vector2(400, 800));
-    await game.onLoad();
+  test(
+    '鼠标单击吸附抓取状态机与动态缩放跟手锁定 (Click-to-Pick, Scale-Independent Tracking, Drop)',
+    () async {
+      final img = await _decodePng();
+      final game = JigsawPuzzleGame(
+        image: img,
+        rows: 3,
+        cols: 3,
+        onSolved: () {},
+      );
+      game.onGameResize(Vector2(400, 800));
+      await game.onLoad();
 
-    final piece0 = game.children.whereType<PuzzlePieceComponent>().first;
+      final piece0 = game.children.whereType<PuzzlePieceComponent>().first;
 
-    // 1. 开启抓取（点击碎片正中心，anchorX=0.5, anchorY=0.5）
-    game.startHoldingPiece(piece0, 0.5, 0.5);
-    expect(game.holdingPiece, equals(piece0));
-    expect(piece0.isDragging, isTrue);
-    expect(piece0.priority, greaterThanOrEqualTo(1000), reason: '抓取中碎片应置于最高层 Priority 1000+');
+      // 1. 开启抓取（点击碎片正中心，anchorX=0.5, anchorY=0.5）
+      game.startHoldingPiece(piece0, 0.5, 0.5);
+      expect(game.holdingPiece, equals(piece0));
+      expect(piece0.isDragging, isTrue);
+      expect(
+        piece0.priority,
+        greaterThanOrEqualTo(1000),
+        reason: '抓取中碎片应置于最高层 Priority 1000+',
+      );
 
-    // 2. 模拟鼠标移动到托盘内某个坐标
-    final trayCursorPos = Vector2(100, 700);
-    game.updateHoldingPiecePosition(trayCursorPos);
-    // 验证在托盘内 scale 为 trayPieceScale
-    expect(piece0.scale.x, closeTo(game.trayPieceScale, 0.001));
-    // 验证碎片中心与光标重合（由于 anchor 为 0.5, 0.5）
-    final visualCenterX = piece0.position.x + 0.5 * piece0.size.x * piece0.scale.x;
-    final visualCenterY = piece0.position.y + 0.5 * piece0.size.y * piece0.scale.y;
-    expect(visualCenterX, closeTo(trayCursorPos.x, 0.01));
-    expect(visualCenterY, closeTo(trayCursorPos.y, 0.01));
+      // 2. 模拟鼠标移动到托盘内某个坐标
+      final trayCursorPos = Vector2(100, 700);
+      game.updateHoldingPiecePosition(trayCursorPos);
+      // 验证在托盘内 scale 为 trayPieceScale
+      expect(piece0.scale.x, closeTo(game.trayPieceScale, 0.001));
+      // 验证碎片中心与光标重合（由于 anchor 为 0.5, 0.5）
+      final visualCenterX =
+          piece0.position.x + 0.5 * piece0.size.x * piece0.scale.x;
+      final visualCenterY =
+          piece0.position.y + 0.5 * piece0.size.y * piece0.scale.y;
+      expect(visualCenterX, closeTo(trayCursorPos.x, 0.01));
+      expect(visualCenterY, closeTo(trayCursorPos.y, 0.01));
 
-    // 3. 模拟鼠标拖动到上方棋盘区域（触发放大到 1.0）
-    final boardCursorPos = Vector2(200, 300);
-    game.updateHoldingPiecePosition(boardCursorPos);
-    // 验证在棋盘区域 scale 变为 zoom (1.0)
-    expect(piece0.scale.x, closeTo(game.zoom, 0.001));
-    // 关键验证：放大后，碎片中心依然 100% 精确与光标重合，绝无距离拉大！
-    final boardVisualCenterX = piece0.position.x + 0.5 * piece0.size.x * piece0.scale.x;
-    final boardVisualCenterY = piece0.position.y + 0.5 * piece0.size.y * piece0.scale.y;
-    expect(boardVisualCenterX, closeTo(boardCursorPos.x, 0.01));
-    expect(boardVisualCenterY, closeTo(boardCursorPos.y, 0.01));
+      // 3. 模拟鼠标拖动到上方棋盘区域（触发放大到 1.0）
+      final boardCursorPos = Vector2(200, 300);
+      game.updateHoldingPiecePosition(boardCursorPos);
+      // 验证在棋盘区域 scale 变为 zoom (1.0)
+      expect(piece0.scale.x, closeTo(game.zoom, 0.001));
+      // 关键验证：放大后，碎片中心依然 100% 精确与光标重合，绝无距离拉大！
+      final boardVisualCenterX =
+          piece0.position.x + 0.5 * piece0.size.x * piece0.scale.x;
+      final boardVisualCenterY =
+          piece0.position.y + 0.5 * piece0.size.y * piece0.scale.y;
+      expect(boardVisualCenterX, closeTo(boardCursorPos.x, 0.01));
+      expect(boardVisualCenterY, closeTo(boardCursorPos.y, 0.01));
 
-    // 4. 再次点击放下
-    game.dropHoldingPiece();
-    expect(game.holdingPiece, isNull);
-    expect(piece0.isDragging, isFalse);
-  });
+      // 4. 再次点击放下
+      game.dropHoldingPiece();
+      expect(game.holdingPiece, isNull);
+      expect(piece0.isDragging, isFalse);
+    },
+  );
 
   test('吸附抓取状态下取消抓取 (cancelHoldingPiece) 平滑复位', () async {
     final img = await _decodePng();
@@ -631,7 +693,10 @@ void main() {
     game.hint();
     game.hint();
 
-    final boardPieces = game.children.whereType<PuzzlePieceComponent>().where((p) => !p.isInTray).toList();
+    final boardPieces = game.children
+        .whereType<PuzzlePieceComponent>()
+        .where((p) => !p.isInTray)
+        .toList();
     expect(boardPieces.length, 3);
 
     // 记录大集群中第一块的位置
@@ -669,7 +734,9 @@ void main() {
     expect(game.isBorderFilterActive, isTrue);
 
     // 验证：3x3 共有 8 块外框碎片和 1 块中心内部碎片
-    final borderPieces = pieces.where((p) => p.r == 0 || p.r == 2 || p.c == 0 || p.c == 2).toList();
+    final borderPieces = pieces
+        .where((p) => p.r == 0 || p.r == 2 || p.c == 0 || p.c == 2)
+        .toList();
     final centerPieces = pieces.where((p) => p.r == 1 && p.c == 1).toList();
 
     expect(borderPieces.length, equals(8));
@@ -703,7 +770,9 @@ void main() {
     game.toggleBorderFilter();
     expect(game.isBorderFilterActive, isTrue);
 
-    final centerPiece = game.children.whereType<PuzzlePieceComponent>().firstWhere((p) => p.r == 1 && p.c == 1);
+    final centerPiece = game.children
+        .whereType<PuzzlePieceComponent>()
+        .firstWhere((p) => p.r == 1 && p.c == 1);
     expect(centerPiece.isFilteredOut, isTrue);
 
     // 连续提示直到 3x3 外围 8 块边缘全部归位（3x3 共有 8 块外框）
@@ -752,10 +821,11 @@ void main() {
       yPositions.add(p.position.y.roundToDouble());
 
       // 1. 验证绝对没有侵入棋盘中心区域
-      final isOverlapBoard = !(p.position.x + p.size.x * p.scale.x <= game.boardTopLeft.x ||
-          p.position.x >= game.boardTopLeft.x + game.boardSize.x ||
-          p.position.y + p.size.y * p.scale.y <= game.boardTopLeft.y ||
-          p.position.y >= game.boardTopLeft.y + game.boardSize.y);
+      final isOverlapBoard =
+          !(p.position.x + p.size.x * p.scale.x <= game.boardTopLeft.x ||
+              p.position.x >= game.boardTopLeft.x + game.boardSize.x ||
+              p.position.y + p.size.y * p.scale.y <= game.boardTopLeft.y ||
+              p.position.y >= game.boardTopLeft.y + game.boardSize.y);
       expect(isOverlapBoard, isFalse, reason: '碎片 #${p.id} 绝对不能遮挡中央棋盘区域');
 
       // 2. 统计围绕中心的 4 个方位分布
@@ -802,7 +872,11 @@ void main() {
     expect(game.solvedCount, 8);
 
     // 找到最后 1 块未归位碎片，人为将其坐标甩出屏幕外
-    final lastPiece = game.children.whereType<PuzzlePieceComponent>().firstWhere((p) => p.isInTray || !game.boardState.pieceById(p.id).isSolved(3, 3));
+    final lastPiece = game.children
+        .whereType<PuzzlePieceComponent>()
+        .firstWhere(
+          (p) => p.isInTray || !game.boardState.pieceById(p.id).isSolved(3, 3),
+        );
     lastPiece.isInTray = false;
     lastPiece.position.setValues(-500, -500); // 严重出界
 
@@ -848,18 +922,32 @@ void main() {
     expect(game.pieceSize.y, equals(game.boardSize.y / 3));
 
     // 3. 验证已归位棋盘碎片的新屏幕坐标与新棋盘对齐
-    final solvedComp = game.children.whereType<PuzzlePieceComponent>().firstWhere((p) => p.isLocked);
+    final solvedComp = game.children
+        .whereType<PuzzlePieceComponent>()
+        .firstWhere((p) => p.isLocked);
     expect(solvedComp.size.x, equals(game.pieceSize.x));
     expect(solvedComp.size.y, equals(game.pieceSize.y));
-    expect(solvedComp.position.x, closeTo(game.boardTopLeft.x + solvedComp.c * game.pieceSize.x, 0.5));
-    expect(solvedComp.position.y, closeTo(game.boardTopLeft.y + solvedComp.r * game.pieceSize.y, 0.5));
+    expect(
+      solvedComp.position.x,
+      closeTo(game.boardTopLeft.x + solvedComp.c * game.pieceSize.x, 0.5),
+    );
+    expect(
+      solvedComp.position.y,
+      closeTo(game.boardTopLeft.y + solvedComp.r * game.pieceSize.y, 0.5),
+    );
 
     // 4. 模拟缩小窗口至 320 x 480
     game.onGameResize(Vector2(320, 480));
     expect(game.trayPosition.y, equals(480.0 - game.traySize.y - 8.0));
     expect(game.traySize.x, equals(320.0 - 16.0));
-    expect(solvedComp.position.x, closeTo(game.boardTopLeft.x + solvedComp.c * game.pieceSize.x, 0.5));
-    expect(solvedComp.position.y, closeTo(game.boardTopLeft.y + solvedComp.r * game.pieceSize.y, 0.5));
+    expect(
+      solvedComp.position.x,
+      closeTo(game.boardTopLeft.x + solvedComp.c * game.pieceSize.x, 0.5),
+    );
+    expect(
+      solvedComp.position.y,
+      closeTo(game.boardTopLeft.y + solvedComp.r * game.pieceSize.y, 0.5),
+    );
   });
 
   test('多块已吸附集群拖拽靠近边缘移动时，同集群碎片不发生冲突或被意外拆散', () async {
@@ -880,9 +968,15 @@ void main() {
     expect(game.solvedCount, 3);
 
     // 人为模拟一个由 3 块碎片组成的自定义未锁定自由集群
-    final p0 = game.children.whereType<PuzzlePieceComponent>().firstWhere((p) => p.id == 0);
-    final p1 = game.children.whereType<PuzzlePieceComponent>().firstWhere((p) => p.id == 1);
-    final p2 = game.children.whereType<PuzzlePieceComponent>().firstWhere((p) => p.id == 2);
+    final p0 = game.children.whereType<PuzzlePieceComponent>().firstWhere(
+      (p) => p.id == 0,
+    );
+    final p1 = game.children.whereType<PuzzlePieceComponent>().firstWhere(
+      (p) => p.id == 1,
+    );
+    final p2 = game.children.whereType<PuzzlePieceComponent>().firstWhere(
+      (p) => p.id == 2,
+    );
 
     p0.isLocked = false;
     p1.isLocked = false;
@@ -928,9 +1022,15 @@ void main() {
     game.onGameResize(Vector2(1920, 1080));
     await game.onLoad();
 
-    final p0 = game.children.whereType<PuzzlePieceComponent>().firstWhere((p) => p.id == 0);
-    final p1 = game.children.whereType<PuzzlePieceComponent>().firstWhere((p) => p.id == 1);
-    final p2 = game.children.whereType<PuzzlePieceComponent>().firstWhere((p) => p.id == 2);
+    final p0 = game.children.whereType<PuzzlePieceComponent>().firstWhere(
+      (p) => p.id == 0,
+    );
+    final p1 = game.children.whereType<PuzzlePieceComponent>().firstWhere(
+      (p) => p.id == 1,
+    );
+    final p2 = game.children.whereType<PuzzlePieceComponent>().firstWhere(
+      (p) => p.id == 2,
+    );
 
     // 1. 将 p0（单块）放置在大窗口右侧边缘 (X=1800, Y=900)
     p0.isInTray = false;
@@ -939,7 +1039,9 @@ void main() {
     final out0 = [0.0, 0.0];
     game.screenToNormalized(p0.position, out0);
     game.boardState = game.boardState.copyWith(
-      pieces: game.boardState.pieces.map((p) => p.id == 0 ? p.copyWith(nx: out0[0], ny: out0[1]) : p).toList(),
+      pieces: game.boardState.pieces
+          .map((p) => p.id == 0 ? p.copyWith(nx: out0[0], ny: out0[1]) : p)
+          .toList(),
     );
 
     // 2. 将 p1, p2 组成自由拼合集群放置在右下方 (X=1700, Y=850)
@@ -959,8 +1061,10 @@ void main() {
 
     game.boardState = game.boardState.copyWith(
       pieces: game.boardState.pieces.map((p) {
-        if (p.id == 1) return p.copyWith(nx: out1[0], ny: out1[1], clusterId: 888);
-        if (p.id == 2) return p.copyWith(nx: out2[0], ny: out2[1], clusterId: 888);
+        if (p.id == 1)
+          return p.copyWith(nx: out1[0], ny: out1[1], clusterId: 888);
+        if (p.id == 2)
+          return p.copyWith(nx: out2[0], ny: out2[1], clusterId: 888);
         return p;
       }).toList(),
     );
@@ -971,14 +1075,20 @@ void main() {
     // 验证单块 p0 已被安全 Clamp 收拢在 800 x 600 的安全可视区域内
     expect(p0.position.x, lessThanOrEqualTo(800.0 - p0.size.x - 8.0));
     expect(p0.position.x, greaterThanOrEqualTo(8.0));
-    expect(p0.position.y, lessThanOrEqualTo(game.trayPosition.y - p0.size.y - 8.0));
+    expect(
+      p0.position.y,
+      lessThanOrEqualTo(game.trayPosition.y - p0.size.y - 8.0),
+    );
     expect(p0.position.y, greaterThanOrEqualTo(44.0));
 
     // 验证集群 p1, p2 已被整体原子平移收拢在可视区域内
     expect(p1.position.x, greaterThanOrEqualTo(8.0));
     expect(p2.position.x + p2.size.x, lessThanOrEqualTo(800.0 - 8.0 + 0.1));
     expect(p1.position.y, greaterThanOrEqualTo(44.0));
-    expect(p1.position.y + p1.size.y, lessThanOrEqualTo(game.trayPosition.y - 8.0 + 0.1));
+    expect(
+      p1.position.y + p1.size.y,
+      lessThanOrEqualTo(game.trayPosition.y - 8.0 + 0.1),
+    );
 
     // 验证集群两块碎片的相对几何距离绝对保持不变
     expect(p2.position.x - p1.position.x, closeTo(game.pieceSize.x, 0.01));
@@ -997,7 +1107,10 @@ void main() {
     await game.onLoad();
 
     // 获取托盘中的第一块和第二块碎片
-    final trayPieces = game.children.whereType<PuzzlePieceComponent>().where((p) => p.isInTray).toList();
+    final trayPieces = game.children
+        .whereType<PuzzlePieceComponent>()
+        .where((p) => p.isInTray)
+        .toList();
     expect(trayPieces.length, equals(9));
     final firstPiece = trayPieces[0];
     final secondPiece = trayPieces[1];
@@ -1032,7 +1145,10 @@ void main() {
     game.onGameResize(Vector2(800, 600));
     await game.onLoad();
 
-    final trayPieces = game.children.whereType<PuzzlePieceComponent>().where((p) => p.isInTray).toList();
+    final trayPieces = game.children
+        .whereType<PuzzlePieceComponent>()
+        .where((p) => p.isInTray)
+        .toList();
     final piece0 = trayPieces[0];
 
     // 1. 将 piece0 从托盘拖出到棋盘空白区域放开（避免吸附）
@@ -1068,14 +1184,23 @@ void main() {
     // 1. maxZoom = max(minZoom, maxPieceZoomPx / max(pieceW, pieceH))：
     //    大块/稀疏拼图取 minZoom 下限；小块按碎片尺寸放大更多并封顶。
     final pieceMaxSide = max(game.boardSize.x / 3, game.boardSize.y / 3);
-    final expectedMaxZoom = max(JigsawPuzzleGame.minZoom, JigsawPuzzleGame.maxPieceZoomPx / pieceMaxSide);
-    expect(game.maxZoom, closeTo(expectedMaxZoom, 0.01),
-        reason: 'maxZoom 应按碎片最大尺寸与 minZoom 下限动态推导');
+    final expectedMaxZoom = max(
+      JigsawPuzzleGame.minZoom,
+      JigsawPuzzleGame.maxPieceZoomPx / pieceMaxSide,
+    );
+    expect(
+      game.maxZoom,
+      closeTo(expectedMaxZoom, 0.01),
+      reason: 'maxZoom 应按碎片最大尺寸与 minZoom 下限动态推导',
+    );
 
     // 2. 尝试过度放大，必须被 clamp 在 maxZoom
     game.zoomAt(Vector2(400, 300), 20.0);
-    expect(game.zoom, closeTo(game.maxZoom, 0.01),
-        reason: '放大倍数必须被严格 clamp 在 maxZoom');
+    expect(
+      game.zoom,
+      closeTo(game.maxZoom, 0.01),
+      reason: '放大倍数必须被严格 clamp 在 maxZoom',
+    );
 
     // 3. 验证放大状态下在空白区域平移有效
     final initialPanX = game.panOffset.x;
@@ -1232,27 +1357,30 @@ void main() {
     expect(p0State3.ny, greaterThan(1.10));
   });
 
-  test('cancelAllPieceDragging 与 cancelPieceDrag 彻底清空 holdingPiece 避免幽灵抓取', () async {
-    final img = await _decodePng();
-    final game = JigsawPuzzleGame(
-      image: img,
-      rows: 2,
-      cols: 2,
-      onSolved: () {},
-    );
-    game.onGameResize(Vector2(400, 800));
-    await game.onLoad();
+  test(
+    'cancelAllPieceDragging 与 cancelPieceDrag 彻底清空 holdingPiece 避免幽灵抓取',
+    () async {
+      final img = await _decodePng();
+      final game = JigsawPuzzleGame(
+        image: img,
+        rows: 2,
+        cols: 2,
+        onSolved: () {},
+      );
+      game.onGameResize(Vector2(400, 800));
+      await game.onLoad();
 
-    final piece = game.children.whereType<PuzzlePieceComponent>().first;
-    game.startHoldingPiece(piece, 50.0, 50.0);
-    expect(game.holdingPiece, equals(piece));
-    expect(piece.isDragging, isTrue);
+      final piece = game.children.whereType<PuzzlePieceComponent>().first;
+      game.startHoldingPiece(piece, 50.0, 50.0);
+      expect(game.holdingPiece, equals(piece));
+      expect(piece.isDragging, isTrue);
 
-    // 触发 cancelAllPieceDragging
-    game.cancelAllPieceDragging();
-    expect(game.holdingPiece, isNull);
-    expect(piece.isDragging, isFalse);
-  });
+      // 触发 cancelAllPieceDragging
+      game.cancelAllPieceDragging();
+      expect(game.holdingPiece, isNull);
+      expect(piece.isDragging, isFalse);
+    },
+  );
 
   test('resetCurrentGame 彻底清空 holdingPiece 与 isDragging 避免重置后粘手', () async {
     final img = await _decodePng();
@@ -1315,7 +1443,15 @@ void main() {
       seed: 42,
       pieces: [
         const PieceState(id: 0, r: 0, c: 0, nx: 0, ny: 0, clusterId: 0, rot: 0),
-        const PieceState(id: 1, r: 0, c: 1, nx: 0.5, ny: 0, clusterId: 1, rot: 0),
+        const PieceState(
+          id: 1,
+          r: 0,
+          c: 1,
+          nx: 0.5,
+          ny: 0,
+          clusterId: 1,
+          rot: 0,
+        ),
       ],
     );
 

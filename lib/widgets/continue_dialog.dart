@@ -77,7 +77,11 @@ class ContinueDialog extends StatelessWidget {
       titlePadding: const EdgeInsets.fromLTRB(20, 16, 12, 0),
       title: Row(
         children: [
-          Icon(PhosphorIconsFill.clockCounterClockwise, color: palette.brand, size: 20),
+          Icon(
+            PhosphorIconsFill.clockCounterClockwise,
+            color: palette.brand,
+            size: 20,
+          ),
           const SizedBox(width: 8),
           Expanded(
             child: Text(
@@ -92,7 +96,11 @@ class ContinueDialog extends StatelessWidget {
             ),
           ),
           IconButton(
-            icon: Icon(PhosphorIconsBold.x, size: 18, color: palette.secondaryText),
+            icon: Icon(
+              PhosphorIconsBold.x,
+              size: 18,
+              color: palette.secondaryText,
+            ),
             onPressed: () => Navigator.of(context).pop(),
           ),
         ],
@@ -115,7 +123,11 @@ class ContinueDialog extends StatelessWidget {
                   cacheWidth: 1080,
                   errorBuilder: (_, _, _) => Container(
                     color: palette.surfaceContainerLow,
-                    child: Icon(PhosphorIconsRegular.image, size: 32, color: palette.disabledText),
+                    child: Icon(
+                      PhosphorIconsRegular.image,
+                      size: 32,
+                      color: palette.disabledText,
+                    ),
                   ),
                 ),
               ),
@@ -181,7 +193,9 @@ class ContinueDialog extends StatelessWidget {
                       ),
                       Text(
                         '碎片 ${snapshot.pieces.length}',
-                        style: styles.caption.copyWith(color: palette.disabledText),
+                        style: styles.caption.copyWith(
+                          color: palette.disabledText,
+                        ),
                       ),
                     ],
                   ),
@@ -195,11 +209,17 @@ class ContinueDialog extends StatelessWidget {
               decoration: BoxDecoration(
                 color: palette.warning.withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: palette.warning.withValues(alpha: 0.3)),
+                border: Border.all(
+                  color: palette.warning.withValues(alpha: 0.3),
+                ),
               ),
               child: Row(
                 children: [
-                  Icon(PhosphorIconsFill.info, size: 16, color: palette.warning),
+                  Icon(
+                    PhosphorIconsFill.info,
+                    size: 16,
+                    color: palette.warning,
+                  ),
                   const SizedBox(width: 6),
                   Expanded(
                     child: Text(
@@ -225,8 +245,13 @@ class ContinueDialog extends StatelessWidget {
               builder: (c) {
                 return AlertDialog(
                   backgroundColor: palette.surfaceContainer,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                  title: Text('重新开始？', style: styles.h3.copyWith(color: palette.primaryText)),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  title: Text(
+                    '重新开始？',
+                    style: styles.h3.copyWith(color: palette.primaryText),
+                  ),
                   content: Text(
                     '将清除该难度的存档进度，不可恢复，确定重新开始吗？',
                     style: styles.body.copyWith(color: palette.secondaryText),
@@ -234,10 +259,15 @@ class ContinueDialog extends StatelessWidget {
                   actions: [
                     TextButton(
                       onPressed: () => Navigator.pop(c, false),
-                      child: Text('取消', style: TextStyle(color: palette.secondaryText)),
+                      child: Text(
+                        '取消',
+                        style: TextStyle(color: palette.secondaryText),
+                      ),
                     ),
                     FilledButton(
-                      style: FilledButton.styleFrom(backgroundColor: palette.warning),
+                      style: FilledButton.styleFrom(
+                        backgroundColor: palette.warning,
+                      ),
                       onPressed: () => Navigator.pop(c, true),
                       child: const Text('确定重开'),
                     ),
@@ -255,7 +285,9 @@ class ContinueDialog extends StatelessWidget {
           label: const Text('继续挑战'),
           style: FilledButton.styleFrom(
             backgroundColor: palette.brand,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+            ),
           ),
         ),
       ],

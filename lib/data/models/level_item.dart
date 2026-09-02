@@ -56,26 +56,28 @@ class LevelItem {
       progressPercent: progressPercent ?? this.progressPercent,
       stars: stars ?? this.stars,
       bestTimeSeconds: bestTimeSeconds ?? this.bestTimeSeconds,
-      savedSnapshotJson: clearSnapshot ? null : (savedSnapshotJson ?? this.savedSnapshotJson),
+      savedSnapshotJson: clearSnapshot
+          ? null
+          : (savedSnapshotJson ?? this.savedSnapshotJson),
       completedPieceCounts: completedPieceCounts ?? this.completedPieceCounts,
     );
   }
 
   Map<String, dynamic> toJson() => {
-        'id': id,
-        'index': index,
-        'title': title,
-        'assetPath': assetPath,
-        'rows': difficulty.rows,
-        'cols': difficulty.cols,
-        'isUnlocked': isUnlocked,
-        'isCompleted': isCompleted || completedPieceCounts.isNotEmpty,
-        'progressPercent': progressPercent,
-        'stars': stars,
-        'bestTimeSeconds': bestTimeSeconds,
-        'savedSnapshotJson': savedSnapshotJson,
-        'completedPieceCounts': completedPieceCounts,
-      };
+    'id': id,
+    'index': index,
+    'title': title,
+    'assetPath': assetPath,
+    'rows': difficulty.rows,
+    'cols': difficulty.cols,
+    'isUnlocked': isUnlocked,
+    'isCompleted': isCompleted || completedPieceCounts.isNotEmpty,
+    'progressPercent': progressPercent,
+    'stars': stars,
+    'bestTimeSeconds': bestTimeSeconds,
+    'savedSnapshotJson': savedSnapshotJson,
+    'completedPieceCounts': completedPieceCounts,
+  };
 
   factory LevelItem.fromJson(Map<String, dynamic> json) {
     final rows = json['rows'] as int? ?? 4;
@@ -93,8 +95,8 @@ class LevelItem {
         ?.map((e) => e as int)
         .toList();
     final isCompletedVal = json['isCompleted'] as bool? ?? false;
-    final completedCounts = rawCompletedCounts ??
-        (isCompletedVal ? [diff.pieceCount] : <int>[]);
+    final completedCounts =
+        rawCompletedCounts ?? (isCompletedVal ? [diff.pieceCount] : <int>[]);
 
     return LevelItem(
       id: json['id'] as String,

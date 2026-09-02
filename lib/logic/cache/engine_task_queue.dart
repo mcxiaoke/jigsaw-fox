@@ -89,16 +89,24 @@ class EngineTaskQueue {
   }
 
   Future<void> _executeTask<T>(_QueuedTask<T> item) async {
-    AppLogger.imageCache.fine('EngineTaskQueue start key=${item.key} running=$_runningCount queued=${_queue.length}');
+    AppLogger.imageCache.fine(
+      'EngineTaskQueue start key=${item.key} running=$_runningCount queued=${_queue.length}',
+    );
     final sw = Stopwatch()..start();
     try {
       final result = await item.task();
-      AppLogger.imageCache.fine('EngineTaskQueue success key=${item.key} ${sw.elapsedMilliseconds}ms');
+      AppLogger.imageCache.fine(
+        'EngineTaskQueue success key=${item.key} ${sw.elapsedMilliseconds}ms',
+      );
       if (!item.completer.isCompleted) {
         item.completer.complete(result);
       }
     } catch (e, stack) {
-      AppLogger.imageCache.warning('EngineTaskQueue failed key=${item.key} ${sw.elapsedMilliseconds}ms', e, stack);
+      AppLogger.imageCache.warning(
+        'EngineTaskQueue failed key=${item.key} ${sw.elapsedMilliseconds}ms',
+        e,
+        stack,
+      );
       if (!item.completer.isCompleted) {
         item.completer.completeError(e, stack);
       }
@@ -124,11 +132,7 @@ class EngineTaskQueue {
 }
 
 class _QueuedTask<T> {
-  _QueuedTask({
-    required this.key,
-    required this.task,
-    required this.completer,
-  });
+  _QueuedTask({required this.key, required this.task, required this.completer});
 
   final String key;
   final Future<T> Function() task;

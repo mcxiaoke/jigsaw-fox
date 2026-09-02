@@ -45,7 +45,9 @@ class MainContentPipeline {
     if (trimmed.isEmpty || trimmed == 'all') {
       return levels;
     }
-    return levels.where((l) => l.tags.map((t) => t.toLowerCase()).contains(trimmed)).toList();
+    return levels
+        .where((l) => l.tags.map((t) => t.toLowerCase()).contains(trimmed))
+        .toList();
   }
 
   /// 从本地缓存初始化加载
@@ -67,19 +69,27 @@ class MainContentPipeline {
                 final localFile = File(_getLocalImagePath(level.id));
                 final isLocal = localFile.existsSync();
                 _levelsMap[level.id] = level.copyWith(
-                  imagePathOrUrl: isLocal ? localFile.path : level.imagePathOrUrl,
+                  imagePathOrUrl: isLocal
+                      ? localFile.path
+                      : level.imagePathOrUrl,
                   isLocalFile: isLocal,
                 );
                 loaded++;
               }
             }
           }
-          AppLogger.mainPipe.info('initializeFromCache version=$_localVersion loaded=$loaded file=${AppLogger.sanitizePath(cacheFilePath)}');
+          AppLogger.mainPipe.info(
+            'initializeFromCache version=$_localVersion loaded=$loaded file=${AppLogger.sanitizePath(cacheFilePath)}',
+          );
         } else {
-          AppLogger.mainPipe.warning('initializeFromCache unexpected json type ${json.runtimeType}');
+          AppLogger.mainPipe.warning(
+            'initializeFromCache unexpected json type ${json.runtimeType}',
+          );
         }
       } else {
-        AppLogger.mainPipe.fine('initializeFromCache no cache file ${AppLogger.sanitizePath(cacheFilePath)}');
+        AppLogger.mainPipe.fine(
+          'initializeFromCache no cache file ${AppLogger.sanitizePath(cacheFilePath)}',
+        );
       }
     } catch (e, st) {
       AppLogger.mainPipe.warning('initializeFromCache failed', e, st);
@@ -91,7 +101,9 @@ class MainContentPipeline {
     required String remoteUrl,
     required int remoteVersion,
   }) async {
-    AppLogger.mainPipe.info('syncWithRemote remoteVersion=$remoteVersion localVersion=$_localVersion url=${AppLogger.sanitizeUrl(remoteUrl)} existing=${_levelsMap.length}');
+    AppLogger.mainPipe.info(
+      'syncWithRemote remoteVersion=$remoteVersion localVersion=$_localVersion url=${AppLogger.sanitizeUrl(remoteUrl)} existing=${_levelsMap.length}',
+    );
     if (remoteUrl.isEmpty) {
       AppLogger.mainPipe.warning('syncWithRemote empty url skip');
       return false;
@@ -137,16 +149,24 @@ class MainContentPipeline {
 
       _localVersion = newVersion;
       await _persistToCache();
-      AppLogger.mainPipe.info('syncWithRemote done newVersion=$newVersion hasNew=$hasNewItems total=${_levelsMap.length}');
+      AppLogger.mainPipe.info(
+        'syncWithRemote done newVersion=$newVersion hasNew=$hasNewItems total=${_levelsMap.length}',
+      );
       return hasNewItems;
     } catch (e, st) {
-      AppLogger.mainPipe.warning('syncWithRemote failed url=${AppLogger.sanitizeUrl(remoteUrl)}', e, st);
+      AppLogger.mainPipe.warning(
+        'syncWithRemote failed url=${AppLogger.sanitizeUrl(remoteUrl)}',
+        e,
+        st,
+      );
       return false;
     }
   }
 
   /// 确保指定关卡的图片已下载至本地磁盘 (按需懒加载)
-  Future<PuzzleLevelItem> ensureLevelImageDownloaded(PuzzleLevelItem level) async {
+  Future<PuzzleLevelItem> ensureLevelImageDownloaded(
+    PuzzleLevelItem level,
+  ) async {
     if (level.isLocalFile && File(level.imagePathOrUrl).existsSync()) {
       AppLogger.mainPipe.fine('ensureDownloaded already local ${level.id}');
       return level;
@@ -155,18 +175,33 @@ class MainContentPipeline {
     final localPath = _getLocalImagePath(level.id);
     final localFile = File(localPath);
     if (localFile.existsSync()) {
-      final updated = level.copyWith(imagePathOrUrl: localPath, isLocalFile: true);
+      final updated = level.copyWith(
+        imagePathOrUrl: localPath,
+        isLocalFile: true,
+      );
       _levelsMap[level.id] = updated;
-      AppLogger.mainPipe.fine('ensureDownloaded hit local file ${level.id} -> ${AppLogger.sanitizePath(localPath)}');
+      AppLogger.mainPipe.fine(
+        'ensureDownloaded hit local file ${level.id} -> ${AppLogger.sanitizePath(localPath)}',
+      );
       return updated;
     }
 
-    AppLogger.mainPipe.info('ensureDownloaded downloading ${level.id} from ${AppLogger.sanitizeUrl(level.imagePathOrUrl)}');
+    AppLogger.mainPipe.info(
+      'ensureDownloaded downloading ${level.id} from ${AppLogger.sanitizeUrl(level.imagePathOrUrl)}',
+    );
     try {
-      final downloaded = await _httpClient.downloadFile(level.imagePathOrUrl, localPath);
-      final updated = level.copyWith(imagePathOrUrl: downloaded.path, isLocalFile: true);
+      final downloaded = await _httpClient.downloadFile(
+        level.imagePathOrUrl,
+        localPath,
+      );
+      final updated = level.copyWith(
+        imagePathOrUrl: downloaded.path,
+        isLocalFile: true,
+      );
       _levelsMap[level.id] = updated;
-      AppLogger.mainPipe.info('ensureDownloaded done ${level.id} -> ${AppLogger.sanitizePath(downloaded.path)}');
+      AppLogger.mainPipe.info(
+        'ensureDownloaded done ${level.id} -> ${AppLogger.sanitizePath(downloaded.path)}',
+      );
       return updated;
     } catch (e, st) {
       AppLogger.mainPipe.severe('ensureDownloaded failed ${level.id}', e, st);
@@ -179,8 +214,15 @@ class MainContentPipeline {
     final url = raw['url']?.toString();
     if (url == null || url.trim().isEmpty) return null;
 
-    final tags = (raw['tags'] as List<dynamic>?)?.map((e) => e.toString().trim()).toList() ?? <String>[];
-    final canonicalId = CanonicalId.fromSource(sourceModule: CanonicalId.prefixMain, pathOrUrl: url);
+    final tags =
+        (raw['tags'] as List<dynamic>?)
+            ?.map((e) => e.toString().trim())
+            .toList() ??
+        <String>[];
+    final canonicalId = CanonicalId.fromSource(
+      sourceModule: CanonicalId.prefixMain,
+      pathOrUrl: url,
+    );
 
     // 从 ID 中尝试提取数字序号作为 order (如 main:101 -> 101)
     int order = 0;
@@ -215,10 +257,20 @@ class MainContentPipeline {
       }
       final payload = {
         'version': _localVersion,
-        'levels': _levelsMap.values.map((l) => {'url': l.imagePathOrUrl, 'order': l.order, 'tags': l.tags}).toList(),
+        'levels': _levelsMap.values
+            .map(
+              (l) => {
+                'url': l.imagePathOrUrl,
+                'order': l.order,
+                'tags': l.tags,
+              },
+            )
+            .toList(),
       };
       await file.writeAsString(jsonEncode(payload), flush: true);
-      AppLogger.mainPipe.fine('Persisted cache version=$_localVersion count=${_levelsMap.length}');
+      AppLogger.mainPipe.fine(
+        'Persisted cache version=$_localVersion count=${_levelsMap.length}',
+      );
     } catch (e, st) {
       AppLogger.mainPipe.warning('Persist cache failed', e, st);
     }

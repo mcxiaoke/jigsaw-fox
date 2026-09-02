@@ -40,7 +40,9 @@ class _EventsTabViewState extends State<EventsTabView> {
   Widget build(BuildContext context) {
     final palette = AppPalette.of(context);
     final styles = AppTextStyles.of(context);
-    final events = _content.isInitialized ? _content.manager.getVisibleEvents() : <PuzzleEventItem>[];
+    final events = _content.isInitialized
+        ? _content.manager.getVisibleEvents()
+        : <PuzzleEventItem>[];
 
     return RefreshIndicator(
       onRefresh: () async => await _content.syncAll(),
@@ -57,12 +59,20 @@ class _EventsTabViewState extends State<EventsTabView> {
                       children: [
                         const Text('🦊', style: TextStyle(fontSize: 48)),
                         const SizedBox(height: 8),
-                        Text('小狐狸没找到正在进行的活动', style: styles.body.copyWith(color: palette.secondaryText)),
+                        Text(
+                          '小狐狸没找到正在进行的活动',
+                          style: styles.body.copyWith(
+                            color: palette.secondaryText,
+                          ),
+                        ),
                         const SizedBox(height: 4),
                         Text('下拉刷新或稍后再来看看吧', style: styles.caption),
                         const SizedBox(height: 12),
                         ElevatedButton.icon(
-                          icon: const Icon(PhosphorIconsRegular.arrowClockwise, size: 16),
+                          icon: const Icon(
+                            PhosphorIconsRegular.arrowClockwise,
+                            size: 16,
+                          ),
                           label: const Text('刷新同步'),
                           style: ElevatedButton.styleFrom(
                             backgroundColor: palette.brand,
@@ -81,7 +91,9 @@ class _EventsTabViewState extends State<EventsTabView> {
                 final isWide = constraints.maxWidth >= 600;
                 return GridView.builder(
                   padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
-                  physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
+                  physics: const AlwaysScrollableScrollPhysics(
+                    parent: BouncingScrollPhysics(),
+                  ),
                   gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                     crossAxisCount: isWide ? 2 : 1,
                     crossAxisSpacing: 16,
@@ -99,7 +111,12 @@ class _EventsTabViewState extends State<EventsTabView> {
     );
   }
 
-  Widget _buildEventCard(BuildContext context, PuzzleEventItem event, AppPalette palette, AppTextStyles styles) {
+  Widget _buildEventCard(
+    BuildContext context,
+    PuzzleEventItem event,
+    AppPalette palette,
+    AppTextStyles styles,
+  ) {
     return Container(
       decoration: BoxDecoration(
         color: palette.surfaceContainer,
@@ -119,7 +136,9 @@ class _EventsTabViewState extends State<EventsTabView> {
                   height: 160,
                   width: double.infinity,
                   child: AppCachedImage(
-                    imagePathOrUrl: event.coverUrl ?? (event.levels.isNotEmpty ? event.levels.first : ''),
+                    imagePathOrUrl:
+                        event.coverUrl ??
+                        (event.levels.isNotEmpty ? event.levels.first : ''),
                     fit: BoxFit.cover,
                     alignment: Alignment.center,
                     targetDimension: ThumbnailDimension.eventCover,
@@ -129,7 +148,11 @@ class _EventsTabViewState extends State<EventsTabView> {
                   child: Container(
                     decoration: BoxDecoration(
                       gradient: LinearGradient(
-                        colors: [Colors.black.withValues(alpha: 0.35), Colors.transparent, const Color(0xBD000000)],
+                        colors: [
+                          Colors.black.withValues(alpha: 0.35),
+                          Colors.transparent,
+                          const Color(0xBD000000),
+                        ],
                         begin: Alignment.topCenter,
                         end: Alignment.bottomCenter,
                       ),
@@ -141,7 +164,10 @@ class _EventsTabViewState extends State<EventsTabView> {
                   left: 12,
                   top: 12,
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 4,
+                    ),
                     decoration: BoxDecoration(
                       color: event.isActive ? palette.brand : Colors.black54,
                       borderRadius: BorderRadius.circular(12),
@@ -150,14 +176,20 @@ class _EventsTabViewState extends State<EventsTabView> {
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         Icon(
-                          event.isActive ? PhosphorIconsFill.sparkle : PhosphorIconsRegular.clockCounterClockwise,
+                          event.isActive
+                              ? PhosphorIconsFill.sparkle
+                              : PhosphorIconsRegular.clockCounterClockwise,
                           color: Colors.white,
                           size: 13,
                         ),
                         const SizedBox(width: 4),
                         Text(
                           event.isActive ? '限时进行中' : '往期活动',
-                          style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold,
+                          ),
                         ),
                       ],
                     ),
@@ -168,14 +200,20 @@ class _EventsTabViewState extends State<EventsTabView> {
                   right: 12,
                   top: 12,
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 4,
+                    ),
                     decoration: BoxDecoration(
                       color: Colors.black.withValues(alpha: 0.6),
                       borderRadius: BorderRadius.circular(10),
                     ),
                     child: Text(
                       event.isZipType ? '离线整包' : '在线精选',
-                      style: const TextStyle(color: Colors.white70, fontSize: 10),
+                      style: const TextStyle(
+                        color: Colors.white70,
+                        fontSize: 10,
+                      ),
                     ),
                   ),
                 ),
@@ -202,7 +240,10 @@ class _EventsTabViewState extends State<EventsTabView> {
             // 2. Event Description & Action Bar
             Expanded(
               child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 10,
+                ),
                 child: Row(
                   children: [
                     Expanded(
@@ -220,8 +261,13 @@ class _EventsTabViewState extends State<EventsTabView> {
                       style: ElevatedButton.styleFrom(
                         backgroundColor: palette.brand,
                         foregroundColor: palette.surface,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 10,
+                        ),
                       ),
                       onPressed: () => EventLevelsPage.open(context, event),
                     ),

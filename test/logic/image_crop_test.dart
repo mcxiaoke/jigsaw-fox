@@ -32,7 +32,11 @@ void main() {
 
   group('centerCropRect', () {
     test('4:3 (4032x3024) to 3:2 crops height, keeps full width', () {
-      final rect = centerCropRect(imageWidth: 4032, imageHeight: 3024, targetRatio: 1.5);
+      final rect = centerCropRect(
+        imageWidth: 4032,
+        imageHeight: 3024,
+        targetRatio: 1.5,
+      );
       expect(rect.left, 0);
       expect(rect.top, closeTo(168, 1)); // (3024 - 2688) / 2
       expect(rect.width, 4032);
@@ -40,7 +44,11 @@ void main() {
     });
 
     test('3:4 portrait to 2:3 crops width, keeps full height', () {
-      final rect = centerCropRect(imageWidth: 3024, imageHeight: 4032, targetRatio: 2 / 3);
+      final rect = centerCropRect(
+        imageWidth: 3024,
+        imageHeight: 4032,
+        targetRatio: 2 / 3,
+      );
       expect(rect.left, closeTo(168, 1)); // (3024 - 2688) / 2
       expect(rect.top, 0);
       expect(rect.width, closeTo(2688, 1));
@@ -48,7 +56,11 @@ void main() {
     });
 
     test('16:9 (1920x1080) to 3:2 crops width', () {
-      final rect = centerCropRect(imageWidth: 1920, imageHeight: 1080, targetRatio: 1.5);
+      final rect = centerCropRect(
+        imageWidth: 1920,
+        imageHeight: 1080,
+        targetRatio: 1.5,
+      );
       expect(rect.top, 0);
       expect(rect.height, 1080);
       expect(rect.width, closeTo(1620, 1)); // 1080 * 1.5
@@ -56,7 +68,11 @@ void main() {
     });
 
     test('1:1 image to 1:1 crops nothing', () {
-      final rect = centerCropRect(imageWidth: 1024, imageHeight: 1024, targetRatio: 1.0);
+      final rect = centerCropRect(
+        imageWidth: 1024,
+        imageHeight: 1024,
+        targetRatio: 1.0,
+      );
       expect(rect.left, 0);
       expect(rect.top, 0);
       expect(rect.width, 1024);
@@ -66,38 +82,62 @@ void main() {
 
   group('needsCenterCropFor', () {
     test('matches ratio within tolerance -> no crop', () {
-      expect(needsCenterCropFor(width: 1500, height: 1000, targetRatio: 1.5), isFalse);
+      expect(
+        needsCenterCropFor(width: 1500, height: 1000, targetRatio: 1.5),
+        isFalse,
+      );
     });
 
     test('4:3 vs 3:2 -> crop needed', () {
-      expect(needsCenterCropFor(width: 4032, height: 3024, targetRatio: 1.5), isTrue);
+      expect(
+        needsCenterCropFor(width: 4032, height: 3024, targetRatio: 1.5),
+        isTrue,
+      );
     });
 
     test('tiny deviation within 1% tolerance -> no crop', () {
       // 1.49 vs 1.5: loss = 0.67% < 1%
-      expect(needsCenterCropFor(width: 1490, height: 1000, targetRatio: 1.5), isFalse);
+      expect(
+        needsCenterCropFor(width: 1490, height: 1000, targetRatio: 1.5),
+        isFalse,
+      );
     });
   });
 
   group('nearestStandardRatio', () {
     test('4:3 (1.333) picks 3:2 (loss 11.1%) over 1:1 (25%)', () {
-      expect(nearestStandardRatio(width: 4032, height: 3024), closeTo(1.5, 0.001));
+      expect(
+        nearestStandardRatio(width: 4032, height: 3024),
+        closeTo(1.5, 0.001),
+      );
     });
 
     test('3:4 (0.75) picks 2:3 (loss 11.1%)', () {
-      expect(nearestStandardRatio(width: 3024, height: 4032), closeTo(2 / 3, 0.001));
+      expect(
+        nearestStandardRatio(width: 3024, height: 4032),
+        closeTo(2 / 3, 0.001),
+      );
     });
 
     test('16:9 (1.778) picks 3:2 (loss 15.6%)', () {
-      expect(nearestStandardRatio(width: 1920, height: 1080), closeTo(1.5, 0.001));
+      expect(
+        nearestStandardRatio(width: 1920, height: 1080),
+        closeTo(1.5, 0.001),
+      );
     });
 
     test('1:1 picks 1:1', () {
-      expect(nearestStandardRatio(width: 1024, height: 1024), closeTo(1.0, 0.001));
+      expect(
+        nearestStandardRatio(width: 1024, height: 1024),
+        closeTo(1.0, 0.001),
+      );
     });
 
     test('4:5 (0.8) picks 2:3 over 1:1 (16.7% < 20%)', () {
-      expect(nearestStandardRatio(width: 800, height: 1000), closeTo(2 / 3, 0.001));
+      expect(
+        nearestStandardRatio(width: 800, height: 1000),
+        closeTo(2 / 3, 0.001),
+      );
     });
   });
 }

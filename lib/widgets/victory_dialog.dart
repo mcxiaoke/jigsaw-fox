@@ -248,8 +248,11 @@ class _VictoryDialogState extends State<VictoryDialog>
                             width: 200,
                             height: 200,
                             color: palette.surfaceContainer,
-                            child: Icon(PhosphorIconsFill.puzzlePiece,
-                                size: 48, color: palette.brand),
+                            child: Icon(
+                              PhosphorIconsFill.puzzlePiece,
+                              size: 48,
+                              color: palette.brand,
+                            ),
                           ),
                         ),
                       ),
@@ -269,7 +272,9 @@ class _VictoryDialogState extends State<VictoryDialog>
                           duration: const Duration(milliseconds: 300),
                           curve: Curves.easeOutBack,
                           child: Icon(
-                            lit ? PhosphorIconsFill.star : PhosphorIconsRegular.star,
+                            lit
+                                ? PhosphorIconsFill.star
+                                : PhosphorIconsRegular.star,
                             size: 36,
                             color: lit ? palette.gold : palette.disabledText,
                           ),
@@ -317,7 +322,10 @@ class _VictoryDialogState extends State<VictoryDialog>
                         Expanded(
                           child: OutlinedButton.icon(
                             onPressed: widget.onSaveWallpaper,
-                            icon: const Icon(PhosphorIconsRegular.image, size: 16),
+                            icon: const Icon(
+                              PhosphorIconsRegular.image,
+                              size: 16,
+                            ),
                             label: const Text('保存壁纸'),
                             style: OutlinedButton.styleFrom(
                               foregroundColor: palette.secondaryText,
@@ -329,13 +337,17 @@ class _VictoryDialogState extends State<VictoryDialog>
                             ),
                           ),
                         ),
-                      if (widget.onSaveWallpaper != null && widget.onShare != null)
+                      if (widget.onSaveWallpaper != null &&
+                          widget.onShare != null)
                         const SizedBox(width: 10),
                       if (widget.onShare != null)
                         Expanded(
                           child: FilledButton.icon(
                             onPressed: widget.onShare,
-                            icon: const Icon(PhosphorIconsBold.shareNetwork, size: 16),
+                            icon: const Icon(
+                              PhosphorIconsBold.shareNetwork,
+                              size: 16,
+                            ),
                             label: const Text('分享成绩'),
                             style: FilledButton.styleFrom(
                               backgroundColor: palette.surfaceContainer,
@@ -373,7 +385,10 @@ class _VictoryDialogState extends State<VictoryDialog>
                   // Close button
                   TextButton(
                     onPressed: () => Navigator.of(context).pop(),
-                    child: Text('返回', style: TextStyle(color: palette.secondaryText)),
+                    child: Text(
+                      '返回',
+                      style: TextStyle(color: palette.secondaryText),
+                    ),
                   ),
                 ],
               ),
@@ -411,9 +426,7 @@ class _ConfettiPainter extends CustomPainter {
   final List<_Particle> _particles;
   final Random _rng = Random();
 
-  _ConfettiPainter(this.palette)
-      : _particles = [],
-        super() {
+  _ConfettiPainter(this.palette) : _particles = [], super() {
     for (int i = 0; i < 60; i++) {
       _particles.add(_Particle.random(_rng));
     }
@@ -439,7 +452,11 @@ class _ConfettiPainter extends CustomPainter {
       canvas.translate(dx, dy - 20);
       canvas.rotate(t * 3);
       canvas.drawRect(
-        Rect.fromCenter(center: Offset.zero, width: p.size, height: p.size * 0.4),
+        Rect.fromCenter(
+          center: Offset.zero,
+          width: p.size,
+          height: p.size * 0.4,
+        ),
         paint,
       );
       canvas.restore();

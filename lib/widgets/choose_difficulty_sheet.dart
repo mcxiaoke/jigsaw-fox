@@ -50,11 +50,7 @@ class _JigsawOverlayPainter extends CustomPainter {
     for (var r = 0; r < rows; r++) {
       for (var c = 0; c < cols; c++) {
         final edges = edgeLayout.edgesFor(r, c);
-        final shape = PieceShape(
-          edges: edges,
-          width: pieceW,
-          height: pieceH,
-        );
+        final shape = PieceShape(edges: edges, width: pieceW, height: pieceH);
 
         canvas.save();
         canvas.translate(c * pieceW, r * pieceH);
@@ -204,7 +200,9 @@ class _ChooseDifficultySheetState extends State<ChooseDifficultySheet> {
         final tiers = aspect.tiers;
         _selectedDifficulty = tiers
             .firstWhere(
-              (t) => t.difficulty.pieceCount == widget.initialDifficulty.pieceCount,
+              (t) =>
+                  t.difficulty.pieceCount ==
+                  widget.initialDifficulty.pieceCount,
               orElse: () => tiers.firstWhere(
                 (t) => t.difficulty.recommended,
                 orElse: () => tiers[0],
@@ -283,7 +281,9 @@ class _ChooseDifficultySheetState extends State<ChooseDifficultySheet> {
           context: context,
           builder: (ctx) => StatefulBuilder(
             builder: (ctx, setDialogState) => AlertDialog(
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
               title: Row(
                 children: [
                   Icon(PhosphorIconsBold.info, color: palette.warning),
@@ -296,14 +296,21 @@ class _ChooseDifficultySheetState extends State<ChooseDifficultySheet> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   const Text('当前 54 块相比新手 24 块难度提升较大，碎片较为小巧。是否继续进入挑战？'),
-            const SizedBox(height: 24),
+                  const SizedBox(height: 24),
                   Row(
                     children: [
                       Checkbox(
                         value: doNotShowAgain,
-                        onChanged: (v) => setDialogState(() => doNotShowAgain = v ?? false),
+                        onChanged: (v) =>
+                            setDialogState(() => doNotShowAgain = v ?? false),
                       ),
-                      Text('不再提示此类跨度', style: TextStyle(fontSize: 13, color: palette.primaryText)),
+                      Text(
+                        '不再提示此类跨度',
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: palette.primaryText,
+                        ),
+                      ),
                     ],
                   ),
                 ],
@@ -354,7 +361,9 @@ class _ChooseDifficultySheetState extends State<ChooseDifficultySheet> {
       ),
     );
 
-    final isEffectivePassed = widget.completedPieceCounts.contains(effectiveDiff.pieceCount);
+    final isEffectivePassed = widget.completedPieceCounts.contains(
+      effectiveDiff.pieceCount,
+    );
     final unlockStatus = _tierUnlockStatuses[effectiveDiff.tierIndex];
     final isTierUnlocked = unlockStatus?.isUnlocked ?? true;
     final isFullyPlayable = widget.isUnlocked && isTierUnlocked;
@@ -367,25 +376,32 @@ class _ChooseDifficultySheetState extends State<ChooseDifficultySheet> {
         elevation: 0.5,
         scrolledUnderElevation: 0.5,
         leading: IconButton(
-          icon: Icon(PhosphorIconsBold.x, size: 22, color: palette.secondaryText),
+          icon: Icon(
+            PhosphorIconsBold.x,
+            size: 22,
+            color: palette.secondaryText,
+          ),
           onPressed: () => Navigator.of(context).pop(),
         ),
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              '选择难度',
-              style: styles.h3.copyWith(fontSize: 18),
-            ),
+            Text('选择难度', style: styles.h3.copyWith(fontSize: 18)),
             if (widget.sourcePlatform != null && widget.sourceUrl != null)
               Row(
                 children: [
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 6,
+                      vertical: 1,
+                    ),
                     decoration: BoxDecoration(
                       color: palette.info.withValues(alpha: 0.12),
                       borderRadius: BorderRadius.circular(6),
-                      border: Border.all(color: palette.info.withValues(alpha: 0.3), width: 0.8),
+                      border: Border.all(
+                        color: palette.info.withValues(alpha: 0.3),
+                        width: 0.8,
+                      ),
                     ),
                     child: Text(
                       widget.sourcePlatform!,
@@ -400,7 +416,9 @@ class _ChooseDifficultySheetState extends State<ChooseDifficultySheet> {
                   Expanded(
                     child: Text(
                       widget.sourceUrl!,
-                      style: styles.caption.copyWith(color: palette.disabledText),
+                      style: styles.caption.copyWith(
+                        color: palette.disabledText,
+                      ),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
@@ -412,7 +430,11 @@ class _ChooseDifficultySheetState extends State<ChooseDifficultySheet> {
         actions: [
           if (widget.onDelete != null)
             IconButton(
-              icon: Icon(PhosphorIconsBold.trash, color: palette.error, size: 20),
+              icon: Icon(
+                PhosphorIconsBold.trash,
+                color: palette.error,
+                size: 20,
+              ),
               tooltip: '删除此自制拼图',
               onPressed: _confirmDelete,
             ),
@@ -426,66 +448,166 @@ class _ChooseDifficultySheetState extends State<ChooseDifficultySheet> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-            // Puzzle Image Preview Card with Grid Overlay — large preview, max width
-            Center(
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(20),
-                child: Container(
-                  width: double.infinity,
-                  constraints: const BoxConstraints(maxWidth: 520, maxHeight: 360),
-                  color: palette.surfaceContainer,
-                  child: AspectRatio(
-                    aspectRatio: _imageLoaded && _imageHeight > 0 ? _imageWidth / _imageHeight : 1.0,
-                    child: Stack(
-                      fit: StackFit.expand,
-                      children: [
-                        Image.memory(
-                          widget.imageBytes,
-                          fit: BoxFit.cover,
-                          // 解码期降采样：预览区 maxWidth 520 × 3倍DPR ≈1560，
-                          // 1080已足够清晰，避免按超分原图全量解码数十MB
-                          cacheWidth: 1080,
-                        ),
-                        if (_showGridOverlay)
-                          CustomPaint(
-                            painter: _JigsawOverlayPainter(
-                              rows: effectiveDiff.rows,
-                              cols: effectiveDiff.cols,
-                            ),
+              // Puzzle Image Preview Card with Grid Overlay — large preview, max width
+              Center(
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(20),
+                  child: Container(
+                    width: double.infinity,
+                    constraints: const BoxConstraints(
+                      maxWidth: 520,
+                      maxHeight: 360,
+                    ),
+                    color: palette.surfaceContainer,
+                    child: AspectRatio(
+                      aspectRatio: _imageLoaded && _imageHeight > 0
+                          ? _imageWidth / _imageHeight
+                          : 1.0,
+                      child: Stack(
+                        fit: StackFit.expand,
+                        children: [
+                          Image.memory(
+                            widget.imageBytes,
+                            fit: BoxFit.cover,
+                            // 解码期降采样：预览区 maxWidth 520 × 3倍DPR ≈1560，
+                            // 1080已足够清晰，避免按超分原图全量解码数十MB
+                            cacheWidth: 1080,
                           ),
-                        Positioned(
-                          right: 10,
-                          bottom: 10,
-                          child: Material(
-                            color: Colors.black54,
-                            borderRadius: BorderRadius.circular(16),
-                            child: InkWell(
+                          if (_showGridOverlay)
+                            CustomPaint(
+                              painter: _JigsawOverlayPainter(
+                                rows: effectiveDiff.rows,
+                                cols: effectiveDiff.cols,
+                              ),
+                            ),
+                          Positioned(
+                            right: 10,
+                            bottom: 10,
+                            child: Material(
+                              color: Colors.black54,
                               borderRadius: BorderRadius.circular(16),
-                              onTap: () {
-                                SoundService.I.play(Sfx.tap);
-                                setState(() {
-                                  _showGridOverlay = !_showGridOverlay;
-                                });
-                                _repo.gridPreviewEnabled = _showGridOverlay;
-                              },
-                              child: Padding(
-                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Icon(
-                                      _showGridOverlay ? PhosphorIconsFill.gridFour : PhosphorIconsRegular.gridFour,
-                                      color: Colors.white,
-                                      size: 14,
-                                    ),
-                                    const SizedBox(width: 4),
-                                    Text(
-                                      _showGridOverlay ? '切图网格' : '无网格',
-                                      style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
-                                    ),
-                                  ],
+                              child: InkWell(
+                                borderRadius: BorderRadius.circular(16),
+                                onTap: () {
+                                  SoundService.I.play(Sfx.tap);
+                                  setState(() {
+                                    _showGridOverlay = !_showGridOverlay;
+                                  });
+                                  _repo.gridPreviewEnabled = _showGridOverlay;
+                                },
+                                child: Padding(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 8,
+                                    vertical: 4,
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(
+                                        _showGridOverlay
+                                            ? PhosphorIconsFill.gridFour
+                                            : PhosphorIconsRegular.gridFour,
+                                        color: Colors.white,
+                                        size: 14,
+                                      ),
+                                      const SizedBox(width: 4),
+                                      Text(
+                                        _showGridOverlay ? '切图网格' : '无网格',
+                                        style: const TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
                                 ),
                               ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+
+              const SizedBox(height: 24),
+
+              // Locked banner if overall level is locked
+              if (!widget.isUnlocked)
+                Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 0,
+                    vertical: 4,
+                  ),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 8,
+                    ),
+                    decoration: BoxDecoration(
+                      color: palette.warning.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: palette.warning.withValues(alpha: 0.4),
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(
+                          PhosphorIconsFill.lockSimple,
+                          color: palette.warning,
+                          size: 18,
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            widget.lockedMessage ?? '此关卡尚未解锁，请先通关前序关卡',
+                            style: TextStyle(
+                              color: palette.warning,
+                              fontSize: 12.5,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                )
+              else if (!isTierUnlocked && unlockStatus != null)
+                Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 0,
+                    vertical: 4,
+                  ),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 8,
+                    ),
+                    decoration: BoxDecoration(
+                      color: palette.warning.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: palette.warning.withValues(alpha: 0.3),
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(
+                          PhosphorIconsFill.lockSimple,
+                          color: palette.warning,
+                          size: 18,
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            unlockStatus.reason,
+                            style: TextStyle(
+                              color: palette.warning,
+                              fontSize: 12.5,
+                              fontWeight: FontWeight.bold,
                             ),
                           ),
                         ),
@@ -493,281 +615,284 @@ class _ChooseDifficultySheetState extends State<ChooseDifficultySheet> {
                     ),
                   ),
                 ),
-              ),
-            ),
 
-            const SizedBox(height: 24),
+              const SizedBox(height: 20),
 
-            // Locked banner if overall level is locked
-            if (!widget.isUnlocked)
+              // Difficulty & Aspect Ratio Info Header
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 0, vertical: 4),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                  decoration: BoxDecoration(
-                    color: palette.warning.withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: palette.warning.withValues(alpha: 0.4)),
-                  ),
-                  child: Row(
-                    children: [
-                      Icon(PhosphorIconsFill.lockSimple, color: palette.warning, size: 18),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          widget.lockedMessage ?? '此关卡尚未解锁，请先通关前序关卡',
-                          style: TextStyle(
-                            color: palette.warning,
-                            fontSize: 12.5,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              )
-            else if (!isTierUnlocked && unlockStatus != null)
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 0, vertical: 4),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                  decoration: BoxDecoration(
-                    color: palette.warning.withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: palette.warning.withValues(alpha: 0.3)),
-                  ),
-                  child: Row(
-                    children: [
-                      Icon(PhosphorIconsFill.lockSimple, color: palette.warning, size: 18),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          unlockStatus.reason,
-                          style: TextStyle(
-                            color: palette.warning,
-                            fontSize: 12.5,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-
-            const SizedBox(height: 20),
-
-            // Difficulty & Aspect Ratio Info Header
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 0),
-              child: Wrap(
-                alignment: WrapAlignment.center,
-                crossAxisAlignment: WrapCrossAlignment.center,
-                spacing: 6,
-                runSpacing: 4,
-                children: [
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                    decoration: BoxDecoration(
-                      color: palette.info.withValues(alpha: 0.12),
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: palette.info.withValues(alpha: 0.3)),
-                    ),
-                    child: Text(
-                      _aspectRatio.label,
-                      style: TextStyle(
-                        fontSize: 11.5,
-                        fontWeight: FontWeight.bold,
-                        color: palette.info,
-                      ),
-                    ),
-                  ),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                    decoration: BoxDecoration(
-                      color: palette.brand.withValues(alpha: 0.12),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Text(
-                      selectedTier.tag,
-                      style: TextStyle(
-                        fontSize: 11.5,
-                        fontWeight: FontWeight.bold,
-                        color: palette.brand,
-                      ),
-                    ),
-                  ),
-                  Text(
-                    '${effectiveDiff.cols} × ${effectiveDiff.rows} (${effectiveDiff.pieceCount} 块)',
-                    style: theme.textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.bold,
-                      color: palette.primaryText,
-                      fontSize: 14.5,
-                    ),
-                  ),
-                  if (isEffectivePassed)
+                padding: const EdgeInsets.symmetric(horizontal: 0),
+                child: Wrap(
+                  alignment: WrapAlignment.center,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  spacing: 6,
+                  runSpacing: 4,
+                  children: [
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: palette.success.withValues(alpha: 0.12),
-                        borderRadius: BorderRadius.circular(10),
-                        border: Border.all(color: palette.success.withValues(alpha: 0.4)),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 3,
                       ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(PhosphorIconsFill.checkCircle, size: 12, color: palette.success),
-                          const SizedBox(width: 2),
-                          Text(
-                            '已通关',
-                            style: TextStyle(
-                              fontSize: 10.5,
-                              fontWeight: FontWeight.bold,
+                      decoration: BoxDecoration(
+                        color: palette.info.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(
+                          color: palette.info.withValues(alpha: 0.3),
+                        ),
+                      ),
+                      child: Text(
+                        _aspectRatio.label,
+                        style: TextStyle(
+                          fontSize: 11.5,
+                          fontWeight: FontWeight.bold,
+                          color: palette.info,
+                        ),
+                      ),
+                    ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 3,
+                      ),
+                      decoration: BoxDecoration(
+                        color: palette.brand.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        selectedTier.tag,
+                        style: TextStyle(
+                          fontSize: 11.5,
+                          fontWeight: FontWeight.bold,
+                          color: palette.brand,
+                        ),
+                      ),
+                    ),
+                    Text(
+                      '${effectiveDiff.cols} × ${effectiveDiff.rows} (${effectiveDiff.pieceCount} 块)',
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.bold,
+                        color: palette.primaryText,
+                        fontSize: 14.5,
+                      ),
+                    ),
+                    if (isEffectivePassed)
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 6,
+                          vertical: 2,
+                        ),
+                        decoration: BoxDecoration(
+                          color: palette.success.withValues(alpha: 0.12),
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(
+                            color: palette.success.withValues(alpha: 0.4),
+                          ),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              PhosphorIconsFill.checkCircle,
+                              size: 12,
                               color: palette.success,
+                            ),
+                            const SizedBox(width: 2),
+                            Text(
+                              '已通关',
+                              style: TextStyle(
+                                fontSize: 10.5,
+                                fontWeight: FontWeight.bold,
+                                color: palette.success,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                '⏱️ 预计耗时：${selectedTier.estimatedMinutes}',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: palette.secondaryText,
+                  fontWeight: FontWeight.w500,
+                ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 28),
+
+              // Horizontal scroll of 7 difficulty tiers
+              SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.symmetric(horizontal: 0),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    for (final tier in currentTiers) ...[
+                      _buildPieceOption(
+                        tier,
+                        isSelected:
+                            tier.difficulty.pieceCount ==
+                            effectiveDiff.pieceCount,
+                        isLocked:
+                            _tierUnlockStatuses[tier.difficulty.tierIndex]
+                                ?.isUnlocked ==
+                            false,
+                      ),
+                      const SizedBox(width: 10),
+                    ],
+                  ],
+                ),
+              ),
+
+              const SizedBox(height: 32),
+
+              // Big Start CTA Button with Saved Progress Detection
+              Padding(
+                padding: const EdgeInsets.fromLTRB(0, 0, 0, 40),
+                child: Builder(
+                  builder: (context) {
+                    final hasSavedProgress =
+                        widget.savedProgressPercent != null &&
+                        widget.savedProgressPercent! > 0;
+                    final isMatchingSavedDiff =
+                        _selectedDifficulty.pieceCount ==
+                        widget.initialDifficulty.pieceCount;
+
+                    return Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (isFullyPlayable &&
+                            hasSavedProgress &&
+                            isMatchingSavedDiff) ...[
+                          Padding(
+                            padding: const EdgeInsets.only(bottom: 10),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 14,
+                                vertical: 6,
+                              ),
+                              decoration: BoxDecoration(
+                                color: palette.success.withValues(alpha: 0.12),
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(
+                                  color: palette.success.withValues(alpha: 0.4),
+                                ),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(
+                                    PhosphorIconsBold.clockCounterClockwise,
+                                    size: 16,
+                                    color: palette.success,
+                                  ),
+                                  const SizedBox(width: 6),
+                                  Text(
+                                    '⚡ 检测到未完成存档 (已拼 ${widget.savedProgressPercent}%)',
+                                    style: TextStyle(
+                                      fontSize: 12.5,
+                                      fontWeight: FontWeight.bold,
+                                      color: palette.success,
+                                    ),
+                                  ),
+                                ],
+                              ),
                             ),
                           ),
                         ],
-                      ),
-                    ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 16),
-            Text(
-              '⏱️ 预计耗时：${selectedTier.estimatedMinutes}',
-              style: TextStyle(fontSize: 12, color: palette.secondaryText, fontWeight: FontWeight.w500),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 28),
-
-            // Horizontal scroll of 7 difficulty tiers
-            SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.symmetric(horizontal: 0),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  for (final tier in currentTiers) ...[
-                    _buildPieceOption(
-                      tier,
-                      isSelected: tier.difficulty.pieceCount == effectiveDiff.pieceCount,
-                      isLocked: _tierUnlockStatuses[tier.difficulty.tierIndex]?.isUnlocked == false,
-                    ),
-                    const SizedBox(width: 10),
-                  ],
-                ],
-              ),
-            ),
-
-            const SizedBox(height: 32),
-
-            // Big Start CTA Button with Saved Progress Detection
-            Padding(
-              padding: const EdgeInsets.fromLTRB(0, 0, 0, 40),
-              child: Builder(
-                builder: (context) {
-                  final hasSavedProgress = widget.savedProgressPercent != null && widget.savedProgressPercent! > 0;
-                  final isMatchingSavedDiff = _selectedDifficulty.pieceCount == widget.initialDifficulty.pieceCount;
-
-                  return Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      if (isFullyPlayable && hasSavedProgress && isMatchingSavedDiff) ...[
-                        Padding(
-                          padding: const EdgeInsets.only(bottom: 10),
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-                            decoration: BoxDecoration(
-                              color: palette.success.withValues(alpha: 0.12),
-                              borderRadius: BorderRadius.circular(12),
-                              border: Border.all(color: palette.success.withValues(alpha: 0.4)),
+                        SizedBox(
+                          width: double.infinity,
+                          height: 52,
+                          child: FilledButton(
+                            onPressed: isFullyPlayable
+                                ? () => _handleStart(effectiveDiff)
+                                : null,
+                            style: FilledButton.styleFrom(
+                              backgroundColor: isFullyPlayable
+                                  ? palette.brand
+                                  : palette.divider,
+                              foregroundColor: palette.surface,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(26),
+                              ),
+                              elevation: isFullyPlayable ? 2 : 0,
                             ),
                             child: Row(
-                              mainAxisSize: MainAxisSize.min,
+                              mainAxisAlignment: MainAxisAlignment.center,
                               children: [
-                                Icon(PhosphorIconsBold.clockCounterClockwise, size: 16, color: palette.success),
-                                const SizedBox(width: 6),
+                                if (!isFullyPlayable) ...[
+                                  Icon(
+                                    PhosphorIconsFill.lockSimple,
+                                    size: 18,
+                                    color: palette.surface.withValues(
+                                      alpha: 0.6,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 6),
+                                ],
                                 Text(
-                                  '⚡ 检测到未完成存档 (已拼 ${widget.savedProgressPercent}%)',
+                                  !widget.isUnlocked
+                                      ? '关卡未解锁'
+                                      : (!isTierUnlocked
+                                            ? '未解锁'
+                                            : (hasSavedProgress &&
+                                                      isMatchingSavedDiff
+                                                  ? '继续游玩 (进度 ${widget.savedProgressPercent}%)'
+                                                  : (isEffectivePassed
+                                                        ? '重玩此难度'
+                                                        : '开始'))),
                                   style: TextStyle(
-                                    fontSize: 12.5,
+                                    fontSize: 16,
                                     fontWeight: FontWeight.bold,
-                                    color: palette.success,
+                                    color: palette.surface,
                                   ),
                                 ),
                               ],
                             ),
                           ),
                         ),
-                      ],
-                      SizedBox(
-                        width: double.infinity,
-                        height: 52,
-                        child: FilledButton(
-                          onPressed: isFullyPlayable
-                              ? () => _handleStart(effectiveDiff)
-                              : null,
-                          style: FilledButton.styleFrom(
-                            backgroundColor: isFullyPlayable ? palette.brand : palette.divider,
-                            foregroundColor: palette.surface,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(26),
+                        if (hasSavedProgress &&
+                            isMatchingSavedDiff &&
+                            widget.onResetProgress != null) ...[
+                          const SizedBox(height: 8),
+                          TextButton.icon(
+                            onPressed: () {
+                              widget.onResetProgress?.call();
+                              Navigator.of(context).pop();
+                            },
+                            icon: Icon(
+                              PhosphorIconsBold.arrowCounterClockwise,
+                              size: 16,
+                              color: palette.secondaryText,
                             ),
-                            elevation: isFullyPlayable ? 2 : 0,
-                          ),
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              if (!isFullyPlayable) ...[
-                                Icon(PhosphorIconsFill.lockSimple, size: 18, color: palette.surface.withValues(alpha: 0.6)),
-                                const SizedBox(width: 6),
-                              ],
-                              Text(
-                                !widget.isUnlocked
-                                    ? '关卡未解锁'
-                                    : (!isTierUnlocked
-                                        ? '未解锁'
-                                        : (hasSavedProgress && isMatchingSavedDiff
-                                            ? '继续游玩 (进度 ${widget.savedProgressPercent}%)'
-                                            : (isEffectivePassed ? '重玩此难度' : '开始'))),
-                                style: TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.bold,
-                                  color: palette.surface,
-                                ),
+                            label: Text(
+                              '放弃进度并重新开始',
+                              style: TextStyle(
+                                fontSize: 13,
+                                color: palette.secondaryText,
                               ),
-                            ],
+                            ),
                           ),
-                        ),
-                      ),
-                      if (hasSavedProgress && isMatchingSavedDiff && widget.onResetProgress != null) ...[
-                        const SizedBox(height: 8),
-                        TextButton.icon(
-                          onPressed: () {
-                            widget.onResetProgress?.call();
-                            Navigator.of(context).pop();
-                          },
-                          icon: Icon(PhosphorIconsBold.arrowCounterClockwise, size: 16, color: palette.secondaryText),
-                          label: Text(
-                            '放弃进度并重新开始',
-                            style: TextStyle(fontSize: 13, color: palette.secondaryText),
-                          ),
-                        ),
+                        ],
                       ],
-                    ],
-                  );
-                },
+                    );
+                  },
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
-    ),
-  );
-}
+    );
+  }
 
-  Widget _buildPieceOption(DifficultyTier tier, {required bool isSelected, bool isLocked = false}) {
+  Widget _buildPieceOption(
+    DifficultyTier tier, {
+    required bool isSelected,
+    bool isLocked = false,
+  }) {
     final opt = tier.difficulty;
     final isPassed = widget.completedPieceCounts.contains(opt.pieceCount);
     final palette = AppPalette.of(context);
@@ -780,10 +905,15 @@ class _ChooseDifficultySheetState extends State<ChooseDifficultySheet> {
 
     if (isSelected) {
       bgColor = isLocked ? palette.warning : palette.brand;
-      border = Border.all(color: isLocked ? palette.warning : palette.brand, width: 2.5);
+      border = Border.all(
+        color: isLocked ? palette.warning : palette.brand,
+        width: 2.5,
+      );
       shadows = [
         BoxShadow(
-          color: (isLocked ? palette.warning : palette.brand).withValues(alpha: 0.35),
+          color: (isLocked ? palette.warning : palette.brand).withValues(
+            alpha: 0.35,
+          ),
           blurRadius: 8,
           offset: const Offset(0, 3),
         ),
@@ -798,7 +928,10 @@ class _ChooseDifficultySheetState extends State<ChooseDifficultySheet> {
       textColor = palette.secondaryText;
     } else if (isPassed) {
       bgColor = palette.success.withValues(alpha: 0.12);
-      border = Border.all(color: palette.success.withValues(alpha: 0.4), width: 1.5);
+      border = Border.all(
+        color: palette.success.withValues(alpha: 0.4),
+        width: 1.5,
+      );
       shadows = null;
       iconColor = palette.success;
       textColor = palette.success;
@@ -815,10 +948,9 @@ class _ChooseDifficultySheetState extends State<ChooseDifficultySheet> {
         SoundService.I.play(Sfx.tap);
         if (isLocked) {
           final status = _tierUnlockStatuses[tier.difficulty.tierIndex];
-          final gap = (status?.targetRequired ?? 0) - (status?.currentProgress ?? 0);
-          final msg = gap > 0
-              ? '再获得 $gap 张 3 星图即可解锁 ${tier.tag}'
-              : '该档位尚未解锁';
+          final gap =
+              (status?.targetRequired ?? 0) - (status?.currentProgress ?? 0);
+          final msg = gap > 0 ? '再获得 $gap 张 3 星图即可解锁 ${tier.tag}' : '该档位尚未解锁';
           GameToast.show(
             context,
             icon: PhosphorIconsFill.lockSimple,
@@ -848,7 +980,9 @@ class _ChooseDifficultySheetState extends State<ChooseDifficultySheet> {
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 Icon(
-                  isLocked ? PhosphorIconsFill.lockSimple : PhosphorIconsFill.puzzlePiece,
+                  isLocked
+                      ? PhosphorIconsFill.lockSimple
+                      : PhosphorIconsFill.puzzlePiece,
                   size: 18,
                   color: iconColor,
                 ),
@@ -865,7 +999,9 @@ class _ChooseDifficultySheetState extends State<ChooseDifficultySheet> {
                   tier.tag,
                   style: TextStyle(
                     fontSize: 9.0,
-                    color: isSelected ? palette.surface.withValues(alpha: 0.7) : palette.disabledText,
+                    color: isSelected
+                        ? palette.surface.withValues(alpha: 0.7)
+                        : palette.disabledText,
                     fontWeight: FontWeight.w500,
                   ),
                   maxLines: 1,

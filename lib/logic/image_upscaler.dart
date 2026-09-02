@@ -44,35 +44,39 @@ class ImageUpscaler {
     bool adaptiveSharpness = true,
     bool outputPng = true,
   }) async {
-    AppLogger.upscaler.info('upscaleBytes start bytes=${bytes.length} scale=$scale denoise=$enableDenoise sharpen=$enableSharpen');
+    AppLogger.upscaler.info(
+      'upscaleBytes start bytes=${bytes.length} scale=$scale denoise=$enableDenoise sharpen=$enableSharpen',
+    );
     final sw = Stopwatch()..start();
     try {
       final result = await Isolate.run(() {
-      final src = img.decodeImage(bytes);
-      if (src == null) {
-        throw Exception('图片解码失败，无法进行超分辨率放大');
-      }
+        final src = img.decodeImage(bytes);
+        if (src == null) {
+          throw Exception('图片解码失败，无法进行超分辨率放大');
+        }
 
-      final processed = processPipeline(
-        src,
-        scale: scale,
-        enableDenoise: enableDenoise,
-        denoiseStrength: denoiseStrength,
-        enableSharpen: enableSharpen,
-        sharpness: sharpness,
-        useLumaGated: useLumaGated,
-        noiseThresholdLow: noiseThresholdLow,
-        noiseThresholdHigh: noiseThresholdHigh,
-        adaptiveSharpness: adaptiveSharpness,
+        final processed = processPipeline(
+          src,
+          scale: scale,
+          enableDenoise: enableDenoise,
+          denoiseStrength: denoiseStrength,
+          enableSharpen: enableSharpen,
+          sharpness: sharpness,
+          useLumaGated: useLumaGated,
+          noiseThresholdLow: noiseThresholdLow,
+          noiseThresholdHigh: noiseThresholdHigh,
+          adaptiveSharpness: adaptiveSharpness,
+        );
+
+        if (outputPng) {
+          return Uint8List.fromList(img.encodePng(processed));
+        } else {
+          return Uint8List.fromList(img.encodeJpg(processed, quality: 95));
+        }
+      });
+      AppLogger.upscaler.info(
+        'upscaleBytes done ${sw.elapsedMilliseconds}ms out=${result.length} bytes',
       );
-
-      if (outputPng) {
-        return Uint8List.fromList(img.encodePng(processed));
-      } else {
-        return Uint8List.fromList(img.encodeJpg(processed, quality: 95));
-      }
-    });
-      AppLogger.upscaler.info('upscaleBytes done ${sw.elapsedMilliseconds}ms out=${result.length} bytes');
       return result;
     } catch (e, st) {
       AppLogger.upscaler.severe('upscaleBytes failed', e, st);
@@ -165,7 +169,11 @@ class ImageUpscaler {
     final outG = _guidedFilterChannel(gChannel, width, height, radius, baseEps);
     final outB = _guidedFilterChannel(bChannel, width, height, radius, baseEps);
 
-    final dst = img.Image(width: width, height: height, numChannels: src.numChannels);
+    final dst = img.Image(
+      width: width,
+      height: height,
+      numChannels: src.numChannels,
+    );
     final blend = strength.clamp(0.0, 1.0);
 
     idx = 0;
@@ -191,7 +199,13 @@ class ImageUpscaler {
     return dst;
   }
 
-  static Float64List _guidedFilterChannel(Float64List p, int w, int h, int r, double eps) {
+  static Float64List _guidedFilterChannel(
+    Float64List p,
+    int w,
+    int h,
+    int r,
+    double eps,
+  ) {
     final n = w * h;
     final meanP = _boxFilter(p, w, h, r);
 
@@ -272,7 +286,11 @@ class ImageUpscaler {
   static img.Image applyLinearCAS(img.Image src, {double sharpness = 0.45}) {
     final width = src.width;
     final height = src.height;
-    final dst = img.Image(width: width, height: height, numChannels: src.numChannels);
+    final dst = img.Image(
+      width: width,
+      height: height,
+      numChannels: src.numChannels,
+    );
 
     final peak = -0.05 - (sharpness.clamp(0.0, 1.0) * 0.11);
 
@@ -290,9 +308,30 @@ class ImageUpscaler {
         final f = src.getPixel(xNext, y);
         final h = src.getPixel(x, yNext);
 
-        final outR = _calcCasChannel(e.r.toDouble(), b.r.toDouble(), d.r.toDouble(), f.r.toDouble(), h.r.toDouble(), peak);
-        final outG = _calcCasChannel(e.g.toDouble(), b.g.toDouble(), d.g.toDouble(), f.g.toDouble(), h.g.toDouble(), peak);
-        final outB = _calcCasChannel(e.b.toDouble(), b.b.toDouble(), d.b.toDouble(), f.b.toDouble(), h.b.toDouble(), peak);
+        final outR = _calcCasChannel(
+          e.r.toDouble(),
+          b.r.toDouble(),
+          d.r.toDouble(),
+          f.r.toDouble(),
+          h.r.toDouble(),
+          peak,
+        );
+        final outG = _calcCasChannel(
+          e.g.toDouble(),
+          b.g.toDouble(),
+          d.g.toDouble(),
+          f.g.toDouble(),
+          h.g.toDouble(),
+          peak,
+        );
+        final outB = _calcCasChannel(
+          e.b.toDouble(),
+          b.b.toDouble(),
+          d.b.toDouble(),
+          f.b.toDouble(),
+          h.b.toDouble(),
+          peak,
+        );
 
         final dstPixel = dst.getPixel(x, y);
         dstPixel.r = outR;
@@ -307,7 +346,14 @@ class ImageUpscaler {
     return dst;
   }
 
-  static num _calcCasChannel(double e, double b, double d, double f, double h, double peak) {
+  static num _calcCasChannel(
+    double e,
+    double b,
+    double d,
+    double f,
+    double h,
+    double peak,
+  ) {
     final minVal = math.min(e, math.min(math.min(b, d), math.min(f, h)));
     final maxVal = math.max(e, math.max(math.max(b, d), math.max(f, h)));
 
@@ -339,7 +385,11 @@ class ImageUpscaler {
   }) {
     final width = src.width;
     final height = src.height;
-    final dst = img.Image(width: width, height: height, numChannels: src.numChannels);
+    final dst = img.Image(
+      width: width,
+      height: height,
+      numChannels: src.numChannels,
+    );
 
     final basePeak = -0.05 - (sharpness.clamp(0.0, 1.0) * 0.11);
     final gateRange = math.max(0.001, noiseThresholdHigh - noiseThresholdLow);
@@ -382,7 +432,10 @@ class ImageUpscaler {
         }
 
         // SmoothStep 门限平滑过渡
-        final t = ((deltaContrast - noiseThresholdLow) / gateRange).clamp(0.0, 1.0);
+        final t = ((deltaContrast - noiseThresholdLow) / gateRange).clamp(
+          0.0,
+          1.0,
+        );
         final smoothGate = t * t * (3.0 - 2.0 * t);
         final peak = basePeak * smoothGate;
 

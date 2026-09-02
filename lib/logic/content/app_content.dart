@@ -12,12 +12,16 @@ class AppContent {
   ContentManager? _manager;
   ContentManager get manager {
     if (_manager == null) {
-      throw StateError('AppContent must be initialized by calling init() first.');
+      throw StateError(
+        'AppContent must be initialized by calling init() first.',
+      );
     }
     return _manager!;
   }
 
-  static final PackContentPipeline _fallbackPacks = PackContentPipeline(packsBaseDir: '');
+  static final PackContentPipeline _fallbackPacks = PackContentPipeline(
+    packsBaseDir: '',
+  );
 
   /// 扩展图包管线快捷访问 (带安全 Fallback)
   PackContentPipeline get packs => _manager?.packPipeline ?? _fallbackPacks;
@@ -35,7 +39,9 @@ class AppContent {
 
   Future<void> init({List<String>? bootstrapUrls}) async {
     if (_isInitialized) return;
-    AppLogger.content.info('AppContent init start bootstrap=${bootstrapUrls ?? defaultBootstrapUrls}');
+    AppLogger.content.info(
+      'AppContent init start bootstrap=${bootstrapUrls ?? defaultBootstrapUrls}',
+    );
     final sw = Stopwatch()..start();
     final supportDir = await getApplicationSupportDirectory();
     final documentsDir = await getApplicationDocumentsDirectory();
@@ -48,7 +54,9 @@ class AppContent {
 
     // 1. 本地快速初始化 (秒开)
     await _manager!.initialize();
-    AppLogger.content.info('AppContent local initialize done ${sw.elapsedMilliseconds}ms supportDir=${supportDir.path}');
+    AppLogger.content.info(
+      'AppContent local initialize done ${sw.elapsedMilliseconds}ms supportDir=${supportDir.path}',
+    );
     _isInitialized = true;
 
     // 2. 异步后台网络增量同步
@@ -61,7 +69,9 @@ class AppContent {
     try {
       await _manager?.syncAll();
       contentUpdateNotifier.value++;
-      AppLogger.content.info('syncAll success ${sw.elapsedMilliseconds}ms notifier=${contentUpdateNotifier.value}');
+      AppLogger.content.info(
+        'syncAll success ${sw.elapsedMilliseconds}ms notifier=${contentUpdateNotifier.value}',
+      );
     } catch (e, st) {
       AppLogger.content.severe('Sync failed', e, st);
     }
@@ -74,7 +84,9 @@ class AppContent {
       try {
         await _manager?.syncAll();
         contentUpdateNotifier.value++;
-        AppLogger.content.info('Background sync success ${sw.elapsedMilliseconds}ms');
+        AppLogger.content.info(
+          'Background sync success ${sw.elapsedMilliseconds}ms',
+        );
       } catch (e, st) {
         AppLogger.content.severe('Background sync failed', e, st);
       }

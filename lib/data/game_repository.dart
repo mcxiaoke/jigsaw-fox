@@ -42,10 +42,13 @@ class GameRepository {
   static const String _keySoundEnabled = 'jigsaw_setting_sound';
   static const String _keyHapticEnabled = 'jigsaw_setting_haptic';
   static const String _keyGridPreviewEnabled = 'jigsaw_setting_grid_preview';
-  static const String _keyPieceScatterMode = 'jigsaw_setting_piece_scatter_mode';
-  static const String _keySelectedBackground = 'jigsaw_setting_selected_background';
+  static const String _keyPieceScatterMode =
+      'jigsaw_setting_piece_scatter_mode';
+  static const String _keySelectedBackground =
+      'jigsaw_setting_selected_background';
   static const String _keyTotalCompleted = 'jigsaw_stat_total_completed';
-  static const String _keyTotalPiecesSnapped = 'jigsaw_stat_total_pieces_snapped';
+  static const String _keyTotalPiecesSnapped =
+      'jigsaw_stat_total_pieces_snapped';
   static const String _keyTotalPlayTimeSeconds = 'jigsaw_stat_total_play_time';
 
   SharedPreferences? _prefs;
@@ -57,7 +60,8 @@ class GameRepository {
       ValueNotifier<List<CustomPuzzleItem>>([]);
 
   List<LevelItem> get levels => List.unmodifiable(_levels);
-  List<DailyChallengeItem> get dailyChallenges => List.unmodifiable(_dailyChallenges);
+  List<DailyChallengeItem> get dailyChallenges =>
+      List.unmodifiable(_dailyChallenges);
   List<CustomPuzzleItem> get customPuzzles => List.unmodifiable(_customPuzzles);
 
   bool get soundEnabled => _prefs?.getBool(_keySoundEnabled) ?? true;
@@ -66,21 +70,24 @@ class GameRepository {
   bool get hapticEnabled => _prefs?.getBool(_keyHapticEnabled) ?? true;
   set hapticEnabled(bool v) => _prefs?.setBool(_keyHapticEnabled, v);
 
-  bool get gridPreviewEnabled => _prefs?.getBool(_keyGridPreviewEnabled) ?? true;
+  bool get gridPreviewEnabled =>
+      _prefs?.getBool(_keyGridPreviewEnabled) ?? true;
   set gridPreviewEnabled(bool v) => _prefs?.setBool(_keyGridPreviewEnabled, v);
 
   /// 碎片初始排布模式：'tray'（底部托盘收纳，默认/移动端友好）或 'tabletop'（桌面环形发散散落，适合宽屏/平板）
   String get pieceScatterMode =>
       _prefs?.getString(_keyPieceScatterMode) ?? 'tray';
-  set pieceScatterMode(String v) =>
-      _prefs?.setString(_keyPieceScatterMode, v);
+  set pieceScatterMode(String v) => _prefs?.setString(_keyPieceScatterMode, v);
 
   String get selectedBackground =>
       _prefs?.getString(_keySelectedBackground) ?? kBackgroundAssets[0];
-  set selectedBackground(String v) => _prefs?.setString(_keySelectedBackground, v);
+  set selectedBackground(String v) =>
+      _prefs?.setString(_keySelectedBackground, v);
 
   /// 累计通关数（历史累加字段，全库已统一以 ProgressStore.instance.getTotalSolved() 去重图数为 SSOT）
-  @Deprecated('Use ProgressStore.instance.getTotalSolved() for distinct solved count')
+  @Deprecated(
+    'Use ProgressStore.instance.getTotalSolved() for distinct solved count',
+  )
   int get totalCompletedLevels => _prefs?.getInt(_keyTotalCompleted) ?? 0;
   int get totalPiecesSnapped => _prefs?.getInt(_keyTotalPiecesSnapped) ?? 0;
   int get totalPlayTimeSeconds => _prefs?.getInt(_keyTotalPlayTimeSeconds) ?? 0;
@@ -108,14 +115,19 @@ class GameRepository {
         customPuzzles: _customPuzzles,
       );
     }
-    AppLogger.repo.info('init done ${sw.elapsedMilliseconds}ms levels=${_levels.length} daily=${_dailyChallenges.length} custom=${_customPuzzles.length}');
+    AppLogger.repo.info(
+      'init done ${sw.elapsedMilliseconds}ms levels=${_levels.length} daily=${_dailyChallenges.length} custom=${_customPuzzles.length}',
+    );
   }
 
   // --- CanonicalId helpers ---
-  static String canonicalForLevel(int index) => 'main:${index.toString().padLeft(3, '0')}';
-  static String canonicalForDaily(String dateStr) => 'daily:${dateStr.replaceAll('-', '')}';
+  static String canonicalForLevel(int index) =>
+      'main:${index.toString().padLeft(3, '0')}';
+  static String canonicalForDaily(String dateStr) =>
+      'daily:${dateStr.replaceAll('-', '')}';
   static String canonicalForCustom(String id) => 'ugc:$id';
-  static String canonicalForPack(String packId, String fileName) => 'pack:$packId:$fileName';
+  static String canonicalForPack(String packId, String fileName) =>
+      'pack:$packId:$fileName';
 
   void _initLevels() {
     final list = <LevelItem>[];
@@ -170,7 +182,9 @@ class GameRepository {
       );
     }
     _levels = list;
-    AppLogger.repo.info('initLevels ${list.length} levels completed=${list.where((l) => l.isCompleted).length} unlocked=${list.where((l) => l.isUnlocked).length}');
+    AppLogger.repo.info(
+      'initLevels ${list.length} levels completed=${list.where((l) => l.isCompleted).length} unlocked=${list.where((l) => l.isUnlocked).length}',
+    );
   }
 
   void _initDailyChallenges() {
@@ -191,7 +205,11 @@ class GameRepository {
           list.add(daily);
           continue;
         } catch (e, st) {
-          AppLogger.repo.warning('Failed to parse daily ${item.dateStr}', e, st);
+          AppLogger.repo.warning(
+            'Failed to parse daily ${item.dateStr}',
+            e,
+            st,
+          );
         }
       }
 
@@ -225,7 +243,9 @@ class GameRepository {
             .map((e) => CustomPuzzleItem.fromJson(e as Map<String, dynamic>))
             .toList();
         customPuzzlesNotifier.value = List.unmodifiable(_customPuzzles);
-        AppLogger.repo.info('initCustom loaded ${_customPuzzles.length} from prefs');
+        AppLogger.repo.info(
+          'initCustom loaded ${_customPuzzles.length} from prefs',
+        );
         return;
       } catch (e, st) {
         AppLogger.repo.warning('Failed to parse custom list', e, st);
@@ -265,7 +285,9 @@ class GameRepository {
     ];
     _saveCustomPuzzles();
     customPuzzlesNotifier.value = List.unmodifiable(_customPuzzles);
-    AppLogger.repo.info('initCustom created default ${_customPuzzles.length} samples');
+    AppLogger.repo.info(
+      'initCustom created default ${_customPuzzles.length} samples',
+    );
   }
 
   Future<void> _saveCustomPuzzles() async {
@@ -279,7 +301,9 @@ class GameRepository {
 
   /// Adds a new user custom puzzle.
   Future<void> addCustomPuzzle(CustomPuzzleItem item) async {
-    AppLogger.repo.info('addCustomPuzzle id=${item.id} title=${item.title} isLocal=${item.isLocalFile}');
+    AppLogger.repo.info(
+      'addCustomPuzzle id=${item.id} title=${item.title} isLocal=${item.isLocalFile}',
+    );
     _customPuzzles.insert(0, item);
     customPuzzlesNotifier.value = List.unmodifiable(_customPuzzles);
     await _saveCustomPuzzles();
@@ -290,16 +314,24 @@ class GameRepository {
     final idx = _customPuzzles.indexWhere((p) => p.id == id);
     if (idx != -1) {
       final item = _customPuzzles[idx];
-      AppLogger.repo.info('deleteCustomPuzzle id=$id path=${AppLogger.sanitizePath(item.imagePathOrUrl)} isLocal=${item.isLocalFile}');
+      AppLogger.repo.info(
+        'deleteCustomPuzzle id=$id path=${AppLogger.sanitizePath(item.imagePathOrUrl)} isLocal=${item.isLocalFile}',
+      );
       if (item.isLocalFile && !item.imagePathOrUrl.startsWith('assets/')) {
         try {
           final file = File(item.imagePathOrUrl);
           if (await file.exists()) {
             await file.delete();
-            AppLogger.repo.info('Deleted local file ${AppLogger.sanitizePath(item.imagePathOrUrl)}');
+            AppLogger.repo.info(
+              'Deleted local file ${AppLogger.sanitizePath(item.imagePathOrUrl)}',
+            );
           }
         } catch (e, st) {
-          AppLogger.repo.warning('Failed to delete local file ${AppLogger.sanitizePath(item.imagePathOrUrl)}', e, st);
+          AppLogger.repo.warning(
+            'Failed to delete local file ${AppLogger.sanitizePath(item.imagePathOrUrl)}',
+            e,
+            st,
+          );
         }
       }
       // 清理该自制对应的全部难度快照
@@ -328,17 +360,23 @@ class GameRepository {
   }) async {
     final idx = levelIndex - 1;
     if (idx < 0 || idx >= _levels.length) {
-      AppLogger.repo.warning('updateLevelProgress invalid index $levelIndex len=${_levels.length}');
+      AppLogger.repo.warning(
+        'updateLevelProgress invalid index $levelIndex len=${_levels.length}',
+      );
       return;
     }
-    AppLogger.repo.info('updateLevelProgress level=$levelIndex progress=$progressPercent% completed=$isCompleted pieceCount=$completedPieceCount stars=$stars time=${timeSeconds}s');
+    AppLogger.repo.info(
+      'updateLevelProgress level=$levelIndex progress=$progressPercent% completed=$isCompleted pieceCount=$completedPieceCount stars=$stars time=${timeSeconds}s',
+    );
 
     var current = _levels[idx];
-    final newStars = isCompleted ? (stars > current.stars ? stars : current.stars) : current.stars;
+    final newStars = isCompleted
+        ? (stars > current.stars ? stars : current.stars)
+        : current.stars;
     final newBestTime = isCompleted
         ? (current.bestTimeSeconds == 0 || timeSeconds < current.bestTimeSeconds
-            ? timeSeconds
-            : current.bestTimeSeconds)
+              ? timeSeconds
+              : current.bestTimeSeconds)
         : current.bestTimeSeconds;
 
     final updatedCompletedCounts = Set<int>.from(current.completedPieceCounts);
@@ -347,10 +385,14 @@ class GameRepository {
     }
 
     // 停止向 prefs 双写大 JSON 快照（P1-6），快照由 SnapshotStore 和 ProgressStore 接管
-    final shouldClear = isCompleted || (snapshotJson == null && progressPercent == 0);
+    final shouldClear =
+        isCompleted || (snapshotJson == null && progressPercent == 0);
     _levels[idx] = current.copyWith(
       progressPercent: progressPercent,
-      isCompleted: isCompleted || current.isCompleted || updatedCompletedCounts.isNotEmpty,
+      isCompleted:
+          isCompleted ||
+          current.isCompleted ||
+          updatedCompletedCounts.isNotEmpty,
       stars: newStars,
       bestTimeSeconds: newBestTime,
       savedSnapshotJson: null,
@@ -359,7 +401,10 @@ class GameRepository {
     );
 
     // Save current level (轻量索引与元数据，不再含 savedSnapshotJson 大字段)
-    await _prefs?.setString('$_keyLevelsPrefix$levelIndex', jsonEncode(_levels[idx].toJson()));
+    await _prefs?.setString(
+      '$_keyLevelsPrefix$levelIndex',
+      jsonEncode(_levels[idx].toJson()),
+    );
 
     // 同步到新一代文件级快照与轻量索引
     final canonicalId = canonicalForLevel(levelIndex);
@@ -385,21 +430,36 @@ class GameRepository {
         // 清档或通关：优先按显式 difficultyKey 精确删除，消除 pieceCount 横竖歧义
         if (difficultyKey != null && difficultyKey.isNotEmpty) {
           await SnapshotStore.instance.delete(canonicalId, difficultyKey);
-          await ProgressStore.instance.clearSnapshot(canonicalId, difficultyKey);
+          await ProgressStore.instance.clearSnapshot(
+            canonicalId,
+            difficultyKey,
+          );
         } else if (completedPieceCount != null) {
           // 兜底：按 pieceCount 反查（存在横竖歧义，仅兼容旧调用）
           final diff = PuzzleDifficulty.presets.firstWhere(
             (d) => d.pieceCount == completedPieceCount,
             orElse: () => current.difficulty,
           );
-          await SnapshotStore.instance.delete(canonicalId, SnapshotStore.difficultyKeyFor(diff));
-          await ProgressStore.instance.clearSnapshot(canonicalId, SnapshotStore.difficultyKeyFor(diff));
+          await SnapshotStore.instance.delete(
+            canonicalId,
+            SnapshotStore.difficultyKeyFor(diff),
+          );
+          await ProgressStore.instance.clearSnapshot(
+            canonicalId,
+            SnapshotStore.difficultyKeyFor(diff),
+          );
         } else if (snapshotJson == null && !isCompleted) {
           // 放弃进度：若当前有 activeDifficultyKey 则删之
           final prog = await ProgressStore.instance.load(canonicalId);
           if (prog.activeDifficultyKey.isNotEmpty) {
-            await SnapshotStore.instance.delete(canonicalId, prog.activeDifficultyKey);
-            await ProgressStore.instance.clearSnapshot(canonicalId, prog.activeDifficultyKey);
+            await SnapshotStore.instance.delete(
+              canonicalId,
+              prog.activeDifficultyKey,
+            );
+            await ProgressStore.instance.clearSnapshot(
+              canonicalId,
+              prog.activeDifficultyKey,
+            );
           } else {
             await SnapshotStore.instance.deleteAllFor(canonicalId);
             await ProgressStore.instance.clearAllSnapshots(canonicalId);
@@ -426,7 +486,11 @@ class GameRepository {
         );
       }
     } catch (e, st) {
-      AppLogger.repo.warning('updateLevelProgress snapshot sync failed level=$levelIndex', e, st);
+      AppLogger.repo.warning(
+        'updateLevelProgress snapshot sync failed level=$levelIndex',
+        e,
+        st,
+      );
     }
 
     // Unlock next level if completed
@@ -447,16 +511,34 @@ class GameRepository {
   }
 
   /// 读取文件级快照（新链路）
-  Future<PuzzleBoardState?> loadLevelSnapshot(int levelIndex, PuzzleDifficulty difficulty) async {
-    return SnapshotStore.instance.load(canonicalForLevel(levelIndex), SnapshotStore.difficultyKeyFor(difficulty));
+  Future<PuzzleBoardState?> loadLevelSnapshot(
+    int levelIndex,
+    PuzzleDifficulty difficulty,
+  ) async {
+    return SnapshotStore.instance.load(
+      canonicalForLevel(levelIndex),
+      SnapshotStore.difficultyKeyFor(difficulty),
+    );
   }
 
-  Future<bool> hasLevelSnapshot(int levelIndex, PuzzleDifficulty difficulty) async {
-    return SnapshotStore.instance.hasSnapshot(canonicalForLevel(levelIndex), SnapshotStore.difficultyKeyFor(difficulty));
+  Future<bool> hasLevelSnapshot(
+    int levelIndex,
+    PuzzleDifficulty difficulty,
+  ) async {
+    return SnapshotStore.instance.hasSnapshot(
+      canonicalForLevel(levelIndex),
+      SnapshotStore.difficultyKeyFor(difficulty),
+    );
   }
 
-  Future<String?> loadLevelSnapshotJson(int levelIndex, PuzzleDifficulty difficulty) async {
-    return SnapshotStore.instance.loadJsonString(canonicalForLevel(levelIndex), SnapshotStore.difficultyKeyFor(difficulty));
+  Future<String?> loadLevelSnapshotJson(
+    int levelIndex,
+    PuzzleDifficulty difficulty,
+  ) async {
+    return SnapshotStore.instance.loadJsonString(
+      canonicalForLevel(levelIndex),
+      SnapshotStore.difficultyKeyFor(difficulty),
+    );
   }
 
   /// Updates daily challenge state.
@@ -469,7 +551,9 @@ class GameRepository {
     String? difficultyKey,
     int timeSeconds = 0,
   }) async {
-    AppLogger.repo.info('updateDailyProgress date=$dateStr progress=$progressPercent% completed=$isCompleted pieceCount=$completedPieceCount time=${timeSeconds}s');
+    AppLogger.repo.info(
+      'updateDailyProgress date=$dateStr progress=$progressPercent% completed=$isCompleted pieceCount=$completedPieceCount time=${timeSeconds}s',
+    );
     final idx = _dailyChallenges.indexWhere((d) => d.date == dateStr);
     if (idx == -1) {
       AppLogger.repo.warning('updateDailyProgress not found date=$dateStr');
@@ -479,8 +563,8 @@ class GameRepository {
     var current = _dailyChallenges[idx];
     final newBestTime = isCompleted
         ? (current.bestTimeSeconds == 0 || timeSeconds < current.bestTimeSeconds
-            ? timeSeconds
-            : current.bestTimeSeconds)
+              ? timeSeconds
+              : current.bestTimeSeconds)
         : current.bestTimeSeconds;
 
     final updatedCompletedCounts = Set<int>.from(current.completedPieceCounts);
@@ -488,38 +572,76 @@ class GameRepository {
       updatedCompletedCounts.add(completedPieceCount);
     }
 
-    final shouldClear = isCompleted || (snapshotJson == null && progressPercent == 0);
+    final shouldClear =
+        isCompleted || (snapshotJson == null && progressPercent == 0);
     _dailyChallenges[idx] = current.copyWith(
       progressPercent: progressPercent,
-      isCompleted: isCompleted || current.isCompleted || updatedCompletedCounts.isNotEmpty,
+      isCompleted:
+          isCompleted ||
+          current.isCompleted ||
+          updatedCompletedCounts.isNotEmpty,
       bestTimeSeconds: newBestTime,
       savedSnapshotJson: null,
       clearSnapshot: true,
       completedPieceCounts: updatedCompletedCounts.toList(),
     );
 
-    await _prefs?.setString('$_keyDailyPrefix$dateStr', jsonEncode(_dailyChallenges[idx].toJson()));
+    await _prefs?.setString(
+      '$_keyDailyPrefix$dateStr',
+      jsonEncode(_dailyChallenges[idx].toJson()),
+    );
 
     final canonicalId = canonicalForDaily(dateStr);
     try {
       if (snapshotJson != null && !isCompleted) {
-        final state = PuzzleBoardState.fromJson(jsonDecode(snapshotJson) as Map<String, dynamic>);
-        final enriched = state.copyWith(canonicalId: canonicalId, difficultyKey: state.effectiveDifficultyKey, updatedAt: DateTime.now(), createdAt: state.createdAt ?? DateTime.now());
+        final state = PuzzleBoardState.fromJson(
+          jsonDecode(snapshotJson) as Map<String, dynamic>,
+        );
+        final enriched = state.copyWith(
+          canonicalId: canonicalId,
+          difficultyKey: state.effectiveDifficultyKey,
+          updatedAt: DateTime.now(),
+          createdAt: state.createdAt ?? DateTime.now(),
+        );
         await SnapshotStore.instance.save(enriched);
-        await ProgressStore.instance.updateProgress(canonicalId: canonicalId, progressPercent: progressPercent, hasSnapshot: true, activeDifficultyKey: enriched.effectiveDifficultyKey, snapshotKeys: [enriched.effectiveDifficultyKey]);
+        await ProgressStore.instance.updateProgress(
+          canonicalId: canonicalId,
+          progressPercent: progressPercent,
+          hasSnapshot: true,
+          activeDifficultyKey: enriched.effectiveDifficultyKey,
+          snapshotKeys: [enriched.effectiveDifficultyKey],
+        );
       } else if (shouldClear) {
         if (difficultyKey != null && difficultyKey.isNotEmpty) {
           await SnapshotStore.instance.delete(canonicalId, difficultyKey);
-          await ProgressStore.instance.clearSnapshot(canonicalId, difficultyKey);
+          await ProgressStore.instance.clearSnapshot(
+            canonicalId,
+            difficultyKey,
+          );
         } else if (completedPieceCount != null) {
-          final diff = PuzzleDifficulty.presets.firstWhere((d) => d.pieceCount == completedPieceCount, orElse: () => current.difficulty);
-          await SnapshotStore.instance.delete(canonicalId, SnapshotStore.difficultyKeyFor(diff));
-          await ProgressStore.instance.clearSnapshot(canonicalId, SnapshotStore.difficultyKeyFor(diff));
+          final diff = PuzzleDifficulty.presets.firstWhere(
+            (d) => d.pieceCount == completedPieceCount,
+            orElse: () => current.difficulty,
+          );
+          await SnapshotStore.instance.delete(
+            canonicalId,
+            SnapshotStore.difficultyKeyFor(diff),
+          );
+          await ProgressStore.instance.clearSnapshot(
+            canonicalId,
+            SnapshotStore.difficultyKeyFor(diff),
+          );
         } else if (snapshotJson == null && !isCompleted) {
           final prog = await ProgressStore.instance.load(canonicalId);
           if (prog.activeDifficultyKey.isNotEmpty) {
-            await SnapshotStore.instance.delete(canonicalId, prog.activeDifficultyKey);
-            await ProgressStore.instance.clearSnapshot(canonicalId, prog.activeDifficultyKey);
+            await SnapshotStore.instance.delete(
+              canonicalId,
+              prog.activeDifficultyKey,
+            );
+            await ProgressStore.instance.clearSnapshot(
+              canonicalId,
+              prog.activeDifficultyKey,
+            );
           } else {
             await SnapshotStore.instance.deleteAllFor(canonicalId);
             await ProgressStore.instance.clearAllSnapshots(canonicalId);
@@ -529,14 +651,27 @@ class GameRepository {
           await ProgressStore.instance.clearAllSnapshots(canonicalId);
         }
       } else if (!isCompleted && progressPercent > 0) {
-        await ProgressStore.instance.updateProgress(canonicalId: canonicalId, progressPercent: progressPercent);
+        await ProgressStore.instance.updateProgress(
+          canonicalId: canonicalId,
+          progressPercent: progressPercent,
+        );
       }
 
       if (isCompleted && completedPieceCount != null) {
-        await ProgressStore.instance.updateProgress(canonicalId: canonicalId, isCompleted: true, completedPieceCount: completedPieceCount, bestTimeSeconds: newBestTime, hasSnapshot: false);
+        await ProgressStore.instance.updateProgress(
+          canonicalId: canonicalId,
+          isCompleted: true,
+          completedPieceCount: completedPieceCount,
+          bestTimeSeconds: newBestTime,
+          hasSnapshot: false,
+        );
       }
     } catch (e, st) {
-      AppLogger.repo.warning('updateDailyProgress snapshot sync failed date=$dateStr', e, st);
+      AppLogger.repo.warning(
+        'updateDailyProgress snapshot sync failed date=$dateStr',
+        e,
+        st,
+      );
     }
 
     if (isCompleted) {
@@ -544,12 +679,24 @@ class GameRepository {
     }
   }
 
-  Future<PuzzleBoardState?> loadDailySnapshot(String dateStr, PuzzleDifficulty difficulty) async {
-    return SnapshotStore.instance.load(canonicalForDaily(dateStr), SnapshotStore.difficultyKeyFor(difficulty));
+  Future<PuzzleBoardState?> loadDailySnapshot(
+    String dateStr,
+    PuzzleDifficulty difficulty,
+  ) async {
+    return SnapshotStore.instance.load(
+      canonicalForDaily(dateStr),
+      SnapshotStore.difficultyKeyFor(difficulty),
+    );
   }
 
-  Future<String?> loadDailySnapshotJson(String dateStr, PuzzleDifficulty difficulty) async {
-    return SnapshotStore.instance.loadJsonString(canonicalForDaily(dateStr), SnapshotStore.difficultyKeyFor(difficulty));
+  Future<String?> loadDailySnapshotJson(
+    String dateStr,
+    PuzzleDifficulty difficulty,
+  ) async {
+    return SnapshotStore.instance.loadJsonString(
+      canonicalForDaily(dateStr),
+      SnapshotStore.difficultyKeyFor(difficulty),
+    );
   }
 
   /// Updates custom puzzle progress.
@@ -562,7 +709,9 @@ class GameRepository {
     String? difficultyKey,
     int timeSeconds = 0,
   }) async {
-    AppLogger.repo.info('updateCustomProgress id=$id progress=$progressPercent% completed=$isCompleted pieceCount=$completedPieceCount time=${timeSeconds}s');
+    AppLogger.repo.info(
+      'updateCustomProgress id=$id progress=$progressPercent% completed=$isCompleted pieceCount=$completedPieceCount time=${timeSeconds}s',
+    );
     final idx = _customPuzzles.indexWhere((p) => p.id == id);
     if (idx == -1) {
       AppLogger.repo.warning('updateCustomProgress not found id=$id');
@@ -572,8 +721,8 @@ class GameRepository {
     var current = _customPuzzles[idx];
     final newBestTime = isCompleted
         ? (current.bestTimeSeconds == 0 || timeSeconds < current.bestTimeSeconds
-            ? timeSeconds
-            : current.bestTimeSeconds)
+              ? timeSeconds
+              : current.bestTimeSeconds)
         : current.bestTimeSeconds;
 
     final updatedCompletedCounts = Set<int>.from(current.completedPieceCounts);
@@ -581,10 +730,14 @@ class GameRepository {
       updatedCompletedCounts.add(completedPieceCount);
     }
 
-    final shouldClear = isCompleted || (snapshotJson == null && progressPercent == 0);
+    final shouldClear =
+        isCompleted || (snapshotJson == null && progressPercent == 0);
     _customPuzzles[idx] = current.copyWith(
       progressPercent: progressPercent,
-      isCompleted: isCompleted || current.isCompleted || updatedCompletedCounts.isNotEmpty,
+      isCompleted:
+          isCompleted ||
+          current.isCompleted ||
+          updatedCompletedCounts.isNotEmpty,
       bestTimeSeconds: newBestTime,
       savedSnapshotJson: null,
       clearSnapshot: true,
@@ -597,23 +750,54 @@ class GameRepository {
     final canonicalId = canonicalForCustom(id);
     try {
       if (snapshotJson != null && !isCompleted) {
-        final state = PuzzleBoardState.fromJson(jsonDecode(snapshotJson) as Map<String, dynamic>);
-        final enriched = state.copyWith(canonicalId: canonicalId, difficultyKey: state.effectiveDifficultyKey, updatedAt: DateTime.now(), createdAt: state.createdAt ?? DateTime.now());
+        final state = PuzzleBoardState.fromJson(
+          jsonDecode(snapshotJson) as Map<String, dynamic>,
+        );
+        final enriched = state.copyWith(
+          canonicalId: canonicalId,
+          difficultyKey: state.effectiveDifficultyKey,
+          updatedAt: DateTime.now(),
+          createdAt: state.createdAt ?? DateTime.now(),
+        );
         await SnapshotStore.instance.save(enriched);
-        await ProgressStore.instance.updateProgress(canonicalId: canonicalId, progressPercent: progressPercent, hasSnapshot: true, activeDifficultyKey: enriched.effectiveDifficultyKey, snapshotKeys: [enriched.effectiveDifficultyKey]);
+        await ProgressStore.instance.updateProgress(
+          canonicalId: canonicalId,
+          progressPercent: progressPercent,
+          hasSnapshot: true,
+          activeDifficultyKey: enriched.effectiveDifficultyKey,
+          snapshotKeys: [enriched.effectiveDifficultyKey],
+        );
       } else if (shouldClear) {
         if (difficultyKey != null && difficultyKey.isNotEmpty) {
           await SnapshotStore.instance.delete(canonicalId, difficultyKey);
-          await ProgressStore.instance.clearSnapshot(canonicalId, difficultyKey);
+          await ProgressStore.instance.clearSnapshot(
+            canonicalId,
+            difficultyKey,
+          );
         } else if (completedPieceCount != null) {
-          final diff = PuzzleDifficulty.presets.firstWhere((d) => d.pieceCount == completedPieceCount, orElse: () => current.difficulty);
-          await SnapshotStore.instance.delete(canonicalId, SnapshotStore.difficultyKeyFor(diff));
-          await ProgressStore.instance.clearSnapshot(canonicalId, SnapshotStore.difficultyKeyFor(diff));
+          final diff = PuzzleDifficulty.presets.firstWhere(
+            (d) => d.pieceCount == completedPieceCount,
+            orElse: () => current.difficulty,
+          );
+          await SnapshotStore.instance.delete(
+            canonicalId,
+            SnapshotStore.difficultyKeyFor(diff),
+          );
+          await ProgressStore.instance.clearSnapshot(
+            canonicalId,
+            SnapshotStore.difficultyKeyFor(diff),
+          );
         } else if (snapshotJson == null && !isCompleted) {
           final prog = await ProgressStore.instance.load(canonicalId);
           if (prog.activeDifficultyKey.isNotEmpty) {
-            await SnapshotStore.instance.delete(canonicalId, prog.activeDifficultyKey);
-            await ProgressStore.instance.clearSnapshot(canonicalId, prog.activeDifficultyKey);
+            await SnapshotStore.instance.delete(
+              canonicalId,
+              prog.activeDifficultyKey,
+            );
+            await ProgressStore.instance.clearSnapshot(
+              canonicalId,
+              prog.activeDifficultyKey,
+            );
           } else {
             await SnapshotStore.instance.deleteAllFor(canonicalId);
             await ProgressStore.instance.clearAllSnapshots(canonicalId);
@@ -623,14 +807,27 @@ class GameRepository {
           await ProgressStore.instance.clearAllSnapshots(canonicalId);
         }
       } else if (!isCompleted && progressPercent > 0) {
-        await ProgressStore.instance.updateProgress(canonicalId: canonicalId, progressPercent: progressPercent);
+        await ProgressStore.instance.updateProgress(
+          canonicalId: canonicalId,
+          progressPercent: progressPercent,
+        );
       }
 
       if (isCompleted && completedPieceCount != null) {
-        await ProgressStore.instance.updateProgress(canonicalId: canonicalId, isCompleted: true, completedPieceCount: completedPieceCount, bestTimeSeconds: newBestTime, hasSnapshot: false);
+        await ProgressStore.instance.updateProgress(
+          canonicalId: canonicalId,
+          isCompleted: true,
+          completedPieceCount: completedPieceCount,
+          bestTimeSeconds: newBestTime,
+          hasSnapshot: false,
+        );
       }
     } catch (e, st) {
-      AppLogger.repo.warning('updateCustomProgress snapshot sync failed id=$id', e, st);
+      AppLogger.repo.warning(
+        'updateCustomProgress snapshot sync failed id=$id',
+        e,
+        st,
+      );
     }
 
     if (isCompleted) {
@@ -638,12 +835,24 @@ class GameRepository {
     }
   }
 
-  Future<PuzzleBoardState?> loadCustomSnapshot(String id, PuzzleDifficulty difficulty) async {
-    return SnapshotStore.instance.load(canonicalForCustom(id), SnapshotStore.difficultyKeyFor(difficulty));
+  Future<PuzzleBoardState?> loadCustomSnapshot(
+    String id,
+    PuzzleDifficulty difficulty,
+  ) async {
+    return SnapshotStore.instance.load(
+      canonicalForCustom(id),
+      SnapshotStore.difficultyKeyFor(difficulty),
+    );
   }
 
-  Future<String?> loadCustomSnapshotJson(String id, PuzzleDifficulty difficulty) async {
-    return SnapshotStore.instance.loadJsonString(canonicalForCustom(id), SnapshotStore.difficultyKeyFor(difficulty));
+  Future<String?> loadCustomSnapshotJson(
+    String id,
+    PuzzleDifficulty difficulty,
+  ) async {
+    return SnapshotStore.instance.loadJsonString(
+      canonicalForCustom(id),
+      SnapshotStore.difficultyKeyFor(difficulty),
+    );
   }
 
   // --- 通用 pack/event 入口（新增） ---
@@ -660,22 +869,51 @@ class GameRepository {
   }) async {
     try {
       if (snapshotJson != null && !isCompleted) {
-        final state = PuzzleBoardState.fromJson(jsonDecode(snapshotJson) as Map<String, dynamic>);
-        final enriched = state.copyWith(canonicalId: canonicalId, difficultyKey: state.effectiveDifficultyKey, updatedAt: DateTime.now(), createdAt: state.createdAt ?? DateTime.now());
+        final state = PuzzleBoardState.fromJson(
+          jsonDecode(snapshotJson) as Map<String, dynamic>,
+        );
+        final enriched = state.copyWith(
+          canonicalId: canonicalId,
+          difficultyKey: state.effectiveDifficultyKey,
+          updatedAt: DateTime.now(),
+          createdAt: state.createdAt ?? DateTime.now(),
+        );
         await SnapshotStore.instance.save(enriched);
-        await ProgressStore.instance.updateProgress(canonicalId: canonicalId, progressPercent: progressPercent, hasSnapshot: true, activeDifficultyKey: enriched.effectiveDifficultyKey, snapshotKeys: [enriched.effectiveDifficultyKey]);
-      } else if (isCompleted || (snapshotJson == null && progressPercent == 0)) {
+        await ProgressStore.instance.updateProgress(
+          canonicalId: canonicalId,
+          progressPercent: progressPercent,
+          hasSnapshot: true,
+          activeDifficultyKey: enriched.effectiveDifficultyKey,
+          snapshotKeys: [enriched.effectiveDifficultyKey],
+        );
+      } else if (isCompleted ||
+          (snapshotJson == null && progressPercent == 0)) {
         if (difficultyKey != null && difficultyKey.isNotEmpty) {
           await SnapshotStore.instance.delete(canonicalId, difficultyKey);
-          await ProgressStore.instance.clearSnapshot(canonicalId, difficultyKey);
+          await ProgressStore.instance.clearSnapshot(
+            canonicalId,
+            difficultyKey,
+          );
         } else if (completedPieceCount != null && difficultyHint != null) {
-          await SnapshotStore.instance.delete(canonicalId, SnapshotStore.difficultyKeyFor(difficultyHint));
-          await ProgressStore.instance.clearSnapshot(canonicalId, SnapshotStore.difficultyKeyFor(difficultyHint));
+          await SnapshotStore.instance.delete(
+            canonicalId,
+            SnapshotStore.difficultyKeyFor(difficultyHint),
+          );
+          await ProgressStore.instance.clearSnapshot(
+            canonicalId,
+            SnapshotStore.difficultyKeyFor(difficultyHint),
+          );
         } else if (snapshotJson == null && !isCompleted) {
           final prog = await ProgressStore.instance.load(canonicalId);
           if (prog.activeDifficultyKey.isNotEmpty) {
-            await SnapshotStore.instance.delete(canonicalId, prog.activeDifficultyKey);
-            await ProgressStore.instance.clearSnapshot(canonicalId, prog.activeDifficultyKey);
+            await SnapshotStore.instance.delete(
+              canonicalId,
+              prog.activeDifficultyKey,
+            );
+            await ProgressStore.instance.clearSnapshot(
+              canonicalId,
+              prog.activeDifficultyKey,
+            );
           } else {
             await SnapshotStore.instance.deleteAllFor(canonicalId);
             await ProgressStore.instance.clearAllSnapshots(canonicalId);
@@ -685,35 +923,69 @@ class GameRepository {
           await ProgressStore.instance.clearAllSnapshots(canonicalId);
         }
       } else if (!isCompleted && progressPercent > 0) {
-        await ProgressStore.instance.updateProgress(canonicalId: canonicalId, progressPercent: progressPercent);
+        await ProgressStore.instance.updateProgress(
+          canonicalId: canonicalId,
+          progressPercent: progressPercent,
+        );
       }
 
       if (isCompleted) {
-        await ProgressStore.instance.updateProgress(canonicalId: canonicalId, isCompleted: true, completedPieceCount: completedPieceCount, bestTimeSeconds: timeSeconds, hasSnapshot: false);
+        await ProgressStore.instance.updateProgress(
+          canonicalId: canonicalId,
+          isCompleted: true,
+          completedPieceCount: completedPieceCount,
+          bestTimeSeconds: timeSeconds,
+          hasSnapshot: false,
+        );
         AppLogger.repo.info('Generic $canonicalId completed');
       }
     } catch (e, st) {
-      AppLogger.repo.warning('updateGenericProgress failed cid=$canonicalId', e, st);
+      AppLogger.repo.warning(
+        'updateGenericProgress failed cid=$canonicalId',
+        e,
+        st,
+      );
     }
   }
 
-  Future<PuzzleBoardState?> loadGenericSnapshot(String canonicalId, PuzzleDifficulty difficulty) =>
-      SnapshotStore.instance.load(canonicalId, SnapshotStore.difficultyKeyFor(difficulty));
+  Future<PuzzleBoardState?> loadGenericSnapshot(
+    String canonicalId,
+    PuzzleDifficulty difficulty,
+  ) => SnapshotStore.instance.load(
+    canonicalId,
+    SnapshotStore.difficultyKeyFor(difficulty),
+  );
 
-  Future<String?> loadGenericSnapshotJson(String canonicalId, PuzzleDifficulty difficulty) =>
-      SnapshotStore.instance.loadJsonString(canonicalId, SnapshotStore.difficultyKeyFor(difficulty));
+  Future<String?> loadGenericSnapshotJson(
+    String canonicalId,
+    PuzzleDifficulty difficulty,
+  ) => SnapshotStore.instance.loadJsonString(
+    canonicalId,
+    SnapshotStore.difficultyKeyFor(difficulty),
+  );
 
   /// Adds statistics for snapped piece and play duration.
-  Future<void> recordSnapStats({int pieceCount = 1, int durationSeconds = 0}) async {
+  Future<void> recordSnapStats({
+    int pieceCount = 1,
+    int durationSeconds = 0,
+  }) async {
     try {
       if (pieceCount > 0) {
-        await _prefs?.setInt(_keyTotalPiecesSnapped, totalPiecesSnapped + pieceCount);
+        await _prefs?.setInt(
+          _keyTotalPiecesSnapped,
+          totalPiecesSnapped + pieceCount,
+        );
       }
       if (durationSeconds > 0) {
-        await _prefs?.setInt(_keyTotalPlayTimeSeconds, totalPlayTimeSeconds + durationSeconds);
+        await _prefs?.setInt(
+          _keyTotalPlayTimeSeconds,
+          totalPlayTimeSeconds + durationSeconds,
+        );
       }
       if (pieceCount > 0 || durationSeconds > 0) {
-        AppLogger.repo.fine('recordSnapStats pieceCount=$pieceCount duration=${durationSeconds}s totalSnapped=${totalPiecesSnapped + pieceCount}');
+        AppLogger.repo.fine(
+          'recordSnapStats pieceCount=$pieceCount duration=${durationSeconds}s totalSnapped=${totalPiecesSnapped + pieceCount}',
+        );
       }
     } catch (e, st) {
       AppLogger.repo.warning('recordSnapStats failed', e, st);
@@ -722,7 +994,9 @@ class GameRepository {
 
   /// Resets all local progress for testing/replay.
   Future<void> resetAllData() async {
-    AppLogger.repo.warning('resetAllData clearing all prefs and snapshots and reinitializing');
+    AppLogger.repo.warning(
+      'resetAllData clearing all prefs and snapshots and reinitializing',
+    );
     await _prefs?.clear();
     try {
       await SnapshotStore.instance.clearAll();

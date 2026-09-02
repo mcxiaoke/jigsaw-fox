@@ -59,7 +59,11 @@ class ThumbnailGenerator {
     try {
       return await compute(_processThumbnailToBytesIsolate, params);
     } catch (e, st) {
-      AppLogger.thumbnail.severe('Failed to generate thumbnail bytes path=${AppLogger.sanitizePath(params.sourceFilePath ?? '')}', e, st);
+      AppLogger.thumbnail.severe(
+        'Failed to generate thumbnail bytes path=${AppLogger.sanitizePath(params.sourceFilePath ?? '')}',
+        e,
+        st,
+      );
       return null;
     }
   }
@@ -79,7 +83,11 @@ class ThumbnailGenerator {
     try {
       return await compute(_processThumbnailToBytesIsolate, params);
     } catch (e, st) {
-      AppLogger.thumbnail.severe('Failed to generate from bytes len=${rawBytes.length}', e, st);
+      AppLogger.thumbnail.severe(
+        'Failed to generate from bytes len=${rawBytes.length}',
+        e,
+        st,
+      );
       return null;
     }
   }
@@ -101,13 +109,19 @@ class ThumbnailGenerator {
     try {
       return await compute(_processThumbnailToFileIsolate, params);
     } catch (e, st) {
-      AppLogger.thumbnail.severe('Failed to generate thumbnail file src=${AppLogger.sanitizePath(sourceFilePath)} dst=${AppLogger.sanitizePath(targetFilePath)}', e, st);
+      AppLogger.thumbnail.severe(
+        'Failed to generate thumbnail file src=${AppLogger.sanitizePath(sourceFilePath)} dst=${AppLogger.sanitizePath(targetFilePath)}',
+        e,
+        st,
+      );
       return false;
     }
   }
 
   /// 后台 Isolate 核心运算例程：返回缩略图 JPEG 字节
-  static Uint8List? _processThumbnailToBytesIsolate(ThumbnailTaskParams params) {
+  static Uint8List? _processThumbnailToBytesIsolate(
+    ThumbnailTaskParams params,
+  ) {
     try {
       Uint8List? rawBytes = params.rawBytes;
       if (rawBytes == null && params.sourceFilePath != null) {
@@ -155,7 +169,9 @@ class ThumbnailGenerator {
   static bool _processThumbnailToFileIsolate(ThumbnailTaskParams params) {
     try {
       final jpgBytes = _processThumbnailToBytesIsolate(params);
-      if (jpgBytes == null || jpgBytes.isEmpty || params.targetFilePath == null) {
+      if (jpgBytes == null ||
+          jpgBytes.isEmpty ||
+          params.targetFilePath == null) {
         return false;
       }
 
@@ -182,11 +198,19 @@ class ThumbnailGenerator {
     int quality = 90,
   }) async {
     if (rawBytes.isEmpty) return null;
-    final params = CropTaskParams(rawBytes: rawBytes, targetRatio: targetRatio, quality: quality);
+    final params = CropTaskParams(
+      rawBytes: rawBytes,
+      targetRatio: targetRatio,
+      quality: quality,
+    );
     try {
       return await compute(_processCropToBytesIsolate, params);
     } catch (e, st) {
-      AppLogger.thumbnail.severe('Failed to generate cropped bytes len=${rawBytes.length}', e, st);
+      AppLogger.thumbnail.severe(
+        'Failed to generate cropped bytes len=${rawBytes.length}',
+        e,
+        st,
+      );
       return null;
     }
   }
@@ -228,7 +252,13 @@ class ThumbnailGenerator {
 
       if (cropW <= 0 || cropH <= 0 || dx < 0 || dy < 0) return null;
 
-      final cropped = img.copyCrop(original, x: dx, y: dy, width: cropW, height: cropH);
+      final cropped = img.copyCrop(
+        original,
+        x: dx,
+        y: dy,
+        width: cropW,
+        height: cropH,
+      );
       final jpgBytes = img.encodeJpg(cropped, quality: params.quality);
       return Uint8List.fromList(jpgBytes);
     } catch (e) {

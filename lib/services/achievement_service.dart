@@ -293,8 +293,10 @@ class AchievementService {
   ];
 
   /// 成就解锁广播通知流
-  final _unlockStreamController = StreamController<AchievementDefinition>.broadcast();
-  Stream<AchievementDefinition> get onAchievementUnlocked => _unlockStreamController.stream;
+  final _unlockStreamController =
+      StreamController<AchievementDefinition>.broadcast();
+  Stream<AchievementDefinition> get onAchievementUnlocked =>
+      _unlockStreamController.stream;
 
   /// 检查某项成就是否可解锁并触发
   Future<bool> _checkAndUnlock(AchievementDefinition def) async {
@@ -302,7 +304,9 @@ class AchievementService {
 
     bool reached = false;
     if (def.type == AchievementType.derived && def.id == 'master_all') {
-      final unlockedCount = allAchievements.where((a) => a.id != 'master_all' && _store.isUnlocked(a.id)).length;
+      final unlockedCount = allAchievements
+          .where((a) => a.id != 'master_all' && _store.isUnlocked(a.id))
+          .length;
       reached = unlockedCount >= 24;
     } else {
       final current = _store.getCounter(def.metricKey);
@@ -330,7 +334,9 @@ class AchievementService {
       }
     }
     // 二次评估派生成就
-    for (final def in allAchievements.where((a) => a.type == AchievementType.derived)) {
+    for (final def in allAchievements.where(
+      (a) => a.type == AchievementType.derived,
+    )) {
       if (await _checkAndUnlock(def)) {
         newlyUnlocked.add(def);
       }

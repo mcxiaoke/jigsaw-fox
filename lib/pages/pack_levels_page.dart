@@ -23,9 +23,9 @@ class PackLevelsPage extends StatefulWidget {
   final PuzzlePackItem pack;
 
   static Future<void> push(BuildContext context, PuzzlePackItem pack) {
-    return Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => PackLevelsPage(pack: pack)),
-    );
+    return Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (_) => PackLevelsPage(pack: pack)));
   }
 
   @override
@@ -52,7 +52,9 @@ class _PackLevelsPageState extends State<PackLevelsPage> {
       builder: (ctx) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: Text('删除「${widget.pack.title}」图包'),
-        content: Text('确定要删除此扩展图包吗？\n将同时清理包内 ${_levels.length} 个关卡并释放 ${widget.pack.displayFileSize} 存储空间。'),
+        content: Text(
+          '确定要删除此扩展图包吗？\n将同时清理包内 ${_levels.length} 个关卡并释放 ${widget.pack.displayFileSize} 存储空间。',
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(false),
@@ -68,24 +70,46 @@ class _PackLevelsPageState extends State<PackLevelsPage> {
     );
 
     if (confirmed == true && mounted) {
-      final success = await AppContent.instance.packs.deletePack(widget.pack.id);
+      final success = await AppContent.instance.packs.deletePack(
+        widget.pack.id,
+      );
       if (mounted) {
         if (success) {
-          GameToast.show(context, icon: PhosphorIconsFill.trashSimple, message: '已成功删除《${widget.pack.title}》', type: GameToastType.success);
+          GameToast.show(
+            context,
+            icon: PhosphorIconsFill.trashSimple,
+            message: '已成功删除《${widget.pack.title}》',
+            type: GameToastType.success,
+          );
           Navigator.of(context).pop();
         } else {
-          GameToast.show(context, icon: Icons.error_outline, message: '删除失败，请重试', type: GameToastType.error);
+          GameToast.show(
+            context,
+            icon: Icons.error_outline,
+            message: '删除失败，请重试',
+            type: GameToastType.error,
+          );
         }
       }
     }
   }
 
-  static const _defaultDiff = PuzzleDifficulty(label: '4 × 4 (16 块)', rows: 4, cols: 4, recommended: true);
+  static const _defaultDiff = PuzzleDifficulty(
+    label: '4 × 4 (16 块)',
+    rows: 4,
+    cols: 4,
+    recommended: true,
+  );
 
   Future<void> _openLevel(PuzzleLevelItem level) async {
     final imageFile = File(level.imagePathOrUrl);
     if (!imageFile.existsSync()) {
-      GameToast.show(context, icon: Icons.error_outline, message: '关卡图片文件不存在', type: GameToastType.error);
+      GameToast.show(
+        context,
+        icon: Icons.error_outline,
+        message: '关卡图片文件不存在',
+        type: GameToastType.error,
+      );
       return;
     }
     final bytes = await imageFile.readAsBytes();
@@ -107,9 +131,22 @@ class _PackLevelsPageState extends State<PackLevelsPage> {
       if (resumeResult.startsWith('continue:')) {
         final k = resumeResult.substring('continue:'.length);
         final diff = await _diffForKey(k, _defaultDiff);
-        final jsonStr = await SnapshotStore.instance.loadJsonString(canonicalId, k);
+        final jsonStr = await SnapshotStore.instance.loadJsonString(
+          canonicalId,
+          k,
+        );
         if (!mounted) return;
-        await Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => GamePage(imageBytes: bytes, difficulty: diff, canonicalId: canonicalId, packTitle: '${widget.pack.title} · 第 ${level.order} 关', initialSnapshotJson: jsonStr)));
+        await Navigator.of(context).push(
+          MaterialPageRoute<void>(
+            builder: (_) => GamePage(
+              imageBytes: bytes,
+              difficulty: diff,
+              canonicalId: canonicalId,
+              packTitle: '${widget.pack.title} · 第 ${level.order} 关',
+              initialSnapshotJson: jsonStr,
+            ),
+          ),
+        );
         if (mounted) setState(() {});
         return;
       } else if (resumeResult.startsWith('restart:')) {
@@ -117,7 +154,17 @@ class _PackLevelsPageState extends State<PackLevelsPage> {
         await ResumeHelper.clearResume(canonicalId, k);
         final diff = await _diffForKey(k, _defaultDiff);
         if (!mounted) return;
-        await Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => GamePage(imageBytes: bytes, difficulty: diff, canonicalId: canonicalId, packTitle: '${widget.pack.title} · 第 ${level.order} 关', initialSnapshotJson: null)));
+        await Navigator.of(context).push(
+          MaterialPageRoute<void>(
+            builder: (_) => GamePage(
+              imageBytes: bytes,
+              difficulty: diff,
+              canonicalId: canonicalId,
+              packTitle: '${widget.pack.title} · 第 ${level.order} 关',
+              initialSnapshotJson: null,
+            ),
+          ),
+        );
         if (mounted) setState(() {});
         return;
       }
@@ -133,28 +180,60 @@ class _PackLevelsPageState extends State<PackLevelsPage> {
       isUnlocked: true,
       title: '${widget.pack.title} · 第 ${level.order} 关',
       sourcePlatform: widget.pack.displaySource,
-      savedProgressPercent: progress.hasSnapshot ? progress.progressPercent : null,
+      savedProgressPercent: progress.hasSnapshot
+          ? progress.progressPercent
+          : null,
       onResetProgress: () async {
         final prog = await ResumeHelper.loadProgress(canonicalId);
         if (prog.activeDifficultyKey.isNotEmpty) {
           await ResumeHelper.clearResume(canonicalId, prog.activeDifficultyKey);
         }
-        await GameRepository.instance.updateGenericProgress(canonicalId: canonicalId, progressPercent: 0, snapshotJson: null);
+        await GameRepository.instance.updateGenericProgress(
+          canonicalId: canonicalId,
+          progressPercent: 0,
+          snapshotJson: null,
+        );
         if (!mounted) return;
-        await Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => GamePage(imageBytes: bytes, difficulty: _defaultDiff, canonicalId: canonicalId, packTitle: '${widget.pack.title} · 第 ${level.order} 关', initialSnapshotJson: null)));
+        await Navigator.of(context).push(
+          MaterialPageRoute<void>(
+            builder: (_) => GamePage(
+              imageBytes: bytes,
+              difficulty: _defaultDiff,
+              canonicalId: canonicalId,
+              packTitle: '${widget.pack.title} · 第 ${level.order} 关',
+              initialSnapshotJson: null,
+            ),
+          ),
+        );
         if (mounted) setState(() {});
       },
       onStart: (diff) async {
         final dkey = SnapshotStore.difficultyKeyFor(diff);
-        final snapJson = await SnapshotStore.instance.loadJsonString(canonicalId, dkey);
+        final snapJson = await SnapshotStore.instance.loadJsonString(
+          canonicalId,
+          dkey,
+        );
         if (!mounted) return;
-        await Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => GamePage(imageBytes: bytes, difficulty: diff, canonicalId: canonicalId, packTitle: '${widget.pack.title} · 第 ${level.order} 关', initialSnapshotJson: snapJson)));
+        await Navigator.of(context).push(
+          MaterialPageRoute<void>(
+            builder: (_) => GamePage(
+              imageBytes: bytes,
+              difficulty: diff,
+              canonicalId: canonicalId,
+              packTitle: '${widget.pack.title} · 第 ${level.order} 关',
+              initialSnapshotJson: snapJson,
+            ),
+          ),
+        );
         if (mounted) setState(() {});
       },
     );
   }
 
-  Future<PuzzleDifficulty> _diffForKey(String k, PuzzleDifficulty fallback) async {
+  Future<PuzzleDifficulty> _diffForKey(
+    String k,
+    PuzzleDifficulty fallback,
+  ) async {
     for (final d in PuzzleDifficulty.presets) {
       if (SnapshotStore.difficultyKeyFor(d) == k) return d;
     }
@@ -216,26 +295,52 @@ class _PackLevelsPageState extends State<PackLevelsPage> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(pack.title, style: styles.h3.copyWith(fontSize: 16), maxLines: 1, overflow: TextOverflow.ellipsis),
+                          Text(
+                            pack.title,
+                            style: styles.h3.copyWith(fontSize: 16),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
                           if (pack.description.isNotEmpty) ...[
                             const SizedBox(height: 2),
-                            Text(pack.description, style: styles.caption, maxLines: 2, overflow: TextOverflow.ellipsis),
+                            Text(
+                              pack.description,
+                              style: styles.caption,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                            ),
                           ],
                           const SizedBox(height: 6),
                           Row(
                             children: [
                               Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 6,
+                                  vertical: 2,
+                                ),
                                 decoration: BoxDecoration(
                                   color: palette.brand.withValues(alpha: 0.12),
                                   borderRadius: BorderRadius.circular(6),
                                 ),
-                                child: Text('${pack.levelCount} 关卡', style: TextStyle(fontSize: 11, color: palette.brand, fontWeight: FontWeight.bold)),
+                                child: Text(
+                                  '${pack.levelCount} 关卡',
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    color: palette.brand,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
                               ),
                               const SizedBox(width: 6),
-                              Text(pack.displayFileSize, style: styles.caption.copyWith(fontSize: 11)),
+                              Text(
+                                pack.displayFileSize,
+                                style: styles.caption.copyWith(fontSize: 11),
+                              ),
                               const SizedBox(width: 6),
-                              Text('• ${pack.displaySource}', style: styles.caption.copyWith(fontSize: 11)),
+                              Text(
+                                '• ${pack.displaySource}',
+                                style: styles.caption.copyWith(fontSize: 11),
+                              ),
                             ],
                           ),
                         ],
@@ -253,7 +358,10 @@ class _PackLevelsPageState extends State<PackLevelsPage> {
               child: Center(
                 child: Padding(
                   padding: const EdgeInsets.symmetric(vertical: 40),
-                  child: Text('此图包中暂无关卡图片', style: styles.caption.copyWith(color: palette.disabledText)),
+                  child: Text(
+                    '此图包中暂无关卡图片',
+                    style: styles.caption.copyWith(color: palette.disabledText),
+                  ),
                 ),
               ),
             )
@@ -267,13 +375,10 @@ class _PackLevelsPageState extends State<PackLevelsPage> {
                   mainAxisSpacing: 14,
                   childAspectRatio: 1.0,
                 ),
-                delegate: SliverChildBuilderDelegate(
-                  (context, index) {
-                    final level = _levels[index];
-                    return _buildLevelCard(level, palette);
-                  },
-                  childCount: _levels.length,
-                ),
+                delegate: SliverChildBuilderDelegate((context, index) {
+                  final level = _levels[index];
+                  return _buildLevelCard(level, palette);
+                }, childCount: _levels.length),
               ),
             ),
 
@@ -298,14 +403,15 @@ class _PackLevelsPageState extends State<PackLevelsPage> {
         child: Stack(
           fit: StackFit.expand,
           children: [
-            LazyLevelImage(
-              level: level,
-              fit: BoxFit.cover,
-            ),
+            LazyLevelImage(level: level, fit: BoxFit.cover),
             Container(
               decoration: BoxDecoration(
                 gradient: LinearGradient(
-                  colors: [Colors.black.withValues(alpha: 0.3), Colors.transparent, Colors.black.withValues(alpha: 0.3)],
+                  colors: [
+                    Colors.black.withValues(alpha: 0.3),
+                    Colors.transparent,
+                    Colors.black.withValues(alpha: 0.3),
+                  ],
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
                 ),
@@ -320,7 +426,14 @@ class _PackLevelsPageState extends State<PackLevelsPage> {
                   color: Colors.black.withValues(alpha: 0.65),
                   borderRadius: BorderRadius.circular(8),
                 ),
-                child: Text('#${level.order}', style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
+                child: Text(
+                  '#${level.order}',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 11,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
               ),
             ),
             if (isCompleted)
@@ -332,7 +445,11 @@ class _PackLevelsPageState extends State<PackLevelsPage> {
                     color: palette.success.withValues(alpha: 0.8),
                     shape: BoxShape.circle,
                   ),
-                  child: Icon(PhosphorIconsBold.check, color: palette.surface, size: 22),
+                  child: Icon(
+                    PhosphorIconsBold.check,
+                    color: palette.surface,
+                    size: 22,
+                  ),
                 ),
               ),
           ],

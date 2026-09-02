@@ -135,7 +135,9 @@ class PuzzleLevelItem {
       isLocalFile: json['isLocalFile'] as bool? ?? false,
       title: json['title'] as String?,
       order: json['order'] as int? ?? 0,
-      tags: (json['tags'] as List<dynamic>?)?.map((e) => e.toString()).toList() ?? const [],
+      tags:
+          (json['tags'] as List<dynamic>?)?.map((e) => e.toString()).toList() ??
+          const [],
       sourceModule: json['sourceModule'] as String? ?? CanonicalId.prefixMain,
       eventId: json['eventId'] as String?,
       dailyDate: json['dailyDate'] as String?,
@@ -144,5 +146,6 @@ class PuzzleLevelItem {
   }
 
   @override
-  String toString() => 'PuzzleLevelItem(id: $id, tags: $tags, isLocal: $isLocalFile, locked: $isTimeLocked)';
+  String toString() =>
+      'PuzzleLevelItem(id: $id, tags: $tags, isLocal: $isLocalFile, locked: $isTimeLocked)';
 }

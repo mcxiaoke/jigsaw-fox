@@ -61,10 +61,8 @@ class BoardGhostComponent extends PositionComponent {
 /// Tray background component that renders a sleek container for unplaced pieces.
 class TrayBackgroundComponent extends PositionComponent
     with DragCallbacks, HasGameReference<JigsawPuzzleGame> {
-  TrayBackgroundComponent({
-    required Vector2 position,
-    required Vector2 size,
-  }) : super(position: position, size: size, priority: 2);
+  TrayBackgroundComponent({required Vector2 position, required Vector2 size})
+    : super(position: position, size: size, priority: 2);
 
   static final Paint _bgPaint = Paint()
     ..color = const Color(0x66000000)
@@ -88,7 +86,9 @@ class TrayBackgroundComponent extends PositionComponent
   @override
   void onDragUpdate(DragUpdateEvent event) {
     super.onDragUpdate(event);
-    if (!game.isTabletop && game.holdingPiece == null && !game.isDraggingAnyPiece) {
+    if (!game.isTabletop &&
+        game.holdingPiece == null &&
+        !game.isDraggingAnyPiece) {
       game.scrollTray(event.localDelta.x);
     }
   }
@@ -111,9 +111,9 @@ class JigsawPuzzleGame extends FlameGame
     this.onPieceSnapped,
     this.onProgressChanged,
     this.onStateUpdated,
-  })  : seed = seed ?? (DateTime.now().millisecondsSinceEpoch % 1000000),
-        _boardGhostOpacity = initialGhostOpacity,
-        undoManager = UndoManager();
+  }) : seed = seed ?? (DateTime.now().millisecondsSinceEpoch % 1000000),
+       _boardGhostOpacity = initialGhostOpacity,
+       undoManager = UndoManager();
 
   final PuzzleImage image;
   final int rows;
@@ -133,12 +133,13 @@ class JigsawPuzzleGame extends FlameGame
   // ---------------------------------------------------------------------------
   // 渲染与交互层级优先级 (Priority Hierarchy)
   // ---------------------------------------------------------------------------
-  static const int _solvedPiecePriority = 5;       // 已归位正确碎片（锁定底层，不遮挡任何浮动碎片）
-  static const int _trayPiecePriority = 10;        // 托盘中的待拼碎片
-  static const int _boardUnsolvedPriority = 20;    // 散落在棋盘上的未归位碎片
+  static const int _solvedPiecePriority = 5; // 已归位正确碎片（锁定底层，不遮挡任何浮动碎片）
+  static const int _trayPiecePriority = 10; // 托盘中的待拼碎片
+  static const int _boardUnsolvedPriority = 20; // 散落在棋盘上的未归位碎片
   static const int _activeDragBasePriority = 1000; // 正在拖拽或光标吸附抓取的碎片集群（绝对顶层）
 
-  static const double targetTrayPieceBaseSize = 64.0; // Standard touch-friendly base size
+  static const double targetTrayPieceBaseSize =
+      64.0; // Standard touch-friendly base size
   static const double _topToolbarHeight = 8.0;
   static const double _sideMargin = 8.0;
   static const double _bottomTrayMargin = 8.0;
@@ -221,7 +222,9 @@ class JigsawPuzzleGame extends FlameGame
 
   @override
   Future<void> onLoad() async {
-    AppLogger.game.info('onLoad start rows=$rows cols=$cols seed=$seed mode=$scatterMode image=${image.width}x${image.height}');
+    AppLogger.game.info(
+      'onLoad start rows=$rows cols=$cols seed=$seed mode=$scatterMode image=${image.width}x${image.height}',
+    );
     final sw = Stopwatch()..start();
     await LinenTextureManager.ensureInitialized();
     _computeLayout();
@@ -279,61 +282,65 @@ class JigsawPuzzleGame extends FlameGame
 
     // 4. Generate Piece Shapes and arrange inside Bottom Tray with Normalized Size.
     //    Pieces are SHUFFLED so the tray order never matches the original image order.
-    _trayOrder = List<int>.generate(totalPieces, (i) => i)..shuffle(Random(seed));
+    _trayOrder = List<int>.generate(totalPieces, (i) => i)
+      ..shuffle(Random(seed));
     var trayIndex = 0;
     for (final id in _trayOrder) {
       final r = id ~/ cols;
       final c = id % cols;
-        final edges = edgeLayout.edgesFor(r, c);
-        final shape = PieceShape(
-          edges: edges,
-          width: pieceSize.x,
-          height: pieceSize.y,
-        );
+      final edges = edgeLayout.edgesFor(r, c);
+      final shape = PieceShape(
+        edges: edges,
+        width: pieceSize.x,
+        height: pieceSize.y,
+      );
 
-        final srcRect = shape.srcRect(
-          row: r,
-          col: c,
-          srcWidthPerCol: srcPieceW,
-          srcHeightPerRow: srcPieceH,
-        );
+      final srcRect = shape.srcRect(
+        row: r,
+        col: c,
+        srcWidthPerCol: srcPieceW,
+        srcHeightPerRow: srcPieceH,
+      );
 
-        final pPos = isTabletop
-            ? _getScatterPositionForIndex(trayIndex, totalPieces)
-            : _getTrayPositionForIndex(trayIndex);
-        final normOut = [0.0, 0.0];
-        _screenToNormalized(pPos, normOut);
+      final pPos = isTabletop
+          ? _getScatterPositionForIndex(trayIndex, totalPieces)
+          : _getTrayPositionForIndex(trayIndex);
+      final normOut = [0.0, 0.0];
+      _screenToNormalized(pPos, normOut);
 
-        final pState = PieceState(
-          id: id,
-          r: r,
-          c: c,
-          nx: normOut[0],
-          ny: normOut[1],
-          clusterId: id,
-          rot: 0,
-        );
-        initialPieces.add(pState);
+      final pState = PieceState(
+        id: id,
+        r: r,
+        c: c,
+        nx: normOut[0],
+        ny: normOut[1],
+        clusterId: id,
+        rot: 0,
+      );
+      initialPieces.add(pState);
 
-        final component = PuzzlePieceComponent(
-          id: id,
-          r: r,
-          c: c,
-          shape: shape,
-          image: image,
-          srcRect: srcRect,
-          initialPosition: pPos,
-          baseSize: pieceSize.clone(),
-        )
-          ..isInTray = !isTabletop
-          ..scale = Vector2.all(isTabletop ? _zoom : _trayPieceScale)
-          ..clusterId = pState.clusterId
-          ..rot = pState.rot
-          ..priority = isTabletop ? _boardUnsolvedPriority : _trayPiecePriority;
+      final component =
+          PuzzlePieceComponent(
+              id: id,
+              r: r,
+              c: c,
+              shape: shape,
+              image: image,
+              srcRect: srcRect,
+              initialPosition: pPos,
+              baseSize: pieceSize.clone(),
+            )
+            ..isInTray = !isTabletop
+            ..scale = Vector2.all(isTabletop ? _zoom : _trayPieceScale)
+            ..clusterId = pState.clusterId
+            ..rot = pState.rot
+            ..priority = isTabletop
+                ? _boardUnsolvedPriority
+                : _trayPiecePriority;
 
-        _pieces[id] = component;
-        add(component);
-        trayIndex++;
+      _pieces[id] = component;
+      add(component);
+      trayIndex++;
     }
 
     _boardState = _boardState.copyWith(pieces: initialPieces);
@@ -344,7 +351,9 @@ class JigsawPuzzleGame extends FlameGame
         final json = jsonDecode(initialSnapshotJson!) as Map<String, dynamic>;
         final restored = PuzzleBoardState.fromJson(json);
         _applyBoardState(restored);
-        AppLogger.game.info('Snapshot restored pieces=${restored.pieces.length} solved=${restored.isSolved}');
+        AppLogger.game.info(
+          'Snapshot restored pieces=${restored.pieces.length} solved=${restored.isSolved}',
+        );
       } catch (e, st) {
         AppLogger.game.warning('Snapshot restore failed', e, st);
       }
@@ -352,7 +361,9 @@ class JigsawPuzzleGame extends FlameGame
 
     _isInitialized = true;
     updatePiecesStateAndPriorities();
-    AppLogger.game.info('onLoad done ${sw.elapsedMilliseconds}ms board=${boardSize.x.toStringAsFixed(1)}x${boardSize.y.toStringAsFixed(1)} piece=${pieceSize.x.toStringAsFixed(1)}x${pieceSize.y.toStringAsFixed(1)} tray=${traySize.x.toStringAsFixed(1)}x${traySize.y.toStringAsFixed(1)}');
+    AppLogger.game.info(
+      'onLoad done ${sw.elapsedMilliseconds}ms board=${boardSize.x.toStringAsFixed(1)}x${boardSize.y.toStringAsFixed(1)} piece=${pieceSize.x.toStringAsFixed(1)}x${pieceSize.y.toStringAsFixed(1)} tray=${traySize.x.toStringAsFixed(1)}x${traySize.y.toStringAsFixed(1)}',
+    );
   }
 
   Vector2? _lastGameSize;
@@ -362,7 +373,9 @@ class JigsawPuzzleGame extends FlameGame
     super.onGameResize(size);
     if (!_isInitialized) return;
     if (_lastGameSize != null && (_lastGameSize! - size).length < 0.5) return;
-    AppLogger.game.info('onGameResize ${size.x.toStringAsFixed(1)}x${size.y.toStringAsFixed(1)} zoom=$_zoom');
+    AppLogger.game.info(
+      'onGameResize ${size.x.toStringAsFixed(1)}x${size.y.toStringAsFixed(1)} zoom=$_zoom',
+    );
     _lastGameSize = size.clone();
     _computeLayout();
     _tabletopScatterSlots = null;
@@ -399,11 +412,7 @@ class JigsawPuzzleGame extends FlameGame
     for (final comp in _pieces.values) {
       final edges = edgeLayout.edgesFor(comp.r, comp.c);
       comp.updateShapeAndSize(
-        PieceShape(
-          edges: edges,
-          width: pieceSize.x,
-          height: pieceSize.y,
-        ),
+        PieceShape(edges: edges, width: pieceSize.x, height: pieceSize.y),
         pieceSize,
       );
 
@@ -432,15 +441,18 @@ class JigsawPuzzleGame extends FlameGame
     );
 
     // 仅针对在棋盘外部/散落区域的游离碎片进行视口安全收拢，处于合法棋盘范围内的碎片随棋盘整体自适应，严禁误 Clamp
-    final freeComponents = _pieces.values
-        .where((p) {
-          if (p.isInTray || p.isLocked || p == _holdingPiece || p.isDragging) return false;
-          final pState = _boardState.pieceById(p.id);
-          // 若处于合法棋盘归一化空间内，受棋盘矩阵直接保护
-          final isOnBoardDomain = (pState.nx >= -0.05 && pState.nx <= 1.05 && pState.ny >= -0.05 && pState.ny <= 1.05);
-          return !isOnBoardDomain;
-        })
-        .toList();
+    final freeComponents = _pieces.values.where((p) {
+      if (p.isInTray || p.isLocked || p == _holdingPiece || p.isDragging)
+        return false;
+      final pState = _boardState.pieceById(p.id);
+      // 若处于合法棋盘归一化空间内，受棋盘矩阵直接保护
+      final isOnBoardDomain =
+          (pState.nx >= -0.05 &&
+          pState.nx <= 1.05 &&
+          pState.ny >= -0.05 &&
+          pState.ny <= 1.05);
+      return !isOnBoardDomain;
+    }).toList();
 
     final clusterGroups = <int, List<PuzzlePieceComponent>>{};
     for (final comp in freeComponents) {
@@ -528,8 +540,9 @@ class JigsawPuzzleGame extends FlameGame
 
     // 6. 重排托盘碎片
     if (!isTabletop) {
-      final trayPieces =
-          _pieces.values.where((p) => p.isInTray && !p.isFilteredOut).toList();
+      final trayPieces = _pieces.values
+          .where((p) => p.isInTray && !p.isFilteredOut)
+          .toList();
       final contentWidth =
           trayPieces.length * (_trayPieceWidth + _traySpacing) + 36.0;
       final minScroll = min(0.0, traySize.x - contentWidth);
@@ -547,8 +560,10 @@ class JigsawPuzzleGame extends FlameGame
     // 1. Bottom Tray Height (comfortably houses ~64px touch piece)
     final targetTrayH = min(size.y * 0.28, max(size.y * 0.20, 100.0));
     traySize = Vector2(size.x - _sideMargin * 2, targetTrayH);
-    trayPosition =
-        Vector2(_sideMargin, size.y - targetTrayH - _bottomTrayMargin);
+    trayPosition = Vector2(
+      _sideMargin,
+      size.y - targetTrayH - _bottomTrayMargin,
+    );
 
     final imageAspect = image.width / image.height;
     double bW, bH;
@@ -579,7 +594,8 @@ class JigsawPuzzleGame extends FlameGame
         final testPieceH = testBoardSize.y / rows;
         final testBoardLeft = (size.x - testBoardSize.x) / 2;
         final testBoardTop =
-            _topToolbarHeight + (size.y - _topToolbarHeight - testBoardSize.y) / 2;
+            _topToolbarHeight +
+            (size.y - _topToolbarHeight - testBoardSize.y) / 2;
         const pad = 4.0; // 允许贴边/轻微覆盖边线，相比原 16px 更宽松，配合用户反馈
         final safeLeft = testBoardLeft - pad;
         final safeTop = testBoardTop - pad;
@@ -596,10 +612,11 @@ class JigsawPuzzleGame extends FlameGame
           final py = topMargin + r * stepY;
           for (var c = 0; c < colsCount; c++) {
             final px = sideMargin + c * stepX;
-            final isOverlap = !(px + testPieceW <= safeLeft ||
-                px >= safeRight ||
-                py + testPieceH <= safeTop ||
-                py >= safeBottom);
+            final isOverlap =
+                !(px + testPieceW <= safeLeft ||
+                    px >= safeRight ||
+                    py + testPieceH <= safeTop ||
+                    py >= safeBottom);
             if (!isOverlap &&
                 px >= 8.0 &&
                 px + testPieceW <= size.x - 8.0 &&
@@ -617,7 +634,8 @@ class JigsawPuzzleGame extends FlameGame
         final testPieceH = testBoardSize.y / rows;
         final testBoardLeft = (size.x - testBoardSize.x) / 2;
         final testBoardTop =
-            _topToolbarHeight + (size.y - _topToolbarHeight - testBoardSize.y) / 2;
+            _topToolbarHeight +
+            (size.y - _topToolbarHeight - testBoardSize.y) / 2;
         const pad = 4.0;
         final safeLeft = testBoardLeft - pad;
         final safeTop = testBoardTop - pad;
@@ -637,10 +655,11 @@ class JigsawPuzzleGame extends FlameGame
           final py = topMargin + r * stepY;
           for (var c = 0; c < colsCount; c++) {
             final px = sideMargin + c * stepX;
-            final isOverlap = !(px + testPieceW <= safeLeft ||
-                px >= safeRight ||
-                py + testPieceH <= safeTop ||
-                py >= safeBottom);
+            final isOverlap =
+                !(px + testPieceW <= safeLeft ||
+                    px >= safeRight ||
+                    py + testPieceH <= safeTop ||
+                    py >= safeBottom);
             if (!isOverlap &&
                 px >= 8.0 &&
                 px + testPieceW <= size.x - 8.0 &&
@@ -727,7 +746,10 @@ class JigsawPuzzleGame extends FlameGame
       pieceSize = Vector2(bW / cols, bH / rows);
     } else {
       final availableBoardW = max(100.0, size.x - _sideMargin * 2);
-      final availableBoardH = max(100.0, trayPosition.y - _topToolbarHeight - 8.0);
+      final availableBoardH = max(
+        100.0,
+        trayPosition.y - _topToolbarHeight - 8.0,
+      );
       final areaAspect = availableBoardW / availableBoardH;
       if (imageAspect >= areaAspect) {
         bW = availableBoardW;
@@ -748,7 +770,9 @@ class JigsawPuzzleGame extends FlameGame
     // 并让小块（密集拼图）按碎片尺寸放大更多、以 maxPieceZoomPx 封顶。
     final pieceMaxSide = max(pieceSize.x, pieceSize.y);
     _maxZoom = max(minZoom, maxPieceZoomPx / pieceMaxSide);
-    AppLogger.game.fine('maxZoom derived from pieceMaxSide=${pieceMaxSide.toStringAsFixed(1)} -> $_maxZoom');
+    AppLogger.game.fine(
+      'maxZoom derived from pieceMaxSide=${pieceMaxSide.toStringAsFixed(1)} -> $_maxZoom',
+    );
 
     // 3. Normalized Tray Scaling (Target max side = 64px, preserving piece aspect ratio)
     final maxPieceSide = max(pieceSize.x, pieceSize.y);
@@ -778,7 +802,8 @@ class JigsawPuzzleGame extends FlameGame
   /// 4. 8 扇区轮流交替分发（Round-Robin Interleaving），确保上下左右均匀发散；
   /// 5. 动态几何避让：棋盘中心保护区保留 8px 呼吸间隙，允许轻微贴边/覆盖边线（已验证用户可接受），配合自适应棋盘放大。
   List<Vector2> _getTabletopScatterSlots(int total) {
-    if (_tabletopScatterSlots != null && _tabletopScatterSlots!.length >= total) {
+    if (_tabletopScatterSlots != null &&
+        _tabletopScatterSlots!.length >= total) {
       return _tabletopScatterSlots!;
     }
 
@@ -809,10 +834,11 @@ class JigsawPuzzleGame extends FlameGame
         final px = sideMargin + c * stepX;
 
         // 碰撞判定：严格避让中央棋盘安全区域
-        final isOverlap = !(px + pieceSize.x <= safeLeft ||
-            px >= safeRight ||
-            py + pieceSize.y <= safeTop ||
-            py >= safeBottom);
+        final isOverlap =
+            !(px + pieceSize.x <= safeLeft ||
+                px >= safeRight ||
+                py + pieceSize.y <= safeTop ||
+                py >= safeBottom);
 
         if (!isOverlap &&
             px >= 8.0 &&
@@ -822,7 +848,10 @@ class JigsawPuzzleGame extends FlameGame
           final pCenterX = px + pieceSize.x / 2;
           final pCenterY = py + pieceSize.y / 2;
           final angle = atan2(pCenterY - centerY, pCenterX - centerX);
-          final dist = Point(pCenterX, pCenterY).distanceTo(Point(centerX, centerY));
+          final dist = Point(
+            pCenterX,
+            pCenterY,
+          ).distanceTo(Point(centerX, centerY));
           candidates.add((x: px, y: py, angle: angle, dist: dist));
         }
       }
@@ -833,7 +862,10 @@ class JigsawPuzzleGame extends FlameGame
     }
 
     // 按围绕棋盘中心的 8 个方位扇区归类
-    final sectors = List.generate(8, (_) => <({double x, double y, double angle, double dist})>[]);
+    final sectors = List.generate(
+      8,
+      (_) => <({double x, double y, double angle, double dist})>[],
+    );
     for (final cand in candidates) {
       final normA = (cand.angle + pi) / (2 * pi); // 0.0 ~ 1.0
       final secIdx = (normA * 8).floor() % 8;
@@ -858,10 +890,12 @@ class JigsawPuzzleGame extends FlameGame
           // 真实微扰动（±10% 自然随机抖动）
           final jx = (rng.nextDouble() - 0.5) * pieceSize.x * 0.16;
           final jy = (rng.nextDouble() - 0.5) * pieceSize.y * 0.16;
-          slots.add(Vector2(
-            (item.x + jx).clamp(8.0, size.x - pieceSize.x - 8.0),
-            (item.y + jy).clamp(44.0, size.y - pieceSize.y - 8.0),
-          ));
+          slots.add(
+            Vector2(
+              (item.x + jx).clamp(8.0, size.x - pieceSize.x - 8.0),
+              (item.y + jy).clamp(44.0, size.y - pieceSize.y - 8.0),
+            ),
+          );
           secI = (secI + offset + 1) % 8;
           found = true;
           break;
@@ -892,7 +926,8 @@ class JigsawPuzzleGame extends FlameGame
   void onScroll(PointerScrollInfo info) {
     super.onScroll(info);
     final mousePos = info.eventPosition.global;
-    if (mousePos.y >= trayPosition.y && mousePos.y <= trayPosition.y + traySize.y) {
+    if (mousePos.y >= trayPosition.y &&
+        mousePos.y <= trayPosition.y + traySize.y) {
       final delta = info.scrollDelta.global.y != 0
           ? -info.scrollDelta.global.y
           : -info.scrollDelta.global.x;
@@ -975,8 +1010,9 @@ class JigsawPuzzleGame extends FlameGame
     primary.position.setValues(targetX, targetY);
 
     // 3. 同步更新同集群内其他碎片的相对位置与缩放
-    final clusterPieces = _pieces.values
-        .where((p) => p.clusterId == primary.clusterId && p != primary);
+    final clusterPieces = _pieces.values.where(
+      (p) => p.clusterId == primary.clusterId && p != primary,
+    );
 
     for (final p in clusterPieces) {
       p.clearActiveEffects();
@@ -989,7 +1025,9 @@ class JigsawPuzzleGame extends FlameGame
     }
 
     // 4. 托盘碎片脱离判定：若碎片原先在托盘中，当且仅当玩家将其真正向上拖出托盘区域时，才正式脱离托盘并平滑闭合托盘空隙
-    if (!isTabletop && primary.isInTray && cursorCanvasPos.y < trayPosition.y - 20.0) {
+    if (!isTabletop &&
+        primary.isInTray &&
+        cursorCanvasPos.y < trayPosition.y - 20.0) {
       primary.isInTray = false;
       for (final p in clusterPieces) {
         p.isInTray = false;
@@ -1024,8 +1062,9 @@ class JigsawPuzzleGame extends FlameGame
 
   /// Scrolls the bottom tray horizontally.
   void scrollTray(double deltaX) {
-    final trayPieces =
-        _pieces.values.where((p) => p.isInTray && !p.isFilteredOut).toList();
+    final trayPieces = _pieces.values
+        .where((p) => p.isInTray && !p.isFilteredOut)
+        .toList();
     if (trayPieces.isEmpty) return;
 
     final contentWidth =
@@ -1044,8 +1083,11 @@ class JigsawPuzzleGame extends FlameGame
 
     // 2. 获取当前托盘内已有可见碎片在 _trayOrder 中的有序列表
     final currentTrayIds = _trayOrder
-        .where((id) =>
-            _pieces[id]?.isInTray == true && _pieces[id]?.isFilteredOut == false)
+        .where(
+          (id) =>
+              _pieces[id]?.isInTray == true &&
+              _pieces[id]?.isFilteredOut == false,
+        )
         .toList();
 
     if (currentTrayIds.isEmpty) {
@@ -1057,8 +1099,10 @@ class JigsawPuzzleGame extends FlameGame
     final startX = trayPosition.x + 18.0 + _trayScrollX;
     final step = _trayPieceWidth + _traySpacing;
     final slotOffset = dropScreenX - startX;
-    final targetIdx =
-        ((slotOffset + step * 0.5) / step).floor().clamp(0, currentTrayIds.length);
+    final targetIdx = ((slotOffset + step * 0.5) / step).floor().clamp(
+      0,
+      currentTrayIds.length,
+    );
 
     // 4. 将 piece.id 插入到 _trayOrder 对应位置
     if (targetIdx >= currentTrayIds.length) {
@@ -1108,7 +1152,8 @@ class JigsawPuzzleGame extends FlameGame
   }
 
   @visibleForTesting
-  Vector2 normalizedToScreen(double nx, double ny) => _normalizedToScreen(nx, ny);
+  Vector2 normalizedToScreen(double nx, double ny) =>
+      _normalizedToScreen(nx, ny);
 
   @visibleForTesting
   void screenToNormalized(Vector2 screenPos, List<double> out) =>
@@ -1159,12 +1204,18 @@ class JigsawPuzzleGame extends FlameGame
     final minPanX =
         edgeMargin - contentW - boardTopLeft.x - normMinX * boardSize.x * _zoom;
     final maxPanX =
-        viewportW - edgeMargin - boardTopLeft.x - normMinX * boardSize.x * _zoom;
+        viewportW -
+        edgeMargin -
+        boardTopLeft.x -
+        normMinX * boardSize.x * _zoom;
 
     final minPanY =
         edgeMargin - contentH - boardTopLeft.y - normMinY * boardSize.y * _zoom;
     final maxPanY =
-        viewportH - edgeMargin - boardTopLeft.y - normMinY * boardSize.y * _zoom;
+        viewportH -
+        edgeMargin -
+        boardTopLeft.y -
+        normMinY * boardSize.y * _zoom;
 
     if (minPanX > maxPanX) {
       _panOffset.x = (minPanX + maxPanX) / 2;
@@ -1211,7 +1262,9 @@ class JigsawPuzzleGame extends FlameGame
     _clampPanOffset();
 
     _updateBoardTransform();
-    AppLogger.game.fine('zoomAt focal=${focalPoint.x.toStringAsFixed(1)},${focalPoint.y.toStringAsFixed(1)} delta=$deltaScale zoom $oldZoom->$newZoom pan=$_panOffset');
+    AppLogger.game.fine(
+      'zoomAt focal=${focalPoint.x.toStringAsFixed(1)},${focalPoint.y.toStringAsFixed(1)} delta=$deltaScale zoom $oldZoom->$newZoom pan=$_panOffset',
+    );
   }
 
   /// Sets zoom and pan directly (e.g. from pinch-to-zoom).
@@ -1230,7 +1283,9 @@ class JigsawPuzzleGame extends FlameGame
     _panOffset.add(delta);
     _clampPanOffset();
     _updateBoardTransform();
-    AppLogger.game.fine('panBy delta=${delta.x.toStringAsFixed(1)},${delta.y.toStringAsFixed(1)} pan=$_panOffset zoom=$_zoom');
+    AppLogger.game.fine(
+      'panBy delta=${delta.x.toStringAsFixed(1)},${delta.y.toStringAsFixed(1)} pan=$_panOffset zoom=$_zoom',
+    );
   }
 
   /// Resets zoom to 1.0 and centers the board.
@@ -1347,7 +1402,9 @@ class JigsawPuzzleGame extends FlameGame
         comp.rot = 0;
         comp.scale.setAll(isTabletop ? _zoom : _trayPieceScale);
         comp.position.setFrom(pPos);
-        comp.priority = isTabletop ? _boardUnsolvedPriority : _trayPiecePriority;
+        comp.priority = isTabletop
+            ? _boardUnsolvedPriority
+            : _trayPiecePriority;
         comp.isLocked = false;
       }
       trayIndex++;
@@ -1386,8 +1443,10 @@ class JigsawPuzzleGame extends FlameGame
       }
 
       // [连通规则] 仅当“邻槽位欧氏距离在吸附阈值内 且 属于边缘长出装配体”时才锁定。
-      final snappedDist = Point(pState.nx, pState.ny)
-          .distanceTo(Point(pState.targetNx(cols), pState.targetNy(rows)));
+      final snappedDist = Point(
+        pState.nx,
+        pState.ny,
+      ).distanceTo(Point(pState.targetNx(cols), pState.targetNy(rows)));
       final isPieceSolved =
           planted.contains(pState.id) && snappedDist <= snapDistLock;
       final wasLocked = comp.isLocked;
@@ -1415,7 +1474,9 @@ class JigsawPuzzleGame extends FlameGame
   /// Called when user begins dragging a piece.
   void handlePieceDragStart(PuzzlePieceComponent piece) {
     if (piece.isLocked || _isSolved) {
-      AppLogger.game.fine('dragStart blocked piece=${piece.id} locked=${piece.isLocked} solved=$_isSolved');
+      AppLogger.game.fine(
+        'dragStart blocked piece=${piece.id} locked=${piece.isLocked} solved=$_isSolved',
+      );
       return;
     }
 
@@ -1427,7 +1488,9 @@ class JigsawPuzzleGame extends FlameGame
         p.clearActiveEffects();
       }
     }
-    AppLogger.game.fine('dragStart piece=${piece.id} cluster=${piece.clusterId} topPriority=$_topPriority');
+    AppLogger.game.fine(
+      'dragStart piece=${piece.id} cluster=${piece.clusterId} topPriority=$_topPriority',
+    );
   }
 
   /// 取消当前所有碎片的拖拽状态，平滑恢复其原有位置
@@ -1446,13 +1509,15 @@ class JigsawPuzzleGame extends FlameGame
       _holdingPiece = null;
     }
     piece.isDragging = false;
-    final clusterPieces =
-        _pieces.values.where((p) => p.clusterId == piece.clusterId).toList();
+    final clusterPieces = _pieces.values
+        .where((p) => p.clusterId == piece.clusterId)
+        .toList();
 
     // 检查集群在被拖拽前的状态：若集群包含多块碎片或任一碎片在棋盘上，则集群整体归位于棋盘（严禁拆解集群）
     final isMultiCluster = clusterPieces.length > 1;
     final primaryState = _boardState.pieceById(piece.id);
-    final isPrimaryOnBoard = (primaryState.nx >= -0.10 &&
+    final isPrimaryOnBoard =
+        (primaryState.nx >= -0.10 &&
         primaryState.nx <= 1.10 &&
         primaryState.ny >= -0.10 &&
         primaryState.ny <= 1.10);
@@ -1483,9 +1548,12 @@ class JigsawPuzzleGame extends FlameGame
   /// Called when user releases drag. Executes snap resolution & cluster merge.
   void handlePieceDragEnd(PuzzlePieceComponent piece) {
     final inTrayArea = piece.position.y >= trayPosition.y - pieceSize.y * 0.25;
-    final clusterPieces =
-        _pieces.values.where((p) => p.clusterId == piece.clusterId).toList();
-    AppLogger.game.info('dragEnd piece=${piece.id} cluster=${piece.clusterId} size=${clusterPieces.length} inTrayArea=$inTrayArea pos=${piece.position.x.toStringAsFixed(1)},${piece.position.y.toStringAsFixed(1)} isTabletop=$isTabletop');
+    final clusterPieces = _pieces.values
+        .where((p) => p.clusterId == piece.clusterId)
+        .toList();
+    AppLogger.game.info(
+      'dragEnd piece=${piece.id} cluster=${piece.clusterId} size=${clusterPieces.length} inTrayArea=$inTrayArea pos=${piece.position.x.toStringAsFixed(1)},${piece.position.y.toStringAsFixed(1)} isTabletop=$isTabletop',
+    );
 
     // 1. 如果拖回托盘区域且为单块碎片 -> 就近插入托盘槽位并平滑吸附就位，不触发棋盘吸附
     if (!isTabletop && inTrayArea && clusterPieces.length == 1) {
@@ -1505,8 +1573,10 @@ class JigsawPuzzleGame extends FlameGame
     }
 
     // 棋盘上所有非托盘碎片的 ID 集合
-    final onBoardPieceIds =
-        _pieces.values.where((p) => !p.isInTray).map((p) => p.id).toSet();
+    final onBoardPieceIds = _pieces.values
+        .where((p) => !p.isInTray)
+        .map((p) => p.id)
+        .toSet();
 
     final out = [0.0, 0.0];
     final updatedPieces = _boardState.pieces.map((p) {
@@ -1522,25 +1592,29 @@ class JigsawPuzzleGame extends FlameGame
           rot: comp.rot,
         );
       }
-      return p.copyWith(
-        clusterId: comp.clusterId,
-        rot: comp.rot,
-      );
+      return p.copyWith(clusterId: comp.clusterId, rot: comp.rot);
     }).toList();
 
     _boardState = _boardState.copyWith(pieces: updatedPieces);
 
     final prevState = _boardState;
-    AppLogger.game.fine('dragEnd resolveSnap entry piece=${piece.id} onBoard=${onBoardPieceIds.length}');
+    AppLogger.game.fine(
+      'dragEnd resolveSnap entry piece=${piece.id} onBoard=${onBoardPieceIds.length}',
+    );
     final result = PuzzleEngine.resolveSnap(
       state: _boardState,
       draggedPieceId: piece.id,
       onBoardPieceIds: onBoardPieceIds,
       customSnapDistance: effectiveSnapDistance(),
     );
-    AppLogger.game.info('dragEnd resolveSnap result piece=${piece.id} didSnap=${result.didSnap} didMerge=${result.didMerge} completed=${result.isCompleted} solved=${result.state.isSolved} affected=${result.affectedPieceIds.length}');
+    AppLogger.game.info(
+      'dragEnd resolveSnap result piece=${piece.id} didSnap=${result.didSnap} didMerge=${result.didMerge} completed=${result.isCompleted} solved=${result.state.isSolved} affected=${result.affectedPieceIds.length}',
+    );
 
-    if (result.didSnap || result.didMerge || result.isCompleted || _boardState.isSolved) {
+    if (result.didSnap ||
+        result.didMerge ||
+        result.isCompleted ||
+        _boardState.isSolved) {
       _boardState = result.state;
       undoManager.record(prevState);
 
@@ -1561,8 +1635,10 @@ class JigsawPuzzleGame extends FlameGame
         comp.scale.setFrom(Vector2.all(_zoom));
         comp.clusterId = statePiece.clusterId;
         comp.rot = statePiece.rot;
-        final targetScreenPos =
-            _normalizedToScreen(statePiece.nx, statePiece.ny);
+        final targetScreenPos = _normalizedToScreen(
+          statePiece.nx,
+          statePiece.ny,
+        );
         comp.animateTo(targetScreenPos);
         comp.triggerSnapGlow();
       }
@@ -1577,7 +1653,9 @@ class JigsawPuzzleGame extends FlameGame
 
       if ((result.isCompleted || _boardState.isSolved) && !_isSolved) {
         _isSolved = true;
-        AppLogger.game.info('Game solved! pieces=$totalPieces solved=$solvedCount trigger onSolved');
+        AppLogger.game.info(
+          'Game solved! pieces=$totalPieces solved=$solvedCount trigger onSolved',
+        );
         onSolved();
       }
     } else {
@@ -1590,7 +1668,9 @@ class JigsawPuzzleGame extends FlameGame
       updatePieceVisibility(animateTray: true);
       updatePiecesStateAndPriorities();
       onStateUpdated?.call();
-      AppLogger.game.fine('dragEnd no snap piece=${piece.id} cluster=${piece.clusterId}');
+      AppLogger.game.fine(
+        'dragEnd no snap piece=${piece.id} cluster=${piece.clusterId}',
+      );
     }
   }
 
@@ -1617,8 +1697,9 @@ class JigsawPuzzleGame extends FlameGame
         // 2. 边缘碎片（包含至少一条平直外框）可见；
         // 3. 与边缘碎片或已归位碎片合并在同一集群的碎片可见；
         // 4. 其他单纯未拼的内部碎片隐藏。
-        final clusterHasBorderOrSolved =
-            borderOrSolvedClusters.contains(p.clusterId);
+        final clusterHasBorderOrSolved = borderOrSolvedClusters.contains(
+          p.clusterId,
+        );
         p.isFilteredOut = !(isSolved || isBorder || clusterHasBorderOrSolved);
       } else {
         p.isFilteredOut = false;
@@ -1657,7 +1738,9 @@ class JigsawPuzzleGame extends FlameGame
 
   /// Organizes all unlinked/unplaced floating pieces cleanly back into the tray or scattered table.
   void organizeTray() {
-    AppLogger.game.info('organizeTray isTabletop=$isTabletop solved=$solvedCount zoom=${_zoom.toStringAsFixed(2)} pan=$_panOffset board=${boardSize.x.toStringAsFixed(1)}x${boardSize.y.toStringAsFixed(1)}');
+    AppLogger.game.info(
+      'organizeTray isTabletop=$isTabletop solved=$solvedCount zoom=${_zoom.toStringAsFixed(2)} pan=$_panOffset board=${boardSize.x.toStringAsFixed(1)}x${boardSize.y.toStringAsFixed(1)}',
+    );
     if (isTabletop) {
       final slots = _getTabletopScatterSlots(totalPieces);
       var slotIdx = 0;
@@ -1666,8 +1749,9 @@ class JigsawPuzzleGame extends FlameGame
       for (final p in _pieces.values) {
         final statePiece = _boardState.pieceById(p.id);
         final isSolved = statePiece.isSolved(rows, cols);
-        final clusterSize =
-            _pieces.values.where((o) => o.clusterId == p.clusterId).length;
+        final clusterSize = _pieces.values
+            .where((o) => o.clusterId == p.clusterId)
+            .length;
         if (!isSolved && clusterSize == 1) {
           final slotPos = slots[slotIdx % slots.length];
           // slotPos 是基于基准未缩放棋盘 (1.0x) 的世界槽位
@@ -1700,8 +1784,9 @@ class JigsawPuzzleGame extends FlameGame
       if (p == null) continue;
       final statePiece = _boardState.pieceById(p.id);
       final isSolved = statePiece.isSolved(rows, cols);
-      final clusterSize =
-          _pieces.values.where((o) => o.clusterId == p.clusterId).length;
+      final clusterSize = _pieces.values
+          .where((o) => o.clusterId == p.clusterId)
+          .length;
 
       if (!isSolved && clusterSize == 1) {
         p.isInTray = true;
@@ -1751,14 +1836,23 @@ class JigsawPuzzleGame extends FlameGame
           );
         }
         _screenToNormalized(comp.position, out);
-        return p.copyWith(nx: out[0], ny: out[1], clusterId: comp.clusterId, rot: comp.rot);
+        return p.copyWith(
+          nx: out[0],
+          ny: out[1],
+          clusterId: comp.clusterId,
+          rot: comp.rot,
+        );
       }
       return p;
     }).toList();
-    return jsonEncode(_boardState.copyWith(
-      pieces: updated,
-      elapsedSeconds: elapsedSeconds ?? _boardState.elapsedSeconds,
-    ).toJson());
+    return jsonEncode(
+      _boardState
+          .copyWith(
+            pieces: updated,
+            elapsedSeconds: elapsedSeconds ?? _boardState.elapsedSeconds,
+          )
+          .toJson(),
+    );
   }
 
   /// Restores previous snapshot from undo history.
@@ -1788,7 +1882,9 @@ class JigsawPuzzleGame extends FlameGame
     if (newState.rows != rows ||
         newState.cols != cols ||
         newState.pieces.length != _pieces.length) {
-      AppLogger.game.warning('Snapshot apply skipped due to size mismatch: snapshot ${newState.rows}x${newState.cols} len=${newState.pieces.length} vs game $rows x $cols len=${_pieces.length} dkey=${newState.difficultyKey} canonical=${newState.canonicalId}');
+      AppLogger.game.warning(
+        'Snapshot apply skipped due to size mismatch: snapshot ${newState.rows}x${newState.cols} len=${newState.pieces.length} vs game $rows x $cols len=${_pieces.length} dkey=${newState.difficultyKey} canonical=${newState.canonicalId}',
+      );
       return;
     }
     _boardState = newState;
@@ -1799,7 +1895,8 @@ class JigsawPuzzleGame extends FlameGame
       comp.rot = p.rot;
 
       // 正确识别棋盘碎片与托盘碎片
-      final isOnBoard = (p.nx >= -0.10 && p.nx <= 1.10 && p.ny >= -0.10 && p.ny <= 1.10);
+      final isOnBoard =
+          (p.nx >= -0.10 && p.nx <= 1.10 && p.ny >= -0.10 && p.ny <= 1.10);
       comp.isInTray = !isOnBoard;
 
       final targetScreenPos = _normalizedToScreen(p.nx, p.ny);
@@ -1837,11 +1934,7 @@ class JigsawPuzzleGame extends FlameGame
     final prevState = _boardState;
     final updated = _boardState.pieces.map((p) {
       if (p.id == targetPieceId) {
-        return p.copyWith(
-          nx: hint.targetNx,
-          ny: hint.targetNy,
-          rot: 0,
-        );
+        return p.copyWith(nx: hint.targetNx, ny: hint.targetNy, rot: 0);
       }
       return p;
     }).toList();
@@ -1891,7 +1984,10 @@ class JigsawPuzzleGame extends FlameGame
       c.scale.setFrom(Vector2.all(_zoom));
       c.clusterId = statePiece.clusterId;
       c.rot = statePiece.rot;
-      c.animateTo(_normalizedToScreen(statePiece.nx, statePiece.ny), duration: 0.25);
+      c.animateTo(
+        _normalizedToScreen(statePiece.nx, statePiece.ny),
+        duration: 0.25,
+      );
       c.triggerSnapGlow();
     }
 
@@ -1915,19 +2011,27 @@ class JigsawPuzzleGame extends FlameGame
   /// 自动将其平滑弹回屏幕可视区域，彻底解决“找不到最后一块碎片”的挫败体验。
   void missingPieceCheck() {
     if (_isSolved) return;
-    final unsolved = _boardState.pieces.where((p) => !p.isSolved(rows, cols)).toList();
+    final unsolved = _boardState.pieces
+        .where((p) => !p.isSolved(rows, cols))
+        .toList();
     if (unsolved.isEmpty || unsolved.length > 2) return;
 
     final holdingClusterId = _holdingPiece?.clusterId;
 
     for (final pState in unsolved) {
       final comp = _pieces[pState.id];
-      if (comp == null || comp.isDragging || comp == _holdingPiece || comp.isInTray) continue;
-      if (holdingClusterId != null && comp.clusterId == holdingClusterId) continue;
+      if (comp == null ||
+          comp.isDragging ||
+          comp == _holdingPiece ||
+          comp.isInTray)
+        continue;
+      if (holdingClusterId != null && comp.clusterId == holdingClusterId)
+        continue;
 
       final visualW = comp.size.x * comp.scale.x;
       final visualH = comp.size.y * comp.scale.y;
-      final isOutOfBounds = comp.position.x < -visualW * 0.5 ||
+      final isOutOfBounds =
+          comp.position.x < -visualW * 0.5 ||
           comp.position.x > size.x - visualW * 0.5 ||
           comp.position.y < -visualH * 0.5 ||
           comp.position.y > size.y - visualH * 0.5;
@@ -1942,7 +2046,13 @@ class JigsawPuzzleGame extends FlameGame
         final normOut = [0.0, 0.0];
         _screenToNormalized(safeTarget, normOut);
         _boardState = _boardState.copyWith(
-          pieces: _boardState.pieces.map((p) => p.id == pState.id ? p.copyWith(nx: normOut[0], ny: normOut[1]) : p).toList(),
+          pieces: _boardState.pieces
+              .map(
+                (p) => p.id == pState.id
+                    ? p.copyWith(nx: normOut[0], ny: normOut[1])
+                    : p,
+              )
+              .toList(),
         );
       }
     }

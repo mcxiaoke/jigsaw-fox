@@ -30,29 +30,40 @@ void main() {
       }
     });
 
-    test('Adjacent internal edges are always complementary mirrors (tab <-> blank)', () {
-      final layout = EdgeLayout(rows: 5, cols: 6, seed: 999);
+    test(
+      'Adjacent internal edges are always complementary mirrors (tab <-> blank)',
+      () {
+        final layout = EdgeLayout(rows: 5, cols: 6, seed: 999);
 
-      for (var r = 0; r < 5; r++) {
-        for (var c = 0; c < 6; c++) {
-          final current = layout.edgesFor(r, c);
+        for (var r = 0; r < 5; r++) {
+          for (var c = 0; c < 6; c++) {
+            final current = layout.edgesFor(r, c);
 
-          // Check right neighbor
-          if (c + 1 < 6) {
-            final rightNeighbor = layout.edgesFor(r, c + 1);
-            expect(current.right.complementary(), equals(rightNeighbor.left),
-                reason: 'Mismatch between piece ($r, $c) right and ($r, ${c + 1}) left');
-          }
+            // Check right neighbor
+            if (c + 1 < 6) {
+              final rightNeighbor = layout.edgesFor(r, c + 1);
+              expect(
+                current.right.complementary(),
+                equals(rightNeighbor.left),
+                reason:
+                    'Mismatch between piece ($r, $c) right and ($r, ${c + 1}) left',
+              );
+            }
 
-          // Check bottom neighbor
-          if (r + 1 < 5) {
-            final bottomNeighbor = layout.edgesFor(r + 1, c);
-            expect(current.bottom.complementary(), equals(bottomNeighbor.top),
-                reason: 'Mismatch between piece ($r, $c) bottom and (${r + 1}, $c) top');
+            // Check bottom neighbor
+            if (r + 1 < 5) {
+              final bottomNeighbor = layout.edgesFor(r + 1, c);
+              expect(
+                current.bottom.complementary(),
+                equals(bottomNeighbor.top),
+                reason:
+                    'Mismatch between piece ($r, $c) bottom and (${r + 1}, $c) top',
+              );
+            }
           }
         }
-      }
-    });
+      },
+    );
 
     test('Corner and Border piece identification', () {
       final layout = EdgeLayout(rows: 3, cols: 3, seed: 101);

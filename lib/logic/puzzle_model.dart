@@ -63,49 +63,78 @@ enum PuzzleAspectRatio {
       case PuzzleAspectRatio.square1x1:
         return const [
           DifficultyTier(
-            difficulty: PuzzleDifficulty(label: '5 × 5 (25 块)', rows: 5, cols: 5),
+            difficulty: PuzzleDifficulty(
+              label: '5 × 5 (25 块)',
+              rows: 5,
+              cols: 5,
+            ),
             tag: '新手 Easy',
             estimatedMinutes: '1~3分钟',
             secPerPiece: 3.0,
             tierLevel: 'L1',
           ),
           DifficultyTier(
-            difficulty: PuzzleDifficulty(label: '6 × 6 (36 块)', rows: 6, cols: 6, recommended: true),
+            difficulty: PuzzleDifficulty(
+              label: '6 × 6 (36 块)',
+              rows: 6,
+              cols: 6,
+              recommended: true,
+            ),
             tag: '入门+ (过渡)',
             estimatedMinutes: '2~4分钟',
             secPerPiece: 3.5,
             tierLevel: 'L1.5',
           ),
           DifficultyTier(
-            difficulty: PuzzleDifficulty(label: '8 × 8 (64 块)', rows: 8, cols: 8),
+            difficulty: PuzzleDifficulty(
+              label: '8 × 8 (64 块)',
+              rows: 8,
+              cols: 8,
+            ),
             tag: '简单 Beginner',
             estimatedMinutes: '5~8分钟',
             secPerPiece: 5.0,
             tierLevel: 'L2',
           ),
           DifficultyTier(
-            difficulty: PuzzleDifficulty(label: '10 × 10 (100 块)', rows: 10, cols: 10),
+            difficulty: PuzzleDifficulty(
+              label: '10 × 10 (100 块)',
+              rows: 10,
+              cols: 10,
+            ),
             tag: '普通 Medium',
             estimatedMinutes: '12~18分钟',
             secPerPiece: 8.0,
             tierLevel: 'L3',
           ),
           DifficultyTier(
-            difficulty: PuzzleDifficulty(label: '12 × 12 (144 块)', rows: 12, cols: 12),
+            difficulty: PuzzleDifficulty(
+              label: '12 × 12 (144 块)',
+              rows: 12,
+              cols: 12,
+            ),
             tag: '进阶 Hard',
             estimatedMinutes: '25~35分钟',
             secPerPiece: 12.0,
             tierLevel: 'L4',
           ),
           DifficultyTier(
-            difficulty: PuzzleDifficulty(label: '15 × 15 (225 块)', rows: 15, cols: 15),
+            difficulty: PuzzleDifficulty(
+              label: '15 × 15 (225 块)',
+              rows: 15,
+              cols: 15,
+            ),
             tag: '困难 Expert',
             estimatedMinutes: '50~75分钟',
             secPerPiece: 18.0,
             tierLevel: 'L5',
           ),
           DifficultyTier(
-            difficulty: PuzzleDifficulty(label: '20 × 20 (400 块)', rows: 20, cols: 20),
+            difficulty: PuzzleDifficulty(
+              label: '20 × 20 (400 块)',
+              rows: 20,
+              cols: 20,
+            ),
             tag: '大师 Master',
             estimatedMinutes: '1.5~3小时',
             secPerPiece: 25.0,
@@ -116,42 +145,67 @@ enum PuzzleAspectRatio {
       case PuzzleAspectRatio.portrait2x3:
         return const [
           DifficultyTier(
-            difficulty: PuzzleDifficulty(label: '4 × 6 (24 块)', rows: 6, cols: 4, recommended: true),
+            difficulty: PuzzleDifficulty(
+              label: '4 × 6 (24 块)',
+              rows: 6,
+              cols: 4,
+              recommended: true,
+            ),
             tag: '新手 Easy',
             estimatedMinutes: '1~3分钟',
             secPerPiece: 3.0,
             tierLevel: 'L1',
           ),
           DifficultyTier(
-            difficulty: PuzzleDifficulty(label: '6 × 9 (54 块)', rows: 9, cols: 6),
+            difficulty: PuzzleDifficulty(
+              label: '6 × 9 (54 块)',
+              rows: 9,
+              cols: 6,
+            ),
             tag: '简单 Beginner',
             estimatedMinutes: '5~8分钟',
             secPerPiece: 5.0,
             tierLevel: 'L2',
           ),
           DifficultyTier(
-            difficulty: PuzzleDifficulty(label: '8 × 12 (96 块)', rows: 12, cols: 8),
+            difficulty: PuzzleDifficulty(
+              label: '8 × 12 (96 块)',
+              rows: 12,
+              cols: 8,
+            ),
             tag: '普通 Medium',
             estimatedMinutes: '12~18分钟',
             secPerPiece: 8.0,
             tierLevel: 'L3',
           ),
           DifficultyTier(
-            difficulty: PuzzleDifficulty(label: '10 × 15 (150 块)', rows: 15, cols: 10),
+            difficulty: PuzzleDifficulty(
+              label: '10 × 15 (150 块)',
+              rows: 15,
+              cols: 10,
+            ),
             tag: '进阶 Hard',
             estimatedMinutes: '25~35分钟',
             secPerPiece: 12.0,
             tierLevel: 'L4',
           ),
           DifficultyTier(
-            difficulty: PuzzleDifficulty(label: '12 × 18 (216 块)', rows: 18, cols: 12),
+            difficulty: PuzzleDifficulty(
+              label: '12 × 18 (216 块)',
+              rows: 18,
+              cols: 12,
+            ),
             tag: '困难 Expert',
             estimatedMinutes: '50~75分钟',
             secPerPiece: 18.0,
             tierLevel: 'L5',
           ),
           DifficultyTier(
-            difficulty: PuzzleDifficulty(label: '16 × 24 (384 块)', rows: 24, cols: 16),
+            difficulty: PuzzleDifficulty(
+              label: '16 × 24 (384 块)',
+              rows: 24,
+              cols: 16,
+            ),
             tag: '大师 Master',
             estimatedMinutes: '1.5~3小时',
             secPerPiece: 25.0,
@@ -162,42 +216,67 @@ enum PuzzleAspectRatio {
       case PuzzleAspectRatio.landscape3x2:
         return const [
           DifficultyTier(
-            difficulty: PuzzleDifficulty(label: '6 × 4 (24 块)', rows: 4, cols: 6, recommended: true),
+            difficulty: PuzzleDifficulty(
+              label: '6 × 4 (24 块)',
+              rows: 4,
+              cols: 6,
+              recommended: true,
+            ),
             tag: '新手 Easy',
             estimatedMinutes: '1~3分钟',
             secPerPiece: 3.0,
             tierLevel: 'L1',
           ),
           DifficultyTier(
-            difficulty: PuzzleDifficulty(label: '9 × 6 (54 块)', rows: 6, cols: 9),
+            difficulty: PuzzleDifficulty(
+              label: '9 × 6 (54 块)',
+              rows: 6,
+              cols: 9,
+            ),
             tag: '简单 Beginner',
             estimatedMinutes: '5~8分钟',
             secPerPiece: 5.0,
             tierLevel: 'L2',
           ),
           DifficultyTier(
-            difficulty: PuzzleDifficulty(label: '12 × 8 (96 块)', rows: 8, cols: 12),
+            difficulty: PuzzleDifficulty(
+              label: '12 × 8 (96 块)',
+              rows: 8,
+              cols: 12,
+            ),
             tag: '普通 Medium',
             estimatedMinutes: '12~18分钟',
             secPerPiece: 8.0,
             tierLevel: 'L3',
           ),
           DifficultyTier(
-            difficulty: PuzzleDifficulty(label: '15 × 10 (150 块)', rows: 10, cols: 15),
+            difficulty: PuzzleDifficulty(
+              label: '15 × 10 (150 块)',
+              rows: 10,
+              cols: 15,
+            ),
             tag: '进阶 Hard',
             estimatedMinutes: '25~35分钟',
             secPerPiece: 12.0,
             tierLevel: 'L4',
           ),
           DifficultyTier(
-            difficulty: PuzzleDifficulty(label: '18 × 12 (216 块)', rows: 12, cols: 18),
+            difficulty: PuzzleDifficulty(
+              label: '18 × 12 (216 块)',
+              rows: 12,
+              cols: 18,
+            ),
             tag: '困难 Expert',
             estimatedMinutes: '50~75分钟',
             secPerPiece: 18.0,
             tierLevel: 'L5',
           ),
           DifficultyTier(
-            difficulty: PuzzleDifficulty(label: '24 × 16 (384 块)', rows: 16, cols: 24),
+            difficulty: PuzzleDifficulty(
+              label: '24 × 16 (384 块)',
+              rows: 16,
+              cols: 24,
+            ),
             tag: '大师 Master',
             estimatedMinutes: '1.5~3小时',
             secPerPiece: 25.0,
@@ -340,10 +419,25 @@ class PuzzleDifficulty {
   }
 
   static const List<PuzzleDifficulty> presets = [
-    PuzzleDifficulty(label: '4 × 6 (24 块)', rows: 6, cols: 4, recommended: true),
-    PuzzleDifficulty(label: '6 × 4 (24 块)', rows: 4, cols: 6, recommended: true),
+    PuzzleDifficulty(
+      label: '4 × 6 (24 块)',
+      rows: 6,
+      cols: 4,
+      recommended: true,
+    ),
+    PuzzleDifficulty(
+      label: '6 × 4 (24 块)',
+      rows: 4,
+      cols: 6,
+      recommended: true,
+    ),
     PuzzleDifficulty(label: '5 × 5 (25 块)', rows: 5, cols: 5),
-    PuzzleDifficulty(label: '6 × 6 (36 块)', rows: 6, cols: 6, recommended: true),
+    PuzzleDifficulty(
+      label: '6 × 6 (36 块)',
+      rows: 6,
+      cols: 6,
+      recommended: true,
+    ),
     PuzzleDifficulty(label: '6 × 9 (54 块)', rows: 9, cols: 6),
     PuzzleDifficulty(label: '9 × 6 (54 块)', rows: 6, cols: 9),
     PuzzleDifficulty(label: '8 × 8 (64 块)', rows: 8, cols: 8),

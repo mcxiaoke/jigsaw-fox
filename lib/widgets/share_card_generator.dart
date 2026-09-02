@@ -34,7 +34,8 @@ class ShareCardGenerator extends StatefulWidget {
   final String? levelTitle;
 
   /// Push as full-screen page
-  static Future<void> open(BuildContext context, {
+  static Future<void> open(
+    BuildContext context, {
     required Uint8List imageBytes,
     required int elapsedSeconds,
     required int pieceCount,
@@ -91,8 +92,9 @@ class _ShareCardGeneratorState extends State<ShareCardGenerator>
   Future<void> _exportPng() async {
     setState(() => _isExporting = true);
     try {
-      final boundary = _repaintKey.currentContext!
-          .findRenderObject() as RenderRepaintBoundary;
+      final boundary =
+          _repaintKey.currentContext!.findRenderObject()
+              as RenderRepaintBoundary;
       final image = await boundary.toImage(pixelRatio: 2.0);
       final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
       if (byteData == null) throw Exception('Failed to encode PNG');
@@ -112,11 +114,7 @@ class _ShareCardGeneratorState extends State<ShareCardGenerator>
       }
     } catch (e) {
       if (mounted) {
-        GameToast.show(
-          context,
-          message: '导出失败: $e',
-          type: GameToastType.error,
-        );
+        GameToast.show(context, message: '导出失败: $e', type: GameToastType.error);
       }
     } finally {
       if (mounted) setState(() => _isExporting = false);
@@ -135,14 +133,21 @@ class _ShareCardGeneratorState extends State<ShareCardGenerator>
         foregroundColor: palette.primaryText,
         elevation: 0.5,
         leading: IconButton(
-          icon: Icon(PhosphorIconsBold.x, color: palette.secondaryText, size: 22),
+          icon: Icon(
+            PhosphorIconsBold.x,
+            color: palette.secondaryText,
+            size: 22,
+          ),
           onPressed: () => Navigator.of(context).pop(),
         ),
         title: Text('分享成绩', style: styles.h3.copyWith(fontSize: 18)),
         actions: [
           IconButton(
-            icon: Icon(PhosphorIconsBold.shareNetwork,
-                color: palette.brand, size: 22),
+            icon: Icon(
+              PhosphorIconsBold.shareNetwork,
+              color: palette.brand,
+              size: 22,
+            ),
             tooltip: '导出分享',
             onPressed: _isExporting ? null : _exportPng,
           ),
@@ -153,8 +158,7 @@ class _ShareCardGeneratorState extends State<ShareCardGenerator>
           opacity: _fadeController,
           child: Center(
             child: SingleChildScrollView(
-              padding: const EdgeInsets.symmetric(
-                  horizontal: 24, vertical: 16),
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
@@ -188,7 +192,9 @@ class _ShareCardGeneratorState extends State<ShareCardGenerator>
                             // ── Main content column ──
                             Padding(
                               padding: const EdgeInsets.symmetric(
-                                  horizontal: 36, vertical: 48),
+                                horizontal: 36,
+                                vertical: 48,
+                              ),
                               child: Column(
                                 mainAxisAlignment:
                                     MainAxisAlignment.spaceEvenly,
@@ -201,8 +207,9 @@ class _ShareCardGeneratorState extends State<ShareCardGenerator>
                                         height: 48,
                                         decoration: BoxDecoration(
                                           gradient: AppPalette.brandGradient,
-                                          borderRadius:
-                                              BorderRadius.circular(14),
+                                          borderRadius: BorderRadius.circular(
+                                            14,
+                                          ),
                                         ),
                                         child: const Center(
                                           child: Text(
@@ -237,29 +244,33 @@ class _ShareCardGeneratorState extends State<ShareCardGenerator>
                                   Expanded(
                                     child: Padding(
                                       padding: const EdgeInsets.symmetric(
-                                          vertical: 16),
+                                        vertical: 16,
+                                      ),
                                       child: AspectRatio(
                                         aspectRatio: 1.0,
                                         child: Container(
                                           decoration: BoxDecoration(
-                                            borderRadius:
-                                                BorderRadius.circular(20),
+                                            borderRadius: BorderRadius.circular(
+                                              20,
+                                            ),
                                             border: Border.all(
                                               color: palette.brand,
                                               width: 3,
                                             ),
                                             boxShadow: [
                                               BoxShadow(
-                                                color: palette.brand
-                                                    .withValues(alpha: 0.2),
+                                                color: palette.brand.withValues(
+                                                  alpha: 0.2,
+                                                ),
                                                 blurRadius: 16,
                                                 offset: const Offset(0, 4),
                                               ),
                                             ],
                                           ),
                                           child: ClipRRect(
-                                            borderRadius:
-                                                BorderRadius.circular(18),
+                                            borderRadius: BorderRadius.circular(
+                                              18,
+                                            ),
                                             child: Image.memory(
                                               widget.imageBytes,
                                               fit: BoxFit.cover,
@@ -276,13 +287,13 @@ class _ShareCardGeneratorState extends State<ShareCardGenerator>
 
                                   // Stars row
                                   Row(
-                                    mainAxisAlignment:
-                                        MainAxisAlignment.center,
+                                    mainAxisAlignment: MainAxisAlignment.center,
                                     children: List.generate(3, (i) {
                                       final earned = i < widget.starCount;
                                       return Padding(
                                         padding: const EdgeInsets.symmetric(
-                                            horizontal: 6),
+                                          horizontal: 6,
+                                        ),
                                         child: Icon(
                                           PhosphorIconsFill.star,
                                           size: 36,
@@ -297,15 +308,18 @@ class _ShareCardGeneratorState extends State<ShareCardGenerator>
                                   // Stats row
                                   Container(
                                     padding: const EdgeInsets.symmetric(
-                                        horizontal: 20, vertical: 16),
+                                      horizontal: 20,
+                                      vertical: 16,
+                                    ),
                                     decoration: BoxDecoration(
-                                      color: palette.surface
-                                          .withValues(alpha: 0.6),
-                                      borderRadius:
-                                          BorderRadius.circular(20),
+                                      color: palette.surface.withValues(
+                                        alpha: 0.6,
+                                      ),
+                                      borderRadius: BorderRadius.circular(20),
                                       border: Border.all(
-                                          color: palette.divider,
-                                          width: 1),
+                                        color: palette.divider,
+                                        width: 1,
+                                      ),
                                     ),
                                     child: Row(
                                       mainAxisAlignment:
@@ -313,26 +327,23 @@ class _ShareCardGeneratorState extends State<ShareCardGenerator>
                                       children: [
                                         _buildStatItem(
                                           palette,
-                                          icon:
-                                              PhosphorIconsBold.clock,
+                                          icon: PhosphorIconsBold.clock,
                                           label: '用时',
                                           value: _formatTime(
-                                              widget.elapsedSeconds),
+                                            widget.elapsedSeconds,
+                                          ),
                                         ),
                                         _buildDivider(palette),
                                         _buildStatItem(
                                           palette,
-                                          icon: PhosphorIconsFill
-                                              .puzzlePiece,
+                                          icon: PhosphorIconsFill.puzzlePiece,
                                           label: '碎片',
-                                          value:
-                                              '${widget.pieceCount}',
+                                          value: '${widget.pieceCount}',
                                         ),
                                         _buildDivider(palette),
                                         _buildStatItem(
                                           palette,
-                                          icon:
-                                              PhosphorIconsBold.handTap,
+                                          icon: PhosphorIconsBold.handTap,
                                           label: '步数',
                                           value: '${widget.stepCount}',
                                         ),
@@ -342,8 +353,7 @@ class _ShareCardGeneratorState extends State<ShareCardGenerator>
 
                                   // Footer watermark
                                   Row(
-                                    mainAxisAlignment:
-                                        MainAxisAlignment.center,
+                                    mainAxisAlignment: MainAxisAlignment.center,
                                     children: [
                                       Text(
                                         '\u{1F98A} 异形拼图',
@@ -376,14 +386,18 @@ class _ShareCardGeneratorState extends State<ShareCardGenerator>
                           style: OutlinedButton.styleFrom(
                             foregroundColor: palette.secondaryText,
                             side: BorderSide(
-                                color: palette.divider, width: 1.2),
+                              color: palette.divider,
+                              width: 1.2,
+                            ),
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(14),
                             ),
                             padding: const EdgeInsets.symmetric(vertical: 14),
                           ),
                           icon: const Icon(
-                              PhosphorIconsBold.arrowLeft, size: 18),
+                            PhosphorIconsBold.arrowLeft,
+                            size: 18,
+                          ),
                           label: const Text('返回'),
                         ),
                       ),
@@ -391,8 +405,7 @@ class _ShareCardGeneratorState extends State<ShareCardGenerator>
                       Expanded(
                         flex: 2,
                         child: FilledButton.icon(
-                          onPressed:
-                              _isExporting ? null : _exportPng,
+                          onPressed: _isExporting ? null : _exportPng,
                           style: FilledButton.styleFrom(
                             backgroundColor: palette.brand,
                             foregroundColor: palette.surface,
@@ -411,8 +424,10 @@ class _ShareCardGeneratorState extends State<ShareCardGenerator>
                                     color: palette.surface,
                                   ),
                                 )
-                              : Icon(PhosphorIconsBold.downloadSimple,
-                                  size: 18),
+                              : Icon(
+                                  PhosphorIconsBold.downloadSimple,
+                                  size: 18,
+                                ),
                           label: Text(
                             _isExporting ? '导出中...' : '保存分享卡片',
                             style: const TextStyle(
@@ -433,10 +448,12 @@ class _ShareCardGeneratorState extends State<ShareCardGenerator>
     );
   }
 
-  Widget _buildStatItem(AppPalette palette,
-      {required IconData icon,
-      required String label,
-      required String value}) {
+  Widget _buildStatItem(
+    AppPalette palette, {
+    required IconData icon,
+    required String label,
+    required String value,
+  }) {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -454,21 +471,14 @@ class _ShareCardGeneratorState extends State<ShareCardGenerator>
         const SizedBox(height: 2),
         Text(
           label,
-          style: TextStyle(
-            fontSize: 11,
-            color: palette.secondaryText,
-          ),
+          style: TextStyle(fontSize: 11, color: palette.secondaryText),
         ),
       ],
     );
   }
 
   Widget _buildDivider(AppPalette palette) {
-    return Container(
-      width: 1,
-      height: 36,
-      color: palette.divider,
-    );
+    return Container(width: 1, height: 36, color: palette.divider);
   }
 }
 
@@ -495,11 +505,7 @@ class _ConfettiDotsPainter extends CustomPainter {
       final y = ((seed * 7) % 100) / 100 * size.height;
       final r = 2.0 + (seed % 5);
       final color = colors[i % colors.length].withValues(alpha: 0.15);
-      canvas.drawCircle(
-        Offset(x, y),
-        r,
-        Paint()..color = color,
-      );
+      canvas.drawCircle(Offset(x, y), r, Paint()..color = color);
     }
   }
 
