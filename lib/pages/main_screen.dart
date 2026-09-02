@@ -54,24 +54,7 @@ class _MainScreenState extends State<MainScreen> {
         elevation: 0.5,
         scrolledUnderElevation: 0.5,
         centerTitle: false,
-        title: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 28,
-              height: 28,
-              decoration: BoxDecoration(
-                gradient: AppPalette.brandGradient,
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: const Center(
-                child: Text('\u{1F98A}', style: TextStyle(fontSize: 16)),
-              ),
-            ),
-            const SizedBox(width: 8),
-            Text(_appBarTitle, style: styles.h3.copyWith(fontSize: 19)),
-          ],
-        ),
+        title: Text(_appBarTitle, style: styles.h3.copyWith(fontSize: 19)),
         actions: [
           _TrophyButton(palette: palette),
           if (_currentIndex == 4) ...[
@@ -168,7 +151,7 @@ class _TrophyButton extends StatelessWidget {
   }
 }
 
-// ── Settings Button (assets/icons/setting.png with icon fallback) ──
+// ── Settings Button ────────────────────────
 class _SettingsButton extends StatelessWidget {
   const _SettingsButton({required this.palette});
   final AppPalette palette;
@@ -176,16 +159,10 @@ class _SettingsButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return IconButton(
-      icon: Image.asset(
-        'assets/icons/setting.png',
-        width: 22,
-        height: 22,
+      icon: Icon(
+        PhosphorIconsBold.gear,
         color: palette.secondaryText,
-        errorBuilder: (_, _, _) => Icon(
-          PhosphorIconsBold.gear,
-          color: palette.secondaryText,
-          size: 22,
-        ),
+        size: 22,
       ),
       tooltip: '设置',
       onPressed: () async {

@@ -342,36 +342,9 @@ class _SettingsPageState extends State<SettingsPage> {
 
               // App Footer
               Center(
-                child: Column(
-                  children: [
-                    Container(
-                      width: 48,
-                      height: 48,
-                      decoration: BoxDecoration(
-                        color: palette.brand.withValues(alpha: 0.12),
-                        borderRadius: BorderRadius.circular(14),
-                      ),
-                      child: Icon(
-                        PhosphorIconsFill.puzzlePiece,
-                        color: palette.brand,
-                        size: 28,
-                      ),
-                    ),
-                    const SizedBox(height: 6),
-                    Text(
-                      '异形拼图 Jigsaw Puzzle',
-                      style: styles.captionBold.copyWith(
-                        color: palette.secondaryText,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      '版本 1.0.0',
-                      style: styles.caption.copyWith(
-                        color: palette.disabledText,
-                      ),
-                    ),
-                  ],
+                child: Text(
+                  '版本 1.0.0',
+                  style: styles.caption.copyWith(color: palette.disabledText),
                 ),
               ),
               const SizedBox(height: 20),

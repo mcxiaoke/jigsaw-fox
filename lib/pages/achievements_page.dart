@@ -157,70 +157,71 @@ class _AchievementsPageState extends State<AchievementsPage> {
               _SectionHeader(title: '数据统计看板', palette: palette, styles: styles),
               const SizedBox(height: 10),
 
-              // Stats Grid
-              LayoutBuilder(
-                builder: (context, constraints) {
-                  final isWide = constraints.maxWidth >= 500;
-                  final crossAxisCount = isWide ? 3 : 2;
-                  return GridView.count(
-                    crossAxisCount: crossAxisCount,
-                    crossAxisSpacing: 10,
-                    mainAxisSpacing: 10,
-                    childAspectRatio: isWide ? 1.9 : 1.6,
-                    shrinkWrap: true,
-                    physics: const NeverScrollableScrollPhysics(),
-                    children: [
-                      _StatCard(
-                        label: '关卡累积星星',
-                        value: '$_totalStars',
-                        icon: PhosphorIconsFill.star,
-                        color: palette.gold,
-                        palette: palette,
-                        styles: styles,
-                      ),
-                      _StatCard(
-                        label: '3星拼图数',
-                        value: '$_distinct3Star 张',
-                        icon: PhosphorIconsFill.trophy,
-                        color: palette.brand,
-                        palette: palette,
-                        styles: styles,
-                      ),
-                      _StatCard(
-                        label: '已通关图数',
-                        value: '$completed 张',
-                        icon: PhosphorIconsBold.checkCircle,
-                        color: palette.success,
-                        palette: palette,
-                        styles: styles,
-                      ),
-                      _StatCard(
-                        label: '拥有金币',
-                        value: '$coins',
-                        icon: PhosphorIconsFill.coins,
-                        color: palette.gold,
-                        palette: palette,
-                        styles: styles,
-                      ),
-                      _StatCard(
-                        label: '已拼碎片',
-                        value: '$snapped',
-                        icon: PhosphorIconsFill.puzzlePiece,
-                        color: palette.info,
-                        palette: palette,
-                        styles: styles,
-                      ),
-                      _StatCard(
-                        label: '总游玩时长',
-                        value: _formatDuration(timeSec),
-                        icon: PhosphorIconsBold.timer,
-                        color: const Color(0xFFA56BC0),
-                        palette: palette,
-                        styles: styles,
-                      ),
-                    ],
-                  );
-                },
+              // Stats Cards (Plan C: 2 consolidated group cards)
+              _StatGroupCard(
+                title: '通关与星级表现',
+                titleIcon: PhosphorIconsBold.trophy,
+                items: [
+                  _StatMetricItem(
+                    label: '关卡累积星星',
+                    value: '$_totalStars',
+                    icon: PhosphorIconsFill.star,
+                    color: palette.gold,
+                    palette: palette,
+                    styles: styles,
+                  ),
+                  _StatMetricItem(
+                    label: '3星拼图数',
+                    value: '$_distinct3Star 张',
+                    icon: PhosphorIconsFill.trophy,
+                    color: palette.brand,
+                    palette: palette,
+                    styles: styles,
+                  ),
+                  _StatMetricItem(
+                    label: '已通关图数',
+                    value: '$completed 张',
+                    icon: PhosphorIconsBold.checkCircle,
+                    color: palette.success,
+                    palette: palette,
+                    styles: styles,
+                  ),
+                ],
+                palette: palette,
+                styles: styles,
+              ),
+              const SizedBox(height: 10),
+              _StatGroupCard(
+                title: '游玩历程与资产',
+                titleIcon: PhosphorIconsBold.chartBar,
+                items: [
+                  _StatMetricItem(
+                    label: '拥有金币',
+                    value: '$coins',
+                    icon: PhosphorIconsFill.coins,
+                    color: palette.gold,
+                    palette: palette,
+                    styles: styles,
+                  ),
+                  _StatMetricItem(
+                    label: '已拼碎片',
+                    value: '$snapped',
+                    icon: PhosphorIconsFill.puzzlePiece,
+                    color: palette.info,
+                    palette: palette,
+                    styles: styles,
+                  ),
+                  _StatMetricItem(
+                    label: '总游玩时长',
+                    value: _formatDuration(timeSec),
+                    icon: PhosphorIconsBold.timer,
+                    color: const Color(0xFFA56BC0),
+                    palette: palette,
+                    styles: styles,
+                  ),
+                ],
+                palette: palette,
+                styles: styles,
               ),
 
               const SizedBox(height: 24),
@@ -290,9 +291,70 @@ class _SectionHeader extends StatelessWidget {
   }
 }
 
-// ── Stat Card ───────────────────────────────
-class _StatCard extends StatelessWidget {
-  const _StatCard({
+// ── Grouped Stat Card & Metric Item ─────────
+class _StatGroupCard extends StatelessWidget {
+  const _StatGroupCard({
+    required this.title,
+    required this.titleIcon,
+    required this.items,
+    required this.palette,
+    required this.styles,
+  });
+
+  final String title;
+  final IconData titleIcon;
+  final List<_StatMetricItem> items;
+  final AppPalette palette;
+  final AppTextStyles styles;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+      decoration: BoxDecoration(
+        color: palette.surfaceContainer,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: palette.divider, width: 1),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(titleIcon, size: 15, color: palette.secondaryText),
+              const SizedBox(width: 6),
+              Text(
+                title,
+                style: styles.captionBold.copyWith(
+                  fontSize: 12.5,
+                  color: palette.secondaryText,
+                  letterSpacing: 0.3,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              for (int i = 0; i < items.length; i++) ...[
+                if (i > 0)
+                  Container(
+                    height: 28,
+                    width: 1,
+                    color: palette.divider.withValues(alpha: 0.8),
+                  ),
+                Expanded(child: items[i]),
+              ],
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _StatMetricItem extends StatelessWidget {
+  const _StatMetricItem({
     required this.label,
     required this.value,
     required this.icon,
@@ -310,44 +372,42 @@ class _StatCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 14),
-      decoration: BoxDecoration(
-        color: palette.surfaceContainer,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: color.withValues(alpha: 0.2), width: 1),
-      ),
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 4),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisAlignment: MainAxisAlignment.center,
+        mainAxisSize: MainAxisSize.min,
         children: [
           Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(icon, color: color, size: 20),
-              const Spacer(),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                decoration: BoxDecoration(
-                  color: color.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(8),
-                ),
+              Icon(icon, size: 14, color: color),
+              const SizedBox(width: 4),
+              Flexible(
                 child: Text(
                   label,
-                  style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w600,
-                    color: color,
+                  style: styles.caption.copyWith(
+                    fontSize: 12,
+                    color: palette.secondaryText,
                   ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
               ),
             ],
           ),
           const SizedBox(height: 6),
-          Text(
-            value,
-            style: styles.monoSmall.copyWith(color: color),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Text(
+              value,
+              style: styles.monoSmall.copyWith(
+                fontSize: 20,
+                fontWeight: FontWeight.w700,
+                color: color,
+              ),
+              maxLines: 1,
+            ),
           ),
         ],
       ),
