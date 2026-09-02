@@ -131,7 +131,9 @@ void main() {
       'AchievementsPage renders statistics with total stars and data-driven badges',
       (tester) async {
         tester.view.physicalSize = const Size(1000, 2000);
+        tester.view.devicePixelRatio = 1.0;
         addTearDown(tester.view.resetPhysicalSize);
+        addTearDown(tester.view.resetDevicePixelRatio);
 
         await tester.pumpWidget(const MaterialApp(home: AchievementsPage()));
         await tester.pumpAndSettle();
@@ -181,22 +183,18 @@ void main() {
         expect(find.text('每日'), findsOneWidget);
         expect(find.text('活动'), findsOneWidget);
         expect(find.text('自制'), findsOneWidget);
+        expect(find.text('我的'), findsOneWidget);
         // Verify help icon is no longer directly in AppBar
         expect(find.byTooltip('玩法指引'), findsNothing);
-        // Verify achievements & 更多选项 (PopupMenuButton) exist in AppBar
+        expect(find.byTooltip('更多选项'), findsNothing);
+
+        // Verify achievements action exists in AppBar
         expect(find.byTooltip('成就与统计'), findsOneWidget);
-        expect(find.byTooltip('更多选项'), findsOneWidget);
 
-        // Open popup menu
-        await tester.tap(find.byTooltip('更多选项'));
+        // Switch to '我的' tab where Settings is present
+        await tester.tap(find.text('我的'));
         await tester.pump(const Duration(milliseconds: 300));
-        expect(find.text('导入关卡包'), findsOneWidget);
-        expect(find.text('游戏设置'), findsOneWidget);
-        expect(find.text('玩法手册'), findsOneWidget);
-
-        // Close popup menu to avoid blocking following tests
-        await tester.tapAt(const Offset(10, 10));
-        await tester.pump(const Duration(milliseconds: 300));
+        expect(find.byTooltip('设置'), findsOneWidget);
       },
     );
 
@@ -209,16 +207,16 @@ void main() {
         ),
       );
 
-      expect(find.text('全部关卡'), findsOneWidget);
-      expect(find.text('新手 (9-16)'), findsOneWidget);
-      expect(find.text('进阶 (24-36)'), findsOneWidget);
-      expect(find.text('大师 (48-100+)'), findsOneWidget);
+      expect(find.text('全部'), findsOneWidget);
+      expect(find.text('宠物'), findsOneWidget);
+      expect(find.text('动物'), findsOneWidget);
+      expect(find.text('鸟类'), findsOneWidget);
 
-      // Tap on '新手 (9-16)' filter
-      await tester.tap(find.text('新手 (9-16)'));
+      // Tap on '宠物' filter
+      await tester.tap(find.text('宠物'));
       await tester.pumpAndSettle();
 
-      expect(find.textContaining('今日挑战'), findsOneWidget);
+      expect(find.textContaining('每日挑战'), findsOneWidget);
     });
 
     testWidgets('DailyTabView renders streak stats and header', (tester) async {
@@ -352,6 +350,11 @@ void main() {
     testWidgets(
       'ChooseDifficultySheet renders saved progress banner & continue button',
       (tester) async {
+        tester.view.physicalSize = const Size(800, 1200);
+        tester.view.devicePixelRatio = 1.0;
+        addTearDown(tester.view.resetPhysicalSize);
+        addTearDown(tester.view.resetDevicePixelRatio);
+
         var resetCalled = false;
         await tester.pumpWidget(
           MaterialApp(

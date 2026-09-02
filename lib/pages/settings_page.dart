@@ -400,12 +400,12 @@ class _SettingsPageState extends State<SettingsPage> {
   }
 
   Widget _buildCardContainer(List<Widget> children, AppPalette palette) {
-    return Container(
+    return Material(
+      color: palette.surfaceContainer,
       clipBehavior: Clip.antiAlias,
-      decoration: BoxDecoration(
-        color: palette.surfaceContainer,
+      shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: palette.divider, width: 1),
+        side: BorderSide(color: palette.divider, width: 1),
       ),
       child: Column(children: children),
     );
@@ -465,7 +465,9 @@ class _SettingsPageState extends State<SettingsPage> {
                 ),
                 const SizedBox(height: 10),
                 // Asset HUD
-                Row(
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
                   children: [
                     _buildAssetChip(
                       icon: PhosphorIconsFill.coins,
@@ -474,7 +476,6 @@ class _SettingsPageState extends State<SettingsPage> {
                       palette: palette,
                       styles: styles,
                     ),
-                    const SizedBox(width: 8),
                     _buildAssetChip(
                       icon: PhosphorIconsFill.star,
                       value: '$_totalStars',
@@ -482,7 +483,6 @@ class _SettingsPageState extends State<SettingsPage> {
                       palette: palette,
                       styles: styles,
                     ),
-                    const SizedBox(width: 8),
                     _buildAssetChip(
                       icon: PhosphorIconsFill.trophy,
                       value: '$_totalSolved',

@@ -12,9 +12,10 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      expect(find.text('暂无正在进行的活动'), findsOneWidget);
+      expect(find.text('小狐狸没找到正在进行的活动'), findsOneWidget);
       expect(find.text('刷新同步'), findsOneWidget);
-      expect(find.byIcon(PhosphorIconsRegular.calendarBlank), findsOneWidget);
+      expect(find.text('🦊'), findsOneWidget);
+      expect(find.byIcon(PhosphorIconsRegular.arrowClockwise), findsOneWidget);
     },
   );
 
@@ -31,7 +32,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('暂无正在进行的活动'), findsOneWidget);
+    expect(find.text('小狐狸没找到正在进行的活动'), findsOneWidget);
 
     // 2. Wide screen (>= 600, e.g. 1000x800)
     tester.view.physicalSize = const Size(1000, 800);
@@ -40,6 +41,6 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('暂无正在进行的活动'), findsOneWidget);
+    expect(find.text('小狐狸没找到正在进行的活动'), findsOneWidget);
   });
 }
