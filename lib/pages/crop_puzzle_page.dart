@@ -16,47 +16,30 @@ import '../logic/puzzle_model.dart';
 import '../theme/app_palette.dart';
 import '../widgets/game_toast.dart';
 
-enum CropRatio {
-  square(
-    '1:1 正方形',
-    1.0,
-    1080,
-    1080,
-    PuzzleAspectRatio.square1x1,
-    PhosphorIconsBold.square,
-  ),
-  portrait2x3(
-    '2:3 竖屏',
-    2 / 3,
-    960,
-    1440,
-    PuzzleAspectRatio.portrait2x3,
-    PhosphorIconsBold.rectangle,
-  ),
-  landscape3x2(
-    '3:2 横屏',
-    3 / 2,
-    1440,
-    960,
-    PuzzleAspectRatio.landscape3x2,
-    PhosphorIconsBold.rectangle,
-  );
-
-  const CropRatio(
-    this.label,
-    this.ratio,
-    this.targetWidth,
-    this.targetHeight,
-    this.aspectRatio,
-    this.icon,
-  );
-  final String label;
-  final double ratio; // width / height
-  final double targetWidth;
-  final double targetHeight;
+/// Dynamic crop ratio option derived from [PuzzleAspectRatio] (Plug & Play architecture).
+class CropRatioOption {
   final PuzzleAspectRatio aspectRatio;
-  final IconData icon;
+
+  const CropRatioOption(this.aspectRatio);
+
+  String get label => '${aspectRatio.aspectCols}:${aspectRatio.aspectRows}';
+  double get ratio => aspectRatio.ratio;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is CropRatioOption &&
+          runtimeType == other.runtimeType &&
+          aspectRatio == other.aspectRatio;
+
+  @override
+  int get hashCode => aspectRatio.hashCode;
 }
+
+/// Dynamically derived list of supported crop ratio options (immutable singleton).
+final List<CropRatioOption> supportedCropOptions = List.unmodifiable(
+  PuzzleAspectRatio.values.map(CropRatioOption.new).toList(),
+);
 
 /// Interactive photo cropping & puzzle creation page with large adaptive viewport and 5 standard aspect ratios.
 class CropPuzzlePage extends StatefulWidget {
@@ -100,7 +83,7 @@ class _CropPuzzlePageState extends State<CropPuzzlePage> {
   final TransformationController _transformController =
       TransformationController();
 
-  CropRatio _selectedRatio = CropRatio.square;
+  CropRatioOption _selectedRatio = supportedCropOptions.first;
   late PuzzleDifficulty _selectedDifficulty;
   ui.Image? _decodedImage;
   bool _isSaving = false;
@@ -134,9 +117,9 @@ class _CropPuzzlePageState extends State<CropPuzzlePage> {
             frame.image.width.toDouble(),
             frame.image.height.toDouble(),
           );
-          _selectedRatio = CropRatio.values.firstWhere(
+          _selectedRatio = supportedCropOptions.firstWhere(
             (c) => c.aspectRatio == detected,
-            orElse: () => CropRatio.square,
+            orElse: () => supportedCropOptions.first,
           );
           final tiers = _selectedRatio.aspectRatio.tiers;
           _selectedDifficulty = tiers
@@ -203,7 +186,7 @@ class _CropPuzzlePageState extends State<CropPuzzlePage> {
     return Matrix4.identity()..setTranslationRaw(initTx, initTy, 0.0);
   }
 
-  void _onRatioChanged(CropRatio ratio) {
+  void _onRatioChanged(CropRatioOption ratio) {
     setState(() {
       _selectedRatio = ratio;
       _needsResetMatrix = true;
@@ -432,17 +415,10 @@ class _CropPuzzlePageState extends State<CropPuzzlePage> {
                 padding: const EdgeInsets.symmetric(horizontal: 16),
                 child: Row(
                   children: [
-                    for (final ratio in CropRatio.values) ...[
+                    for (final ratio in supportedCropOptions) ...[
                       Padding(
                         padding: const EdgeInsets.only(right: 8),
                         child: ChoiceChip(
-                          avatar: Icon(
-                            ratio.icon,
-                            size: 16,
-                            color: _selectedRatio == ratio
-                                ? Colors.white
-                                : Colors.white70,
-                          ),
                           label: Text(ratio.label),
                           selected: _selectedRatio == ratio,
                           selectedColor: palette.brand,

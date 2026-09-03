@@ -1,7 +1,7 @@
-/// 图片居中裁剪与主体智能裁切适配（设计 §2.2：移除 3:4/4:3 后的必备配套）
+/// 图片居中裁剪与主体智能裁切适配（设计 §2.2：支持 1:1, 2:3, 3:2, 3:4, 4:3 五大画幅）
 ///
 /// 仅用于 ZIP 图包导入入库时的静默裁切（设计 §2.2 管线路径）：
-/// 任意比例图片裁剪到 {1:1, 3:2, 2:3} 中面积损失最小的档位，
+/// 任意比例图片裁剪到标准几何画幅中面积损失最小的档位，
 /// 保证入库后进游戏切片 `srcPieceW == srcPieceH`（纯正方形 cell）。
 ///
 /// 规则：
@@ -16,29 +16,20 @@ import 'dart:typed_data';
 import 'dart:ui' show Rect;
 import 'package:image/image.dart' as img;
 
-/// 支持的三种标准比例（1:1 / 3:2 / 2:3）
-const List<double> kStandardRatios = [1.0, 1.5, 2 / 3];
+import 'puzzle_model.dart';
 
-/// 最小面积损失法（与 `PuzzleAspectRatio.cropLoss` 同一公式，此处解耦避免依赖层级）
-double cropLossFor(double imageRatio, double targetRatio) {
-  if (imageRatio <= 0 || targetRatio <= 0) return 1.0;
-  return 1.0 - math.min(imageRatio / targetRatio, targetRatio / imageRatio);
-}
+/// 支持的标准几何画幅比例（单一数据源代理 PuzzleAspectRatio）
+List<double> get kStandardRatios =>
+    PuzzleAspectRatio.values.map((a) => a.ratio).toList();
 
-/// 选取 {1:1, 3:2, 2:3} 中面积损失最小的目标比例（设计 §2.2 最小面积损失法）
+/// 最小面积损失法（代理 PuzzleAspectRatio.cropLoss）
+double cropLossFor(double imageRatio, double targetRatio) =>
+    PuzzleAspectRatio.cropLoss(imageRatio, targetRatio);
+
+/// 选取标准几何画幅中面积损失最小的目标比例（单一数据源代理 PuzzleAspectRatio.fromSize）
 double nearestStandardRatio({required int width, required int height}) {
   if (width <= 0 || height <= 0) return 1.0;
-  final r = width / height;
-  var best = kStandardRatios.first;
-  var minLoss = cropLossFor(r, best);
-  for (final candidate in kStandardRatios) {
-    final loss = cropLossFor(r, candidate);
-    if (loss < minLoss) {
-      minLoss = loss;
-      best = candidate;
-    }
-  }
-  return best;
+  return PuzzleAspectRatio.fromSize(width.toDouble(), height.toDouble()).ratio;
 }
 
 /// 判断宽高为 [width]x[height] 的图片是否需要居中裁剪到目标比例

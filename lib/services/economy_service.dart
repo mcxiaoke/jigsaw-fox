@@ -29,12 +29,12 @@ class EconomyService {
   EconomyService._();
   static final EconomyService instance = EconomyService._();
 
-  /// 7 档难度基准金币：[L1, L1.5, L2, L3, L4, L5, L6]（设计 §6.1 压缩倍率表）
-  static const List<int> kDifficultyBaseCoins = [5, 6, 8, 12, 15, 20, 25];
+  /// 8 档难度基准金币：[L1, L1.5, L2, L3, L4, L5, L6, L7]（设计 §6.1 压缩倍率表）
+  static const List<int> kDifficultyBaseCoins = [5, 6, 8, 12, 15, 20, 25, 32];
 
   /// 阶梯星数加成表（设计 §6.1）：每档数组下标 0=1星、1=2星、2=3星；
   /// 1 星不加成（+0），2 星 / 3 星按档位阶梯递增。
-  /// 3 星总收益 = Base + 3星加成（L1=10 ... L6=55，高低档倍率 5.5×）。
+  /// 3 星总收益 = Base + 3星加成（L1=10 ... L7=72）。
   static const List<List<int>> kStarBonusTable = [
     [0, 2, 5], // L1
     [0, 3, 6], // L1.5
@@ -43,6 +43,7 @@ class EconomyService {
     [0, 7, 15], // L4
     [0, 10, 20], // L5
     [0, 15, 30], // L6
+    [0, 20, 40], // L7
   ];
 
   /// 纯函数：某档位某星级的总通关收益 = Base + StarBonus（设计 §6.1）
@@ -53,8 +54,8 @@ class EconomyService {
     return kDifficultyBaseCoins[safeTier] + bonus;
   }
 
-  /// 7 档难度提示定价：[L1, L1.5, L2, L3, L4, L5, L6]
-  static const List<int> kHintPrices = [5, 6, 10, 15, 20, 25, 35];
+  /// 8 档难度提示定价：[L1, L1.5, L2, L3, L4, L5, L6, L7]
+  static const List<int> kHintPrices = [5, 6, 10, 15, 20, 25, 35, 45];
 
   /// 每日金币获取上限
   static const int kDailyCoinCap = 200;

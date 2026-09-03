@@ -115,7 +115,7 @@ class LevelItem {
     final diff = PuzzleDifficulty.presets.firstWhere(
       (d) => d.rows == rows && d.cols == cols,
       orElse: () => PuzzleDifficulty(
-        label: '$rows × $cols (${rows * cols} 块)',
+        label: '$cols × $rows (${rows * cols} 块)',
         rows: rows,
         cols: cols,
       ),

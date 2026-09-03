@@ -109,17 +109,17 @@ void main() {
   });
 
   group('nearestStandardRatio', () {
-    test('4:3 (1.333) picks 3:2 (loss 11.1%) over 1:1 (25%)', () {
+    test('4:3 (1.333) perfectly matches 4:3 (loss 0%)', () {
       expect(
         nearestStandardRatio(width: 4032, height: 3024),
-        closeTo(1.5, 0.001),
+        closeTo(4 / 3, 0.001),
       );
     });
 
-    test('3:4 (0.75) picks 2:3 (loss 11.1%)', () {
+    test('3:4 (0.75) perfectly matches 3:4 (loss 0%)', () {
       expect(
         nearestStandardRatio(width: 3024, height: 4032),
-        closeTo(2 / 3, 0.001),
+        closeTo(3 / 4, 0.001),
       );
     });
 
@@ -137,10 +137,10 @@ void main() {
       );
     });
 
-    test('4:5 (0.8) picks 2:3 over 1:1 (16.7% < 20%)', () {
+    test('4:5 (0.8) picks 3:4 over 2:3 (6.25% < 16.7%)', () {
       expect(
         nearestStandardRatio(width: 800, height: 1000),
-        closeTo(2 / 3, 0.001),
+        closeTo(3 / 4, 0.001),
       );
     });
   });

@@ -196,7 +196,9 @@ class _MyCenterTabViewState extends State<MyCenterTabView> {
     if (card.hasActiveSnapshot) {
       final fallbackDiff = PuzzleDifficulty.presets.firstWhere(
         (d) => SnapshotStore.difficultyKeyFor(d) == card.activeDifficultyKey,
-        orElse: () => PuzzleDifficulty.presets[0],
+        orElse: () => PuzzleAspectRatio.square1x1.tiers
+            .firstWhere((t) => t.difficulty.recommended)
+            .difficulty,
       );
       final handled = await ResumeHelper.tryHandleResumeFlow(
         context: context,
@@ -233,7 +235,9 @@ class _MyCenterTabViewState extends State<MyCenterTabView> {
     // 2. 无快照或点“重选难度”，打开难度选择面板
     final initialDiff = PuzzleDifficulty.presets.firstWhere(
       (d) => SnapshotStore.difficultyKeyFor(d) == card.activeDifficultyKey,
-      orElse: () => PuzzleDifficulty.presets[0],
+      orElse: () => PuzzleAspectRatio.square1x1.tiers
+          .firstWhere((t) => t.difficulty.recommended)
+          .difficulty,
     );
 
     if (!mounted) return;

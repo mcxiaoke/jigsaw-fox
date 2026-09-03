@@ -90,6 +90,7 @@ class ChooseDifficultySheet extends StatefulWidget {
     this.sourcePlatform,
     this.sourceUrl,
     this.imagePathOrUrl,
+    this.enableL7 = false,
   });
 
   final Uint8List imageBytes;
@@ -106,6 +107,7 @@ class ChooseDifficultySheet extends StatefulWidget {
   final String? sourcePlatform;
   final String? sourceUrl;
   final String? imagePathOrUrl;
+  final bool enableL7;
 
   static Future<void> show({
     required BuildContext context,
@@ -123,6 +125,7 @@ class ChooseDifficultySheet extends StatefulWidget {
     String? sourcePlatform,
     String? sourceUrl,
     String? imagePathOrUrl,
+    bool enableL7 = false,
   }) {
     return Navigator.of(context).push(
       MaterialPageRoute<void>(
@@ -141,6 +144,7 @@ class ChooseDifficultySheet extends StatefulWidget {
           sourcePlatform: sourcePlatform,
           sourceUrl: sourceUrl,
           imagePathOrUrl: imagePathOrUrl,
+          enableL7: enableL7,
         ),
       ),
     );
@@ -164,20 +168,34 @@ class _ChooseDifficultySheetState extends State<ChooseDifficultySheet> {
   PuzzleAspectRatio get _aspectRatio =>
       PuzzleAspectRatio.fromSize(_imageWidth, _imageHeight);
 
-  List<DifficultyTier> get _currentTiers => _aspectRatio.tiers;
+  /// 根据 L7 隔离规则与防吞机制过滤可游玩的档位列表
+  List<DifficultyTier> get _playableTiers => _aspectRatio.tiers.where((t) {
+    if (t.difficulty.tierLevel != 'L7') return true;
+    // 显式启用 L7，或传入的初始难度本身就是 L7 时自动放行展示，防止吞存档
+    return widget.enableL7 || widget.initialDifficulty.tierLevel == 'L7';
+  }).toList();
+
+  List<DifficultyTier> get _currentTiers => _playableTiers;
 
   @override
   void initState() {
     super.initState();
     _showGridOverlay = _repo.gridPreviewEnabled;
-    final defaultTiers = PuzzleAspectRatio.square1x1.tiers;
+    final defaultTiers = _playableTiers;
     _selectedDifficulty = defaultTiers
         .firstWhere(
           (t) => t.difficulty.pieceCount == widget.initialDifficulty.pieceCount,
-          orElse: () => defaultTiers[0],
+          orElse: () => defaultTiers.firstWhere(
+            (t) => t.difficulty.recommended,
+            orElse: () => defaultTiers[0],
+          ),
         )
         .difficulty;
-    for (var i = 0; i < 7; i++) {
+    for (
+      var i = 0;
+      i < UnlockService.kDifficultyStarImageRequirements.length;
+      i++
+    ) {
       _tierUnlockStatuses[i] = _unlockService.checkDifficultyUnlockSync(i);
     }
     _decodeImageSize();
@@ -185,7 +203,11 @@ class _ChooseDifficultySheetState extends State<ChooseDifficultySheet> {
   }
 
   Future<void> _loadTierUnlocks() async {
-    for (var i = 0; i < 7; i++) {
+    for (
+      var i = 0;
+      i < UnlockService.kDifficultyStarImageRequirements.length;
+      i++
+    ) {
       final st = await _unlockService.checkDifficultyUnlock(i);
       if (mounted) {
         setState(() {
@@ -207,8 +229,7 @@ class _ChooseDifficultySheetState extends State<ChooseDifficultySheet> {
         _imageHeight = descriptor.height.toDouble();
         _imageLoaded = true;
 
-        final aspect = PuzzleAspectRatio.fromSize(_imageWidth, _imageHeight);
-        final tiers = aspect.tiers;
+        final tiers = _playableTiers;
         _selectedDifficulty = tiers
             .firstWhere(
               (t) =>
@@ -282,8 +303,16 @@ class _ChooseDifficultySheetState extends State<ChooseDifficultySheet> {
 
   Future<void> _handleStart(PuzzleDifficulty diff) async {
     final palette = AppPalette.of(context);
-    // 针对 2:3/3:2 矩形 L2（54块）断层弹窗二次确认
-    if (diff.pieceCount == 54 && _aspectRatio != PuzzleAspectRatio.square1x1) {
+    // 基于当前比例推荐起步档位判断是否存在越级跳档（跨越至少 2 个层级且 >= 2.5x，防小白误触防劝退）
+    final baseTier = _currentTiers.firstWhere(
+      (t) => t.difficulty.recommended,
+      orElse: () => _currentTiers.first,
+    );
+    final basePieces = baseTier.difficulty.pieceCount;
+    final isBigJump =
+        diff.pieceCount >= basePieces * 2.5 &&
+        (diff.tierIndex - baseTier.difficulty.tierIndex >= 2);
+    if (isBigJump) {
       final prefs = await SharedPreferences.getInstance();
       final skip = prefs.getBool('skip_l2_gap_warning') ?? false;
       if (!skip && mounted) {
@@ -306,7 +335,9 @@ class _ChooseDifficultySheetState extends State<ChooseDifficultySheet> {
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('当前 54 块相比新手 24 块难度提升较大，碎片较为小巧。是否继续进入挑战？'),
+                  Text(
+                    '当前 ${diff.pieceCount} 块相比推荐档 $basePieces 块难度提升较大，碎片较为小巧。是否继续进入挑战？',
+                  ),
                   const SizedBox(height: 24),
                   Row(
                     children: [

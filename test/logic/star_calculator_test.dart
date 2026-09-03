@@ -180,15 +180,15 @@ void main() {
       // 3:4 (0.75) to 2:3 (0.667) -> loss = 1 - 0.6667/0.75 = 11.1%
       expect(PuzzleAspectRatio.cropLoss(3 / 4, 2 / 3), closeTo(0.111, 0.005));
 
-      // fromSize test: 4:3 image chooses 3:2 (11.1% loss) over 1:1 (25% loss)
+      // fromSize test: 4:3 image perfectly chooses 4:3 (0% loss)
       expect(
         PuzzleAspectRatio.fromSize(4032, 3024),
-        equals(PuzzleAspectRatio.landscape3x2),
+        equals(PuzzleAspectRatio.landscape4x3),
       );
-      // 3:4 vertical image chooses 2:3 (11.1% loss)
+      // 3:4 vertical image perfectly chooses 3:4 (0% loss)
       expect(
         PuzzleAspectRatio.fromSize(3024, 4032),
-        equals(PuzzleAspectRatio.portrait2x3),
+        equals(PuzzleAspectRatio.portrait3x4),
       );
       // 1:1 image chooses 1:1
       expect(

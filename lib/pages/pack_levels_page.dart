@@ -124,7 +124,7 @@ class _PackLevelsPageState extends State<PackLevelsPage> {
       }
       if (resumeResult.startsWith('continue:')) {
         final k = resumeResult.substring('continue:'.length);
-        final diff = await _diffForKey(k, _defaultDiff);
+        final diff = await ResumeHelper.diffForKey(k, _defaultDiff);
         final jsonStr = await SnapshotStore.instance.loadJsonString(
           canonicalId,
           k,
@@ -146,7 +146,7 @@ class _PackLevelsPageState extends State<PackLevelsPage> {
       } else if (resumeResult.startsWith('restart:')) {
         final k = resumeResult.substring('restart:'.length);
         await ResumeHelper.clearResume(canonicalId, k);
-        final diff = await _diffForKey(k, _defaultDiff);
+        final diff = await ResumeHelper.diffForKey(k, _defaultDiff);
         if (!mounted) return;
         await Navigator.of(context).push(
           MaterialPageRoute<void>(
@@ -223,16 +223,6 @@ class _PackLevelsPageState extends State<PackLevelsPage> {
         if (mounted) setState(() {});
       },
     );
-  }
-
-  Future<PuzzleDifficulty> _diffForKey(
-    String k,
-    PuzzleDifficulty fallback,
-  ) async {
-    for (final d in PuzzleDifficulty.presets) {
-      if (SnapshotStore.difficultyKeyFor(d) == k) return d;
-    }
-    return fallback;
   }
 
   @override

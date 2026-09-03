@@ -27,8 +27,9 @@ void main() {
       expect(EconomyService.rewardFor(4, 3), 30); // L4
       expect(EconomyService.rewardFor(5, 3), 40); // L5
       expect(EconomyService.rewardFor(6, 3), 55); // L6
+      expect(EconomyService.rewardFor(7, 3), 72); // L7 (Base 32 + 3星加成 40)
 
-      // D5 压缩倍率：高低档 3 星总收益 5.5×
+      // D5 压缩倍率：高低档 3 星总收益 5.5× (L6/L1)
       expect(55 / 10, closeTo(5.5, 0.001));
     });
 
@@ -38,12 +39,15 @@ void main() {
       expect(EconomyService.rewardFor(6, 1), 25); // L6 1星 = Base
       expect(EconomyService.rewardFor(6, 2), 40); // L6 +2星
       expect(EconomyService.rewardFor(6, 3), 55); // L6 +3星
+      expect(EconomyService.rewardFor(7, 1), 32); // L7 1星 = Base
+      expect(EconomyService.rewardFor(7, 2), 52); // L7 +2星
+      expect(EconomyService.rewardFor(7, 3), 72); // L7 +3星
     });
 
     test(
       'Hint price invariant: hintPrice <= 2-star reward for all tiers (§6.2)',
       () {
-        for (var t = 0; t < 7; t++) {
+        for (var t = 0; t < EconomyService.kDifficultyBaseCoins.length; t++) {
           final twoStarReward = EconomyService.rewardFor(t, 2);
           expect(
             EconomyService.kHintPrices[t],

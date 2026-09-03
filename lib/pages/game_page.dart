@@ -226,7 +226,7 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
           effectiveDiff = PuzzleDifficulty.presets.firstWhere(
             (d) => d.rows == r && d.cols == c,
             orElse: () => PuzzleDifficulty(
-              label: '$r x $c (${r * c}块)',
+              label: '$c × $r (${r * c} 块)',
               rows: r,
               cols: c,
             ),

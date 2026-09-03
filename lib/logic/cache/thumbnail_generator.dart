@@ -35,7 +35,7 @@ class CropTaskParams {
 
   final Uint8List rawBytes;
 
-  /// 目标比例（cols / rows）。为 null 时自动选取 {1:1, 3:2, 2:3} 中
+  /// 目标比例（cols / rows）。为 null 时自动选取标准画幅（1:1, 2:3, 3:2, 3:4, 4:3）中
   /// 面积损失最小的标准比例（ZIP 图包导入场景）。
   final double? targetRatio;
   final int quality;

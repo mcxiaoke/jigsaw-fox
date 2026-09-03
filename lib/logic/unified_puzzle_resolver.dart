@@ -161,11 +161,10 @@ class UnifiedPuzzleResolver {
     final fallbackImage = favoriteEntry?.imageSnapshot ?? '';
     final fallbackLabel = favoriteEntry?.sourceLabelSnapshot ?? '已失效';
     final fallbackLocal = favoriteEntry?.isLocalFileSnapshot ?? false;
-    final fallbackAspect = favoriteEntry?.aspectRatioLabel == 'portrait2x3'
-        ? PuzzleAspectRatio.portrait2x3
-        : (favoriteEntry?.aspectRatioLabel == 'landscape3x2'
-              ? PuzzleAspectRatio.landscape3x2
-              : PuzzleAspectRatio.square1x1);
+    final fallbackAspect = PuzzleAspectRatio.values.firstWhere(
+      (a) => a.name == favoriteEntry?.aspectRatioLabel,
+      orElse: () => PuzzleAspectRatio.values.first,
+    );
 
     return UnifiedPuzzleCardData(
       canonicalId: canonicalId,

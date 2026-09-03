@@ -25,17 +25,19 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   test(
-    'CropRatio definitions cover 3 standard aspect ratios with positive target resolutions',
+    'supportedCropOptions dynamically derives 5 standard aspect ratios with consistent properties',
     () {
-      expect(CropRatio.values.length, 3);
-      for (final ratio in CropRatio.values) {
-        expect(ratio.targetWidth, greaterThan(0));
-        expect(ratio.targetHeight, greaterThan(0));
+      expect(supportedCropOptions.length, 5);
+      for (final option in supportedCropOptions) {
+        expect(option.label, isNotEmpty);
+        expect(option.ratio, greaterThan(0));
         expect(
-          (ratio.targetWidth / ratio.targetHeight - ratio.ratio).abs(),
+          (option.aspectRatio.aspectCols / option.aspectRatio.aspectRows -
+                  option.ratio)
+              .abs(),
           lessThan(1e-4),
         );
-        expect(ratio.aspectRatio.tiers.isNotEmpty, isTrue);
+        expect(option.aspectRatio.tiers.isNotEmpty, isTrue);
       }
     },
   );
@@ -59,9 +61,11 @@ void main() {
 
       expect(find.text('裁剪与自制拼图'), findsOneWidget);
       expect(find.text('按住拖动调整裁切位置 · 双指或滚轮缩放'), findsOneWidget);
-      expect(find.text('1:1 正方形'), findsOneWidget);
-      expect(find.text('3:2 横屏'), findsOneWidget);
-      expect(find.text('2:3 竖屏'), findsOneWidget);
+      expect(find.text('1:1'), findsOneWidget);
+      expect(find.text('3:2'), findsOneWidget);
+      expect(find.text('2:3'), findsOneWidget);
+      expect(find.text('3:4'), findsOneWidget);
+      expect(find.text('4:3'), findsOneWidget);
 
       final ivFinder = find.byType(InteractiveViewer);
       expect(ivFinder, findsOneWidget);
@@ -71,11 +75,11 @@ void main() {
       expect(iv.maxScale, greaterThanOrEqualTo(1.0));
 
       // Switch ratio to 2:3 Portrait
-      await tester.tap(find.text('2:3 竖屏'));
+      await tester.tap(find.text('2:3'));
       await tester.pump();
 
       // Switch ratio to 3:2 Landscape
-      await tester.tap(find.text('3:2 横屏'));
+      await tester.tap(find.text('3:2'));
       await tester.pump();
 
       // Verify reset zoom percentage pill exists

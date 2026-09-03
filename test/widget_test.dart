@@ -117,7 +117,7 @@ void main() {
 
   test('difficulty preset configuration', () {
     expect(PuzzleDifficulty.presets.first.pieceCount, 24);
-    expect(PuzzleDifficulty.presets.last.pieceCount, 400);
+    expect(PuzzleDifficulty.presets.last.pieceCount, 600);
   });
 
   test(
@@ -153,24 +153,24 @@ void main() {
         PuzzleAspectRatio.landscape3x2,
       );
 
-      // 3:4 (Portrait) -> closest crop is 2:3
+      // 3:4 (Portrait)
       expect(
         PuzzleAspectRatio.fromSize(900, 1200),
-        PuzzleAspectRatio.portrait2x3,
+        PuzzleAspectRatio.portrait3x4,
       );
       expect(
         PuzzleAspectRatio.fromSize(1080, 1440),
-        PuzzleAspectRatio.portrait2x3,
+        PuzzleAspectRatio.portrait3x4,
       );
 
-      // 4:3 (Landscape) -> closest crop is 3:2
+      // 4:3 (Landscape)
       expect(
         PuzzleAspectRatio.fromSize(1200, 900),
-        PuzzleAspectRatio.landscape3x2,
+        PuzzleAspectRatio.landscape4x3,
       );
       expect(
         PuzzleAspectRatio.fromSize(1440, 1080),
-        PuzzleAspectRatio.landscape3x2,
+        PuzzleAspectRatio.landscape4x3,
       );
     },
   );

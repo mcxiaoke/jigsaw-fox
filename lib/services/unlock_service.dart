@@ -24,8 +24,8 @@ class UnlockService {
   UnlockService._();
   static final UnlockService instance = UnlockService._();
 
-  /// 7 档难度解锁所需的 3 星不同图片数量门槛
-  /// [L1, L1.5, L2, L3, L4, L5, L6]
+  /// 8 档难度解锁所需的 3 星不同图片数量门槛
+  /// [L1, L1.5, L2, L3, L4, L5, L6, L7]
   static const List<int> kDifficultyStarImageRequirements = [
     0,
     0,
@@ -34,6 +34,7 @@ class UnlockService {
     2,
     5,
     10,
+    15,
   ];
 
   /// 每日挑战所需主线通关数
@@ -42,7 +43,7 @@ class UnlockService {
   /// 活动与扩展包所需主线通关数
   static const int kEventUnlockRequiredMainLevels = 5;
 
-  /// 同步检查特定难度档位（0~6）是否已解锁（避免首帧渲染跳变）
+  /// 同步检查特定难度档位（0~7）是否已解锁（避免首帧渲染跳变）
   UnlockStatus checkDifficultyUnlockSync(int tierIndex) {
     final safeTier = tierIndex.clamp(
       0,
@@ -70,7 +71,7 @@ class UnlockService {
     );
   }
 
-  /// 检查特定难度档位（0~6）是否已解锁（异步完整版）
+  /// 检查特定难度档位（0~7）是否已解锁（异步完整版）
   Future<UnlockStatus> checkDifficultyUnlock(int tierIndex) async {
     final safeTier = tierIndex.clamp(
       0,

@@ -168,7 +168,9 @@ class _DailyTabViewState extends State<DailyTabView> {
 
     final canonicalId = level.id;
     final progress = ProgressStore.instance.getLevelProgress(canonicalId);
-    final fallbackDifficulty = PuzzleDifficulty.presets[2]; // 4x4
+    final fallbackDifficulty = PuzzleAspectRatio.square1x1.tiers
+        .firstWhere((t) => t.difficulty.recommended)
+        .difficulty;
     final title = _formatDailyDateDisplay(level.dailyDate);
 
     final handled = await ResumeHelper.tryHandleResumeFlow(

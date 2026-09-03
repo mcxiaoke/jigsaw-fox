@@ -1,6 +1,6 @@
 # 拼图 · 难度·评分·评星·成就·经济 系统设计（v3.3.1 定稿）
 
-> 状态：**v3.3.1 定稿**（取代 v1 两份文档与 v2 改进版，旧稿已归档至 `temp/docs/`）
+> 状态：**v3.3.1 定稿**（注：v3.4 画幅已由 `docs/aspect-ratio-expansion-and-grid-design-20260903.md` 扩展支持 4:3 与 3:4 比例，网格自适应扩展至 5 大黄金画幅并理论支持 L7 宗师档；核心双轴评分公式、金币防通胀与成就数据驱动保持不变）
 > 决策依据：多份外部评审（`temp/reviews/`）+ 内置图库实测数据
 > 关联实现：`lib/logic/puzzle_model.dart`、`lib/pages/game_page.dart`、`lib/data/progress_store.dart`、`lib/pages/achievements_page.dart`
 

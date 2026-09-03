@@ -130,13 +130,31 @@ class ResumeHelper {
     return legacyPercent;
   }
 
-  /// 根据 difficultyKey 找回 PuzzleDifficulty，找不到则回退
+  /// 根据 difficultyKey 找回 PuzzleDifficulty，找不到则尝试解析字符串格式或回退
   static Future<PuzzleDifficulty> diffForKey(
     String k,
     PuzzleDifficulty fallback,
   ) async {
     for (final d in PuzzleDifficulty.presets) {
       if (SnapshotStore.difficultyKeyFor(d) == k) return d;
+    }
+    // 字符串动态解析兜底（格式 'rows x cols'），增强容错清洗确保历史快照 100% 恢复
+    final normalized = k
+        .trim()
+        .toLowerCase()
+        .replaceAll('×', 'x')
+        .replaceAll(' ', '');
+    final parts = normalized.split('x');
+    if (parts.length == 2) {
+      final r = int.tryParse(parts[0].trim());
+      final c = int.tryParse(parts[1].trim());
+      if (r != null && c != null && r > 0 && c > 0) {
+        return PuzzleDifficulty(
+          rows: r,
+          cols: c,
+          label: '$c × $r (${r * c} 块)',
+        );
+      }
     }
     return fallback;
   }

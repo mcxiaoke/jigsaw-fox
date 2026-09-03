@@ -61,15 +61,22 @@ void main() {
       expect(status.isUnlocked, isTrue);
     });
 
-    test('L5 requires 5 distinct 3-star images and L6 requires 10', () async {
-      final unlock = UnlockService.instance;
-      final statusL5 = await unlock.checkDifficultyUnlock(5);
-      expect(statusL5.isUnlocked, isFalse);
-      expect(statusL5.targetRequired, equals(5));
+    test(
+      'L5 requires 5 distinct 3-star images, L6 requires 10, and L7 requires 15',
+      () async {
+        final unlock = UnlockService.instance;
+        final statusL5 = await unlock.checkDifficultyUnlock(5);
+        expect(statusL5.isUnlocked, isFalse);
+        expect(statusL5.targetRequired, equals(5));
 
-      final statusL6 = await unlock.checkDifficultyUnlock(6);
-      expect(statusL6.isUnlocked, isFalse);
-      expect(statusL6.targetRequired, equals(10));
-    });
+        final statusL6 = await unlock.checkDifficultyUnlock(6);
+        expect(statusL6.isUnlocked, isFalse);
+        expect(statusL6.targetRequired, equals(10));
+
+        final statusL7 = await unlock.checkDifficultyUnlock(7);
+        expect(statusL7.isUnlocked, isFalse);
+        expect(statusL7.targetRequired, equals(15));
+      },
+    );
   });
 }

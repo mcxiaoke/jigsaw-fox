@@ -17,18 +17,53 @@ class DifficultyTier {
   final String tierLevel;
 }
 
-/// Standard aspect ratios supported by the game (v3.3.1: 1:1, 2:3, 3:2).
+/// Standard aspect ratios supported by the game (v3.4: 1:1, 2:3, 3:2, 3:4, 4:3).
 /// Ensures all base cells before jigsaw edge deformation are pure squares (pieceW == pieceH).
 enum PuzzleAspectRatio {
-  square1x1('1:1 正方形', 1, 1),
-  portrait2x3('2:3 竖屏', 2, 3),
-  landscape3x2('3:2 横屏', 3, 2);
+  square1x1(
+    '1:1 正方形',
+    1,
+    1,
+    recommendedK: 6,
+    multipliers: [5, 6, 8, 10, 12, 15, 20, 24],
+  ),
+  portrait2x3(
+    '2:3 竖屏',
+    2,
+    3,
+    recommendedK: 2,
+    multipliers: [2, 3, 4, 5, 6, 8, 10],
+  ),
+  landscape3x2(
+    '3:2 横屏',
+    3,
+    2,
+    recommendedK: 2,
+    multipliers: [2, 3, 4, 5, 6, 8, 10],
+  ),
+  portrait3x4('3:4 竖屏', 3, 4, recommendedK: 2, multipliers: [2, 3, 4, 5, 6, 7]),
+  landscape4x3(
+    '4:3 横屏',
+    4,
+    3,
+    recommendedK: 2,
+    multipliers: [2, 3, 4, 5, 6, 7],
+  );
 
-  const PuzzleAspectRatio(this.label, this.aspectCols, this.aspectRows);
+  const PuzzleAspectRatio(
+    this.label,
+    this.aspectCols,
+    this.aspectRows, {
+    required this.recommendedK,
+    required this.multipliers,
+  });
 
   final String label;
   final int aspectCols; // Base column multiplier
   final int aspectRows; // Base row multiplier
+  final int recommendedK; // Recommended multiplier for beginner/casual start
+  final List<int>
+  multipliers; // Ladder multipliers under pure square piece constraint
 
   double get ratio => aspectCols / aspectRows;
 
@@ -44,8 +79,8 @@ enum PuzzleAspectRatio {
     if (width <= 0 || height <= 0) return square1x1;
     final r = width / height;
 
-    var closest = square1x1;
-    var minLoss = cropLoss(r, square1x1.ratio);
+    var closest = values.first;
+    var minLoss = double.infinity;
 
     for (final candidate in values) {
       final loss = cropLoss(r, candidate.ratio);
@@ -57,233 +92,26 @@ enum PuzzleAspectRatio {
     return closest;
   }
 
-  /// Generates the list of regular square-piece difficulty tiers for this aspect ratio (7 tiers).
+  /// Generates the list of regular square-piece difficulty tiers for this aspect ratio.
   List<DifficultyTier> get tiers {
-    switch (this) {
-      case PuzzleAspectRatio.square1x1:
-        return const [
-          DifficultyTier(
-            difficulty: PuzzleDifficulty(
-              label: '5 × 5 (25 块)',
-              rows: 5,
-              cols: 5,
-            ),
-            tag: '新手 Easy',
-            estimatedMinutes: '1~3分钟',
-            secPerPiece: 3.0,
-            tierLevel: 'L1',
-          ),
-          DifficultyTier(
-            difficulty: PuzzleDifficulty(
-              label: '6 × 6 (36 块)',
-              rows: 6,
-              cols: 6,
-              recommended: true,
-            ),
-            tag: '入门+ (过渡)',
-            estimatedMinutes: '2~4分钟',
-            secPerPiece: 3.5,
-            tierLevel: 'L1.5',
-          ),
-          DifficultyTier(
-            difficulty: PuzzleDifficulty(
-              label: '8 × 8 (64 块)',
-              rows: 8,
-              cols: 8,
-            ),
-            tag: '简单 Beginner',
-            estimatedMinutes: '5~8分钟',
-            secPerPiece: 5.0,
-            tierLevel: 'L2',
-          ),
-          DifficultyTier(
-            difficulty: PuzzleDifficulty(
-              label: '10 × 10 (100 块)',
-              rows: 10,
-              cols: 10,
-            ),
-            tag: '普通 Medium',
-            estimatedMinutes: '12~18分钟',
-            secPerPiece: 8.0,
-            tierLevel: 'L3',
-          ),
-          DifficultyTier(
-            difficulty: PuzzleDifficulty(
-              label: '12 × 12 (144 块)',
-              rows: 12,
-              cols: 12,
-            ),
-            tag: '进阶 Hard',
-            estimatedMinutes: '25~35分钟',
-            secPerPiece: 12.0,
-            tierLevel: 'L4',
-          ),
-          DifficultyTier(
-            difficulty: PuzzleDifficulty(
-              label: '15 × 15 (225 块)',
-              rows: 15,
-              cols: 15,
-            ),
-            tag: '困难 Expert',
-            estimatedMinutes: '50~75分钟',
-            secPerPiece: 18.0,
-            tierLevel: 'L5',
-          ),
-          DifficultyTier(
-            difficulty: PuzzleDifficulty(
-              label: '20 × 20 (400 块)',
-              rows: 20,
-              cols: 20,
-            ),
-            tag: '大师 Master',
-            estimatedMinutes: '1.5~3小时',
-            secPerPiece: 25.0,
-            tierLevel: 'L6',
-          ),
-        ];
-
-      case PuzzleAspectRatio.portrait2x3:
-        return const [
-          DifficultyTier(
-            difficulty: PuzzleDifficulty(
-              label: '4 × 6 (24 块)',
-              rows: 6,
-              cols: 4,
-              recommended: true,
-            ),
-            tag: '新手 Easy',
-            estimatedMinutes: '1~3分钟',
-            secPerPiece: 3.0,
-            tierLevel: 'L1',
-          ),
-          DifficultyTier(
-            difficulty: PuzzleDifficulty(
-              label: '6 × 9 (54 块)',
-              rows: 9,
-              cols: 6,
-            ),
-            tag: '简单 Beginner',
-            estimatedMinutes: '5~8分钟',
-            secPerPiece: 5.0,
-            tierLevel: 'L2',
-          ),
-          DifficultyTier(
-            difficulty: PuzzleDifficulty(
-              label: '8 × 12 (96 块)',
-              rows: 12,
-              cols: 8,
-            ),
-            tag: '普通 Medium',
-            estimatedMinutes: '12~18分钟',
-            secPerPiece: 8.0,
-            tierLevel: 'L3',
-          ),
-          DifficultyTier(
-            difficulty: PuzzleDifficulty(
-              label: '10 × 15 (150 块)',
-              rows: 15,
-              cols: 10,
-            ),
-            tag: '进阶 Hard',
-            estimatedMinutes: '25~35分钟',
-            secPerPiece: 12.0,
-            tierLevel: 'L4',
-          ),
-          DifficultyTier(
-            difficulty: PuzzleDifficulty(
-              label: '12 × 18 (216 块)',
-              rows: 18,
-              cols: 12,
-            ),
-            tag: '困难 Expert',
-            estimatedMinutes: '50~75分钟',
-            secPerPiece: 18.0,
-            tierLevel: 'L5',
-          ),
-          DifficultyTier(
-            difficulty: PuzzleDifficulty(
-              label: '16 × 24 (384 块)',
-              rows: 24,
-              cols: 16,
-            ),
-            tag: '大师 Master',
-            estimatedMinutes: '1.5~3小时',
-            secPerPiece: 25.0,
-            tierLevel: 'L6',
-          ),
-        ];
-
-      case PuzzleAspectRatio.landscape3x2:
-        return const [
-          DifficultyTier(
-            difficulty: PuzzleDifficulty(
-              label: '6 × 4 (24 块)',
-              rows: 4,
-              cols: 6,
-              recommended: true,
-            ),
-            tag: '新手 Easy',
-            estimatedMinutes: '1~3分钟',
-            secPerPiece: 3.0,
-            tierLevel: 'L1',
-          ),
-          DifficultyTier(
-            difficulty: PuzzleDifficulty(
-              label: '9 × 6 (54 块)',
-              rows: 6,
-              cols: 9,
-            ),
-            tag: '简单 Beginner',
-            estimatedMinutes: '5~8分钟',
-            secPerPiece: 5.0,
-            tierLevel: 'L2',
-          ),
-          DifficultyTier(
-            difficulty: PuzzleDifficulty(
-              label: '12 × 8 (96 块)',
-              rows: 8,
-              cols: 12,
-            ),
-            tag: '普通 Medium',
-            estimatedMinutes: '12~18分钟',
-            secPerPiece: 8.0,
-            tierLevel: 'L3',
-          ),
-          DifficultyTier(
-            difficulty: PuzzleDifficulty(
-              label: '15 × 10 (150 块)',
-              rows: 10,
-              cols: 15,
-            ),
-            tag: '进阶 Hard',
-            estimatedMinutes: '25~35分钟',
-            secPerPiece: 12.0,
-            tierLevel: 'L4',
-          ),
-          DifficultyTier(
-            difficulty: PuzzleDifficulty(
-              label: '18 × 12 (216 块)',
-              rows: 12,
-              cols: 18,
-            ),
-            tag: '困难 Expert',
-            estimatedMinutes: '50~75分钟',
-            secPerPiece: 18.0,
-            tierLevel: 'L5',
-          ),
-          DifficultyTier(
-            difficulty: PuzzleDifficulty(
-              label: '24 × 16 (384 块)',
-              rows: 16,
-              cols: 24,
-            ),
-            tag: '大师 Master',
-            estimatedMinutes: '1.5~3小时',
-            secPerPiece: 25.0,
-            tierLevel: 'L6',
-          ),
-        ];
-    }
+    return multipliers.map((k) {
+      final cols = aspectCols * k;
+      final rows = aspectRows * k;
+      final count = cols * rows;
+      final diff = PuzzleDifficulty(
+        rows: rows,
+        cols: cols,
+        label: '$cols × $rows ($count 块)',
+        recommended: k == recommendedK,
+      );
+      return DifficultyTier(
+        difficulty: diff,
+        tag: diff.tierTag,
+        estimatedMinutes: diff.estimatedMinutes,
+        secPerPiece: diff.secPerPiece,
+        tierLevel: diff.tierLevel,
+      );
+    }).toList();
   }
 }
 
@@ -303,99 +131,111 @@ class PuzzleDifficulty {
 
   int get pieceCount => rows * cols;
 
+  /// Difficulty tier level (L1 ~ L7).
+  String get tierLevel {
+    if (pieceCount <= 30) return 'L1';
+    if (pieceCount <= 40) return 'L1.5';
+    if (pieceCount <= 75) return 'L2';
+    if (pieceCount <= 125) return 'L3';
+    if (pieceCount <= 200) return 'L4';
+    if (pieceCount <= 320) return 'L5';
+    if (pieceCount <= 450) return 'L6';
+    return 'L7';
+  }
+
+  /// Difficulty tier tag label.
+  String get tierTag {
+    switch (tierLevel) {
+      case 'L1':
+        return '新手 Easy';
+      case 'L1.5':
+        return '入门+ (过渡)';
+      case 'L2':
+        return '简单 Beginner';
+      case 'L3':
+        return '普通 Medium';
+      case 'L4':
+        return '进阶 Hard';
+      case 'L5':
+        return '困难 Expert';
+      case 'L6':
+        return '大师 Master';
+      case 'L7':
+        return '宗师 Grandmaster';
+      default:
+        return '普通 Medium';
+    }
+  }
+
+  /// Difficulty tier index (0 ~ 7).
+  int get tierIndex {
+    switch (tierLevel) {
+      case 'L1':
+        return 0;
+      case 'L1.5':
+        return 1;
+      case 'L2':
+        return 2;
+      case 'L3':
+        return 3;
+      case 'L4':
+        return 4;
+      case 'L5':
+        return 5;
+      case 'L6':
+        return 6;
+      case 'L7':
+        return 7;
+      default:
+        return 2;
+    }
+  }
+
+  /// Estimated completion time text (matches existing baselines).
+  String get estimatedMinutes {
+    switch (tierLevel) {
+      case 'L1':
+        return '1~3分钟';
+      case 'L1.5':
+        return '2~4分钟';
+      case 'L2':
+        return '5~8分钟';
+      case 'L3':
+        return '12~18分钟';
+      case 'L4':
+        return '25~35分钟';
+      case 'L5':
+        return '50~75分钟';
+      case 'L6':
+        return '1.5~3小时';
+      case 'L7':
+        return '3~5小时';
+      default:
+        return '10~20分钟';
+    }
+  }
+
   /// Returns the corresponding non-linear secPerPiece benchmark for star rating.
   double get secPerPiece {
-    switch (pieceCount) {
-      case 24:
-      case 25:
-        return 3.0; // L1
-      case 36:
-        return 3.5; // L1.5
-      case 54:
-      case 64:
-        return 5.0; // L2
-      case 96:
-      case 100:
-        return 8.0; // L3
-      case 144:
-      case 150:
-        return 12.0; // L4
-      case 216:
-      case 225:
-        return 18.0; // L5
-      case 384:
-      case 400:
-        return 25.0; // L6
-      default:
-        if (pieceCount <= 30) return 3.0;
-        if (pieceCount <= 45) return 3.5;
-        if (pieceCount <= 80) return 5.0;
-        if (pieceCount <= 120) return 8.0;
-        if (pieceCount <= 180) return 12.0;
-        if (pieceCount <= 300) return 18.0;
+    switch (tierLevel) {
+      case 'L1':
+        return 3.0;
+      case 'L1.5':
+        return 3.5;
+      case 'L2':
+        return 5.0;
+      case 'L3':
+        return 8.0;
+      case 'L4':
+        return 12.0;
+      case 'L5':
+        return 18.0;
+      case 'L6':
         return 25.0;
-    }
-  }
-
-  /// Difficulty tier index (0 ~ 6).
-  int get tierIndex {
-    switch (pieceCount) {
-      case 24:
-      case 25:
-        return 0; // L1
-      case 36:
-        return 1; // L1.5
-      case 54:
-      case 64:
-        return 2; // L2
-      case 96:
-      case 100:
-        return 3; // L3
-      case 144:
-      case 150:
-        return 4; // L4
-      case 216:
-      case 225:
-        return 5; // L5
-      case 384:
-      case 400:
-        return 6; // L6
+      case 'L7':
+        return 28.0;
       default:
-        if (pieceCount <= 30) return 0;
-        if (pieceCount <= 45) return 1;
-        if (pieceCount <= 80) return 2;
-        if (pieceCount <= 120) return 3;
-        if (pieceCount <= 180) return 4;
-        if (pieceCount <= 300) return 5;
-        return 6;
-    }
-  }
-
-  /// Difficulty tier label (L1 ~ L6).
-  String get tierLevel {
-    switch (pieceCount) {
-      case 24:
-      case 25:
-        return 'L1';
-      case 36:
-        return 'L1.5';
-      case 54:
-      case 64:
-        return 'L2';
-      case 96:
-      case 100:
-        return 'L3';
-      case 144:
-      case 150:
-        return 'L4';
-      case 216:
-      case 225:
-        return 'L5';
-      case 384:
-      case 400:
-        return 'L6';
-      default:
-        return 'Custom';
+        return 8.0;
     }
   }
 
@@ -418,43 +258,38 @@ class PuzzleDifficulty {
     return best;
   }
 
-  static const List<PuzzleDifficulty> presets = [
-    PuzzleDifficulty(
-      label: '4 × 6 (24 块)',
-      rows: 6,
-      cols: 4,
-      recommended: true,
-    ),
-    PuzzleDifficulty(
-      label: '6 × 4 (24 块)',
-      rows: 4,
-      cols: 6,
-      recommended: true,
-    ),
-    PuzzleDifficulty(label: '5 × 5 (25 块)', rows: 5, cols: 5),
-    PuzzleDifficulty(
-      label: '6 × 6 (36 块)',
-      rows: 6,
-      cols: 6,
-      recommended: true,
-    ),
-    PuzzleDifficulty(label: '6 × 9 (54 块)', rows: 9, cols: 6),
-    PuzzleDifficulty(label: '9 × 6 (54 块)', rows: 6, cols: 9),
-    PuzzleDifficulty(label: '8 × 8 (64 块)', rows: 8, cols: 8),
-    PuzzleDifficulty(label: '8 × 12 (96 块)', rows: 12, cols: 8),
-    PuzzleDifficulty(label: '12 × 8 (96 块)', rows: 8, cols: 12),
-    PuzzleDifficulty(label: '10 × 10 (100 块)', rows: 10, cols: 10),
-    PuzzleDifficulty(label: '12 × 12 (144 块)', rows: 12, cols: 12),
-    PuzzleDifficulty(label: '10 × 15 (150 块)', rows: 15, cols: 10),
-    PuzzleDifficulty(label: '15 × 10 (150 块)', rows: 10, cols: 15),
-    PuzzleDifficulty(label: '12 × 18 (216 块)', rows: 18, cols: 12),
-    PuzzleDifficulty(label: '18 × 12 (216 块)', rows: 12, cols: 18),
-    PuzzleDifficulty(label: '15 × 15 (225 块)', rows: 15, cols: 15),
-    PuzzleDifficulty(label: '16 × 24 (384 块)', rows: 24, cols: 16),
-    PuzzleDifficulty(label: '24 × 16 (384 块)', rows: 16, cols: 24),
-    PuzzleDifficulty(label: '20 × 20 (400 块)', rows: 20, cols: 20),
-  ];
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is PuzzleDifficulty &&
+          runtimeType == other.runtimeType &&
+          rows == other.rows &&
+          cols == other.cols;
+
+  @override
+  int get hashCode => Object.hash(rows, cols);
 
   @override
   String toString() => label;
+
+  /// Global static preset difficulty list (sorted ascending by pieceCount, then cols, then rows).
+  static final List<PuzzleDifficulty> presets = _buildPresets();
+
+  static List<PuzzleDifficulty> _buildPresets() {
+    final list = <PuzzleDifficulty>[];
+    for (final aspect in PuzzleAspectRatio.values) {
+      for (final t in aspect.tiers) {
+        if (!list.contains(t.difficulty)) {
+          list.add(t.difficulty);
+        }
+      }
+    }
+    list.sort((a, b) {
+      final cmp = a.pieceCount.compareTo(b.pieceCount);
+      if (cmp != 0) return cmp;
+      final c2 = a.cols.compareTo(b.cols);
+      return c2 != 0 ? c2 : a.rows.compareTo(b.rows);
+    });
+    return List.unmodifiable(list);
+  }
 }
