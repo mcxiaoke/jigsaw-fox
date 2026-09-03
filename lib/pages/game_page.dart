@@ -1045,50 +1045,54 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
             ),
 
             // 2. Progress Line + Flame Game Canvas
-            // Keep as non-positioned Column so Stack fills the entire available screen
-            Column(
-              children: [
-                _buildProgressLine(),
-                Expanded(
-                  child: _game != null
-                      ? KeyboardListener(
-                          focusNode: _focusNode,
-                          autofocus: true,
-                          onKeyEvent: (keyEvent) {
-                            if (keyEvent is KeyDownEvent &&
-                                keyEvent.logicalKey ==
-                                    LogicalKeyboardKey.escape &&
-                                _game?.holdingPiece != null) {
-                              _game?.cancelHoldingPiece();
-                              if (mounted) setState(() {});
-                            }
-                          },
-                          child: Listener(
-                            onPointerDown: _onPointerDown,
-                            onPointerMove: _onPointerMove,
-                            onPointerUp: _onPointerUp,
-                            onPointerCancel: _onPointerCancel,
-                            onPointerSignal: _onPointerSignal,
-                            behavior: HitTestBehavior.translucent,
-                            child: AnimatedOpacity(
-                              opacity: _gameFadeIn ? 1.0 : 0.0,
-                              duration: const Duration(milliseconds: 300),
-                              curve: Curves.easeOutCubic,
-                              child: ClipRect(
-                                child: GameWidget<JigsawPuzzleGame>(
-                                  game: _game!,
+            // Keep as non-positioned SafeArea so Stack fills screen, while canvas avoids bottom gesture bar
+            SafeArea(
+              top: false,
+              bottom: true,
+              child: Column(
+                children: [
+                  _buildProgressLine(),
+                  Expanded(
+                    child: _game != null
+                        ? KeyboardListener(
+                            focusNode: _focusNode,
+                            autofocus: true,
+                            onKeyEvent: (keyEvent) {
+                              if (keyEvent is KeyDownEvent &&
+                                  keyEvent.logicalKey ==
+                                      LogicalKeyboardKey.escape &&
+                                  _game?.holdingPiece != null) {
+                                _game?.cancelHoldingPiece();
+                                if (mounted) setState(() {});
+                              }
+                            },
+                            child: Listener(
+                              onPointerDown: _onPointerDown,
+                              onPointerMove: _onPointerMove,
+                              onPointerUp: _onPointerUp,
+                              onPointerCancel: _onPointerCancel,
+                              onPointerSignal: _onPointerSignal,
+                              behavior: HitTestBehavior.translucent,
+                              child: AnimatedOpacity(
+                                opacity: _gameFadeIn ? 1.0 : 0.0,
+                                duration: const Duration(milliseconds: 300),
+                                curve: Curves.easeOutCubic,
+                                child: ClipRect(
+                                  child: GameWidget<JigsawPuzzleGame>(
+                                    game: _game!,
+                                  ),
                                 ),
                               ),
                             ),
+                          )
+                        : const Center(
+                            child: CircularProgressIndicator(
+                              color: Color(0xFF2E7D32),
+                            ),
                           ),
-                        )
-                      : const Center(
-                          child: CircularProgressIndicator(
-                            color: Color(0xFF2E7D32),
-                          ),
-                        ),
-                ),
-              ],
+                  ),
+                ],
+              ),
             ),
 
             // 3. Full-Screen Original Image Overlay (toggled via eye icon)
@@ -1217,7 +1221,7 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
             // 6. Floating Victory Banner when solved and dialog closed
             if (_isSolved)
               Positioned(
-                bottom: 16,
+                bottom: 16 + MediaQuery.paddingOf(context).bottom,
                 left: 20,
                 right: 20,
                 child: Container(

@@ -9,7 +9,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/scheduler.dart';
 
 import 'package:flutter/painting.dart'
-    show Color, Paint, PaintingStyle, RRect, Radius, decodeImageFromList;
+    show Color, Paint, PaintingStyle, decodeImageFromList;
 
 import '../logic/engine/puzzle_engine.dart';
 import '../logic/engine/undo_manager.dart';
@@ -75,12 +75,10 @@ class TrayBackgroundComponent extends PositionComponent
 
   @override
   void render(ui.Canvas canvas) {
-    final rrect = RRect.fromRectAndRadius(
-      size.toRect(),
-      const Radius.circular(16),
-    );
-    canvas.drawRRect(rrect, _bgPaint);
-    canvas.drawRRect(rrect, _borderPaint);
+    final rect = size.toRect();
+    canvas.drawRect(rect, _bgPaint);
+    // 顶部半透明高光微边线（通栏平铺底栏风格，替代原全包围圆角描边）
+    canvas.drawLine(const ui.Offset(0, 0), ui.Offset(size.x, 0), _borderPaint);
   }
 
   @override
@@ -143,6 +141,7 @@ class JigsawPuzzleGame extends FlameGame
   static const double _topToolbarHeight = 8.0;
   static const double _sideMargin = 8.0;
   static const double _bottomTrayMargin = 8.0;
+  static const double _trayStartXMargin = 16.0;
 
   /// 放大倍数的**最小保证下限**：无论碎片多大，都至少允许放大到此倍数，
   /// 避免“72px 目标小于原始格子 → maxZoom<1 完全无法放大”的问题（可用于精确贴边）。
@@ -557,19 +556,20 @@ class JigsawPuzzleGame extends FlameGame
   /// Computes smart board maximizing layout and normalized tray metrics.
   /// 桌面散落模式采用动态自适应棋盘：根据窗口尺寸、图片长宽比与碎片数量
   void _computeLayout() {
-    // 1. Bottom Tray Height: 碎片高度为基准，上边间距 15%，下边间距 30%
+    // 1. Bottom Tray Height:
+    // 拼图碎片凸头（Tab）最大向外延伸 35%，双向凸头时物理总高度达 1.70 * _trayPieceHeight。
+    // 托盘高度设置为基础碎片高度的 2.0 倍（约 128px），并在内部垂直居中对齐，
+    // 确保任何切片的凸头在顶部与底部均保留约 10px 的安全呼吸空间，绝不溢出托盘边缘。
     final srcPieceW = image.width / cols;
     final srcPieceH = image.height / rows;
     final maxSrcSide = max(srcPieceW, srcPieceH);
     _trayPieceWidth = srcPieceW * (targetTrayPieceBaseSize / maxSrcSide);
     _trayPieceHeight = srcPieceH * (targetTrayPieceBaseSize / maxSrcSide);
 
-    final targetTrayH = _trayPieceHeight * (1.0 + 0.15 + 0.30);
-    traySize = Vector2(size.x - _sideMargin * 2, targetTrayH);
-    trayPosition = Vector2(
-      _sideMargin,
-      size.y - targetTrayH - _bottomTrayMargin,
-    );
+    final targetTrayH = _trayPieceHeight * 2.0;
+    // 托盘横向 100% 铺满全屏（通栏 Dock 风格），彻底消除碎片滚动至左右两侧时跨越圆角/悬空的视觉突兀感
+    traySize = Vector2(size.x, targetTrayH);
+    trayPosition = Vector2(0.0, size.y - targetTrayH - _bottomTrayMargin);
 
     final imageAspect = image.width / image.height;
     double bW, bH;
@@ -789,11 +789,11 @@ class JigsawPuzzleGame extends FlameGame
   List<Vector2>? _tabletopScatterSlots;
 
   /// Computes the exact screen coordinate for the N-th piece in the bottom tray.
-  /// 托盘内上边间距为 15% 碎片高度，下边自然留出 30% 碎片高度
+  /// 碎片基础单元格在托盘内垂直居中对齐，上下对称预留 50% 基础高度空间（完全包容 35% 凸头并留白）
   Vector2 _getTrayPositionForIndex(int index) {
-    final startX = trayPosition.x + 18.0 + _trayScrollX;
+    final startX = trayPosition.x + _trayStartXMargin + _trayScrollX;
     final px = startX + index * (_trayPieceWidth + _traySpacing);
-    final py = trayPosition.y + (_trayPieceHeight * 0.15);
+    final py = trayPosition.y + (traySize.y - _trayPieceHeight) / 2;
     return Vector2(px, py);
   }
 
@@ -1100,8 +1100,8 @@ class JigsawPuzzleGame extends FlameGame
       return;
     }
 
-    // 3. 计算就近插入索引
-    final startX = trayPosition.x + 18.0 + _trayScrollX;
+    // 3. 计算就近插入索引（与 _getTrayPositionForIndex 严格共享同一 _trayStartXMargin 基准）
+    final startX = trayPosition.x + _trayStartXMargin + _trayScrollX;
     final step = _trayPieceWidth + _traySpacing;
     final slotOffset = dropScreenX - startX;
     final targetIdx = ((slotOffset + step * 0.5) / step).floor().clamp(

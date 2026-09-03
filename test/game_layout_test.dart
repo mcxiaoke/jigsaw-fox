@@ -21,7 +21,7 @@ Future<ui.Image> _decodePng() async {
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  test('初始碎片 base cell 应在托盘区域内满足上边距 15%、下边距 30%', () async {
+  test('初始碎片在托盘区域内应垂直居中且上下边距能完全包容凸头 Overhang (>=35%)', () async {
     final img = await _decodePng();
     final game = JigsawPuzzleGame(
       image: img,
@@ -40,7 +40,7 @@ void main() {
 
     final report = <String>[];
     for (final p in pieces) {
-      // 组件 anchor=topLeft，渲染内容覆盖 [position, position + size*scale]
+      // 组件 anchor=topLeft，基础矩形覆盖 [position, position + size*scale]
       final top = p.position.y;
       final bottom = p.position.y + p.size.y * p.scale.y;
       final pieceHeight = p.size.y * p.scale.y;
@@ -49,17 +49,29 @@ void main() {
       report.add(
         'piece#${p.id} top=$top bottom=$bottom '
         'topMargin=$actualTopMargin bottomMargin=$actualBottomMargin '
-        'expectedTop=${pieceHeight * 0.15} expectedBottom=${pieceHeight * 0.30}',
+        'expectedMargin=${pieceHeight * 0.50}',
+      );
+      // 1. 垂直居中：上下边距对称一致且精准满足 50% 居中设计意图
+      expect(
+        (actualTopMargin - actualBottomMargin).abs(),
+        lessThan(1.0),
+        reason: '碎片基础单元格应在托盘内垂直居中对齐:\n${report.join('\n')}',
       );
       expect(
-        (actualTopMargin - pieceHeight * 0.15).abs(),
-        lessThan(1.0),
-        reason: '碎片上边距应为碎片高度的 15%:\n${report.join('\n')}',
+        actualTopMargin,
+        closeTo(pieceHeight * 0.50, 1.0),
+        reason: '上边距应精准满足托盘 2.0 倍高度时的 50% 居中设计意图',
+      );
+      // 2. 边距充足：上下留白各为 50% 基础高度，足以包容 35% 凸头并保留缓冲空间
+      expect(
+        actualTopMargin,
+        greaterThanOrEqualTo(pieceHeight * 0.35),
+        reason: '上边距必须大于凸头最大延伸 35%，防止凸头溢出托盘边缘',
       );
       expect(
-        (actualBottomMargin - pieceHeight * 0.30).abs(),
-        lessThan(1.0),
-        reason: '碎片下边距应为碎片高度的 30%:\n${report.join('\n')}',
+        actualBottomMargin,
+        greaterThanOrEqualTo(pieceHeight * 0.35),
+        reason: '下边距必须大于凸头最大延伸 35%，防止凸头溢出托盘边缘',
       );
     }
   });
@@ -910,9 +922,10 @@ void main() {
     // 模拟 Windows 桌面端拉伸窗口至 1280 x 720
     game.onGameResize(Vector2(1280, 720));
 
-    // 1. 验证托盘依然紧贴新视口底部
+    // 1. 验证托盘依然紧贴新视口底部，且横向 100% 铺满全宽 (1280.0)
     expect(game.trayPosition.y, closeTo(720.0 - game.traySize.y - 8.0, 1e-4));
-    expect(game.traySize.x, equals(1280.0 - 16.0));
+    expect(game.trayPosition.x, equals(0.0));
+    expect(game.traySize.x, equals(1280.0));
 
     // 2. 验证棋盘与碎片尺寸同步等比重算
     expect(game.boardSize.x, isNot(equals(initialBoardW)));
@@ -937,7 +950,8 @@ void main() {
     // 4. 模拟缩小窗口至 320 x 480
     game.onGameResize(Vector2(320, 480));
     expect(game.trayPosition.y, closeTo(480.0 - game.traySize.y - 8.0, 1e-4));
-    expect(game.traySize.x, equals(320.0 - 16.0));
+    expect(game.trayPosition.x, equals(0.0));
+    expect(game.traySize.x, equals(320.0));
     expect(
       solvedComp.position.x,
       closeTo(game.boardTopLeft.x + solvedComp.c * game.pieceSize.x, 0.5),
@@ -1166,7 +1180,7 @@ void main() {
     game.dropHoldingPiece();
 
     expect(piece0.isInTray, isTrue);
-    // 验证 piece0 就近插入在 X = 450 附近，绝非跳回 X = 18 附近的最左侧槽位
+    // 验证 piece0 就近插入在 X = 450 附近，绝非跳回 X = 16 附近的最左侧槽位
     expect(piece0.position.x, closeTo(dropX, 60.0));
   });
 
