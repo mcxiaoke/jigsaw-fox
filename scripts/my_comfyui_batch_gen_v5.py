@@ -51,6 +51,13 @@ import urllib.request
 from dataclasses import dataclass, field
 from pathlib import Path
 
+# Fix Windows console UTF-8 output
+if hasattr(sys.stdout, "reconfigure"):
+    try:
+        sys.stdout.reconfigure(encoding="utf-8")
+    except Exception:
+        pass
+
 PROGRESS_NAME = "_progress.json"
 METADATA_DIR = "_metadata"
 STAGING_SUBDIR = "jig"
@@ -309,6 +316,7 @@ class Job:
     ratio: str
     width: int
     height: int
+    subject: str = ""
     attempts: int = 0
 
 
@@ -482,6 +490,7 @@ def build_jobs(
                         ratio=ratio,
                         width=int(dim["width"]),
                         height=int(dim["height"]),
+                        subject=cat_subject,
                     )
                 )
     # Interleaving is disabled when reseed>1: consecutive jobs must share one
@@ -506,7 +515,14 @@ def load_progress(path: Path) -> dict:
 def save_progress(path: Path, progress: dict) -> None:
     tmp = path.with_suffix(".tmp")
     tmp.write_text(json.dumps(progress, ensure_ascii=False, indent=1), encoding="utf-8")
-    tmp.replace(path)
+    for attempt in range(3):
+        try:
+            tmp.replace(path)
+            break
+        except OSError:
+            if attempt == 2:
+                raise
+            time.sleep(0.1)
 
 
 def collect_images(history: dict) -> list[dict]:
@@ -528,6 +544,11 @@ def relocate(src_root: Path | None, images: list[dict], out_dir: Path, job: Job)
         sub = Path(img.get("subfolder", ""))
         src = src_root / "output" / sub / img["filename"]
         if not src.exists():
+            for _ in range(6):
+                time.sleep(0.3)
+                if src.exists():
+                    break
+        if not src.exists():
             continue
         suffix = src.suffix or ".png"
         stem = f"{job.tag}_{job.index:04d}_{job.seed}_{job.width}x{job.height}"
@@ -542,23 +563,28 @@ def append_metadata(
 ) -> None:
     meta_dir = out_dir / METADATA_DIR
     meta_dir.mkdir(parents=True, exist_ok=True)
-    record = {
-        "key": job.key,
-        "tag": job.tag,
-        "index": job.index,
-        "seed": job.seed,
-        "ratio": job.ratio,
-        "width": job.width,
-        "height": job.height,
-        "prompt": job.prompt,
-        "filename": filename,
-        "model": model,
-        "steps": steps,
-        "cfg": cfg,
-        "ts": time.strftime("%Y-%m-%dT%H:%M:%S"),
-    }
+    file_list = [f.strip() for f in filename.split(",") if f.strip()]
+    if not file_list:
+        file_list = [filename]
     with (meta_dir / f"{job.tag}.jsonl").open("a", encoding="utf-8") as f:
-        f.write(json.dumps(record, ensure_ascii=False) + "\n")
+        for fname in file_list:
+            record = {
+                "key": job.key,
+                "tag": job.tag,
+                "subject": job.subject,
+                "index": job.index,
+                "seed": job.seed,
+                "ratio": job.ratio,
+                "width": job.width,
+                "height": job.height,
+                "prompt": job.prompt,
+                "filename": fname,
+                "model": model,
+                "steps": steps,
+                "cfg": cfg,
+                "ts": time.strftime("%Y-%m-%dT%H:%M:%S"),
+            }
+            f.write(json.dumps(record, ensure_ascii=False) + "\n")
 
 
 # ---------------------------------------------------------------------------
@@ -589,7 +615,11 @@ def parse_args(argv=None):
         default=r"F:\ai\ComfyUI\ComfyUI",
         help=r"ComfyUI install root (default: F:\ai\ComfyUI\ComfyUI)",
     )
-    p.add_argument("--out", default="jigsaw_raw", help="output directory")
+    p.add_argument(
+        "--out",
+        default=None,
+        help="output directory (required when generating images)",
+    )
     p.add_argument("--tags", help="comma separated tag ids to restrict the run")
     p.add_argument(
         "--per-tag",
@@ -695,9 +725,21 @@ def parse_args(argv=None):
         "when ComfyUI can cache identical conditioning)",
     )
     p.add_argument(
-        "--no-resume",
+        "--resume",
         action="store_true",
+        default=True,
+        help="resume previous progress if _progress.json exists (default: true)",
+    )
+    p.add_argument(
+        "--no-resume",
+        action="store_false",
+        dest="resume",
         help="ignore existing progress and regenerate everything",
+    )
+    p.add_argument(
+        "--prune-missing",
+        action="store_true",
+        help="scan output dir and prune keys from done progress if their image files are missing on disk",
     )
     p.add_argument(
         "--dry-run",
@@ -705,7 +747,10 @@ def parse_args(argv=None):
         help="print planned prompts, do not call ComfyUI",
     )
     p.add_argument(
-        "--dry-run-count", type=int, default=5, help="how many dry-run prompts to print"
+        "--dry-run-count",
+        type=int,
+        default=None,
+        help="how many dry-run prompts to print (specifying this automatically enables --dry-run)",
     )
     p.add_argument(
         "--list-tags",
@@ -718,6 +763,10 @@ def parse_args(argv=None):
     p.add_argument("--output-node", help="explicit node id for the save node")
     args = p.parse_args(argv)
 
+    # Auto-enable dry-run if --dry-run-count is specified
+    if args.dry_run_count is not None:
+        args.dry_run = True
+
     # Validate --steps and --cfg legal ranges so a typo does not waste a GPU run.
     if args.steps is not None:
         if not (4 <= args.steps <= 20):
@@ -727,6 +776,10 @@ def parse_args(argv=None):
             p.error(
                 f"--cfg must be in [1.0, 2.0] (Z-Image Turbo official: 1.0), got {args.cfg}"
             )
+
+    # Enforce --out is required when actually generating images
+    if not args.dry_run and not args.list_tags and not args.out:
+        p.error("生成图片时必须显式指定 --out 输出目录 (例如: --out D:/jigsaw_raw)")
 
     return args
 
@@ -804,30 +857,124 @@ def main(argv=None) -> int:
     cfg = args.cfg if args.cfg is not None else lib.get("generation", {}).get("cfg")
     model_hint = lib.get("model_hint", "unknown")
 
-    est_hours = len(jobs) * args.sec_per_image / 3600
-    if args.rounds:
-        print(
-            f"[plan] {len(jobs)} jobs ({args.rounds} cards x {len({j.tag for j in jobs})} tags), "
-            f"estimated ~{est_hours:.1f}h at {args.sec_per_image}s/img"
+    # 统计涉及的标签及每个标签的主体/作业数量
+    active_tags = [t for t in lib["tags"] if (not tag_filter) or t["id"] in tag_filter]
+    tag_stats = []
+    total_subjects = 0
+    for t in active_tags:
+        n_subs = len(t.get("catalog_subjects", []))
+        total_subjects += n_subs
+        n_jobs = sum(1 for j in jobs if j.tag == t["id"])
+        tag_stats.append((t["id"], n_subs, n_jobs))
+
+    out_dir = Path(args.out) if args.out else None
+    done_set = set()
+    progress = {"done": [], "failed": []}
+    if out_dir and not args.dry_run:
+        out_dir.mkdir(parents=True, exist_ok=True)
+        # Disk space pre-check
+        try:
+            free_bytes = shutil.disk_usage(out_dir).free
+            free_gb = free_bytes / (1024**3)
+            if free_gb < 5.0:
+                print(
+                    f"[warn] low disk space on {out_dir.resolve()}: {free_gb:.1f} GB free (< 5.0 GB recommended)"
+                )
+        except Exception:
+            pass
+
+        progress_path = out_dir / PROGRESS_NAME
+        progress = (
+            load_progress(progress_path) if args.resume else {"done": [], "failed": []}
         )
-    elif args.per_tag is not None:
-        print(
-            f"[plan] {len(jobs)} jobs ({args.per_tag} per tag x {len({j.tag for j in jobs})} tags), "
-            f"estimated ~{est_hours:.1f}h at {args.sec_per_image}s/img"
-        )
+        if args.prune_missing and progress.get("done"):
+            existing_files = (
+                {f.name for f in out_dir.rglob("*.png")}
+                | {f.name for f in out_dir.rglob("*.jpg")}
+                | {f.name for f in out_dir.rglob("*.webp")}
+            )
+            meta_map: dict[str, str] = {}
+            meta_dir = out_dir / METADATA_DIR
+            if meta_dir.exists():
+                for jf in meta_dir.glob("*.jsonl"):
+                    try:
+                        for line in jf.read_text(encoding="utf-8").splitlines():
+                            if line.strip():
+                                r = json.loads(line)
+                                if "key" in r and "filename" in r:
+                                    meta_map[r["key"]] = r["filename"]
+                    except Exception:
+                        pass
+            pruned_done = []
+            pruned_count = 0
+            for k in progress["done"]:
+                fn = meta_map.get(k)
+                if fn and fn in existing_files:
+                    pruned_done.append(k)
+                elif not fn:
+                    # Fallback when metadata lacks key: check if image starting with {tag}_{idx}_ exists
+                    parts = k.split(":")
+                    tag_id = parts[0]
+                    tag_dir = out_dir / tag_id
+                    if tag_dir.exists() and len(parts) > 1:
+                        try:
+                            idx_str = f"{int(parts[1]):04d}"
+                            prefix_match = any(
+                                f.name.startswith(f"{tag_id}_{idx_str}_")
+                                for f in tag_dir.glob("*.png")
+                            )
+                        except ValueError:
+                            prefix_match = False
+                    else:
+                        prefix_match = False
+                    if prefix_match:
+                        pruned_done.append(k)
+                    else:
+                        pruned_count += 1
+                else:
+                    pruned_count += 1
+            if pruned_count > 0:
+                print(
+                    f"[prune] pruned {pruned_count} missing images from progress; they will be regenerated"
+                )
+                progress["done"] = pruned_done
+                save_progress(progress_path, progress)
+
+        done_set = set(progress["done"])
+
+    already_done = sum(1 for j in jobs if j.key in done_set)
+    remaining_jobs = len(jobs) - already_done
+    real_est_hours = remaining_jobs * args.sec_per_image / 3600
+
+    # 打印全局参数配置与任务计划大看板
+    print("=" * 80)
+    print("ComfyUI Batch Image Generator v5.1")
+    print("=" * 80)
+    print(f"[config] library    : {Path(args.library).resolve().name} ({Path(args.library).resolve()})")
+    print(f"[config] workflow   : {Path(args.workflow).resolve().name} ({Path(args.workflow).resolve()})")
+    comfy_root_str = str(Path(args.comfyui_root).resolve()) if args.comfyui_root else "None"
+    print(f"[config] comfy-root : {comfy_root_str} (host: {args.host})")
+    out_str = str(out_dir.resolve()) if out_dir else "(dry-run: none)"
+    print(f"[config] output dir : {out_str}")
+    print(f"[config] seed-base  : {args.seed_base}")
+    print(f"[config] sampling   : steps={steps}, cfg={cfg}, ratios={sorted({j.ratio for j in jobs})}")
+    sched_desc = (
+        f"batch_per_tag={args.batch_per_tag} (interleaved)"
+        if args.batch_per_tag > 0
+        else "batch_per_tag=0 (sequential)"
+    )
+    cards_desc = f"{args.cards_per_subject} card(s) per subject" if not args.per_tag else f"{args.per_tag} per tag"
+    print(f"[config] schedule   : {cards_desc}, reseed={args.reseed}, {sched_desc}")
+    if tag_filter:
+        print(f"[config] tags filter: {len(tag_filter)} tags selected ({', '.join(sorted(tag_filter))})")
     else:
-        print(
-            f"[plan] {len(jobs)} jobs ({args.cards_per_subject} card(s) per subject), "
-            f"estimated ~{est_hours:.1f}h at {args.sec_per_image}s/img"
-        )
-    if args.reseed > 1:
-        print(
-            f"[plan] seed gacha x{args.reseed}: {len(jobs) // args.reseed} distinct prompts, "
-            f"each rolled {args.reseed} times with different noise "
-            f"(consecutive jobs share a prompt, so conditioning is cached -- "
-            f"the real rate is usually better than {args.sec_per_image:g}s/img)"
-        )
-    print(f"[plan] steps={steps}, cfg={cfg}, ratios={sorted({j.ratio for j in jobs})}")
+        print(f"[config] tags scope : all {len(active_tags)} tags ({total_subjects} total catalog subjects)")
+
+    print("-" * 80)
+    print("[plan] tag breakdown (subjects -> jobs):")
+    chunks = [f"{tid}: {ns} subs -> {nj} jobs" for tid, ns, nj in tag_stats]
+    for i in range(0, len(chunks), 3):
+        print("  " + " | ".join(chunks[i : i + 3]))
 
     # Style-pool split: how much of the run is photographic vs illustrated.
     pool_of = {t["id"]: t.get("style_pool", "photo") for t in lib["tags"]}
@@ -835,48 +982,38 @@ def main(argv=None) -> int:
     for j in jobs:
         p = pool_of.get(j.tag, "photo")
         by_pool[p] = by_pool.get(p, 0) + 1
-    if by_pool:
-        print(
-            "[plan] style mix: "
-            + ", ".join(
-                f"{k} {v} ({v / len(jobs) * 100:.0f}%)"
-                for k, v in sorted(by_pool.items())
-            )
-        )
+    mix_str = ", ".join(f"{k} {v} ({v / len(jobs) * 100:.0f}%)" for k, v in sorted(by_pool.items())) if by_pool else "none"
 
-    print(
-        f"[plan] nodes prompt={node_ids['prompt']} seed={node_ids['seed']} "
-        f"size={node_ids['size']} save={node_ids['output']}"
-    )
+    print("-" * 80)
+    print(f"[plan] total planned: {len(jobs)} jobs ({total_subjects} subjects)")
+    print(f"[plan] style mix    : {mix_str}")
+    print(f"[plan] wired nodes  : prompt={node_ids['prompt']} seed={node_ids['seed']} size={node_ids['size']} save={node_ids['output']}")
+
+    if not args.dry_run:
+        pct_done = (already_done / len(jobs) * 100) if jobs else 0
+        pct_rem = 100.0 - pct_done
+        print("-" * 80)
+        print(f"[run] resume status :")
+        print(f"  already finished  : {already_done:>5}/{len(jobs)} ({pct_done:5.1f}% skipped)")
+        print(f"  remaining to run  : {remaining_jobs:>5}/{len(jobs)} ({pct_rem:5.1f}% to generate)")
+        print(f"  estimated time    : ~{real_est_hours:.1f}h (based on remaining {remaining_jobs} imgs @ {args.sec_per_image:g}s/img)")
+        print(f"[run] guardrails    : hard reset every {args.hard_reset_minutes:g} min, hang probe at {args.stuck_timeout:.0f}s, abort after {args.max_stuck} hangs")
+    print("=" * 80 + "\n")
 
     if args.dry_run:
-        for j in jobs[: args.dry_run_count]:
-            print(f"\n--- {j.key} [{j.ratio} {j.width}x{j.height}] seed={j.seed}")
-            print(j.prompt)
-        print(f"\n[dry-run] {len(jobs)} jobs planned, nothing generated")
+        dry_count = args.dry_run_count if args.dry_run_count is not None else 5
+        for j in jobs[:dry_count]:
+            print(f"--- {j.key} [{j.ratio} {j.width}x{j.height}] seed={j.seed}")
+            print(j.prompt + "\n")
+        print(f"[dry-run] {len(jobs)} jobs planned, nothing generated")
         return 0
 
-    out_dir = Path(args.out)
-    out_dir.mkdir(parents=True, exist_ok=True)
     comfy_root = Path(args.comfyui_root) if args.comfyui_root else None
-    progress_path = out_dir / PROGRESS_NAME
-    progress = (
-        {"done": [], "failed": []} if args.no_resume else load_progress(progress_path)
-    )
-    done_set = set(progress["done"])
-
     client = ComfyClient(args.host)
     stats = Stats()
     total = len(jobs)
     last_hard_reset = time.time()
     consecutive_stuck = 0
-
-    print(f"[run] output -> {out_dir.resolve()}")
-    print(f"[run] resuming: {len(done_set)} already done")
-    print(
-        f"[run] hard reset every {args.hard_reset_minutes:g} min, "
-        f"hang probe at {args.stuck_timeout:.0f}s, abort after {args.max_stuck} hangs\n"
-    )
 
     def default_shift(w: int, h: int) -> float:
         m = max(w, h)

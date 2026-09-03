@@ -1,6 +1,6 @@
 {
-  "version": "5.1-illust-pure-copy",
-  "_comment": "Pure copy from my_prompt_library_v5.json with style swapped to classic storybook illustration (Dominic Davison / Kim Jacobs gouache & watercolor). Zero photo optics, zero external env pollution.",
+  "version": "5.1-illust-clean",
+  "_comment": "Pure storybook illustration library (100% aligned with v5 catalog). Zero photo-optics words, positive prompting only, corner-to-corner dense hand-painted detail.",
   "model_hint": "z-image-turbo-fp8 (Apache 2.0, 8 steps, CFG 1.0)",
   "critical_note": "CFG is near 1.0 on distilled Turbo models, so NEGATIVE prompts barely work. All constraints are written positively. Never use the words 'jigsaw puzzle' or 'puzzle pieces' in a prompt - some models then draw cut lines into the artwork.",
   "generation": {
@@ -23,8 +23,8 @@
       "height": 896
     }
   },
-  "quality_prefix": "vibrant colorful storybook illustration, rich hand-painted detail, deep depth of field with consistent sharpness, busy composition with clear visual hierarchy, varied shape color and scale between regions",
-  "quality_tail": "corner-to-corner detail, visible fine brushwork, rich color harmony, medium-scale readable details, full-bleed painterly artwork",
+  "quality_prefix": "deep depth of field with consistent sharpness, busy composition with clear visual hierarchy, varied shape color and scale between regions",
+  "quality_tail": "corner-to-corner fine detail, rich color harmony, full-bleed painterly artwork",
   "modifiers": {
     "lighting": [
       "dramatic high-contrast lighting",
@@ -62,12 +62,12 @@
   },
   "style_pools": {
     "illust": [
-      "in the classic storybook illustration style of Dominic Davison and Kim Jacobs, rich textured gouache and watercolor painting with fine brushwork",
-      "richly detailed European storybook gouache illustration with visible brushstrokes and vivid color depth",
-      "detailed gouache and watercolor painting with intricate architectural and floral details",
-      "classic storybook illustration with textured brushstrokes and warm nostalgic charm",
-      "lively painterly acrylic and gouache artwork with thick visible brushwork and crisp outlines",
-      "richly textured folk-art inspired painterly illustration with dense decorative detail"
+      "Dominic Davison and Kim Jacobs style gouache and watercolor painting",
+      "classic storybook gouache illustration with textured brushstrokes",
+      "detailed watercolor and gouache artwork with crisp painted outlines",
+      "vintage storybook illustration with warm painterly nostalgic charm",
+      "lively acrylic and gouache artwork with vibrant layered brushwork",
+      "textured folk-art inspired painterly illustration with rich detail"
     ]
   },
   "active_ratios": [
@@ -85,7 +85,7 @@
       "a full {subject} view with {env_fg} in the foreground, {env_mid} stretching across the middle, and {env_bg} filling the far distance"
     ],
     "object": [
-      "a single {subject} with {env_fg} in the foreground, {env_mid} nearby, and {detail} throughout",
+      "a single {subject} with {env_fg} in the foreground, {env_mid} nearby, {env_bg} in the background, and {detail} throughout",
       "one {subject} surrounded by {env_fg}, with {env_mid} at center and {env_bg} filling the edges",
       "a detailed {subject} with {env_fg} in the foreground, {env_mid} nearby, and {env_bg} in the background"
     ],
@@ -103,6 +103,7 @@
         "1:1"
       ],
       "style_pool": "illust",
+      "optics": [],
       "catalog_subjects": [
         "lion",
         "lioness with cubs",
@@ -246,7 +247,7 @@
         "snow-dusted scree cliff",
         "tropical rainforest vines",
         "prehistoric fern grove",
-        "smoking active volcano",
+        "riverbank pebble shore",
         "tropical swamp"
       ],
       "template_group": "animal",
@@ -298,6 +299,30 @@
           "smoking active volcano",
           "primordial swamp with cycads",
           "rugged volcanic badlands"
+        ],
+        "farm": [
+          "sunlit green pasture meadow",
+          "rustic wooden barn and hay bales",
+          "split rail wooden fence along wildflowers",
+          "apple orchard edge with clover"
+        ],
+        "garden_micro": [
+          "sunlit wildflower cluster with morning dew",
+          "mossy garden stones and blooming clover",
+          "flowering thyme and stone garden wall",
+          "lush green leaves with water droplets"
+        ],
+        "australia": [
+          "eucalyptus woodland with red earth",
+          "spinifex grassland and sandstone rocks",
+          "sun-drenched dry scrubland with golden grass",
+          "coastal paperbark tree grove"
+        ],
+        "wetland": [
+          "reed marsh with water lily pads",
+          "tranquil riverbank with weeping willows",
+          "mossy wetland pond with blooming irises",
+          "shallow clear stream with smooth pebbles"
         ]
       },
       "subject_env_group": {
@@ -381,7 +406,60 @@
         "stegosaurus": "prehistoric",
         "pterodactyl": "prehistoric",
         "mammoth": "prehistoric",
-        "saber-toothed tiger": "prehistoric"
+        "saber-toothed tiger": "prehistoric",
+        "cow": "farm",
+        "pig": "farm",
+        "sheep": "farm",
+        "goat": "farm",
+        "donkey": "farm",
+        "horse": "farm",
+        "duck": "farm",
+        "goose": "farm",
+        "chicken": "farm",
+        "honeybee": "garden_micro",
+        "ladybug": "garden_micro",
+        "butterfly": "garden_micro",
+        "praying mantis": "garden_micro",
+        "snail": "garden_micro",
+        "dragonfly": "wetland",
+        "stag beetle": "forest",
+        "stick insect": "tropical",
+        "ant colony": "forest",
+        "centipede": "forest",
+        "spider": "forest",
+        "scorpion": "desert",
+        "kangaroo": "australia",
+        "wombat": "australia",
+        "echidna": "australia",
+        "tasmanian devil": "australia",
+        "emu": "australia",
+        "bullfrog": "wetland",
+        "tree frog": "tropical",
+        "salamander": "wetland",
+        "water buffalo": "wetland",
+        "giant tortoise": "savanna",
+        "radiated tortoise": "savanna",
+        "yak": "alpine",
+        "cougar": "alpine",
+        "american bison": "savanna",
+        "wild horse herd": "savanna",
+        "asian elephant": "tropical",
+        "chimpanzee": "tropical",
+        "macaque": "forest",
+        "mandrill": "tropical",
+        "tarsier": "tropical",
+        "sloth": "tropical",
+        "pangolin": "tropical",
+        "armadillo": "savanna",
+        "honey badger": "savanna",
+        "serval": "savanna",
+        "caracal": "savanna",
+        "cobra": "tropical",
+        "python": "tropical",
+        "green iguana": "tropical",
+        "komodo dragon": "tropical",
+        "frilled lizard": "australia",
+        "blue-tongued skink": "australia"
       },
       "quality_prefix": "deep depth of field with consistent sharpness, clear visual hierarchy, varied shape color and scale between regions",
       "quality_tail": "medium-scale readable details, full-bleed artwork",
@@ -392,8 +470,10 @@
       ],
       "prompt_templates": [
         "one large {subject} filling most of the frame in the foreground, {env_fg} and {env_mid} in the background, and {detail} throughout",
-        "a single large {subject} dominating the foreground, with {env_fg} behind it and {env_mid} in the distance, and {detail} throughout",
-        "a large {subject} taking up most of the picture, with {env_fg} and {env_mid} as its backdrop, and {detail} throughout"
+        "a single large {subject} dominating the foreground, with {env_fg} behind it and {env_mid} surrounding the subject, and {detail} throughout",
+        "a large {subject} taking up most of the picture, with {env_fg} and {env_mid} as its backdrop, and {detail} throughout",
+        "a dramatic wide-angle close-up of {subject} filling 85 percent of the frame, powerful face and eyes close to the camera, with natural textured patterns of {env_fg} filling the background edges with rich non-solid variation, and {detail} throughout",
+        "an immersive wide-angle close-up of {subject} dominating the composition, towering front and center, surrounded along the perimeter by textured organic patterns of {env_fg}, strictly no flat monochrome background, with {detail} throughout"
       ]
     },
     {
@@ -509,8 +589,11 @@
       "prompt_templates": [
         "one large {subject} filling most of the frame in the foreground, with {env_fg} in the background and {env_mid} at the sides, and {detail} throughout",
         "a single large {subject} dominating the frame, {env_fg} visible behind it, {env_mid} filling the edges, and {detail} throughout",
-        "a large {subject} front and center taking up most of the image, surrounded by {env_fg} and {env_mid}, with {detail} throughout"
-      ]
+        "a large {subject} front and center taking up most of the image, surrounded by {env_fg} and {env_mid}, with {detail} throughout",
+        "an intimate wide-angle close-up of {subject} filling 85 percent of the frame, expressive face and nose close to the lens, surrounded along the edges by textured patterns of {env_fg} with rich non-solid color depth, and {detail} across every whisker and hair",
+        "playful wide-angle close-up of {subject} dominating the entire picture, head and front paws right in front of the viewer, with warm textured surface patterns of {env_fg} filling the background without flat or plain colors, and {detail} throughout"
+      ],
+      "optics": []
     },
     {
       "id": "Nature",
@@ -519,6 +602,7 @@
         "1:1"
       ],
       "style_pool": "illust",
+      "optics": [],
       "catalog_subjects": [
         "ancient redwood",
         "ancient ginkgo tree",
@@ -582,6 +666,7 @@
         "1:1"
       ],
       "style_pool": "illust",
+      "optics": [],
       "viewpoint_deny": [
         "flat lay overhead view"
       ],
@@ -697,7 +782,7 @@
         "water lily",
         "phalaenopsis orchid",
         "dancing lady orchid",
-        "male bird-of-paradise with ornate iridescent plumage",
+        "vibrant bird-of-paradise flower (Strelitzia) in full bloom",
         "amaryllis",
         "hibiscus",
         "plumeria",
@@ -721,9 +806,9 @@
         "bridal bouquet",
         "flower basket",
         "flower wall and arch",
-        "lavender field",
+        "blooming lavender bouquet with fresh sprigs",
         "rapeseed flower field",
-        "tulip field",
+        "vibrant multicolored tulip blossoms arrangement",
         "sunflower field",
         "cherry blossom avenue",
         "cosmos flower sea",
@@ -737,7 +822,8 @@
         "gardening notebook",
         "sunlit glass greenhouse"
       ],
-      "template_group": "object"
+      "template_group": "object",
+      "optics": []
     },
     {
       "id": "Ocean",
@@ -751,6 +837,7 @@
         "plain sky"
       ],
       "style_pool": "illust",
+      "optics": [],
       "catalog_subjects": [
         "humpback whale",
         "blue whale",
@@ -812,6 +899,7 @@
         "1:1"
       ],
       "style_pool": "illust",
+      "optics": [],
       "catalog_subjects": [
         "scarlet macaw",
         "toco toucan",
@@ -884,7 +972,9 @@
       "prompt_templates": [
         "one large {subject} perched prominently and filling most of the frame in the foreground, with {env_fg} in the background and {env_mid} at the sides, and {detail} throughout",
         "a single large {subject} dominating the frame on its perch, {env_fg} visible behind it, {env_mid} filling the edges, and {detail} throughout",
-        "a large {subject} with detailed feathers taking up most of the picture, {env_fg} and {env_mid} as its backdrop, and {detail} throughout"
+        "a large {subject} with detailed feathers taking up most of the picture, {env_fg} and {env_mid} as its backdrop, and {detail} throughout",
+        "a striking wide-angle close-up of {subject} perched close to the lens and dominating 85 percent of the picture, plumage and beak filling the frame, with textured foliage patterns of {env_fg} filling the background with rich non-solid color depth, and {detail} across every feather",
+        "an intimate wide-angle close-up of {subject} taking up almost the entire frame, sharp plumage portrait bordered by soft natural textures of {env_fg}, rich textural variation without flat plain areas, and {detail} throughout"
       ]
     },
     {
@@ -894,6 +984,7 @@
         "1:1"
       ],
       "style_pool": "illust",
+      "optics": [],
       "viewpoint_deny": [
         "flat lay overhead view"
       ],
@@ -955,6 +1046,7 @@
         "1:1"
       ],
       "style_pool": "illust",
+      "optics": [],
       "viewpoint_deny": [
         "flat lay overhead view"
       ],
@@ -1058,7 +1150,7 @@
         "European country kitchen with pots and herb bundles"
       ],
       "catalog_env_partners": [
-        "foreground flower beds and fountains",
+        "flower beds and stone fountains",
         "stone railing with vines",
         "water surface reflection",
         "weathered brick with carved reliefs"
@@ -1163,7 +1255,16 @@
         "vintage ceramic bowl",
         "linen napkin"
       ],
-      "template_group": "object"
+      "template_group": "object",
+      "optics": [],
+      "quality_prefix": "deep depth of field with consistent sharpness, clear visual hierarchy, varied shape color and scale between regions",
+      "quality_tail": "medium-scale readable details, full-bleed artwork",
+      "prompt_templates": [
+        "one delicious {subject} surrounded by {env_fg}, with {env_mid} at center and {env_bg} filling the edges, and {detail} throughout",
+        "a beautifully arranged {subject} with {env_fg} in the foreground, {env_mid} nearby, {env_bg} in the background, and {detail} throughout",
+        "a mouthwatering wide-angle close-up of {subject} overflowing the dish and filling 85 percent of the frame, glistening culinary textures, with textured patterns of {env_fg} framing the edges with rich non-solid depth, and {detail} throughout",
+        "an immersive top-down wide-angle close-up of {subject} dominating the entire composition edge to edge, surrounded by textured surfaces of {env_fg} along the borders, no flat solid background, with {detail} across all ingredients"
+      ]
     },
     {
       "id": "Art",
@@ -1227,7 +1328,8 @@
         "palette knife impasto thickness"
       ],
       "template_group": "special",
-      "quality_prefix": "corner-to-corner dense detail, rich tonal range and contrast, busy composition with clear visual hierarchy, varied shapes and scales between regions"
+      "quality_prefix": "corner-to-corner dense detail, rich tonal range and contrast, busy composition with clear visual hierarchy, varied shapes and scales between regions",
+      "optics": []
     },
     {
       "id": "Fantasy",
@@ -1310,7 +1412,8 @@
         "rune-carved stone pillar",
         "starry sky with purple-pink aurora interweaving"
       ],
-      "template_group": "special"
+      "template_group": "special",
+      "optics": []
     },
     {
       "id": "Space",
@@ -1371,7 +1474,8 @@
         "starlight refraction flare",
         "lens flare"
       ],
-      "template_group": "special"
+      "template_group": "special",
+      "optics": []
     },
     {
       "id": "Transportation",
@@ -1380,6 +1484,7 @@
         "1:1"
       ],
       "style_pool": "illust",
+      "optics": [],
       "viewpoint_deny": [
         "flat lay overhead view"
       ],
@@ -1505,7 +1610,8 @@
       "template_group": "special",
       "viewpoint_deny": [
         "flat lay overhead view"
-      ]
+      ],
+      "optics": []
     },
     {
       "id": "Seasons",
@@ -1514,6 +1620,7 @@
         "1:1"
       ],
       "style_pool": "illust",
+      "optics": [],
       "catalog_subjects": [
         "cherry blossom tunnel in full bloom",
         "rapeseed flower sea",
@@ -1546,9 +1653,9 @@
         "snow-covered lighthouse and windmill"
       ],
       "catalog_env_partners": [
-        "seasonal flower sea foreground layer",
-        "seasonal tree color gradient midground",
-        "full-frame seasonal ground texture background"
+        "seasonal blooming flower sea",
+        "seasonal tree canopy with color gradients",
+        "seasonal ground with fallen leaves and petals"
       ],
       "template_group": "scene",
       "viewpoint_deny": [
@@ -1604,7 +1711,8 @@
         "flickering candlelight",
         "ribbon and gold dust particles"
       ],
-      "template_group": "special"
+      "template_group": "special",
+      "optics": []
     },
     {
       "id": "Abstract",
@@ -1661,10 +1769,11 @@
       "catalog_env_partners": [
         "high contrast edge lines",
         "gold leaf outlines",
-        "layered gold leaf fragment collage foreground",
+        "layered gold leaf fragments and collage textures",
         "high saturation color wheel overlay"
       ],
-      "template_group": "special"
+      "template_group": "special",
+      "optics": []
     },
     {
       "id": "Cartoon",
@@ -1734,7 +1843,8 @@
         "hand-drawn speckled accents",
         "abundant small life objects"
       ],
-      "template_group": "special"
+      "template_group": "special",
+      "optics": []
     },
     {
       "id": "Others",
@@ -1815,7 +1925,8 @@
         "brass desk lamp warm light environment",
         "leather and burlap base texture"
       ],
-      "template_group": "object"
+      "template_group": "object",
+      "optics": []
     }
   ]
 }

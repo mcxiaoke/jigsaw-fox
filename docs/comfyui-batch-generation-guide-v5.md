@@ -77,7 +77,7 @@ python scripts/my_comfyui_batch_gen_v5.py [OPTIONS]
 | `--workflow` | `scripts/zimage_api_workflow_v5.json` | ComfyUI API 格式工作流 JSON 文件 |
 | `--comfyui-root` | `F:\ai\ComfyUI\ComfyUI` | ComfyUI 根目录，用于将图片自动移动到目标输出目录 |
 | `--host` | `http://127.0.0.1:8188` | ComfyUI HTTP 监听地址 |
-| `--out` | `jigsaw_raw` | 图片最终归档输出目录 |
+| `--out` | **(必填)** | 图片最终归档输出目录（生成图片时强制必填，无默认值，防止误写入默认目录；`--dry-run` 或 `--list-tags` 时可省略） |
 
 ### 4.2 任务范围与调度策略
 
@@ -96,12 +96,14 @@ python scripts/my_comfyui_batch_gen_v5.py [OPTIONS]
 | 参数 | 默认值 | 说明 |
 |---|---|---|
 | `--hard-reset-minutes` | `10.0` | 每隔 N 分钟强制执行一次模型卸载与 VRAM 清空，杜绝显存碎片引发的驱动崩溃 |
-| `--clean-every N` | `10` | 每生成 N 张图片进行一次显存释放清理 |
+| `--clean-every N` | `100` | 每生成 N 张图片进行一次显存释放清理 |
 | `--timeout T` | `300.0` | 单张图片最大超时时间（秒） |
 | `--retries R` | `2` | 单张图片遇到报错或超时后的自动重试次数 |
-| `--resume` | - | 开启断点续跑（读取目标目录下的 `_progress.json`，跳过已完成项） |
+| `--resume` | `True` | 开启断点续跑（默认开启；读取目标目录下的 `_progress.json`，跳过已完成项） |
+| `--no-resume` | - | 忽略已有进度，强制重新生成全量任务 |
+| `--prune-missing` | - | 磁盘与进度联动同步：自动检测磁盘上已被删除的残次图片，重置其进度状态以便自动补生成 |
 | `--dry-run` | - | 仅在控制台打印提示词组装计划与参数，不向 ComfyUI 发送真实请求 |
-| `--dry-run-count N` | `5` | Dry-run 时打印的样例提示词条数 |
+| `--dry-run-count N` | `5` | Dry-run 时打印的样例条数（**只要显式传入此参数，即自动激活 `--dry-run` 预览模式**） |
 
 ---
 
