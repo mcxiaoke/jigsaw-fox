@@ -1304,6 +1304,213 @@ void main() {
     expect(topLeftScreenPos.y, greaterThanOrEqualTo(0.0));
   });
 
+  test('托盘模式缩放视口贴边包裹模型：放大后边缘严禁拖离视口，捏合缩小到100%连续收敛且无弹跳', () async {
+    final img = await _decodePng();
+    final game = JigsawPuzzleGame(
+      image: img,
+      rows: 3,
+      cols: 3,
+      onSolved: () {},
+    );
+    game.onGameResize(Vector2(400, 800));
+    await game.onLoad();
+
+    // 1. 放大到 2.0x
+    game.zoomAt(Vector2(200, 300), 1.0);
+    expect(game.zoom, closeTo(2.0, 0.01));
+
+    // 2. 尝试将棋盘向右拖拽极远（试图让左边缘离开视口露出空白底色）
+    game.panBy(Vector2(500, 0));
+    // 棋盘左侧边缘 (nx=0) 不允许向内脱离 viewLeft (8.0)
+    final leftPos = game.normalizedToScreen(0.0, 0.0);
+    expect(leftPos.x, closeTo(8.0, 0.01), reason: '棋盘左侧边缘必须精确贴止于视口左边距 8.0');
+
+    // 3. 尝试将棋盘向左拖拽极远（试图让右边缘离开视口露出空白底色）
+    game.panBy(Vector2(-1000, 0));
+    // 棋盘右侧边缘 (nx=1.0) 不允许向内脱离 viewRight (400 - 8.0 = 392.0)
+    final rightPos = game.normalizedToScreen(1.0, 0.0);
+    expect(
+      rightPos.x,
+      closeTo(392.0, 0.01),
+      reason: '棋盘右侧边缘必须精确贴止于视口右边距 392.0',
+    );
+
+    // 4. 双指捏合逐步缩小：验证缩小时 panOffset 连续收敛，1.05x -> 1.01x -> 1.0x 绝对无突变弹跳
+    game.setZoomAndPan(1.05, Vector2(-100, 0));
+    final panAt105 = game.panOffset.x;
+    expect(
+      panAt105.abs(),
+      lessThanOrEqualTo(20.0),
+      reason: '1.05x 时允许偏移必须连续收缩',
+    );
+
+    game.setZoomAndPan(1.01, Vector2(-100, 0));
+    final panAt101 = game.panOffset.x;
+    expect(
+      panAt101.abs(),
+      lessThanOrEqualTo(4.0),
+      reason: '1.01x 时允许偏移已被压缩到 4px 以内',
+    );
+
+    game.setZoomAndPan(1.0, Vector2(-100, 0));
+    expect(game.panOffset.x, equals(0.0), reason: '1.0x 连续归零，无 setZero 断崖弹跳');
+  });
+
+  test('桌面散落模式（Tabletop）下视口严格对齐工具栏高度，且无早退断崖', () async {
+    final img = await _decodePng();
+    final game = JigsawPuzzleGame(
+      image: img,
+      rows: 3,
+      cols: 3,
+      scatterMode: 'tabletop',
+      onSolved: () {},
+    );
+    game.onGameResize(Vector2(600, 900));
+    await game.onLoad();
+
+    // 1. 放大至 2.0x
+    game.zoomAt(Vector2(300, 450), 1.0);
+    expect(game.zoom, closeTo(2.0, 0.01));
+
+    // 2. 向上大幅拖拽棋盘
+    game.panBy(Vector2(0, 1000));
+    // 大桌面顶边缘（动态自适应 normMinY）严密对齐 viewTop = _topToolbarHeight (8.0)，杜绝钻入 AppBar
+    final normMinY = (8.0 - game.boardTopLeft.y) / game.boardSize.y;
+    final screenTop = game.normalizedToScreen(0.0, normMinY);
+    expect(
+      screenTop.y,
+      closeTo(8.0, 0.01),
+      reason: '桌面模式大桌面顶边缘不可超过顶部工具栏高度 8.0',
+    );
+
+    // 3. 缩小至 1.0x：由几何约束平滑自恰收敛，无断崖
+    game.setZoomAndPan(1.0, Vector2.zero());
+    expect(game.zoom, closeTo(1.0, 0.001));
+  });
+
+  test('桌面与棋盘碎片拖拽与松手全周期受安全视口保护，严禁脱离屏幕或进入操作盲区丢失', () async {
+    final img = await _decodePng();
+    final game = JigsawPuzzleGame(
+      image: img,
+      rows: 3,
+      cols: 3,
+      scatterMode: 'tabletop',
+      onSolved: () {},
+    );
+    game.onGameResize(Vector2(400, 800));
+    await game.onLoad();
+
+    final piece = game.children.whereType<PuzzlePieceComponent>().first;
+
+    // 1. 尝试将碎片疯狂向左上方甩出屏幕（x = -500, y = -500）
+    game.startHoldingPiece(piece, 0.5, 0.5);
+    game.updateHoldingPiecePosition(Vector2(-500, -500));
+    // 验证左边缘绝不超过 _sideMargin (8.0)，顶边缘绝不超过 _topToolbarHeight (8.0)
+    expect(piece.position.x, greaterThanOrEqualTo(8.0));
+    expect(piece.position.y, greaterThanOrEqualTo(8.0));
+
+    // 松手释放，验证依然稳妥停在安全可视区内
+    game.dropHoldingPiece();
+    expect(piece.position.x, greaterThanOrEqualTo(8.0));
+    expect(piece.position.y, greaterThanOrEqualTo(8.0));
+
+    // 2. 尝试将碎片疯狂向右下方甩出屏幕（x = 1000, y = 1500）
+    game.startHoldingPiece(piece, 0.5, 0.5);
+    game.updateHoldingPiecePosition(Vector2(1000, 1500));
+    final pieceVisualW = piece.size.x * piece.scale.x;
+    final pieceVisualH = piece.size.y * piece.scale.y;
+    expect(
+      piece.position.x + pieceVisualW,
+      lessThanOrEqualTo(400.0 - 8.0 + 0.01),
+    );
+    expect(
+      piece.position.y + pieceVisualH,
+      lessThanOrEqualTo(800.0 - 8.0 + 0.01),
+    );
+
+    // 松手释放
+    game.dropHoldingPiece();
+    expect(
+      piece.position.x + pieceVisualW,
+      lessThanOrEqualTo(400.0 - 8.0 + 0.01),
+    );
+    expect(
+      piece.position.y + pieceVisualH,
+      lessThanOrEqualTo(800.0 - 8.0 + 0.01),
+    );
+  });
+
+  test('桌面散落模式（Tabletop）放大 2.0x 后可自由全景漫游至四周最外围散落槽位，无 Y 轴死锁', () async {
+    final img = await _decodePng();
+    final game = JigsawPuzzleGame(
+      image: img,
+      rows: 3,
+      cols: 3,
+      scatterMode: 'tabletop',
+      onSolved: () {},
+    );
+    // 模拟典型竖屏手机 (392x800)
+    game.onGameResize(Vector2(392, 800));
+    await game.onLoad();
+
+    // 1. 放大至 2.0x
+    game.zoomAt(Vector2(196, 400), 1.0);
+    expect(game.zoom, closeTo(2.0, 0.01));
+
+    // 2. 向下大幅平移视口（查看顶部边缘碎片槽位）
+    game.panBy(Vector2(0, 1000));
+    // 验证垂直 Y 轴绝不被锁死为 0，平移量显著大于 0
+    expect(
+      game.panOffset.y,
+      greaterThan(100.0),
+      reason: 'Y 轴绝不被锁死，必须可以自由漫游到顶部',
+    );
+
+    // 3. 向上大幅平移视口（查看底部边缘碎片槽位）
+    game.panBy(Vector2(0, -2000));
+    expect(game.panOffset.y, lessThan(-100.0), reason: 'Y 轴必须可以自由漫游到底部槽位');
+  });
+
+  test('桌面散落模式（Tabletop）在放大状态下点击扫把一键整理，自动复位至 1.0x 全景总览且所有碎片安全在屏', () async {
+    final img = await _decodePng();
+    final game = JigsawPuzzleGame(
+      image: img,
+      rows: 3,
+      cols: 3,
+      scatterMode: 'tabletop',
+      onSolved: () {},
+    );
+    game.onGameResize(Vector2(400, 800));
+    await game.onLoad();
+
+    // 1. 放大至 2.0x
+    game.zoomAt(Vector2(200, 400), 1.0);
+    expect(game.zoom, closeTo(2.0, 0.01));
+
+    // 2. 点击扫把 (organizeTray)
+    game.organizeTray();
+
+    // 3. 验证自动复位缩放到 1.0x 全景总览
+    expect(
+      game.zoom,
+      closeTo(1.0, 0.001),
+      reason: '桌面模式放大时点扫把必须自动复位回 1.0x 全景总览',
+    );
+    expect(game.panOffset.x, equals(0.0));
+    expect(game.panOffset.y, equals(0.0));
+
+    // 4. 验证全部碎片均在可视屏幕范围内
+    final pieces = game.children.whereType<PuzzlePieceComponent>().toList();
+    for (final p in pieces) {
+      final pW = p.size.x * p.scale.x;
+      final pH = p.size.y * p.scale.y;
+      expect(p.position.x, greaterThanOrEqualTo(8.0 - 0.1));
+      expect(p.position.x + pW, lessThanOrEqualTo(400.0 - 8.0 + 0.1));
+      expect(p.position.y, greaterThanOrEqualTo(8.0 - 0.1));
+      expect(p.position.y + pH, lessThanOrEqualTo(800.0 - 8.0 + 0.1));
+    }
+  });
+
   test('通关后碎片保持绘制且带分割线，不被原图水印遮挡', () async {
     final img = await _decodePng();
     var isSolvedTriggered = false;

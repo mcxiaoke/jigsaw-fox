@@ -1005,19 +1005,57 @@ class JigsawPuzzleGame extends FlameGame
     }
 
     // 2. 根据归一化锚点精确计算主碎片的新左上角坐标（无论缩放多少，光标永远对准抓取点）
-    final targetX =
+    final rawTargetX =
         cursorCanvasPos.x - _holdingAnchorX * primary.size.x * currentScale;
-    final targetY =
+    final rawTargetY =
         cursorCanvasPos.y - _holdingAnchorY * primary.size.y * currentScale;
+
+    // 3. 计算同集群内其他碎片的相对偏移范围（包围盒约束）
+    final clusterPieces = _pieces.values.where(
+      (p) => p.clusterId == primary.clusterId && p != primary,
+    );
+
+    var minCol = 0, maxCol = 0, minRow = 0, maxRow = 0;
+    for (final p in clusterPieces) {
+      final relC = p.c - primary.c;
+      final relR = p.r - primary.r;
+      if (relC < minCol) minCol = relC;
+      if (relC > maxCol) maxCol = relC;
+      if (relR < minRow) minRow = relR;
+      if (relR > maxRow) maxRow = relR;
+    }
+
+    final clusterLeftOffset = minCol * primary.size.x * currentScale;
+    final clusterRightOffset = (maxCol + 1) * primary.size.x * currentScale;
+    final clusterTopOffset = minRow * primary.size.y * currentScale;
+    final clusterBottomOffset = (maxRow + 1) * primary.size.y * currentScale;
+
+    // 安全边界限位：
+    // - 水平方向：四周预留 _sideMargin (8px)
+    // - 垂直方向：顶部预留 _topToolbarHeight (8px) 贴边避让进度条/AppBar 底沿
+    // - 下界限制：
+    //   * 桌面模式：限制在屏幕底部 size.y - 8.0
+    //   * 托盘模式单片（可放回托盘）：限制在屏幕底部 size.y - 8.0
+    //   * 托盘模式集群（不可放回托盘）：严格以托盘顶部 trayPosition.y - 8.0 为界，绝不遮挡托盘
+    final safeMinX = _sideMargin - clusterLeftOffset;
+    final safeMaxX = size.x - _sideMargin - clusterRightOffset;
+    final safeMinY = _topToolbarHeight - clusterTopOffset;
+    final safeMaxY =
+        (isTabletop || clusterPieces.isEmpty
+            ? size.y - 8.0
+            : trayPosition.y - 8.0) -
+        clusterBottomOffset;
+
+    final targetX = rawTargetX
+        .clamp(min(safeMinX, safeMaxX), max(safeMinX, safeMaxX))
+        .toDouble();
+    final targetY = rawTargetY
+        .clamp(min(safeMinY, safeMaxY), max(safeMinY, safeMaxY))
+        .toDouble();
 
     primary.clearActiveEffects();
     primary.scale.setAll(currentScale);
     primary.position.setValues(targetX, targetY);
-
-    // 3. 同步更新同集群内其他碎片的相对位置与缩放
-    final clusterPieces = _pieces.values.where(
-      (p) => p.clusterId == primary.clusterId && p != primary,
-    );
 
     for (final p in clusterPieces) {
       p.clearActiveEffects();
@@ -1185,54 +1223,82 @@ class JigsawPuzzleGame extends FlameGame
     return screenPx / (minBoardPx * _zoom);
   }
 
-  /// Clamps panOffset so that the entire zoomed board and scatter area can be freely navigated
-  /// without being prematurely truncated or losing sight of any corner/piece.
+  /// 视口贴边包裹模型 (Viewport Containment - v1.1 终版)：
+  /// 1. 彻底移除 setZero() 早退：1.0x 及以下完全由几何约束自动收敛居中，根治未松手弹跳；
+  /// 2. 坐标系基准统一：双模式均对齐 _sideMargin 与 _topToolbarHeight，杜绝钻入 AppBar；
+  /// 3. 单点退化与浮点防御：content < view 时自然收缩为 min==max==center，并用 min/max 防御 ArgumentError。
   void _clampPanOffset() {
-    if (_zoom <= 1.0) {
-      _panOffset.setZero();
-      return;
-    }
+    const eps = 1e-6;
 
-    final normMinX = isTabletop ? -0.35 : 0.0;
-    final normMaxX = isTabletop ? 1.35 : 1.0;
-    final normMinY = isTabletop ? -0.35 : 0.0;
-    final normMaxY = isTabletop ? 1.35 : 1.0;
+    // 视口矩形：双模式统一对齐 _computeLayout 基准坐标系
+    final viewLeft = _sideMargin;
+    final viewRight = size.x - _sideMargin;
+    final viewTop = _topToolbarHeight;
+    final viewBottom = isTabletop ? size.y - 8.0 : trayPosition.y - 8.0;
+
+    // 关键优化：桌面模式下归一化边界基于大桌面全景动态自适应推导，彻底废除硬编码 [-0.35, 1.35]
+    final normMinX = isTabletop
+        ? (viewLeft - boardTopLeft.x) / boardSize.x
+        : 0.0;
+    final normMaxX = isTabletop
+        ? (viewRight - boardTopLeft.x) / boardSize.x
+        : 1.0;
+    final normMinY = isTabletop
+        ? (viewTop - boardTopLeft.y) / boardSize.y
+        : 0.0;
+    final normMaxY = isTabletop
+        ? (viewBottom - boardTopLeft.y) / boardSize.y
+        : 1.0;
+
+    final viewW = max(0.0, viewRight - viewLeft);
+    final viewH = max(0.0, viewBottom - viewTop);
 
     final contentW = (normMaxX - normMinX) * boardSize.x * _zoom;
     final contentH = (normMaxY - normMinY) * boardSize.y * _zoom;
 
-    final viewportW = size.x;
-    final viewportH = isTabletop ? size.y : trayPosition.y;
-
-    const edgeMargin = 80.0;
-
-    final minPanX =
-        edgeMargin - contentW - boardTopLeft.x - normMinX * boardSize.x * _zoom;
-    final maxPanX =
-        viewportW -
-        edgeMargin -
-        boardTopLeft.x -
-        normMinX * boardSize.x * _zoom;
-
-    final minPanY =
-        edgeMargin - contentH - boardTopLeft.y - normMinY * boardSize.y * _zoom;
-    final maxPanY =
-        viewportH -
-        edgeMargin -
-        boardTopLeft.y -
-        normMinY * boardSize.y * _zoom;
-
-    if (minPanX > maxPanX) {
-      _panOffset.x = (minPanX + maxPanX) / 2;
+    // 水平维度 (X)：内容超视口则贴边 clamp；内容窄于视口则退化为单点居中
+    double minPanX, maxPanX;
+    if (contentW + eps >= viewW) {
+      maxPanX = viewLeft - boardTopLeft.x - normMinX * boardSize.x * _zoom;
+      minPanX =
+          viewRight -
+          boardTopLeft.x -
+          normMinX * boardSize.x * _zoom -
+          contentW;
     } else {
-      _panOffset.x = _panOffset.x.clamp(minPanX, maxPanX);
+      final centerX =
+          viewLeft +
+          (viewW - contentW) / 2 -
+          boardTopLeft.x -
+          normMinX * boardSize.x * _zoom;
+      minPanX = maxPanX = centerX;
     }
+    _panOffset.x = _panOffset.x.clamp(
+      min(minPanX, maxPanX),
+      max(minPanX, maxPanX),
+    );
 
-    if (minPanY > maxPanY) {
-      _panOffset.y = (minPanY + maxPanY) / 2;
+    // 垂直维度 (Y)：内容超视口则贴边 clamp；内容矮于视口则退化为单点居中
+    double minPanY, maxPanY;
+    if (contentH + eps >= viewH) {
+      maxPanY = viewTop - boardTopLeft.y - normMinY * boardSize.y * _zoom;
+      minPanY =
+          viewBottom -
+          boardTopLeft.y -
+          normMinY * boardSize.y * _zoom -
+          contentH;
     } else {
-      _panOffset.y = _panOffset.y.clamp(minPanY, maxPanY);
+      final centerY =
+          viewTop +
+          (viewH - contentH) / 2 -
+          boardTopLeft.y -
+          normMinY * boardSize.y * _zoom;
+      minPanY = maxPanY = centerY;
     }
+    _panOffset.y = _panOffset.y.clamp(
+      min(minPanY, maxPanY),
+      max(minPanY, maxPanY),
+    );
   }
 
   /// 单一 zoom 写入入口：同步字段与对外通知，保证所有内部重置路径（窗口尺寸变化、
@@ -1577,6 +1643,46 @@ class JigsawPuzzleGame extends FlameGame
       p.isInTray = false;
     }
 
+    // 防御性二次限位：确保松手留在棋盘或桌面上的碎片绝对在可视安全区内（防御手势中断等边缘情况）
+    var minCol = 0, maxCol = 0, minRow = 0, maxRow = 0;
+    for (final p in clusterPieces) {
+      final relC = p.c - piece.c;
+      final relR = p.r - piece.r;
+      if (relC < minCol) minCol = relC;
+      if (relC > maxCol) maxCol = relC;
+      if (relR < minRow) minRow = relR;
+      if (relR > maxRow) maxRow = relR;
+    }
+    final clusterLeftOffset = minCol * piece.size.x * piece.scale.x;
+    final clusterRightOffset = (maxCol + 1) * piece.size.x * piece.scale.x;
+    final clusterTopOffset = minRow * piece.size.y * piece.scale.y;
+    final clusterBottomOffset = (maxRow + 1) * piece.size.y * piece.scale.y;
+
+    final safeMinX = _sideMargin - clusterLeftOffset;
+    final safeMaxX = size.x - _sideMargin - clusterRightOffset;
+    final safeMinY = _topToolbarHeight - clusterTopOffset;
+    final safeMaxY =
+        (isTabletop ? size.y - 8.0 : trayPosition.y - 8.0) -
+        clusterBottomOffset;
+
+    final clampedX = piece.position.x
+        .clamp(min(safeMinX, safeMaxX), max(safeMinX, safeMaxX))
+        .toDouble();
+    final clampedY = piece.position.y
+        .clamp(min(safeMinY, safeMaxY), max(safeMinY, safeMaxY))
+        .toDouble();
+
+    if (clampedX != piece.position.x || clampedY != piece.position.y) {
+      final dx = clampedX - piece.position.x;
+      final dy = clampedY - piece.position.y;
+      piece.position.setValues(clampedX, clampedY);
+      for (final p in clusterPieces) {
+        if (p != piece) {
+          p.position.add(Vector2(dx, dy));
+        }
+      }
+    }
+
     // 棋盘上所有非托盘碎片的 ID 集合
     final onBoardPieceIds = _pieces.values
         .where((p) => !p.isInTray)
@@ -1747,6 +1853,9 @@ class JigsawPuzzleGame extends FlameGame
       'organizeTray isTabletop=$isTabletop solved=$solvedCount zoom=${_zoom.toStringAsFixed(2)} pan=$_panOffset board=${boardSize.x.toStringAsFixed(1)}x${boardSize.y.toStringAsFixed(1)}',
     );
     if (isTabletop) {
+      if (_zoom > 1.0) {
+        resetZoom();
+      }
       final slots = _getTabletopScatterSlots(totalPieces);
       var slotIdx = 0;
       final updatedPieces = <PieceState>[];
