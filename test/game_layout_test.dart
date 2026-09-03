@@ -1729,4 +1729,218 @@ void main() {
     // 提示计数必须保留，防止玩家刷低提示次数以达成三星
     expect(game.boardState.hintsUsed, 1);
   });
+
+  test('桌面模式读档后缩放：全场所有碎片（含未移动初始散落碎片）100% 同步缩放', () async {
+    final img = await _decodePng();
+    final game = JigsawPuzzleGame(
+      image: img,
+      rows: 3,
+      cols: 3,
+      scatterMode: 'tabletop',
+      onSolved: () {},
+    );
+    game.onGameResize(Vector2(600, 800));
+    await game.onLoad();
+
+    // 移动第 0 块碎片到顶部
+    final p0 = game.children.whereType<PuzzlePieceComponent>().first;
+    game.startHoldingPiece(p0, 0.5, 0.5);
+    game.updateHoldingPiecePosition(Vector2(300, 50));
+    game.dropHoldingPiece();
+
+    // 导出快照并模拟退出再重进（恢复快照）
+    final snapshot = game.exportSnapshotJson();
+
+    final game2 = JigsawPuzzleGame(
+      image: img,
+      rows: 3,
+      cols: 3,
+      scatterMode: 'tabletop',
+      initialSnapshotJson: snapshot,
+      onSolved: () {},
+    );
+    game2.onGameResize(Vector2(600, 800));
+    await game2.onLoad();
+
+    // 验证所有碎片在桌面模式下 isInTray 均为 false
+    final pieces = game2.children.whereType<PuzzlePieceComponent>().toList();
+    expect(pieces.every((p) => !p.isInTray), isTrue);
+
+    // 放大至 2.0x
+    game2.zoomAt(Vector2(300, 400), 1.0);
+    expect(game2.zoom, closeTo(2.0, 0.01));
+
+    // 验证全场所有碎片（包括未移动碎片）的 scale 均跟随变为 2.0x
+    for (final p in pieces) {
+      expect(
+        p.scale.x,
+        closeTo(2.0, 0.01),
+        reason: '碎片 ${p.id} 必须跟随棋盘缩放至 2.0x，不得冻结',
+      );
+    }
+  });
+
+  test('跨模式切换：桌面模式导出快照 -> 托盘模式加载，未拼游离碎片自动收纳进托盘，无悬空越界碎片', () async {
+    final img = await _decodePng();
+    final gameTabletop = JigsawPuzzleGame(
+      image: img,
+      rows: 3,
+      cols: 3,
+      scatterMode: 'tabletop',
+      onSolved: () {},
+    );
+    gameTabletop.onGameResize(Vector2(600, 800));
+    await gameTabletop.onLoad();
+
+    // 拼上一块（hint）作为已归位资产
+    gameTabletop.hint();
+    expect(gameTabletop.solvedCount, 1);
+
+    // 导出桌面模式快照
+    final snapshot = gameTabletop.exportSnapshotJson();
+
+    // 切换为托盘模式加载该快照
+    final gameTray = JigsawPuzzleGame(
+      image: img,
+      rows: 3,
+      cols: 3,
+      scatterMode: 'tray',
+      initialSnapshotJson: snapshot,
+      onSolved: () {},
+    );
+    gameTray.onGameResize(Vector2(600, 800));
+    await gameTray.onLoad();
+
+    // 1. 已归位碎片依然正确归位在棋盘上
+    expect(gameTray.solvedCount, 1);
+
+    // 2. 其余未拼碎片全部被收纳进托盘
+    final pieces = gameTray.children.whereType<PuzzlePieceComponent>().toList();
+    final trayPieces = pieces.where((p) => p.isInTray).toList();
+    expect(trayPieces.length, equals(8), reason: '9块碎片除1块已归位外，其余8块应全部进入托盘');
+
+    // 3. 所有托盘碎片均在托盘区域内（y >= trayPosition.y - 10.0），绝无悬空或飞出屏幕顶部的碎片
+    for (final p in trayPieces) {
+      expect(
+        p.position.y,
+        greaterThanOrEqualTo(gameTray.trayPosition.y - 10.0),
+      );
+      expect(p.scale.x, closeTo(gameTray.trayPieceScale, 0.01));
+    }
+  });
+
+  test('跨模式切换：托盘模式导出快照 -> 桌面模式加载，托盘碎片自动均匀散落至桌面四周，全场随缩放响应', () async {
+    final img = await _decodePng();
+    final gameTray = JigsawPuzzleGame(
+      image: img,
+      rows: 3,
+      cols: 3,
+      scatterMode: 'tray',
+      onSolved: () {},
+    );
+    gameTray.onGameResize(Vector2(600, 800));
+    await gameTray.onLoad();
+
+    // 拼上一块（hint）
+    gameTray.hint();
+    expect(gameTray.solvedCount, 1);
+
+    // 导出托盘模式快照
+    final snapshot = gameTray.exportSnapshotJson();
+
+    // 切换为桌面模式加载该快照
+    final gameTabletop = JigsawPuzzleGame(
+      image: img,
+      rows: 3,
+      cols: 3,
+      scatterMode: 'tabletop',
+      initialSnapshotJson: snapshot,
+      onSolved: () {},
+    );
+    gameTabletop.onGameResize(Vector2(600, 800));
+    await gameTabletop.onLoad();
+
+    // 1. 桌面模式下所有碎片 isInTray 为 false
+    final pieces = gameTabletop.children
+        .whereType<PuzzlePieceComponent>()
+        .toList();
+    expect(pieces.every((p) => !p.isInTray), isTrue);
+
+    // 2. 已归位碎片保持归位
+    expect(gameTabletop.solvedCount, 1);
+
+    // 3. 所有碎片均在安全可视屏幕范围内
+    for (final p in pieces) {
+      expect(p.position.x, greaterThanOrEqualTo(8.0 - 0.1));
+      expect(p.position.x, lessThanOrEqualTo(600.0 - 8.0 + 0.1));
+      expect(p.position.y, greaterThanOrEqualTo(8.0 - 0.1));
+      expect(p.position.y, lessThanOrEqualTo(800.0 - 8.0 + 0.1));
+    }
+
+    // 4. 放大至 2.0x，全场所有碎片跟随缩放
+    gameTabletop.zoomAt(Vector2(300, 400), 1.0);
+    expect(gameTabletop.zoom, closeTo(2.0, 0.01));
+    for (final p in pieces) {
+      expect(p.scale.x, closeTo(2.0, 0.01));
+    }
+  });
+
+  test('历史旧存档恢复（无 scatterMode 标记）：未拼游离单片自动初始化归位，已归位碎片完美保全', () async {
+    final img = await _decodePng();
+    final game = JigsawPuzzleGame(
+      image: img,
+      rows: 2,
+      cols: 2,
+      scatterMode: 'tray',
+      onSolved: () {},
+    );
+    game.onGameResize(Vector2(400, 800));
+    await game.onLoad();
+    game.hint();
+    expect(game.solvedCount, 1);
+
+    // 构建一个不带 extra.scatterMode 的历史旧快照 JSON
+    final jsonStr = game.exportSnapshotJson();
+    final map = jsonDecode(jsonStr) as Map<String, dynamic>;
+    map.remove('scatterMode');
+
+    // 1. 在桌面模式下加载历史旧快照
+    final gameTabletop = JigsawPuzzleGame(
+      image: img,
+      rows: 2,
+      cols: 2,
+      scatterMode: 'tabletop',
+      initialSnapshotJson: jsonEncode(map),
+      onSolved: () {},
+    );
+    gameTabletop.onGameResize(Vector2(400, 800));
+    await gameTabletop.onLoad();
+
+    // 验证：已归位碎片保全，其余3块未拼碎片全部自动散落在桌面有效范围内且 isInTray=false
+    expect(gameTabletop.solvedCount, 1);
+    final pieces = gameTabletop.children
+        .whereType<PuzzlePieceComponent>()
+        .toList();
+    expect(pieces.every((p) => !p.isInTray), isTrue);
+
+    // 2. 在托盘模式下加载历史旧快照
+    final gameTray = JigsawPuzzleGame(
+      image: img,
+      rows: 2,
+      cols: 2,
+      scatterMode: 'tray',
+      initialSnapshotJson: jsonEncode(map),
+      onSolved: () {},
+    );
+    gameTray.onGameResize(Vector2(400, 800));
+    await gameTray.onLoad();
+
+    // 验证：已归位碎片保全，其余3块未拼碎片全部自动收归托盘
+    expect(gameTray.solvedCount, 1);
+    final trayPieces = gameTray.children
+        .whereType<PuzzlePieceComponent>()
+        .where((p) => p.isInTray)
+        .toList();
+    expect(trayPieces.length, 3);
+  });
 }
