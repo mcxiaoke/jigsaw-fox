@@ -92,4 +92,93 @@ void main() {
       expect(find.text('保存自制关卡'), findsOneWidget);
     },
   );
+
+  group('CropPuzzlePage.calculateMaxCropScaleFromDimensions', () {
+    test(
+      '4000x3000 image with matching 4:3 viewport yields maxScale ~2.778',
+      () {
+        final scale = CropPuzzlePage.calculateMaxCropScaleFromDimensions(
+          viewportSize: const Size(400, 300),
+          imageWidth: 4000,
+          imageHeight: 3000,
+        );
+        expect(scale, closeTo(3000 / 1080, 1e-4));
+        // 验证在 scale 上限时，真实裁切短边像素恰好为 1080px
+        const baseScale = 400 / 4000;
+        final cropShort = 300 / (baseScale * scale);
+        expect(cropShort, closeTo(1080.0, 0.1));
+      },
+    );
+
+    test(
+      '3000x4000 portrait image cropped to 4:3 landscape limits scale to 2.083 to guarantee 1080px short side',
+      () {
+        final scale = CropPuzzlePage.calculateMaxCropScaleFromDimensions(
+          viewportSize: const Size(400, 300),
+          imageWidth: 3000,
+          imageHeight: 4000,
+        );
+        // baseScale = max(400/3000, 300/4000) = 400/3000
+        // physMax = 300 / ((400/3000) * 1080) = 300 / 144 = 2.08333
+        expect(scale, closeTo(2.08333, 1e-4));
+
+        const baseScale = 400.0 / 3000.0;
+        final realCropW = 400.0 / (baseScale * scale);
+        final realCropH = 300.0 / (baseScale * scale);
+        expect(realCropW, closeTo(1440.0, 0.1));
+        expect(realCropH, closeTo(1080.0, 0.1));
+        expect(realCropH, greaterThanOrEqualTo(1080.0 - 1e-4));
+      },
+    );
+
+    test(
+      '1440x1440 square image cropped to 3:2 landscape locks to 1.0 (prevents digital upscale)',
+      () {
+        final scale = CropPuzzlePage.calculateMaxCropScaleFromDimensions(
+          viewportSize: const Size(300, 200),
+          imageWidth: 1440,
+          imageHeight: 1440,
+        );
+        // baseScale = 300/1440, physMax = 200 / ((300/1440) * 1080) = 0.8888 <= 1.0
+        expect(scale, 1.0);
+      },
+    );
+
+    test('1080x1080 image on 1:1 viewport locks to 1.0', () {
+      final scale = CropPuzzlePage.calculateMaxCropScaleFromDimensions(
+        viewportSize: const Size(300, 300),
+        imageWidth: 1080,
+        imageHeight: 1080,
+      );
+      expect(scale, 1.0);
+    });
+
+    test('800x600 small image locks to 1.0', () {
+      final scale = CropPuzzlePage.calculateMaxCropScaleFromDimensions(
+        viewportSize: const Size(400, 300),
+        imageWidth: 800,
+        imageHeight: 600,
+      );
+      expect(scale, 1.0);
+    });
+
+    test('zero or negative dimensions safely fallback to 1.0', () {
+      expect(
+        CropPuzzlePage.calculateMaxCropScaleFromDimensions(
+          viewportSize: Size.zero,
+          imageWidth: 4000,
+          imageHeight: 3000,
+        ),
+        1.0,
+      );
+      expect(
+        CropPuzzlePage.calculateMaxCropScaleFromDimensions(
+          viewportSize: const Size(400, 300),
+          imageWidth: 0,
+          imageHeight: 3000,
+        ),
+        1.0,
+      );
+    });
+  });
 }

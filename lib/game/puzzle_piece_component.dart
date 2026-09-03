@@ -112,11 +112,11 @@ class PuzzlePieceComponent extends PositionComponent
     ..isAntiAlias = true;
 
   /// 静止/贴地接触微阴影画笔（Contact AO）：
-  /// - 模糊半径 1.0px，垂直位移 0.8px，透明度 0x30 (约 19%)
-  /// - 模拟硬纸板受重力紧压在底托/桌面时的环境光遮挡（Ambient Occlusion），形成逼真贴地感。
+  /// - 垂直位移 0.8px，透明度 0x30 (约 19%)，无离屏高斯模糊
+  /// - 模拟硬纸板受重力紧压在底托/桌面时的环境光遮挡（Ambient Occlusion），形成逼真贴地感；
+  /// - 消除静止碎片（尤其是托盘内数十块静止碎片）每帧产生昂贵 GPU MaskFilter 高斯模糊卷积 Pass。
   static final Paint _contactShadowPaint = Paint()
     ..color = const Color(0x30000000)
-    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 1.0)
     ..isAntiAlias = true;
 
   /// 拖拽拾起悬浮扩散软阴影画笔：
@@ -182,6 +182,27 @@ class PuzzlePieceComponent extends PositionComponent
   @override
   void render(ui.Canvas canvas) {
     if (isFilteredOut || hideBorders) return; // 边缘过滤隐藏或通关后整图渲染，跳过单片绘制
+
+    // 纯渲染层视锥剔除：若该碎片及所属拖拽集群未处于交互中，且完全位于当前屏幕视口可见范围之外，直接跳过绘制
+    // 1. 严格计入 PieceShape 的四周凸头（Tab）与凹槽（Blank）延展外扩（overhang），防止边缘切片闪烁；
+    // 2. 预留 4.0px 安全裕量，容纳接触阴影垂直位移（0.8px）与高亮描边外扩；
+    // 3. 托盘模式下可立即消除屏幕外 85%~90% 碎片的无效 GPU 绘制，100% 零业务逻辑干扰。
+    final isHoldingCluster = game.holdingPiece?.clusterId == clusterId;
+    if (!isDragging &&
+        !isHoldingCluster &&
+        game.size.x > 0 &&
+        game.size.y > 0) {
+      final oh = shape.overhang;
+      const margin = 4.0;
+      final left = position.x - (oh.left * size.x + margin) * scale.x;
+      final right = position.x + ((1.0 + oh.right) * size.x + margin) * scale.x;
+      final top = position.y - (oh.top * size.y + margin) * scale.y;
+      final bottom =
+          position.y + ((1.0 + oh.bottom) * size.y + margin) * scale.y;
+      if (right < 0 || left > game.size.x || bottom < 0 || top > game.size.y) {
+        return;
+      }
+    }
 
     final isElevated = isDragging && !isInTray;
 

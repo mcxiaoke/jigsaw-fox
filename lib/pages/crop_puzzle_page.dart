@@ -56,6 +56,52 @@ class CropPuzzlePage extends StatefulWidget {
   final String sourcePlatform;
   final String? sourceUrl;
 
+  /// 拼图素材裁切短边物理基准像素（参考选图标准 docs/puzzle-image-selection-standard.md 及格线 1080px）
+  static const double kMinOriginalCropPixels = 1080.0;
+
+  /// 计算最大允许缩放倍率，严格基于原图与视口的真实物理像素几何映射：
+  /// 1. 保证裁切区域短边像素 min(boxW, boxH) / (baseScale * scale) >= 1080px；
+  /// 2. 原图较小（物理尺寸不足以支撑 1080px 短边）时，严格锁定为 1.0x（仅允许平移选区，禁止数码拉伸糊图）；
+  /// 3. 彻底消除原先 1.0 / baseScale 导致的大图放大至 900%+ 破坏构图的缺陷。
+  static double calculateMaxCropScale(Size viewportSize, ui.Image? image) {
+    if (image == null) return 1.0;
+    return calculateMaxCropScaleFromDimensions(
+      viewportSize: viewportSize,
+      imageWidth: image.width.toDouble(),
+      imageHeight: image.height.toDouble(),
+    );
+  }
+
+  /// 纯尺寸维度的物理缩放上限计算，供内部使用及单元测试覆盖
+  @visibleForTesting
+  static double calculateMaxCropScaleFromDimensions({
+    required Size viewportSize,
+    required double imageWidth,
+    required double imageHeight,
+  }) {
+    final boxW = viewportSize.width;
+    final boxH = viewportSize.height;
+    final imgW = imageWidth;
+    final imgH = imageHeight;
+
+    if (boxW <= 0 || boxH <= 0 || imgW <= 0 || imgH <= 0) {
+      return 1.0;
+    }
+
+    final baseScale = max(boxW / imgW, boxH / imgH);
+    if (baseScale <= 0) return 1.0;
+
+    // 真实导出短边像素: min(realCropW, realCropH) = min(boxW, boxH) / (baseScale * scale)
+    // 约束 min(realCropW, realCropH) >= kMinOriginalCropPixels
+    // 得 scale <= min(boxW, boxH) / (baseScale * kMinOriginalCropPixels)
+    final physMax = min(boxW, boxH) / (baseScale * kMinOriginalCropPixels);
+    if (physMax <= 1.0) {
+      return 1.0;
+    }
+
+    return physMax;
+  }
+
   static Future<CustomPuzzleItem?> push(
     BuildContext context,
     Uint8List bytes, {
@@ -159,21 +205,8 @@ class _CropPuzzlePageState extends State<CropPuzzlePage> {
     return Size(imgW * baseScale, imgH * baseScale);
   }
 
-  /// 计算最大允许缩放倍率，限制不能放大超过原图原本物理分辨率
   double _calculateMaxScale(Size viewportSize, ui.Image? image) {
-    if (image == null || viewportSize.width <= 0 || viewportSize.height <= 0) {
-      return 1.0;
-    }
-    final boxW = viewportSize.width;
-    final boxH = viewportSize.height;
-    final imgW = image.width.toDouble();
-    final imgH = image.height.toDouble();
-    if (boxW <= 0 || boxH <= 0 || imgW <= 0 || imgH <= 0) {
-      return 1.0;
-    }
-    final baseScale = max(boxW / imgW, boxH / imgH);
-    if (baseScale <= 0) return 1.0;
-    return max(1.0, 1.0 / baseScale);
+    return CropPuzzlePage.calculateMaxCropScale(viewportSize, image);
   }
 
   Matrix4 _getInitialMatrix(Size viewportSize, ui.Image? image) {
