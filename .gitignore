@@ -83,3 +83,5 @@ working.txt
 
 # fdb session state
 .fdb/
+
+jigsaw_raw/

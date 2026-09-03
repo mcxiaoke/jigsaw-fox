@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:image/image.dart' as img;
 
 import '../../services/app_logger.dart';
+import '../image_crop.dart';
 
 /// 传递至后台 Isolate 的缩略图处理参数负载
 class ThumbnailTaskParams {
@@ -23,12 +24,13 @@ class ThumbnailTaskParams {
   final int quality;
 }
 
-/// 传递至后台 Isolate 的居中裁剪处理参数负载（设计 §2.2 裁剪适配）
+/// 传递至后台 Isolate 的居中裁剪与智能裁切处理参数负载（设计 §2.2 裁剪适配）
 class CropTaskParams {
   const CropTaskParams({
     required this.rawBytes,
     this.targetRatio,
     this.quality = 90,
+    this.smartCrop = true,
   });
 
   final Uint8List rawBytes;
@@ -37,10 +39,19 @@ class CropTaskParams {
   /// 面积损失最小的标准比例（ZIP 图包导入场景）。
   final double? targetRatio;
   final int quality;
+
+  /// 是否启用主体感知智能裁切（默认启用）。为 false 时回退几何居中裁切。
+  final bool smartCrop;
 }
 
-/// 独立的后台 Isolate 缩略图生成器
-/// 纯 Dart 逻辑，基于二进制与图像矩阵运算，零 Flutter UI 依赖
+/// 独立的后台 Isolate 图像处理与缩略图生成器（纯 Dart 逻辑，零 Flutter UI 依赖）
+///
+/// 职责划分：
+/// 1. 缩略图生成（[generateThumbnail] / [generateThumbnailBytes] / [generateThumbnailFromBytes]）：
+///    纯等比例下采样，长宽比与原图完全一致，绝不裁切；
+/// 2. 原图入库规格化（[generateCroppedBytesFromBytes]）：
+///    针对 ZIP 图包导入等比例不可控的源图，智能裁切/居中裁切至 [kStandardRatios] 标准比例，
+///    保证入库后拼图切片网格为纯正方形。
 class ThumbnailGenerator {
   const ThumbnailGenerator._();
 
@@ -188,20 +199,23 @@ class ThumbnailGenerator {
     }
   }
 
-  /// 在独立后台 Isolate 中对内存图片字节执行居中裁剪（只裁不缩），返回 JPEG 字节。
+  /// 在独立后台 Isolate 中对内存图片字节执行智能或居中裁剪（只裁不缩），返回 JPEG 字节。
   ///
   /// [targetRatio] 为 null 时自动选取面积损失最小的标准比例（ZIP 图包导入入库用，
   /// 设计 §2.2）；已是标准比例（损失 ≤ 1%）的图**原样返回不重编码**，零质量损耗。
+  /// [smartCrop] 为 true 时启用主体显著性感知智能裁切（默认启用），为 false 时回退纯几何居中裁切。
   static Future<Uint8List?> generateCroppedBytesFromBytes({
     required Uint8List rawBytes,
     double? targetRatio,
     int quality = 90,
+    bool smartCrop = true,
   }) async {
     if (rawBytes.isEmpty) return null;
     final params = CropTaskParams(
       rawBytes: rawBytes,
       targetRatio: targetRatio,
       quality: quality,
+      smartCrop: smartCrop,
     );
     try {
       return await compute(_processCropToBytesIsolate, params);
@@ -215,8 +229,8 @@ class ThumbnailGenerator {
     }
   }
 
-  /// 后台 Isolate 核心运算例程：居中裁剪并返回 JPEG 字节。
-  /// `ratio > target` 裁宽（左右各半），否则裁高（上下各半）。
+  /// 后台 Isolate 核心运算例程：智能/居中裁剪并返回 JPEG 字节。
+  /// 默认使用 [findSmartCropRect] 进行主体显著性能量寻优；
   /// 标准比例图（损失 ≤ 1%）直接返回原始字节，避免无谓重编码。
   static Uint8List? _processCropToBytesIsolate(CropTaskParams params) {
     try {
@@ -227,7 +241,8 @@ class ThumbnailGenerator {
       if (srcW <= 0 || srcH <= 0) return null;
 
       final srcRatio = srcW / srcH;
-      final target = params.targetRatio ?? _nearestStandardRatio(srcW, srcH);
+      final target =
+          params.targetRatio ?? nearestStandardRatio(width: srcW, height: srcH);
 
       // 已是目标比例（容差 1%）：原样返回，零重编码损耗
       final loss = 1.0 - min(srcRatio / target, target / srcRatio);
@@ -236,18 +251,26 @@ class ThumbnailGenerator {
       }
 
       int cropW, cropH, dx, dy;
-      if (srcRatio > target) {
-        // 太宽：裁宽，高度不变
-        cropH = srcH;
-        cropW = (srcH * target).round();
-        dx = ((srcW - cropW) / 2).round();
-        dy = 0;
+      if (params.smartCrop) {
+        final rect = findSmartCropRect(original, targetRatio: target);
+        cropW = rect.width.round();
+        cropH = rect.height.round();
+        dx = rect.left.round();
+        dy = rect.top.round();
       } else {
-        // 太高：裁高，宽度不变
-        cropW = srcW;
-        cropH = (srcW / target).round();
-        dx = 0;
-        dy = ((srcH - cropH) / 2).round();
+        if (srcRatio > target) {
+          // 太宽：裁宽，高度不变
+          cropH = srcH;
+          cropW = (srcH * target).round();
+          dx = ((srcW - cropW) / 2).round();
+          dy = 0;
+        } else {
+          // 太高：裁高，宽度不变
+          cropW = srcW;
+          cropH = (srcW / target).round();
+          dx = 0;
+          dy = ((srcH - cropH) / 2).round();
+        }
       }
 
       if (cropW <= 0 || cropH <= 0 || dx < 0 || dy < 0) return null;
@@ -264,22 +287,5 @@ class ThumbnailGenerator {
     } catch (e) {
       return null;
     }
-  }
-
-  /// 选取 {1:1, 3:2, 2:3} 中面积损失最小的目标比例（与 image_crop.dart 一致，isolate 内避免跨库依赖）
-  static double _nearestStandardRatio(int width, int height) {
-    if (width <= 0 || height <= 0) return 1.0;
-    final r = width / height;
-    const candidates = [1.0, 1.5, 2 / 3];
-    var best = candidates.first;
-    var minLoss = 1.0 - min(r / best, best / r);
-    for (final c in candidates) {
-      final loss = 1.0 - min(r / c, c / r);
-      if (loss < minLoss) {
-        minLoss = loss;
-        best = c;
-      }
-    }
-    return best;
   }
 }

@@ -1,4 +1,8 @@
+import 'dart:typed_data';
+
 import 'package:flutter_test/flutter_test.dart';
+import 'package:image/image.dart' as img;
+import 'package:jigsawpuzzle/logic/cache/thumbnail_generator.dart';
 import 'package:jigsawpuzzle/logic/image_crop.dart';
 
 void main() {
@@ -138,6 +142,165 @@ void main() {
         nearestStandardRatio(width: 800, height: 1000),
         closeTo(2 / 3, 0.001),
       );
+    });
+  });
+
+  group('findSmartCropRect', () {
+    test('pure monochrome image smoothly falls back to centerCropRect', () {
+      final imgObj = img.Image(width: 1600, height: 900);
+      img.fill(imgObj, color: img.ColorRgb8(200, 200, 200));
+
+      final smartRect = findSmartCropRect(imgObj, targetRatio: 1.0);
+      final centerRect = centerCropRect(
+        imageWidth: 1600,
+        imageHeight: 900,
+        targetRatio: 1.0,
+      );
+
+      expect(smartRect.left, centerRect.left);
+      expect(smartRect.top, centerRect.top);
+      expect(smartRect.width, centerRect.width);
+      expect(smartRect.height, centerRect.height);
+    });
+
+    test('left-biased high-contrast subject pulls crop window to the left', () {
+      final imgObj = img.Image(width: 1600, height: 900);
+      img.fill(imgObj, color: img.ColorRgb8(240, 240, 240));
+
+      // 在左侧 [50, 450] 绘制高对比度细节纹理
+      for (var y = 100; y < 800; y++) {
+        for (var x = 50; x < 450; x++) {
+          final c = ((x * 17 + y * 31) % 200);
+          imgObj.setPixelRgb(x, y, c, 255 - c, (c * 2) % 255);
+        }
+      }
+
+      final smartRect = findSmartCropRect(imgObj, targetRatio: 1.0);
+      final centerRect = centerCropRect(
+        imageWidth: 1600,
+        imageHeight: 900,
+        targetRatio: 1.0,
+      );
+
+      // 普通居中会从 (1600 - 900)/2 = 350 开始，裁掉左边大部分主体
+      expect(centerRect.left, 350.0);
+      // 智能裁切窗口必须自动向左靠拢 (left <= 100)，完全覆盖主体
+      expect(smartRect.left, lessThan(100.0));
+      expect(smartRect.width, 900.0);
+      expect(smartRect.height, 900.0);
+    });
+
+    test(
+      'right-biased high-contrast subject pulls crop window to the right',
+      () {
+        final imgObj = img.Image(width: 1600, height: 900);
+        img.fill(imgObj, color: img.ColorRgb8(240, 240, 240));
+
+        // 在右侧 [1150, 1550] 绘制高对比度细节纹理
+        for (var y = 100; y < 800; y++) {
+          for (var x = 1150; x < 1550; x++) {
+            final c = ((x * 19 + y * 23) % 200);
+            imgObj.setPixelRgb(x, y, 255 - c, c, (c * 3) % 255);
+          }
+        }
+
+        final smartRect = findSmartCropRect(imgObj, targetRatio: 1.0);
+        final centerRect = centerCropRect(
+          imageWidth: 1600,
+          imageHeight: 900,
+          targetRatio: 1.0,
+        );
+
+        expect(centerRect.left, 350.0);
+        // 智能裁切窗口必须自动向右靠拢 (left >= 600)
+        expect(smartRect.left, greaterThan(600.0));
+        expect(smartRect.width, 900.0);
+        expect(smartRect.height, 900.0);
+      },
+    );
+
+    test(
+      'top-biased subject on tall vertical image pulls crop window to the top',
+      () {
+        final imgObj = img.Image(width: 900, height: 1600);
+        img.fill(imgObj, color: img.ColorRgb8(240, 240, 240));
+
+        // 在顶部 [50, 450] 绘制主体
+        for (var y = 50; y < 450; y++) {
+          for (var x = 100; x < 800; x++) {
+            final c = ((x * 13 + y * 29) % 200);
+            imgObj.setPixelRgb(x, y, c, c, 255 - c);
+          }
+        }
+
+        final smartRect = findSmartCropRect(imgObj, targetRatio: 1.0);
+        final centerRect = centerCropRect(
+          imageWidth: 900,
+          imageHeight: 1600,
+          targetRatio: 1.0,
+        );
+
+        // 普通居中 top = (1600 - 900) / 2 = 350
+        expect(centerRect.top, 350.0);
+        // 智能裁切必须向顶部靠拢 (top <= 100)
+        expect(smartRect.top, lessThan(100.0));
+        expect(smartRect.width, 900.0);
+        expect(smartRect.height, 900.0);
+      },
+    );
+
+    test('already matching target ratio returns full image rect', () {
+      final imgObj = img.Image(width: 1200, height: 800); // 3:2
+      final smartRect = findSmartCropRect(imgObj, targetRatio: 1.5);
+      expect(smartRect.left, 0.0);
+      expect(smartRect.top, 0.0);
+      expect(smartRect.width, 1200.0);
+      expect(smartRect.height, 800.0);
+    });
+  });
+
+  group('ThumbnailGenerator.generateCroppedBytesFromBytes', () {
+    test(
+      'crops image to target ratio with smartCrop: true by default',
+      () async {
+        final imgObj = img.Image(width: 400, height: 200); // 2:1
+        img.fill(imgObj, color: img.ColorRgb8(100, 150, 200));
+        for (var y = 20; y < 180; y++) {
+          for (var x = 20; x < 180; x++) {
+            imgObj.setPixelRgb(x, y, 255, 0, 0);
+          }
+        }
+        final rawBytes = Uint8List.fromList(img.encodeJpg(imgObj));
+
+        final croppedBytes =
+            await ThumbnailGenerator.generateCroppedBytesFromBytes(
+              rawBytes: rawBytes,
+              targetRatio: 1.0,
+            );
+        expect(croppedBytes, isNotNull);
+
+        final resultImg = img.decodeImage(croppedBytes!)!;
+        expect(resultImg.width, 200);
+        expect(resultImg.height, 200);
+      },
+    );
+
+    test('supports smartCrop: false for center crop fallback', () async {
+      final imgObj = img.Image(width: 400, height: 200); // 2:1
+      img.fill(imgObj, color: img.ColorRgb8(100, 150, 200));
+      final rawBytes = Uint8List.fromList(img.encodeJpg(imgObj));
+
+      final croppedBytes =
+          await ThumbnailGenerator.generateCroppedBytesFromBytes(
+            rawBytes: rawBytes,
+            targetRatio: 1.0,
+            smartCrop: false,
+          );
+      expect(croppedBytes, isNotNull);
+
+      final resultImg = img.decodeImage(croppedBytes!)!;
+      expect(resultImg.width, 200);
+      expect(resultImg.height, 200);
     });
   });
 }
