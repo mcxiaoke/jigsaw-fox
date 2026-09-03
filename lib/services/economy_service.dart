@@ -1,8 +1,9 @@
 import 'dart:math' as math;
 
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:hive_ce/hive_ce.dart';
 
 import 'app_logger.dart';
+import '../data/storage_manager.dart';
 
 /// 经济与奖励结算结果
 class SettlementRewardResult {
@@ -27,12 +28,6 @@ class SettlementRewardResult {
 class EconomyService {
   EconomyService._();
   static final EconomyService instance = EconomyService._();
-
-  static const String _keyCoins = 'jigsaw_economy_coins';
-  static const String _keyCoupons = 'jigsaw_economy_hint_coupons';
-  static const String _keyDailyEarned = 'jigsaw_economy_daily_earned';
-  static const String _keyDailyDate = 'jigsaw_economy_daily_date';
-  static const String _keyStarterGranted = 'jigsaw_economy_starter_granted';
 
   /// 7 档难度基准金币：[L1, L1.5, L2, L3, L4, L5, L6]（设计 §6.1 压缩倍率表）
   static const List<int> kDifficultyBaseCoins = [5, 6, 8, 12, 15, 20, 25];
@@ -68,20 +63,23 @@ class EconomyService {
   static const int kInitialHintCoupons = 5;
   static const int kInitialCoins = 100;
 
-  SharedPreferences? _prefs;
+  // 存储迁移（§2.2 / §4.3）：原 5 个 经济 prefs key prefs key 改为
+  // app-state-v1 的原生类型 key（int/String/bool 直接 put/get，无 jsonEncode）
+  static const String _keyCoins = 'econ:coins';
+  static const String _keyCoupons = 'econ:hintCoupons';
+  static const String _keyDailyEarned = 'econ:dailyEarned';
+  static const String _keyDailyDate = 'econ:dailyDate';
+  static const String _keyStarterGranted = 'econ:starterGranted';
 
-  Future<void> init() async {
-    _prefs = await SharedPreferences.getInstance();
-    // 新手赠送（仅首次启动一次，标记防重复）：5 券 + 100 金币（设计 §6.2）
-    if (!(_prefs?.getBool(_keyStarterGranted) ?? false)) {
-      await _prefs?.setInt(_keyCoins, kInitialCoins);
-      await _prefs?.setInt(_keyCoupons, kInitialHintCoupons);
-      await _prefs?.setBool(_keyStarterGranted, true);
-    }
-  }
+  Box<dynamic> get _box => StorageManager.instance.state;
 
-  int get coins => _prefs?.getInt(_keyCoins) ?? 0;
-  int get hintCoupons => _prefs?.getInt(_keyCoupons) ?? 0; // 初始赠送见 init()
+  bool _initialized = false;
+
+  /// **注意默认值为 0**（§4.3）：初始 100 由 starter 补发流程写入，
+  /// 不得用 `box.get(key, defaultValue: 100)` 硬编码 100，否则与补发冲突
+  int get coins => _initialized ? (_box.get(_keyCoins) as int? ?? 0) : 0;
+  int get hintCoupons =>
+      _initialized ? (_box.get(_keyCoupons) as int? ?? 0) : 0; // 初始赠送见 init()
 
   String _todayDateStr() {
     final now = DateTime.now();
@@ -89,10 +87,34 @@ class EconomyService {
   }
 
   int get dailyEarnedCoins {
+    if (!_initialized) return 0;
     final today = _todayDateStr();
-    final savedDate = _prefs?.getString(_keyDailyDate) ?? '';
+    final savedDate = _box.get(_keyDailyDate) as String? ?? '';
     if (savedDate != today) return 0;
-    return _prefs?.getInt(_keyDailyEarned) ?? 0;
+    return _box.get(_keyDailyEarned) as int? ?? 0;
+  }
+
+  Future<void> init() async {
+    if (_initialized) return;
+    _initialized = true;
+    // 新手赠送（仅首次启动一次，标记防重复）：5 券 + 100 金币（设计 §6.2）
+    if (!(_box.get(_keyStarterGranted) as bool? ?? false)) {
+      await _box.put(_keyCoins, kInitialCoins);
+      await _box.put(_keyCoupons, kInitialHintCoupons);
+      await _box.put(_keyStarterGranted, true);
+    }
+  }
+
+  /// 重置（§7.6 步骤 4，本次新建）：直接重发 starter 资产，
+  /// 保证 resetAllData 后当前会话金币=100/券=5，无需杀进程重启补发
+  Future<void> reset() async {
+    _initialized = true;
+    await _box.put(_keyCoins, kInitialCoins);
+    await _box.put(_keyCoupons, kInitialHintCoupons);
+    await _box.put(_keyStarterGranted, true);
+    await _box.put(_keyDailyEarned, 0);
+    await _box.put(_keyDailyDate, '');
+    AppLogger.repo.info('EconomyService.reset done (starter re-granted)');
   }
 
   /// 增加金币（受日上限控制）
@@ -101,9 +123,9 @@ class EconomyService {
     if (amount <= 0) return 0;
 
     final today = _todayDateStr();
-    final savedDate = _prefs?.getString(_keyDailyDate) ?? '';
-    var currentDaily = (savedDate == today)
-        ? (_prefs?.getInt(_keyDailyEarned) ?? 0)
+    final savedDate = _box.get(_keyDailyDate) as String? ?? '';
+    var currentDaily = savedDate == today
+        ? (_box.get(_keyDailyEarned) as int? ?? 0)
         : 0;
 
     int actualEarned;
@@ -113,12 +135,12 @@ class EconomyService {
       final remainingCap = math.max(0, kDailyCoinCap - currentDaily);
       actualEarned = math.min(amount, remainingCap);
       currentDaily += actualEarned;
-      await _prefs?.setString(_keyDailyDate, today);
-      await _prefs?.setInt(_keyDailyEarned, currentDaily);
+      await _box.put(_keyDailyDate, today);
+      await _box.put(_keyDailyEarned, currentDaily);
     }
 
     final newTotal = coins + actualEarned;
-    await _prefs?.setInt(_keyCoins, newTotal);
+    await _box.put(_keyCoins, newTotal);
     AppLogger.repo.info(
       'EconomyService.addCoins +$actualEarned (total=$newTotal daily=$currentDaily bypass=$bypassCap)',
     );
@@ -130,7 +152,7 @@ class EconomyService {
     await init();
     if (count <= 0) return;
     final newTotal = hintCoupons + count;
-    await _prefs?.setInt(_keyCoupons, newTotal);
+    await _box.put(_keyCoupons, newTotal);
     AppLogger.repo.info(
       'EconomyService.addHintCoupons +$count (total=$newTotal)',
     );
@@ -184,7 +206,7 @@ class EconomyService {
     await init();
     // 1. 优先扣免费提示券
     if (hintCoupons > 0) {
-      await _prefs?.setInt(_keyCoupons, hintCoupons - 1);
+      await _box.put(_keyCoupons, hintCoupons - 1);
       AppLogger.repo.info(
         'EconomyService.consumeHint used coupon (remaining=${hintCoupons - 1})',
       );
@@ -196,7 +218,7 @@ class EconomyService {
     final price = kHintPrices[safeTier];
     if (coins >= price) {
       final newTotal = coins - price;
-      await _prefs?.setInt(_keyCoins, newTotal);
+      await _box.put(_keyCoins, newTotal);
       AppLogger.repo.info(
         'EconomyService.consumeHint used coins -$price (remaining=$newTotal)',
       );

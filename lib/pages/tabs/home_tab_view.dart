@@ -204,15 +204,12 @@ class _HomeTabViewState extends State<HomeTabView> {
       },
       onStart: (diff) async {
         final dkey = SnapshotStore.difficultyKeyFor(diff);
+        // 快照由 SnapshotStore 文件级管理；Item 旧快照字段
+        // 遗留 fallback 已移除（改造后恒为 null，清理阶段 §11）
         final snapJson = await SnapshotStore.instance.loadJsonString(
           canonicalId,
           dkey,
         );
-        final fallbackLegacy =
-            (diff.pieceCount == level.difficulty.pieceCount &&
-                !level.isCompleted)
-            ? level.savedSnapshotJson
-            : null;
         if (!mounted) return;
         await Navigator.of(context).push(
           MaterialPageRoute<void>(
@@ -220,7 +217,7 @@ class _HomeTabViewState extends State<HomeTabView> {
               imageBytes: imgBytes,
               difficulty: diff,
               levelIndex: level.index,
-              initialSnapshotJson: snapJson ?? fallbackLegacy,
+              initialSnapshotJson: snapJson,
             ),
           ),
         );

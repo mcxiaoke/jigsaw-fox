@@ -2,7 +2,13 @@
 
 > 日期：2026-09-02
 > 版本：**v4.7（无迁移，直接改造 + 文件级备份/恢复；拍板 3 项落地细节）**
-> 状态：**已就绪，可对照实施**
+> 状态：**✅ 已按本文档全量实施完成（2026-09-03）**，无遗留阶段项；实现与测试详见 [CHANGES-20260903.md](CHANGES-20260903.md)
+>
+> 实施记录（2026-09-03，供对照本文档核验）：
+> - 落地后 `flutter analyze` 0 问题；全量 `flutter test` 220 用例通过（新增 storage_manager / game_progress_migration / game_collections_migration / game_state_migration 四个迁移测试文件）；`flutter build windows --debug` 通过。
+> - 与文档的主要一致性核对：§2.2/§2.3 主线双路收敛为 `main:{NNN}` 单路（`jigsaw_level_{i}` 读写路径已删除）；§4.4 `custom:presetsInitialized` 采用拍板方案并实现"全部成功才置 true"失败语义；§7.1 openAll 内聚两阶段恢复 + §7.8 原子备份（保留 5 份、`.tmp` 跳过、空箱守卫、备份点 A 一次性守卫）；§7.5 AppLifecycleListener 顶层持有（onHide/onInactive/onExitRequested，flush+备份+closeAll）；§7.6 resetAllData 七步 + 5 个新建 reset() + reconcileSnapshots()；§4.3 `ach:*` 显式前缀匹配（禁 split）。
+> - 落地差异（无害微调）：`EconomyService.reset()` 额外清空 `econ:dailyEarned`/`econ:dailyDate`（box 已 clear 场景下等效）；`AchievementStore.init()` 扫描前先收集 keys 再读取（§5.4 纪律）；`StorageManager` 增加 `openAllWithMemoryFallback()`（磁盘持续故障时以内存 box 启动，避免 UI 崩溃、绝不删盘）。
+> - 测试基建补充：`test/test_helper.dart` 提供 `initTestStorage`（禁备份）/ `initTestStorageWithBackups`（备份开启，供 §7.8 用例）/ `initTestAppStorage`（业务单例重置组合）。
 
 ## 一、目标
 

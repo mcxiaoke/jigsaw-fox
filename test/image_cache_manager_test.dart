@@ -6,13 +6,15 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:image/image.dart' as img;
 import 'package:jigsawpuzzle/data/game_repository.dart';
 import 'package:jigsawpuzzle/data/models/custom_puzzle_item.dart';
+import 'package:jigsawpuzzle/data/storage_manager.dart';
 import 'package:jigsawpuzzle/logic/cache/engine_task_queue.dart';
 import 'package:jigsawpuzzle/logic/cache/image_cache_manager.dart';
 import 'package:jigsawpuzzle/logic/cache/memory_cache.dart';
 import 'package:jigsawpuzzle/logic/cache/thumbnail_generator.dart';
 import 'package:jigsawpuzzle/logic/puzzle_model.dart';
 import 'package:jigsawpuzzle/widgets/app_cached_image.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+
+import 'test_helper.dart';
 
 Uint8List createTestPngBytes(int width, int height) {
   final image = img.Image(width: width, height: height);
@@ -24,6 +26,7 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   late Directory testTempDir;
+  late StorageManager sm;
 
   setUpAll(() async {
     testTempDir = await Directory.systemTemp.createTemp(
@@ -36,12 +39,13 @@ void main() {
           return testTempDir.path;
         });
 
-    SharedPreferences.setMockInitialValues({});
+    sm = await initTestAppStorage();
     await GameRepository.instance.init();
     await ImageCacheManager.instance.init();
   });
 
   tearDownAll(() async {
+    await tearDownTestStorage(sm);
     try {
       if (await testTempDir.exists()) {
         await testTempDir.delete(recursive: true);

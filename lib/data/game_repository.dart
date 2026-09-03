@@ -7,12 +7,16 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../logic/image_source.dart';
 import '../logic/models/puzzle_state.dart';
 import '../logic/puzzle_model.dart';
+import '../services/achievement_store.dart';
 import '../services/app_logger.dart';
-import 'migration_service.dart';
+import '../services/economy_service.dart';
+import '../logic/download_manager.dart';
+import 'favorite_store.dart';
 import 'models/custom_puzzle_item.dart';
 import 'models/level_item.dart';
 import 'progress_store.dart';
 import 'snapshot_store.dart';
+import 'storage_manager.dart';
 
 /// Central game data repository managing main levels, daily challenges, UGC custom puzzles, and persistent state.
 class GameRepository {
@@ -34,8 +38,12 @@ class GameRepository {
     'assets/bg/tile_011.webp',
   ];
 
-  static const String _keyLevelsPrefix = 'jigsaw_level_';
-  static const String _keyCustomList = 'jigsaw_custom_list';
+  // 主线进度已收敛至 game-progress-v1（§2.3）：`jigsaw level {i}` 整条
+  // LevelItem 读写路径已删除，不再有 prefs 键前缀常量。
+  // 自制拼图元数据在 game-collections-v1 的 `custom:{id}`（§2.2）；
+  // presetsInitialized 标志在 app-state-v1（同前缀跨 box，§4.4 注意事项）
+  static const String _customKeyPrefix = 'custom:';
+  static const String kKeyPresetsInitialized = 'custom:presetsInitialized';
   static const String _keySoundEnabled = 'jigsaw_setting_sound';
   static const String _keyHapticEnabled = 'jigsaw_setting_haptic';
   static const String _keyGridPreviewEnabled = 'jigsaw_setting_grid_preview';
@@ -43,10 +51,10 @@ class GameRepository {
       'jigsaw_setting_piece_scatter_mode';
   static const String _keySelectedBackground =
       'jigsaw_setting_selected_background';
-  static const String _keyTotalCompleted = 'jigsaw_stat_total_completed';
-  static const String _keyTotalPiecesSnapped =
-      'jigsaw_stat_total_pieces_snapped';
-  static const String _keyTotalPlayTimeSeconds = 'jigsaw_stat_total_play_time';
+
+  // 全局统计（§2.2 / §4.3）：app-state-v1 原生 int
+  static const String _keyStatPiecesSnapped = 'stat:totalPiecesSnapped';
+  static const String _keyStatPlayTime = 'stat:totalPlayTimeSeconds';
 
   SharedPreferences? _prefs;
   List<LevelItem> _levels = [];
@@ -78,13 +86,21 @@ class GameRepository {
   set selectedBackground(String v) =>
       _prefs?.setString(_keySelectedBackground, v);
 
-  /// 累计通关数（历史累加字段，全库已统一以 ProgressStore.instance.getTotalSolved() 去重图数为 SSOT）
+  /// 累计通关数（历史累加字段，全库已统一以 ProgressStore.instance.getTotalSolved() 去重图数为 SSOT；
+  /// 原 prefs 累加 key 已按 §2.3 丢弃，恒返回 0）
   @Deprecated(
     'Use ProgressStore.instance.getTotalSolved() for distinct solved count',
   )
-  int get totalCompletedLevels => _prefs?.getInt(_keyTotalCompleted) ?? 0;
-  int get totalPiecesSnapped => _prefs?.getInt(_keyTotalPiecesSnapped) ?? 0;
-  int get totalPlayTimeSeconds => _prefs?.getInt(_keyTotalPlayTimeSeconds) ?? 0;
+  int get totalCompletedLevels => 0;
+
+  /// 注意：以下两个 stat getter 直接读 app-state-v1 box（fail-fast），
+  /// **前置条件：必须先执行 StorageManager.openAll()**——main() 中在 runApp 前
+  /// 已 `await openAllWithMemoryFallback()`，生产路径安全；仅测试/误用场景
+  /// 会在未打开时抛 StateError，用于尽早暴露初始化顺序错误。
+  int get totalPiecesSnapped =>
+      (StorageManager.instance.state.get(_keyStatPiecesSnapped) as int?) ?? 0;
+  int get totalPlayTimeSeconds =>
+      (StorageManager.instance.state.get(_keyStatPlayTime) as int?) ?? 0;
 
   /// Initializes persistent store and generates predefined levels, daily challenge series, and UGC presets.
   Future<void> init() async {
@@ -96,17 +112,10 @@ class GameRepository {
       await SnapshotStore.instance.init();
       await ProgressStore.instance.init();
     } catch (e, st) {
-      AppLogger.repo.warning('Snapshot/Progress init failed', e, st);
+      AppLogger.repo.warning('init Snapshot/Progress failed', e, st);
     }
     _initLevels();
-    _initCustomPuzzles();
-    if (_prefs != null) {
-      await MigrationService.instance.migrateIfNeeded(
-        prefs: _prefs!,
-        levels: _levels,
-        customPuzzles: _customPuzzles,
-      );
-    }
+    await _initCustomPuzzles();
     AppLogger.repo.info(
       'init done ${sw.elapsedMilliseconds}ms levels=${_levels.length} custom=${_customPuzzles.length}',
     );
@@ -146,18 +155,12 @@ class GameRepository {
         diff = squareTiers[5].difficulty; // L5: 15x15 (225)
       }
 
-      // Read saved status from SharedPreferences
-      final key = '$_keyLevelsPrefix$i';
-      final savedStr = _prefs?.getString(key);
-      if (savedStr != null) {
-        try {
-          final json = jsonDecode(savedStr) as Map<String, dynamic>;
-          list.add(LevelItem.fromJson(json));
-          continue;
-        } catch (e, st) {
-          AppLogger.repo.warning('Failed to parse level $i saved json', e, st);
-        }
-      }
+      // 水合（§7.3 step3）：静态生成 LevelItem，再从 ProgressStore 的
+      // `main:{NNN}` 回填进度字段。原「读 prefs `jigsaw level {i}` 整条 JSON」
+      // 分支已整体删除——进度 SSOT 唯一，不再有 prefs 副本。
+      final prog = ProgressStore.instance.getLevelProgress(
+        canonicalForLevel(i),
+      );
 
       // 全量可浏览：无解锁墙，首期全部可玩（Phase0）
       // 后续如需象征性解锁，通过 manifest unlockCoins/unlockCode 字段扩展
@@ -173,8 +176,11 @@ class GameRepository {
           assetPath: assetPath,
           difficulty: diff,
           isUnlocked: true,
-          isCompleted: false,
-          progressPercent: 0,
+          isCompleted: prog.isCompleted,
+          progressPercent: prog.progressPercent,
+          stars: prog.stars,
+          bestTimeSeconds: prog.bestTimeSeconds,
+          completedPieceCounts: prog.completedPieceCounts,
           addedAt: addedAt,
         ),
       );
@@ -185,69 +191,125 @@ class GameRepository {
     );
   }
 
-  void _initCustomPuzzles() {
-    final savedListStr = _prefs?.getString(_keyCustomList);
-    if (savedListStr != null) {
+  /// 自制拼图初始化（§4.4 / §7.3）：
+  /// - 元数据：`game-collections-v1` 的 `custom:{id}` 逐条存储；
+  /// - 「全删后死灰复燃」防护：`app-state-v1` 的 `custom:presetsInitialized`
+  ///   显式标志区分「首次启动」与「用户删光」；
+  /// - 进度水合：加载元数据后立即从 ProgressStore 的 `ugc:{id}` 回填，
+  ///   否则通关状态重启后全部「回退」为未完成。
+  Future<void> _initCustomPuzzles() async {
+    final stateBox = StorageManager.instance.state;
+    final collectionsBox = StorageManager.instance.collections;
+    final presetsInitialized = stateBox.get(kKeyPresetsInitialized) as bool?;
+
+    final rawItems = <CustomPuzzleItem>[];
+    // 先收集后处理（§5.4）
+    final keys = collectionsBox.keys
+        .cast<String>()
+        .where((k) => k.startsWith(_customKeyPrefix))
+        .toList();
+    for (final key in keys) {
+      final m = getJson(collectionsBox, key);
+      if (m == null) continue;
       try {
-        final rawList = jsonDecode(savedListStr) as List<dynamic>;
-        _customPuzzles = rawList
-            .map((e) => CustomPuzzleItem.fromJson(e as Map<String, dynamic>))
-            .toList();
-        customPuzzlesNotifier.value = List.unmodifiable(_customPuzzles);
-        AppLogger.repo.info(
-          'initCustom loaded ${_customPuzzles.length} from prefs',
-        );
-        return;
+        rawItems.add(CustomPuzzleItem.fromJson(m));
       } catch (e, st) {
-        AppLogger.repo.warning('Failed to parse custom list', e, st);
+        AppLogger.repo.warning('Failed to parse custom item key=$key', e, st);
       }
     }
 
-    // Default preset samples for "My Puzzles"
-    final squareTiers = PuzzleAspectRatio.square1x1.tiers;
-    _customPuzzles = [
-      CustomPuzzleItem(
-        id: 'sample_01',
-        title: '巴黎埃菲尔铁塔晨曦',
-        imagePathOrUrl: assetSamples[0],
-        isLocalFile: false,
-        sourcePlatform: '网络',
-        difficulty: squareTiers[0].difficulty, // 16
-        createdAt: DateTime.now().subtract(const Duration(days: 2)),
-      ),
-      CustomPuzzleItem(
-        id: 'sample_02',
-        title: '午后阳光与香浓拿铁',
-        imagePathOrUrl: assetSamples[1],
-        isLocalFile: false,
-        sourcePlatform: '网络',
-        difficulty: squareTiers[2].difficulty, // 36
-        createdAt: DateTime.now().subtract(const Duration(days: 1)),
-      ),
-      CustomPuzzleItem(
-        id: 'sample_03',
-        title: '草地上奔跑的小柴犬',
-        imagePathOrUrl: assetSamples[2],
-        isLocalFile: false,
-        sourcePlatform: '网络',
-        difficulty: squareTiers[3].difficulty, // 64
-        createdAt: DateTime.now(),
-      ),
-    ];
-    _saveCustomPuzzles();
+    if (presetsInitialized != true && rawItems.isEmpty) {
+      // Default preset samples for "My Puzzles"
+      final squareTiers = PuzzleAspectRatio.square1x1.tiers;
+      final samples = [
+        CustomPuzzleItem(
+          id: 'sample_01',
+          title: '巴黎埃菲尔铁塔晨曦',
+          imagePathOrUrl: assetSamples[0],
+          isLocalFile: false,
+          sourcePlatform: '网络',
+          difficulty: squareTiers[0].difficulty, // 16
+          createdAt: DateTime.now().subtract(const Duration(days: 2)),
+        ),
+        CustomPuzzleItem(
+          id: 'sample_02',
+          title: '午后阳光与香浓拿铁',
+          imagePathOrUrl: assetSamples[1],
+          isLocalFile: false,
+          sourcePlatform: '网络',
+          difficulty: squareTiers[2].difficulty, // 36
+          createdAt: DateTime.now().subtract(const Duration(days: 1)),
+        ),
+        CustomPuzzleItem(
+          id: 'sample_03',
+          title: '草地上奔跑的小柴犬',
+          imagePathOrUrl: assetSamples[2],
+          isLocalFile: false,
+          sourcePlatform: '网络',
+          difficulty: squareTiers[3].difficulty, // 64
+          createdAt: DateTime.now(),
+        ),
+      ];
+      // 失败语义（§4.4）：全部成功才置 true，任一失败保持 false，
+      // 下次启动重新植入完整样例，避免「半套样例 + 永久跳过」的脏状态
+      var allOk = true;
+      for (final s in samples) {
+        try {
+          await _saveCustomPuzzle(s);
+        } catch (e, st) {
+          allOk = false;
+          AppLogger.repo.warning('Failed to plant sample ${s.id}', e, st);
+        }
+      }
+      if (allOk) {
+        rawItems.addAll(samples);
+        await stateBox.put(kKeyPresetsInitialized, true);
+        AppLogger.repo.info('initCustom created default 3 samples');
+      }
+    } else {
+      if (presetsInitialized != true) {
+        // 有历史数据但标志缺失（理论不可达，防御性补写）
+        await stateBox.put(kKeyPresetsInitialized, true);
+      }
+    }
+
+    // ugc:{id} 进度水合（§7.3 v4.3）——空判断用「无任何落盘痕迹」
+    _customPuzzles = rawItems.map((item) {
+      final prog = ProgressStore.instance.getLevelProgress(
+        canonicalForCustom(item.id),
+      );
+      final hasRecord =
+          prog.lastSavedAt != null ||
+          prog.isCompleted ||
+          prog.progressPercent > 0;
+      if (!hasRecord) return item;
+      return item.copyWith(
+        isCompleted: prog.isCompleted,
+        progressPercent: prog.progressPercent,
+        bestTimeSeconds: prog.bestTimeSeconds,
+        completedPieceCounts: prog.completedPieceCounts,
+      );
+    }).toList();
+
     customPuzzlesNotifier.value = List.unmodifiable(_customPuzzles);
     AppLogger.repo.info(
-      'initCustom created default ${_customPuzzles.length} samples',
+      'initCustom loaded ${_customPuzzles.length} from hive (initialized=$presetsInitialized)',
     );
   }
 
-  Future<void> _saveCustomPuzzles() async {
-    try {
-      final jsonList = _customPuzzles.map((e) => e.toJson()).toList();
-      await _prefs?.setString(_keyCustomList, jsonEncode(jsonList));
-    } catch (e, st) {
-      AppLogger.repo.severe('Failed to save custom puzzles', e, st);
-    }
+  /// 单条落盘（原 `jigsaw custom list` 整 JSON 数组全量重写已被逐条 put 取代）。
+  /// 只写元数据（§5.2）：进度字段委托 ugc:{id}，不在此冗余落盘。
+  Future<void> _saveCustomPuzzle(CustomPuzzleItem item) async {
+    await putJson(
+      StorageManager.instance.collections,
+      '$_customKeyPrefix${item.id}',
+      item.toMetadataJson(),
+    );
+  }
+
+  /// 删除单条元数据
+  Future<void> _deleteCustomPuzzleKey(String id) async {
+    await StorageManager.instance.collections.delete('$_customKeyPrefix$id');
   }
 
   /// Adds a new user custom puzzle.
@@ -257,7 +319,7 @@ class GameRepository {
     );
     _customPuzzles.insert(0, item);
     customPuzzlesNotifier.value = List.unmodifiable(_customPuzzles);
-    await _saveCustomPuzzles();
+    await _saveCustomPuzzle(item);
   }
 
   /// Deletes a custom puzzle and cleans up local image file if present.
@@ -292,7 +354,18 @@ class GameRepository {
       } catch (_) {}
       _customPuzzles.removeAt(idx);
       customPuzzlesNotifier.value = List.unmodifiable(_customPuzzles);
-      await _saveCustomPuzzles();
+      await _deleteCustomPuzzleKey(id);
+      // 级联删进度记录（§7.3 v4.3）：防止孤儿 ugc:{id} 进度永久残留、
+      // 且重新创建同 id 拼图时旧进度错误复活
+      try {
+        await ProgressStore.instance.delete(canonicalForCustom(id));
+      } catch (e, st) {
+        AppLogger.repo.warning(
+          'deleteCustomPuzzle cascade progress failed id=$id',
+          e,
+          st,
+        );
+      }
     } else {
       AppLogger.repo.warning('deleteCustomPuzzle not found id=$id');
     }
@@ -335,9 +408,8 @@ class GameRepository {
       updatedCompletedCounts.add(completedPieceCount);
     }
 
-    // 停止向 prefs 双写大 JSON 快照（P1-6），快照由 SnapshotStore 和 ProgressStore 接管
-    final shouldClear =
-        isCompleted || (snapshotJson == null && progressPercent == 0);
+    // 内存 Item 立即更新（UI 同步响应），持久化走 ProgressStore →
+    // game-progress-v1 单条（原 prefs `jigsaw level {i}` 整条写入已删除，§2.3）
     _levels[idx] = current.copyWith(
       progressPercent: progressPercent,
       isCompleted:
@@ -351,14 +423,10 @@ class GameRepository {
       completedPieceCounts: updatedCompletedCounts.toList(),
     );
 
-    // Save current level (轻量索引与元数据，不再含 savedSnapshotJson 大字段)
-    await _prefs?.setString(
-      '$_keyLevelsPrefix$levelIndex',
-      jsonEncode(_levels[idx].toJson()),
-    );
-
     // 同步到新一代文件级快照与轻量索引
     final canonicalId = canonicalForLevel(levelIndex);
+    final shouldClear =
+        isCompleted || (snapshotJson == null && progressPercent == 0);
     try {
       if (snapshotJson != null && !isCompleted) {
         final map = jsonDecode(snapshotJson) as Map<String, dynamic>;
@@ -449,11 +517,9 @@ class GameRepository {
     if (isCompleted && levelIndex < _levels.length) {
       final nextIdx = levelIndex;
       if (!_levels[nextIdx].isUnlocked) {
+        // Phase0 恒为 true，此分支实际不触发；即使触发也仅更新内存——
+        // isUnlocked 不持久化（§2.3 §4.5），无需写 prefs/box
         _levels[nextIdx] = _levels[nextIdx].copyWith(isUnlocked: true);
-        await _prefs?.setString(
-          '$_keyLevelsPrefix${nextIdx + 1}',
-          jsonEncode(_levels[nextIdx].toJson()),
-        );
       }
     }
 
@@ -559,7 +625,9 @@ class GameRepository {
     );
 
     customPuzzlesNotifier.value = List.unmodifiable(_customPuzzles);
-    await _saveCustomPuzzles();
+    // 内存 Item 立即更新（UI 同步响应）；进度字段已委托 game-progress-v1 的
+    // ugc:{id}，元数据落盘只写 custom:{id}（§5.2）
+    await _saveCustomPuzzle(_customPuzzles[idx]);
 
     final canonicalId = canonicalForCustom(id);
     try {
@@ -779,20 +847,23 @@ class GameRepository {
   );
 
   /// Adds statistics for snapped piece and play duration.
+  /// 原 stat 前缀 / stat 前缀
+  /// prefs key 已迁至 app-state-v1 的 `stat:*`（§2.2 / §4.3）。
   Future<void> recordSnapStats({
     int pieceCount = 1,
     int durationSeconds = 0,
   }) async {
     try {
+      final stateBox = StorageManager.instance.state;
       if (pieceCount > 0) {
-        await _prefs?.setInt(
-          _keyTotalPiecesSnapped,
+        await stateBox.put(
+          _keyStatPiecesSnapped,
           totalPiecesSnapped + pieceCount,
         );
       }
       if (durationSeconds > 0) {
-        await _prefs?.setInt(
-          _keyTotalPlayTimeSeconds,
+        await stateBox.put(
+          _keyStatPlayTime,
           totalPlayTimeSeconds + durationSeconds,
         );
       }
@@ -806,17 +877,63 @@ class GameRepository {
     }
   }
 
-  /// Resets all local progress for testing/replay.
+  /// 重置全部进度数据（§7.6）：仅清进度，**保留设置**（行为变更，有意为之——
+  /// 现状 `_prefs.clear()` 连设置一起清掉，与文案不符）。
+  ///
+  /// 注意：本方法在 GameRepository.init() 完成后才可调用（入口 settings_page）。
   Future<void> resetAllData() async {
     AppLogger.repo.warning(
-      'resetAllData clearing all prefs and snapshots and reinitializing',
+      'resetAllData clearing all hive boxes and snapshots and reinitializing',
     );
-    await _prefs?.clear();
+    // 1. 清空 3 个 Hive box（clear()，不 deleteFromDisk）
+    await Future.wait([
+      StorageManager.instance.progress.clear(),
+      StorageManager.instance.collections.clear(),
+      StorageManager.instance.state.clear(),
+    ]);
+    // 2. 清文件级快照
     try {
       await SnapshotStore.instance.clearAll();
-      await ProgressStore.instance.init();
-    } catch (_) {}
+    } catch (e, st) {
+      AppLogger.repo.warning('resetAllData snapshot clear failed', e, st);
+    }
+    // 3. ProgressStore 重置：清 _index + 刷新聚合 + 广播
+    try {
+      await ProgressStore.instance.reset();
+    } catch (e, st) {
+      AppLogger.repo.warning('resetAllData progress reset failed', e, st);
+    }
+    // 4. 各单例内存状态重置
+    try {
+      await EconomyService.instance.reset(); // starter 资产重发：金币 100 / 券 5
+    } catch (e, st) {
+      AppLogger.repo.warning('resetAllData economy reset failed', e, st);
+    }
+    try {
+      await AchievementStore.instance.reset();
+    } catch (e, st) {
+      AppLogger.repo.warning('resetAllData achievement reset failed', e, st);
+    }
+    try {
+      await FavoriteStore.instance.reset();
+    } catch (e, st) {
+      AppLogger.repo.warning('resetAllData favorite reset failed', e, st);
+    }
+    try {
+      await DownloadManager.instance.reset(); // 清空 download_cache 物理文件
+    } catch (e, st) {
+      AppLogger.repo.warning('resetAllData download reset failed', e, st);
+    }
+    // 5. 重新生成（含 §7.3 的进度水合——此刻 box 已空，样例重新植入，恢复出厂语义）
     _initLevels();
-    _initCustomPuzzles();
+    await _initCustomPuzzles();
+    // 6. 仅设置入口保留设置；此处不触碰 SharedPreferences 设置 key
+    // 7. 快照索引对账（防幽灵索引）
+    try {
+      await ProgressStore.instance.reconcileSnapshots();
+    } catch (e, st) {
+      AppLogger.repo.warning('resetAllData reconcile failed', e, st);
+    }
+    AppLogger.repo.info('resetAllData done');
   }
 }

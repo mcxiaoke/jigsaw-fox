@@ -1,9 +1,8 @@
-import 'dart:convert';
-
 import 'package:flutter/foundation.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:hive_ce/hive_ce.dart';
 
 import '../services/app_logger.dart';
+import 'storage_manager.dart';
 
 /// 单条收藏条目模型（支持源被删后的孤儿卡优雅兜底展示）
 class FavoriteEntry {
@@ -152,50 +151,66 @@ class FavoriteEntry {
 }
 
 /// 收藏夹全局持久化管理单例
+///
+/// 存储迁移（设计 §2.2 / §3.3）：原 原收藏大 key 整 JSON 数组大 key
+/// 改为 `game-collections-v1` 的 `favorite:{cid}` 逐条存储；init 时一次性前缀
+/// 读入 `_entriesCache`，日常读走纯内存，写/删直接同步触发 Hive 单 key 操作。
 class FavoriteStore {
   FavoriteStore._();
   static final FavoriteStore instance = FavoriteStore._();
 
-  static const String _storageKey = 'jigsaw_favorites_v1';
-  SharedPreferences? _prefs;
+  static const String _keyPrefix = 'favorite:';
+  bool _initialized = false;
   final Map<String, FavoriteEntry> _entriesCache = {};
 
   /// 全局响应式 ID 集合通知器（供心形按钮和红心高亮监听）
   final ValueNotifier<Set<String>> idsNotifier = ValueNotifier<Set<String>>({});
 
+  Box<dynamic> get _box => StorageManager.instance.collections;
+
   Future<void> init() async {
-    if (_prefs != null) return;
-    _prefs = await SharedPreferences.getInstance();
+    if (_initialized) return;
+    _initialized = true;
     await _loadFromDisk();
   }
 
   Future<void> _loadFromDisk() async {
-    final raw = _prefs?.getString(_storageKey);
     _entriesCache.clear();
-    if (raw != null && raw.isNotEmpty) {
-      try {
-        final list = jsonDecode(raw) as List<dynamic>;
-        for (final item in list) {
-          if (item is Map<String, dynamic>) {
-            final entry = FavoriteEntry.fromJson(item);
-            if (entry.canonicalId.isNotEmpty) {
-              _entriesCache[entry.canonicalId] = entry;
-            }
-          }
+    try {
+      // 先收集后处理（§5.4：box.keys 迭代中不做写操作）
+      final keys = _box.keys
+          .cast<String>()
+          .where((k) => k.startsWith(_keyPrefix))
+          .toList();
+      for (final key in keys) {
+        final m = getJson(_box, key);
+        if (m == null) continue;
+        final entry = FavoriteEntry.fromJson(m);
+        if (entry.canonicalId.isNotEmpty) {
+          _entriesCache[entry.canonicalId] = entry;
         }
-      } catch (e, st) {
-        AppLogger.repo.warning('FavoriteStore._loadFromDisk fail', e, st);
       }
+    } catch (e, st) {
+      AppLogger.repo.warning('FavoriteStore._loadFromDisk fail', e, st);
     }
     idsNotifier.value = Set.unmodifiable(_entriesCache.keys);
   }
 
-  Future<void> _saveToDisk() async {
+  /// 单条落盘（整 JSON 数组全量重写已被逐条 put 取代）
+  Future<void> _saveEntry(FavoriteEntry entry) async {
     try {
-      final list = _entriesCache.values.map((e) => e.toJson()).toList();
-      await _prefs?.setString(_storageKey, jsonEncode(list));
+      await putJson(_box, '$_keyPrefix${entry.canonicalId}', entry.toJson());
     } catch (e, st) {
-      AppLogger.repo.warning('FavoriteStore._saveToDisk fail', e, st);
+      AppLogger.repo.warning('FavoriteStore._saveEntry fail', e, st);
+    }
+  }
+
+  /// 单条删除
+  Future<void> _deleteEntry(String canonicalId) async {
+    try {
+      await _box.delete('$_keyPrefix$canonicalId');
+    } catch (e, st) {
+      AppLogger.repo.warning('FavoriteStore._deleteEntry fail', e, st);
     }
   }
 
@@ -221,8 +236,9 @@ class FavoriteStore {
     final isFav = isFavorite(canonicalId);
     if (isFav) {
       _entriesCache.remove(canonicalId);
+      await _deleteEntry(canonicalId);
     } else {
-      _entriesCache[canonicalId] = FavoriteEntry(
+      final entry = FavoriteEntry(
         canonicalId: canonicalId,
         favoritedAt: DateTime.now(),
         titleSnapshot: title,
@@ -234,20 +250,25 @@ class FavoriteStore {
         tags: tags ?? const [],
         preferredDifficultyKey: preferredDifficultyKey,
       );
+      _entriesCache[canonicalId] = entry;
+      await _saveEntry(entry);
     }
     idsNotifier.value = Set.unmodifiable(_entriesCache.keys);
-    await _saveToDisk();
     AppLogger.repo.info(
       'FavoriteStore.toggle cid=$canonicalId nextState=${!isFav} total=${_entriesCache.length}',
     );
     return !isFav;
   }
 
-  /// 按收藏时间倒序返回全部收藏条目
+  /// 按收藏时间倒序返回全部收藏条目（sortOrder 作为次优先级权重，§3.3）
   Future<List<FavoriteEntry>> favoritesSortedByTime() async {
     await init();
     final list = _entriesCache.values.toList();
-    list.sort((a, b) => b.favoritedAt.compareTo(a.favoritedAt));
+    list.sort((a, b) {
+      final byTime = b.favoritedAt.compareTo(a.favoritedAt);
+      if (byTime != 0) return byTime;
+      return b.sortOrder.compareTo(a.sortOrder);
+    });
     return list;
   }
 
@@ -256,7 +277,7 @@ class FavoriteStore {
     await init();
     if (_entriesCache.remove(canonicalId) != null) {
       idsNotifier.value = Set.unmodifiable(_entriesCache.keys);
-      await _saveToDisk();
+      await _deleteEntry(canonicalId);
     }
   }
 
@@ -264,13 +285,33 @@ class FavoriteStore {
   Future<void> pruneOrphans(Set<String> validCanonicalIds) async {
     await init();
     final before = _entriesCache.length;
-    _entriesCache.removeWhere((id, _) => !validCanonicalIds.contains(id));
+    // 先收集后批量删（§5.4）
+    final orphanIds = _entriesCache.keys
+        .where((id) => !validCanonicalIds.contains(id))
+        .toList();
+    for (final id in orphanIds) {
+      _entriesCache.remove(id);
+      await _deleteEntry(id);
+    }
     if (_entriesCache.length != before) {
       idsNotifier.value = Set.unmodifiable(_entriesCache.keys);
-      await _saveToDisk();
       AppLogger.repo.info(
         'FavoriteStore.pruneOrphans removed ${before - _entriesCache.length} entries',
       );
     }
+  }
+
+  /// 重置（§7.6 步骤 4，本次新建）：清内存缓存 + 通知器。
+  ///
+  /// **注意**：本方法只清内存，**不清 `game-collections-v1` 的 `favorite:*`
+  /// 盘上条目**——正常调用方 `resetAllData()` 步骤 1 已 `collections.clear()`
+  /// 先行清盘，二者配合无残留；若未来被脱离 `resetAllData()` 独立调用，
+  /// 需自行先 `clear` box（可参照 `AchievementStore.reset()` 的
+  /// 「先收集后批量删」实现），否则盘上会遗留孤儿 `favorite:` key。
+  Future<void> reset() async {
+    _entriesCache.clear();
+    idsNotifier.value = const <String>{};
+    _initialized = false;
+    AppLogger.repo.info('FavoriteStore.reset done');
   }
 }

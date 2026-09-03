@@ -2,19 +2,26 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:jigsawpuzzle/data/favorite_store.dart';
 import 'package:jigsawpuzzle/data/game_repository.dart';
 import 'package:jigsawpuzzle/data/progress_store.dart';
+import 'package:jigsawpuzzle/data/storage_manager.dart';
 import 'package:jigsawpuzzle/logic/catalog_index.dart';
 import 'package:jigsawpuzzle/logic/puzzle_model.dart';
 import 'package:jigsawpuzzle/logic/unified_puzzle_resolver.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+
+import '../test_helper.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+  late StorageManager sm;
 
   setUp(() async {
-    SharedPreferences.setMockInitialValues({});
+    sm = await initTestAppStorage();
     await GameRepository.instance.init();
     await ProgressStore.instance.init();
     await FavoriteStore.instance.init();
+  });
+
+  tearDown(() async {
+    await tearDownTestStorage(sm);
   });
 
   group('UnifiedCatalogIndex & UnifiedPuzzleResolver Tests', () {

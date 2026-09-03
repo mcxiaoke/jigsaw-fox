@@ -1,13 +1,21 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:jigsawpuzzle/data/storage_manager.dart';
 import 'package:jigsawpuzzle/services/economy_service.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+
+import '../test_helper.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+  late StorageManager sm;
 
   setUp(() async {
-    SharedPreferences.setMockInitialValues({});
-    await EconomyService.instance.init();
+    sm = await initTestAppStorage();
+    // reset() = starter 资产重发（金币 100 / 券 5），等价「全新安装首次启动」
+    await EconomyService.instance.reset();
+  });
+
+  tearDown(() async {
+    await tearDownTestStorage(sm);
   });
 
   group('EconomyService §6.1 Design Table', () {
@@ -157,13 +165,10 @@ void main() {
       expect(await eco.consumeHint(tierIndex: 0), isTrue);
       expect(eco.coins, equals(coinsBefore - 5));
 
-      // 3. 金币不足时失败（预置已赠送标记避免 init 重复发新手礼）
-      SharedPreferences.setMockInitialValues({
-        'jigsaw_economy_coins': 0,
-        'jigsaw_economy_hint_coupons': 0,
-        'jigsaw_economy_starter_granted': true,
-      });
-      await eco.init();
+      // 3. 金币不足时失败（直接清空金币与券——app-state 原生 key 直写）
+      await sm.state.put('econ:coins', 0);
+      await sm.state.put('econ:hintCoupons', 0);
+      await EconomyService.instance.init();
       expect(await eco.consumeHint(tierIndex: 0), isFalse);
     });
   });

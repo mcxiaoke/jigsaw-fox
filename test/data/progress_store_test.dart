@@ -1,13 +1,21 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:jigsawpuzzle/data/progress_store.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:jigsawpuzzle/data/storage_manager.dart';
+
+import '../test_helper.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+  late StorageManager sm;
 
   setUp(() async {
-    SharedPreferences.setMockInitialValues({});
-    await ProgressStore.instance.init();
+    // 每个测试独立 Hive 目录 + 内存索引清零（等价全新 init）
+    sm = await initTestStorage();
+    await ProgressStore.instance.reset();
+  });
+
+  tearDown(() async {
+    await tearDownTestStorage(sm);
   });
 
   group('ProgressStore & DifficultyRecord Unit Tests', () {

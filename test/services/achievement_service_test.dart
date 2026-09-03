@@ -1,16 +1,23 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:jigsawpuzzle/data/storage_manager.dart';
 import 'package:jigsawpuzzle/services/achievement_service.dart';
 import 'package:jigsawpuzzle/services/achievement_store.dart';
 import 'package:jigsawpuzzle/services/economy_service.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+
+import '../test_helper.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+  late StorageManager sm;
 
   setUp(() async {
-    SharedPreferences.setMockInitialValues({});
-    await AchievementStore.instance.init();
-    await EconomyService.instance.init();
+    sm = await initTestAppStorage();
+    await AchievementStore.instance.reset(); // 清 4 个内存缓存 + box 中 ach:* 条目
+    await EconomyService.instance.reset(); // starter 资产重发
+  });
+
+  tearDown(() async {
+    await tearDownTestStorage(sm);
   });
 
   group('AchievementService Unit Tests', () {

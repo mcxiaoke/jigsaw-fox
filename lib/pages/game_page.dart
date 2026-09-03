@@ -656,14 +656,14 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
     final imgBytes = bytes.buffer.asUint8List();
 
     if (!mounted) return;
-    // 尝试从文件级快照读取（新链路优先）
-    String? snapJson = nextLevel.savedSnapshotJson;
+    // 从文件级快照读取续玩（Item 的旧快照字段遗留 fallback 已移除——
+    // 快照由 SnapshotStore 文件级管理，该字段改造后恒为 null，清理阶段 §11）
+    String? snapJson;
     try {
-      final s = await _repo.loadLevelSnapshotJson(
+      snapJson = await _repo.loadLevelSnapshotJson(
         nextIndex,
         nextLevel.difficulty,
       );
-      if (s != null) snapJson = s;
     } catch (_) {}
     if (!mounted) return;
     Navigator.of(context).pushReplacement(

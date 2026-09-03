@@ -2,10 +2,11 @@ import 'dart:convert';
 import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:hive_ce/hive_ce.dart';
 
 import '../services/app_logger.dart';
 import 'snapshot_store.dart';
+import 'storage_manager.dart';
 
 /// 单档位通关记录（v3.3.1 设计）
 class DifficultyRecord {
@@ -153,20 +154,28 @@ class DifficultyRecordUpdateResult {
   final DifficultyRecord record;
 }
 
-/// 轻量进度索引（按 canonicalId 单条 SharedPreferences JSON）
+/// 轻量进度索引（按 canonicalId 单条 Hive `game-progress-v1` JSON String）
 ///
 /// 与重型快照文件（SnapshotStore）分离，列表页无需读大文件即可展示
 /// 进度、星级、最佳用时与“是否有存档”标记。
 /// 支持嵌套档位记录 `Map<difficultyKey, DifficultyRecord>`，避免 N+1 查询。
+///
+/// 存储迁移（设计 §2.2 / §3.3）：
+/// - 值统一为 `jsonEncode(LevelProgress.toJson())` 的 **JSON String**，
+///   根除未注册 TypeAdapter 的嵌套 Map 重启后退化为 Map[dynamic,dynamic] 的崩溃；
+/// - 冷启动一次性 `jsonDecode` 建全量内存索引 `_index[cid]`，热路径 O(1) 命中；
+/// - 主线进度 SSOT：原 `jigsaw level {i}` 整条 LevelItem 读写路径已删除，
+///   与 `jigsaw progress v3 聚合` 聚合索引收敛为同一份（§2.3）。
 class ProgressStore {
   ProgressStore._();
   static final ProgressStore instance = ProgressStore._();
 
-  static const String _keyPrefix = 'jigsaw_progress_v3_';
-  SharedPreferences? _prefs;
   int _cachedDistinct3Star = 0;
   int _cachedTotalSolved = 0;
   int _cachedTotalStars = 0;
+
+  /// 全量内存索引（null 表示尚未 init；空 map 表示已 init 但无数据）
+  Map<String, LevelProgress>? _index;
 
   /// 全局响应式进度通知器（当任何关卡产生进度、通关或清档时自增触发）
   final ValueNotifier<int> progressNotifier = ValueNotifier<int>(0);
@@ -179,37 +188,61 @@ class ProgressStore {
   int get cachedTotalSolvedCount => _cachedTotalSolved;
   int get cachedTotalStarsCount => _cachedTotalStars;
 
-  Future<void> init() async {
-    if (_prefs != null) return;
-    _prefs = await SharedPreferences.getInstance();
-    await refreshAggregatesCache();
+  Box<dynamic> get _box => StorageManager.instance.progress;
+
+  Future<void> _ensureInit() async {
+    if (_index != null) return;
+    await init();
   }
 
+  /// 冷启动一次性解码建索引（§3.3）
+  Future<void> init() async {
+    if (_index != null) return; // 幂等守卫（等价原 `if (_prefs != null) return`）
+    final map = <String, LevelProgress>{};
+    try {
+      for (final key in _box.keys.cast<String>()) {
+        final raw = _box.get(key) as String?;
+        if (raw == null) continue;
+        try {
+          final p = LevelProgress.fromJson(
+            jsonDecode(raw) as Map<String, dynamic>,
+          );
+          final cid = p.canonicalId.isNotEmpty ? p.canonicalId : key;
+          map[cid] = p;
+        } catch (e, st) {
+          AppLogger.repo.warning(
+            'ProgressStore.init parse fail key=$key',
+            e,
+            st,
+          );
+        }
+      }
+    } catch (e, st) {
+      AppLogger.repo.severe('ProgressStore.init failed', e, st);
+    }
+    _index = map;
+    await refreshAggregatesCache();
+    AppLogger.repo.info('ProgressStore.init loaded ${map.length} records');
+  }
+
+  /// 纯内存遍历重算（§八）：聚合值是 _index 的纯函数，不落盘
   Future<void> refreshAggregatesCache() async {
-    final keys = _prefs?.getKeys() ?? const {};
+    final idx = _index;
+    if (idx == null) return;
     var count3Star = 0;
     var countSolved = 0;
     var sumStars = 0;
-    for (final k in keys) {
-      if (k.startsWith(_keyPrefix)) {
-        final raw = _prefs?.getString(k);
-        if (raw != null) {
-          try {
-            final m = jsonDecode(raw) as Map<String, dynamic>;
-            final p = LevelProgress.fromJson(m);
-            if (p.hasAny3Star) count3Star++;
-            if (p.isCompleted || p.records.values.any((r) => r.isCompleted)) {
-              countSolved++;
-            }
-            if (p.records.isNotEmpty) {
-              for (final r in p.records.values) {
-                sumStars += r.bestStars;
-              }
-            } else {
-              sumStars += p.stars;
-            }
-          } catch (_) {}
+    for (final p in idx.values) {
+      if (p.hasAny3Star) count3Star++;
+      if (p.isCompleted || p.records.values.any((r) => r.isCompleted)) {
+        countSolved++;
+      }
+      if (p.records.isNotEmpty) {
+        for (final r in p.records.values) {
+          sumStars += r.bestStars;
         }
+      } else {
+        sumStars += p.stars;
       }
     }
     _cachedDistinct3Star = count3Star;
@@ -217,81 +250,47 @@ class ProgressStore {
     _cachedTotalStars = sumStars;
   }
 
-  String _keyFor(String canonicalId) {
-    final safe = canonicalId.replaceAll(RegExp(r'[^a-zA-Z0-9_-]'), '_');
-    return '$_keyPrefix$safe';
-  }
-
   Future<LevelProgress> load(String canonicalId) async {
-    await init();
-    final str = _prefs?.getString(_keyFor(canonicalId));
-    if (str == null) return LevelProgress(canonicalId: canonicalId);
-    try {
-      final map = jsonDecode(str) as Map<String, dynamic>;
-      return LevelProgress.fromJson(map);
-    } catch (e, st) {
-      AppLogger.repo.warning(
-        'ProgressStore.load parse fail cid=$canonicalId',
-        e,
-        st,
-      );
-      return LevelProgress(canonicalId: canonicalId);
-    }
+    await _ensureInit();
+    return _index![canonicalId] ?? LevelProgress(canonicalId: canonicalId);
   }
 
-  /// 同步读取单关卡通用进度（直接从已初始化的内存 Prefs 读取）
+  /// 同步读取单关卡通用进度（内存 O(1) 命中，供 UI 水合使用）
   LevelProgress getLevelProgress(String canonicalId) {
-    final str = _prefs?.getString(_keyFor(canonicalId));
-    if (str == null) return LevelProgress(canonicalId: canonicalId);
-    try {
-      final map = jsonDecode(str) as Map<String, dynamic>;
-      return LevelProgress.fromJson(map);
-    } catch (_) {
-      return LevelProgress(canonicalId: canonicalId);
-    }
+    final idx = _index;
+    if (idx == null) return LevelProgress(canonicalId: canonicalId);
+    return idx[canonicalId] ?? LevelProgress(canonicalId: canonicalId);
   }
 
-  /// 批量高效加载全部已保存的 LevelProgress（单次遍历 prefs keys，消除 N+1）
+  /// 批量加载全部 LevelProgress（直接返回内存索引副本，O(N) 零解码）
   Future<Map<String, LevelProgress>> loadAllProgress() async {
-    await init();
-    final keys = _prefs?.getKeys() ?? const {};
-    final map = <String, LevelProgress>{};
-    for (final k in keys) {
-      if (k.startsWith(_keyPrefix)) {
-        final raw = _prefs?.getString(k);
-        if (raw != null) {
-          try {
-            final m = jsonDecode(raw) as Map<String, dynamic>;
-            final p = LevelProgress.fromJson(m);
-            if (p.canonicalId.isNotEmpty) {
-              map[p.canonicalId] = p;
-            }
-          } catch (_) {}
-        }
-      }
-    }
-    return map;
+    await _ensureInit();
+    return Map<String, LevelProgress>.from(_index!);
   }
 
   Future<void> save(LevelProgress p) async {
-    await init();
+    await _ensureInit();
+    final cid = p.canonicalId;
+    if (cid.isEmpty) {
+      AppLogger.repo.warning('ProgressStore.save skip empty canonicalId');
+      return;
+    }
     try {
-      await _prefs?.setString(_keyFor(p.canonicalId), jsonEncode(p.toJson()));
+      // 内存优先（UI 立即响应），再落 box——维持写侧内存一致性（§3.3）
+      _index![cid] = p;
+      await putJson(_box, cid, p.toJson());
       _notifyProgressChanged();
     } catch (e, st) {
-      AppLogger.repo.warning(
-        'ProgressStore.save fail cid=${p.canonicalId}',
-        e,
-        st,
-      );
+      AppLogger.repo.warning('ProgressStore.save fail cid=$cid', e, st);
     }
   }
 
   /// 删除指定关卡的进度记录并通知更新
   Future<void> delete(String canonicalId) async {
-    await init();
+    await _ensureInit();
     try {
-      await _prefs?.remove(_keyFor(canonicalId));
+      _index!.remove(canonicalId);
+      await _box.delete(canonicalId);
       await refreshAggregatesCache();
       _notifyProgressChanged();
     } catch (e, st) {
@@ -305,52 +304,34 @@ class ProgressStore {
 
   /// 获取全部已存储的 canonicalId 列表
   Future<List<String>> listAllCanonicalIds() async {
-    await init();
-    final keys = _prefs?.getKeys() ?? <String>{};
-    final list = <String>[];
-    for (final k in keys) {
-      if (k.startsWith(_keyPrefix)) {
-        final raw = _prefs?.getString(k);
-        if (raw != null) {
-          try {
-            final m = jsonDecode(raw) as Map<String, dynamic>;
-            final cid = m['canonicalId'] as String?;
-            if (cid != null && cid.isNotEmpty) {
-              list.add(cid);
-            }
-          } catch (_) {}
-        }
-      }
-    }
-    return list;
+    await _ensureInit();
+    return _index!.keys.toList();
   }
 
   /// 账号资产：获得 3 星的不同图数量（任一档位拿过 3 星即计入，按 canonicalId 去重）
   Future<int> getDistinctImagesWith3Star() async {
-    await init();
+    await _ensureInit();
     return _cachedDistinct3Star;
   }
 
   /// 账号资产：所有 canonicalId × 所有档位 bestStars 求和（读缓存，O(1) 性能）
   Future<int> getTotalStars() async {
-    await init();
+    await _ensureInit();
     return _cachedTotalStars;
   }
 
   /// 账号资产：累计已通关的不同图数量或局数（读缓存，O(1) 性能）
   Future<int> getTotalSolved() async {
-    await init();
+    await _ensureInit();
     return _cachedTotalSolved;
   }
 
   /// 账号资产：累计游玩总局数（跨所有图 × 所有档位）
+  ///
+  /// 改造后走内存索引遍历，避免每次聚合都重复 jsonDecode（§八）
   Future<int> getTotalPlayCount() async {
-    final all = await loadAllProgress();
-    var sum = 0;
-    for (final p in all.values) {
-      sum += p.totalPlayCount;
-    }
-    return sum;
+    await _ensureInit();
+    return _index!.values.fold<int>(0, (sum, p) => sum + p.totalPlayCount);
   }
 
   /// 记录单图单档位的通关成绩，原子更新嵌套 records 并维护 minHintsUsed 与时间戳
@@ -607,6 +588,64 @@ class ProgressStore {
       AppLogger.repo.info(
         'ProgressStore.reconcile cid=$canonicalId has=$has keys=$keys active=$nextActive',
       );
+    }
+  }
+
+  /// 重置（§7.6 步骤 3）：清空内存索引、重算聚合缓存并广播。
+  ///
+  /// **必须存在**——`init()` 有 `if (_index != null) return` 幂等守卫，
+  /// `resetAllData()` 里再调 `init()` 不会重建索引，聚合统计会停留在旧值。
+  Future<void> reset() async {
+    _index = <String, LevelProgress>{};
+    await refreshAggregatesCache();
+    // 末尾必须广播：「我的」中心等界面靠监听 progressNotifier 重绘，
+    // 只清 _index 不通知 → UI 继续显示旧统计（总星数/通关数）
+    _notifyProgressChanged();
+    AppLogger.repo.info('ProgressStore.reset done');
+  }
+
+  /// 测试专用：置空内存索引并从 box 重新加载（模拟冷启动重启，§10.3 往返用例）
+  @visibleForTesting
+  Future<void> reloadForTest() async {
+    _index = null;
+    await init();
+  }
+
+  /// 校正 _index 中 hasSnapshot/snapshotKeys 与物理快照的一致性（§7.6 步骤 7）。
+  ///
+  /// 在 init()/恢复/重置后调用，消除幽灵索引（索引称有快照但文件已无）
+  /// 与 snapshotKeys 漂移。仅修快照索引，不删进度记录本身。
+  Future<void> reconcileSnapshots() async {
+    final idx = _index;
+    if (idx == null) return;
+    var dirty = false;
+    for (final cid in idx.keys.toList()) {
+      final p = idx[cid]!;
+      if (!p.hasSnapshot) continue;
+      // SnapshotStore 按 canonicalId 管理快照文件
+      final actualKeys = await SnapshotStore.instance.listDifficultyKeys(cid);
+      final indexedKeys = p.snapshotKeys;
+      final mismatch =
+          (actualKeys.isEmpty && p.hasSnapshot) ||
+          actualKeys.length != indexedKeys.length ||
+          !actualKeys.toSet().containsAll(indexedKeys);
+      if (mismatch) {
+        final corrected = p.copyWith(
+          hasSnapshot: actualKeys.isNotEmpty,
+          snapshotKeys: actualKeys,
+          activeDifficultyKey: actualKeys.isNotEmpty
+              ? p.activeDifficultyKey
+              : '',
+        );
+        idx[cid] = corrected;
+        await putJson(_box, cid, corrected.toJson());
+        dirty = true;
+      }
+    }
+    if (dirty) {
+      await refreshAggregatesCache();
+      _notifyProgressChanged();
+      AppLogger.repo.info('ProgressStore.reconcileSnapshots corrected');
     }
   }
 }

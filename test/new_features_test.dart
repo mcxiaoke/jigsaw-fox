@@ -6,6 +6,7 @@ import 'package:flame/components.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:jigsawpuzzle/data/game_repository.dart';
+import 'package:jigsawpuzzle/data/storage_manager.dart';
 import 'package:jigsawpuzzle/game/jigsaw_puzzle_game.dart';
 import 'package:jigsawpuzzle/logic/puzzle_model.dart';
 import 'package:jigsawpuzzle/pages/achievements_page.dart';
@@ -15,10 +16,13 @@ import 'package:jigsawpuzzle/pages/settings_page.dart';
 import 'package:jigsawpuzzle/pages/tabs/daily_tab_view.dart';
 import 'package:jigsawpuzzle/pages/tabs/home_tab_view.dart';
 import 'package:jigsawpuzzle/pages/tabs/my_puzzles_tab_view.dart';
+import 'package:jigsawpuzzle/services/achievement_store.dart';
+import 'package:jigsawpuzzle/services/economy_service.dart';
 import 'package:jigsawpuzzle/widgets/choose_difficulty_sheet.dart';
 import 'package:jigsawpuzzle/widgets/downloaded_drawer_sheet.dart';
 import 'package:phosphoricons_flutter/phosphoricons_flutter.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+
+import 'test_helper.dart';
 
 final Uint8List kTestTransparentImage = base64Decode(
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
@@ -40,10 +44,20 @@ Future<ui.Image> createTestImage(int width, int height) async {
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+  late StorageManager sm;
 
   setUpAll(() async {
-    SharedPreferences.setMockInitialValues({});
+    sm = await initTestAppStorage();
     await GameRepository.instance.init();
+    // 预完成所有「首次初始化会写盘」的服务 init（widget 测试 FakeAsync 区内
+    // 真实文件 I/O 的 Future 永不完成——首次 EconomyService.init() 的 box.put
+    // 会等待磁盘写帧；提前在真实异步区完成，页面内 init 即可同步早退）
+    await AchievementStore.instance.init();
+    await EconomyService.instance.init();
+  });
+
+  tearDownAll(() async {
+    await tearDownTestStorage(sm);
   });
 
   group('New UI/UX Features & Mechanics Tests', () {

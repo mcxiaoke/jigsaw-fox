@@ -193,14 +193,12 @@ class _MyPuzzlesTabViewState extends State<MyPuzzlesTabView> {
       },
       onStart: (diff) async {
         final dkey = SnapshotStore.difficultyKeyFor(diff);
+        // 快照由 SnapshotStore 文件级管理；Item 旧快照字段
+        // 遗留 fallback 已移除（改造后恒为 null，清理阶段 §11）
         final snapJson = await SnapshotStore.instance.loadJsonString(
           canonicalId,
           dkey,
         );
-        final fallbackLegacy =
-            (diff.pieceCount == item.difficulty.pieceCount && !item.isCompleted)
-            ? item.savedSnapshotJson
-            : null;
         if (!mounted) return;
         await Navigator.of(context).push(
           MaterialPageRoute<void>(
@@ -208,7 +206,7 @@ class _MyPuzzlesTabViewState extends State<MyPuzzlesTabView> {
               imageBytes: bytes,
               difficulty: diff,
               customId: item.id,
-              initialSnapshotJson: snapJson ?? fallbackLegacy,
+              initialSnapshotJson: snapJson,
             ),
           ),
         );

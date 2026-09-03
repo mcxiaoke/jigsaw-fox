@@ -1,24 +1,27 @@
-import 'dart:convert';
-
 import 'package:flutter_test/flutter_test.dart';
-import 'package:jigsawpuzzle/data/game_repository.dart';
-import 'package:jigsawpuzzle/data/migration_service.dart';
-import 'package:jigsawpuzzle/data/models/level_item.dart';
 import 'package:jigsawpuzzle/data/progress_store.dart';
 import 'package:jigsawpuzzle/data/resume_helper.dart';
 import 'package:jigsawpuzzle/data/snapshot_store.dart';
+import 'package:jigsawpuzzle/data/storage_manager.dart';
 import 'package:jigsawpuzzle/logic/models/puzzle_state.dart';
 import 'package:jigsawpuzzle/logic/puzzle_model.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+
+import 'test_helper.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+  late StorageManager sm;
 
-  group('SnapshotStore & ProgressStore & Migration Tests', () {
+  group('SnapshotStore & ProgressStore Tests', () {
     setUp(() async {
-      SharedPreferences.setMockInitialValues({});
+      sm = await initTestStorage();
       await SnapshotStore.instance.init();
-      await ProgressStore.instance.init();
+      // 每个测试独立 box：清空内存索引（box 本身为空，等价全新 init）
+      await ProgressStore.instance.reset();
+    });
+
+    tearDown(() async {
+      await tearDownTestStorage(sm);
     });
 
     test('SnapshotStore atomic save, load, and explicit delete', () async {
@@ -97,52 +100,6 @@ void main() {
       p = await ProgressStore.instance.load(cid);
       expect(p.hasSnapshot, isFalse);
       expect(p.activeDifficultyKey, isEmpty);
-    });
-
-    test('MigrationService migrates legacy savedSnapshotJson', () async {
-      final prefs = await SharedPreferences.getInstance();
-      const legacyState = PuzzleBoardState(
-        rows: 2,
-        cols: 2,
-        seed: 1234,
-        pieces: [
-          PieceState(id: 0, r: 0, c: 0, nx: 0.0, ny: 0.0, clusterId: 0),
-          PieceState(id: 1, r: 0, c: 1, nx: 0.5, ny: 0.0, clusterId: 1),
-          PieceState(id: 2, r: 1, c: 0, nx: 0.0, ny: 0.5, clusterId: 2),
-          PieceState(id: 3, r: 1, c: 1, nx: 0.5, ny: 0.5, clusterId: 3),
-        ],
-      );
-      final jsonStr = jsonEncode(legacyState.toJson());
-
-      final levels = [
-        LevelItem(
-          id: 'level_1',
-          index: 1,
-          title: '第 1 关',
-          assetPath: 'assets/sample.webp',
-          difficulty: const PuzzleDifficulty(label: '2x2', rows: 2, cols: 2),
-          isUnlocked: true,
-          isCompleted: false,
-          progressPercent: 25,
-          savedSnapshotJson: jsonStr,
-        ),
-      ];
-
-      await MigrationService.instance.migrateIfNeeded(
-        prefs: prefs,
-        levels: levels,
-        customPuzzles: const [],
-      );
-
-      final cid = GameRepository.canonicalForLevel(1);
-      final prog = await ProgressStore.instance.load(cid);
-      expect(prog.hasSnapshot, isTrue);
-      expect(prog.progressPercent, 25);
-      expect(prog.activeDifficultyKey, '2x2');
-
-      final snap = await SnapshotStore.instance.load(cid, '2x2');
-      expect(snap, isNotNull);
-      expect(snap!.pieces.length, 4);
     });
 
     test(

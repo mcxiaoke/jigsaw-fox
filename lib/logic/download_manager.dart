@@ -1,24 +1,29 @@
-import 'dart:convert';
 import 'dart:io';
 import 'dart:ui' as ui;
 
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
+import 'package:hive_ce/hive_ce.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 import '../data/models/downloaded_image_item.dart';
+import '../data/storage_manager.dart';
 import '../services/app_logger.dart';
 import 'cache/image_cache_manager.dart';
 
 /// Singleton manager for batch downloaded and locally imported images (Material Box / 素材库)
 /// with local persistence, deduplication, and metadata parsing.
+///
+/// 存储迁移（设计 §2.2 / §5.4）：原 原下载素材大 key 单 key 大数组
+/// 改为 `game-collections-v1` 的 `material:{id}` 逐条存储；init 一次性前缀读入
+/// `itemsNotifier`（内存），聚合按 `downloadedAt` 降序，失效项同步删除 box key。
 class DownloadManager {
   DownloadManager._();
   static final DownloadManager instance = DownloadManager._();
 
-  static const String _storageKey = 'cached_downloaded_images_v1';
+  static const String _keyPrefix = 'material:';
   final Dio _dio = Dio(
     BaseOptions(
       connectTimeout: const Duration(seconds: 20),
@@ -35,37 +40,59 @@ class DownloadManager {
 
   bool _initialized = false;
 
+  Box<dynamic> get _box => StorageManager.instance.collections;
+
   Future<void> init() async {
     if (_initialized) return;
     _initialized = true;
     try {
-      final prefs = await SharedPreferences.getInstance();
-      final rawJson = prefs.getString(_storageKey);
-      if (rawJson != null && rawJson.isNotEmpty) {
-        final list = (jsonDecode(rawJson) as List<dynamic>)
-            .map((e) => DownloadedImageItem.fromJson(e as Map<String, dynamic>))
-            .where((item) {
-              final file = File(item.localPath);
-              return file.existsSync();
-            })
-            .toList();
-
-        itemsNotifier.value = list;
-        AppLogger.download.info('Loaded ${list.length} cached images');
+      // 先收集后批量删（§5.4：box.keys 迭代中 delete 属未定义行为）
+      final keys = _box.keys
+          .cast<String>()
+          .where((k) => k.startsWith(_keyPrefix))
+          .toList();
+      final list = <DownloadedImageItem>[];
+      final staleKeys = <String>[];
+      for (final key in keys) {
+        final m = getJson(_box, key);
+        if (m == null) continue;
+        final item = DownloadedImageItem.fromJson(m);
+        // 失效过滤必须保留：localPath 已不存在的项剔除，且同步删除 box key，
+        // 否则失效项永久驻留 box（§5.4 v4 补充）
+        if (!File(item.localPath).existsSync()) {
+          staleKeys.add(key);
+          continue;
+        }
+        list.add(item);
       }
+      for (final key in staleKeys) {
+        await _box.delete(key);
+      }
+
+      // 聚合按 downloadedAt 降序（§3.3 排序约定：拆条后字典序 ≠ 业务时序）
+      list.sort((a, b) => b.downloadedAt.compareTo(a.downloadedAt));
+      itemsNotifier.value = list;
+      AppLogger.download.info(
+        'Loaded ${list.length} cached images (stale removed ${staleKeys.length})',
+      );
     } catch (e, st) {
       AppLogger.download.severe('Failed to load cache', e, st);
     }
   }
 
-  Future<void> _saveToStorage() async {
+  /// 单条落盘
+  Future<void> _saveItem(DownloadedImageItem item) async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      final jsonList = itemsNotifier.value.map((e) => e.toJson()).toList();
-      await prefs.setString(_storageKey, jsonEncode(jsonList));
+      await putJson(_box, '$_keyPrefix${item.id}', item.toJson());
     } catch (e, st) {
-      AppLogger.download.warning('Save to storage failed', e, st);
+      AppLogger.download.warning('Save item to hive failed', e, st);
     }
+  }
+
+  /// 内存 + box 同步插入（新项置顶）
+  Future<void> _insertAtTop(DownloadedImageItem item) async {
+    itemsNotifier.value = [item, ...itemsNotifier.value];
+    await _saveItem(item);
   }
 
   /// Check if the image sourceUrl already exists in download drawer.
@@ -138,8 +165,10 @@ class DownloadManager {
     }
 
     if (newlyAdded.isNotEmpty) {
-      itemsNotifier.value = [...newlyAdded, ...itemsNotifier.value];
-      await _saveToStorage();
+      // 新项置顶（下载/导入时序即列表时序），逐条落盘
+      for (final item in newlyAdded) {
+        await _insertAtTop(item);
+      }
       AppLogger.download.info(
         'Successfully imported ${newlyAdded.length} local images total=${itemsNotifier.value.length}',
       );
@@ -311,7 +340,7 @@ class DownloadManager {
     );
 
     itemsNotifier.value = [item, ...itemsNotifier.value];
-    await _saveToStorage();
+    await _saveItem(item);
     AppLogger.download.info(
       'Complete added item $id ${width}x$height ${rawBytes.length} bytes total=${itemsNotifier.value.length}',
     );
@@ -341,7 +370,11 @@ class DownloadManager {
       }
       list.removeAt(idx);
       itemsNotifier.value = list;
-      await _saveToStorage();
+      try {
+        await _box.delete('$_keyPrefix$id');
+      } catch (e, st) {
+        AppLogger.download.warning('Delete box key failed id=$id', e, st);
+      }
       AppLogger.download.info('Removed item $id remaining=${list.length}');
     } else {
       AppLogger.download.warning('Delete not found id=$id');
@@ -362,8 +395,72 @@ class DownloadManager {
         );
       } catch (_) {}
     }
+    // 先收集后批量删（§5.4）
+    final keys = _box.keys
+        .cast<String>()
+        .where((k) => k.startsWith(_keyPrefix))
+        .toList();
+    for (final key in keys) {
+      try {
+        await _box.delete(key);
+      } catch (_) {}
+    }
     itemsNotifier.value = [];
-    await _saveToStorage();
     AppLogger.download.info('All downloaded images cleared');
+  }
+
+  /// 重置（§7.6 步骤 4，本次新建）：直接清空 download_cache 目录——
+  /// 物理文件命名有本地导入 `mat_*.{ext}` 与网络下载 `img_*.jpg` 两种，
+  /// 重置语义即归零，不做脆弱的前缀匹配。
+  Future<void> reset() async {
+    // ① 遍历 {appSupport}/download_cache/ 全部文件逐个删除（扫盘天然覆盖
+    //    内存可能为空的情形——init() 在 main 组2 后台不 await）
+    try {
+      final appSupportDir = await getApplicationSupportDirectory();
+      final cacheDir = Directory('${appSupportDir.path}/download_cache');
+      if (await cacheDir.exists()) {
+        await for (final entity in cacheDir.list()) {
+          if (entity is File) {
+            try {
+              await entity.delete();
+            } catch (_) {}
+          }
+        }
+      }
+    } catch (e, st) {
+      AppLogger.download.warning('reset download_cache failed', e, st);
+    }
+    // ② 清理 ImageCacheManager 缩略图缓存
+    for (final item in itemsNotifier.value) {
+      try {
+        await ImageCacheManager.instance.removeThumbnailForSource(
+          item.localPath,
+        );
+      } catch (_) {}
+    }
+    // ③ 清 box keys + itemsNotifier + _initialized 标志
+    try {
+      final keys = _box.keys
+          .cast<String>()
+          .where((k) => k.startsWith(_keyPrefix))
+          .toList();
+      for (final key in keys) {
+        try {
+          await _box.delete(key);
+        } catch (_) {}
+      }
+    } catch (_) {}
+    itemsNotifier.value = [];
+    _initialized = false;
+    AppLogger.download.info('DownloadManager.reset done');
+  }
+
+  /// 资源目录（供测试断言物理文件清理）
+  static String materialKeyFor(String id) => '$_keyPrefix$id';
+
+  /// 供测试/重置逻辑定位 download_cache 目录
+  static Future<Directory> downloadCacheDir() async {
+    final appSupportDir = await getApplicationSupportDirectory();
+    return Directory(p.join(appSupportDir.path, 'download_cache'));
   }
 }

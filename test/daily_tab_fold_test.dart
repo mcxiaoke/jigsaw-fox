@@ -1,15 +1,22 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:jigsawpuzzle/data/game_repository.dart';
+import 'package:jigsawpuzzle/data/storage_manager.dart';
 import 'package:jigsawpuzzle/pages/tabs/daily_tab_view.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+
+import 'test_helper.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+  late StorageManager sm;
 
   setUp(() async {
-    SharedPreferences.setMockInitialValues({});
+    sm = await initTestAppStorage();
     await GameRepository.instance.init();
+  });
+
+  tearDown(() async {
+    await tearDownTestStorage(sm);
   });
 
   group('DailyTabView Month Folding Tests', () {

@@ -106,6 +106,24 @@ class CustomPuzzleItem {
     'sourceUrl': sourceUrl,
   };
 
+  /// 元数据专用序列化（设计 §5.2）：custom:{id} 只存元数据，
+  /// 进度字段 isCompleted/progressPercent/bestTimeSeconds/
+  /// completedPieceCounts/savedSnapshotJson 全部委托 game-progress-v1 的
+  /// ugc:{id}，不在此落盘——否则会产生双路副本，且残留的旧进度字段会
+  /// 在水合前被 fromJson 错误还原。
+  Map<String, dynamic> toMetadataJson() => {
+    'id': id,
+    'title': title,
+    'imagePathOrUrl': imagePathOrUrl,
+    'isLocalFile': isLocalFile,
+    'rows': difficulty.rows,
+    'cols': difficulty.cols,
+    if (createdAt != null) 'createdAt': createdAt!.toIso8601String(),
+    'sourceType': sourceType,
+    'sourcePlatform': sourcePlatform,
+    if (sourceUrl != null) 'sourceUrl': sourceUrl,
+  };
+
   factory CustomPuzzleItem.fromJson(Map<String, dynamic> json) {
     final rows = json['rows'] as int? ?? 4;
     final cols = json['cols'] as int? ?? 4;

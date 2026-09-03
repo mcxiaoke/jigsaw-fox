@@ -3,17 +3,24 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:jigsawpuzzle/data/favorite_store.dart';
 import 'package:jigsawpuzzle/data/game_repository.dart';
 import 'package:jigsawpuzzle/data/progress_store.dart';
+import 'package:jigsawpuzzle/data/storage_manager.dart';
 import 'package:jigsawpuzzle/pages/tabs/my_center_tab_view.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+
+import 'test_helper.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+  late StorageManager sm;
 
   setUp(() async {
-    SharedPreferences.setMockInitialValues({});
+    sm = await initTestAppStorage();
     await GameRepository.instance.init();
     await ProgressStore.instance.init();
     await FavoriteStore.instance.init();
+  });
+
+  tearDown(() async {
+    await tearDownTestStorage(sm);
   });
 
   group('MyCenterTabView Widget Tests', () {
