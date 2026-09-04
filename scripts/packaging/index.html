@@ -93,12 +93,24 @@ input,select,textarea{font:inherit}
 .tag-chip{border:1px solid var(--line);background:#fff;padding:5px 10px;border-radius:999px;font-size:12px;cursor:pointer;display:inline-flex;gap:6px;align-items:center}
 .tag-chip:hover{border-color:#cbd5e1;background:#f8fafc}
 .tag-chip.active{border-color:var(--accent);background:#e8f0fe;color:#0b57d0;font-weight:700}
+.tag-chip.is-zero{opacity:.45;border-style:dashed}
+.tag-chip.is-zero:hover{opacity:.85}
+.tag-chip.is-zero.active{opacity:1;border-style:solid}
 .tag-chip .zh{color:var(--muted)}
 .tag-chip .cnt{background:#f1f5f9;color:var(--muted);padding:1px 6px;border-radius:999px;font-size:11px}
-.tag-chip.active .cnt{background:#dbeafe;color:#0b57d0}
 .tag-bar-actions{margin-left:auto;display:flex;gap:6px;align-items:center}
-
-/* grid */
+.catalog-chips{display:flex;gap:6px;flex-wrap:wrap;padding-bottom:6px;border-bottom:1px dashed var(--line);margin-bottom:6px}
+.cat-chip{border:1px solid var(--line);background:#f8fafc;padding:4px 9px;border-radius:999px;font-size:12px;cursor:pointer;display:inline-flex;gap:5px;align-items:center}
+.cat-chip:hover{border-color:#cbd5e1;background:#fff}
+.cat-chip.active{border-color:var(--accent);background:#e8f0fe;color:#0b57d0;font-weight:700}
+.cat-chip.is-zero{opacity:.45}
+.cat-chip.is-zero:hover{opacity:.85}
+.cat-chip.is-zero.active{opacity:1}
+.cat-chip .cnt{background:#e2e8f0;color:var(--muted);padding:1px 6px;border-radius:999px;font-size:11px}
+.cat-chip.active .cnt{background:#bfdbfe;color:#0b57d0}
+.tag-section{border:1px solid var(--line);border-radius:8px;margin-bottom:8px;background:#fff;overflow:hidden}
+.tag-section-head{padding:5px 8px;background:#f8fafc;border-bottom:1px solid var(--line);font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:space-between;color:var(--text)}
+.tag-section-grid{display:grid;grid-template-columns:1fr 1fr;gap:4px;padding:6px}
 .grid-wrap{padding:12px}
 .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px}
 @media(min-width:1400px){ .grid{grid-template-columns:repeat(auto-fill,minmax(165px,1fr))} }
@@ -175,7 +187,7 @@ input,select,textarea{font:inherit}
   <div class="header-inner">
     <div class="brand">
       <div class="logo">🧩</div>
-      <div>Content Studio <small>v1.2 · 21 Tags</small></div>
+      <div>Content Studio <small>v2.1 · Catalogs & Tags</small></div>
       <span class="hint" style="margin-left:10px">按需启动 · 本地打包（`python scripts/packaging/server.py`）</span>
     </div>
     <div class="header-actions">
@@ -234,8 +246,10 @@ input,select,textarea{font:inherit}
   <button class="btn small" id="btnDeselectAll">取消全选</button>
   <button class="btn small" id="btnInvert">反选</button>
   <span class="hint" id="selHint"></span>
-  <select id="bulkTag" class="select"><option value="">批量设为…</option></select>
-  <button class="btn small" id="btnBulk">应用</button>
+  <select id="bulkTag" class="select"><option value="">选择批量标签…</option></select>
+  <button class="btn small" id="btnBulkSet">设为</button>
+  <button class="btn small" id="btnBulkAdd">+追加</button>
+  <button class="btn small" id="btnBulkDel">-移除</button>
 </section>
 
 <!-- shell — new layout: main-col (tag bar + grid) + detail -->
@@ -245,13 +259,14 @@ input,select,textarea{font:inherit}
     <div class="panel">
       <div class="tag-bar">
         <div class="tag-bar-head">
-          <b>📂 标签分布</b>
+          <b>📂 分类与标签分布</b>
           <small id="leftTotal" class="hint"></small>
           <span class="hint" id="leftScanInfo" style="margin-left:6px"></span>
           <div class="tag-bar-actions">
             <button class="btn small" id="btnRefresh">刷新</button>
           </div>
         </div>
+        <div class="catalog-chips" id="catalogList"></div>
         <div class="tag-chips" id="tagList"></div>
       </div>
     </div>
@@ -274,25 +289,27 @@ input,select,textarea{font:inherit}
 
   <!-- right: detail -->
   <div class="panel detail">
-    <h3>🔍 详情与校正 <small id="detailTitle">未选中</small></h3>
+    <h3>🔍 详情与标签 <small id="detailTitle">未选中</small></h3>
     <div class="preview" id="preview"><span class="hint">未选中图片</span></div>
     <div class="detail-scroll">
       <div class="detail-body">
         <div class="kv"><b>文件名</b><span id="dFile">-</span></div>
         <div class="kv"><b>路径</b><span id="dPath">-</span></div>
-        <div class="kv"><b>AI 判定</b><span id="dAi">-</span></div>
-        <div class="kv"><b>置信度</b><span id="dConf">-</span></div>
-        <div class="kv"><b>subject/scene</b><span id="dSub">-</span></div>
-        <div class="kv"><b>reason</b><span id="dReason">-</span></div>
-        <div class="kv"><b>review</b><span id="dReview">-</span></div>
+        <div class="kv"><b>当前标签</b><div id="dCurrentTags" style="display:flex;gap:4px;flex-wrap:wrap"></div></div>
+        <div class="kv"><b>所属分类</b><span id="dCatalog">-</span></div>
+        <div class="kv"><b>识别信息</b><span id="dReason">-</span></div>
+        <div class="kv"><b>状态</b><span id="dReview">-</span></div>
         <div style="height:1px;background:var(--line)"></div>
-        <div style="font-weight:700;font-size:12px">校正为（单选 21 类）</div>
+        <div style="font-weight:700;font-size:12px;display:flex;justify-content:space-between;align-items:center">
+          <span>编辑标签（可多选）</span>
+          <small class="hint">勾选添加 / 取消移除</small>
+        </div>
         <div class="tag-grid" id="tagGrid"></div>
         <div class="actions">
-          <button class="btn" id="btnClearCorrect">清除校正</button>
-          <button class="btn primary" id="btnNext">保存并下一个 →</button>
+          <button class="btn" id="btnClearTags">清空为Others</button>
+          <button class="btn primary" id="btnNext">下一个 →</button>
         </div>
-        <div class="hint">保存后标记为“已校正”，`tags.json` 中写入 <code>correctedTag</code>，导出时以校正值为准。`confidence&lt;0.75` 或 `Others` 自动待复核。</div>
+        <div class="hint">支持一张图片打多个标签，勾选即实时生效并暂存。完成后点击顶部“保存 tags.json”。</div>
         <div class="log" id="log"></div>
       </div>
     </div>
@@ -300,8 +317,223 @@ input,select,textarea{font:inherit}
 </section>
 
 <script>
-const TAGS = ["Animals","Pets","Nature","Landscapes","Flowers","Ocean","Birds","Cities","Architecture","Food","Art","Fantasy","Space","Transportation","People","Sports","Seasons","Holidays","Abstract","Cartoon","Others"];
-const ZH = {Animals:"动物",Pets:"宠物",Nature:"自然",Landscapes:"风景",Flowers:"花卉",Ocean:"海洋",Birds:"鸟类",Cities:"城市",Architecture:"建筑",Food:"美食",Art:"艺术",Fantasy:"奇幻",Space:"太空",Transportation:"交通",People:"人物",Sports:"运动",Seasons:"四季",Holidays:"节日",Abstract:"抽象",Cartoon:"卡通",Others:"其他"};
+const CATALOG_DEFS = [
+  {id: "cat_nature", name: "Nature", zh: "自然风光", icon: "🌲"},
+  {id: "cat_animals", name: "Animals", zh: "动物萌宠", icon: "🐾"},
+  {id: "cat_colors", name: "Colors", zh: "缤纷色彩", icon: "🌈"},
+  {id: "cat_flowers", name: "Flowers", zh: "花卉园艺", icon: "🌸"},
+  {id: "cat_cozy", name: "Cozy", zh: "温馨生活", icon: "☕"},
+  {id: "cat_travel", name: "Travel", zh: "城市旅行", icon: "✈️"},
+  {id: "cat_food", name: "Food", zh: "美食甜品", icon: "🍰"},
+  {id: "cat_art", name: "Art", zh: "唯美艺术", icon: "🎨"},
+  {id: "cat_fantasy", name: "Fantasy", zh: "奇幻仙境", icon: "✨"},
+  {id: "cat_holidays", name: "Holidays", zh: "节日时令", icon: "🎉"},
+  {id: "cat_others", name: "Others", zh: "其他分类", icon: "📦"}
+];
+
+const SPECIFIC_TAG_DEFS = [
+  // 动物萌宠 (5)
+  {id: "cats", name: "Cats", zh: "猫咪"},
+  {id: "dogs", name: "Dogs", zh: "狗狗"},
+  {id: "birds", name: "Birds", zh: "飞禽鸟类"},
+  {id: "wildlife", name: "Wildlife", zh: "陆地野兽"},
+  {id: "sealife", name: "SeaLife", zh: "海洋水族"},
+  // 自然风光 (4)
+  {id: "mountains", name: "Mountains", zh: "山峦湖泊"},
+  {id: "forests", name: "Forests", zh: "森林自然"},
+  {id: "oceans", name: "Oceans", zh: "海洋海岸"},
+  {id: "sunsets", name: "Sunsets", zh: "日落晚霞"},
+  // 建筑旅行 (3)
+  {id: "landmarks", name: "Landmarks", zh: "名胜地标"},
+  {id: "castles", name: "Castles", zh: "古堡宫殿"},
+  {id: "villages", name: "Villages", zh: "街景小镇"},
+  // 花卉园艺 (2)
+  {id: "flowers", name: "Flowers", zh: "花卉花园"},
+  {id: "botanical", name: "Botanical", zh: "绿植微观"},
+  // 温馨生活 (4)
+  {id: "cottages", name: "Cottages", zh: "乡村木屋"},
+  {id: "cozy_home", name: "CozyHome", zh: "温馨室内"},
+  {id: "vintage", name: "Vintage", zh: "复古珍奇"},
+  {id: "crafts", name: "Crafts", zh: "手作布艺"},
+  // 美食甜品 (3)
+  {id: "desserts", name: "Desserts", zh: "甜点茶饮"},
+  {id: "cuisine", name: "Cuisine", zh: "环球料理"},
+  {id: "fruits", name: "Fruits", zh: "鲜果时蔬"},
+  // 缤纷色彩 (3)
+  {id: "colors", name: "Colors", zh: "彩虹色彩"},
+  {id: "flat_lay", name: "FlatLay", zh: "俯拍平铺"},
+  {id: "mandalas", name: "Mandalas", zh: "曼陀罗图腾"},
+  // 唯美艺术 (3)
+  {id: "fine_art", name: "FineArt", zh: "经典名画"},
+  {id: "illustrations", name: "Illustrations", zh: "治愈插画"},
+  {id: "oriental", name: "Oriental", zh: "国风东方"},
+  // 奇幻神秘 (2)
+  {id: "mythical", name: "Mythical", zh: "奇幻神兽"},
+  {id: "zodiac", name: "Zodiac", zh: "星座星象"},
+  // 节日时令 (2)
+  {id: "holidays", name: "Holidays", zh: "节庆假日"},
+  {id: "seasons", name: "Seasons", zh: "四季节令"},
+  // 兜底 (1)
+  {id: "others", name: "Others", zh: "其他分类"}
+];
+
+const TAG_ZH = {};
+for(const item of SPECIFIC_TAG_DEFS){
+  TAG_ZH[item.id] = item.zh;
+}
+
+const CATALOG_TO_TAGS_MAP = {
+  cat_nature: ["mountains", "forests", "oceans", "sunsets", "seasons"],
+  cat_animals: ["cats", "dogs", "birds", "wildlife", "sealife"],
+  cat_colors: ["colors", "flat_lay", "mandalas", "crafts"],
+  cat_flowers: ["flowers", "botanical"],
+  cat_cozy: ["cottages", "cozy_home", "vintage", "crafts"],
+  cat_travel: ["landmarks", "castles", "villages", "vintage"],
+  cat_food: ["desserts", "cuisine", "fruits"],
+  cat_art: ["fine_art", "illustrations", "oriental", "mandalas"],
+  cat_fantasy: ["mythical", "zodiac", "colors"],
+  cat_holidays: ["holidays", "seasons"],
+  cat_others: ["others"]
+};
+
+const TAG_TO_CATALOGS = {};
+for(const [cid, tlist] of Object.entries(CATALOG_TO_TAGS_MAP)){
+  for(const t of tlist){
+    if(!TAG_TO_CATALOGS[t]) TAG_TO_CATALOGS[t] = [];
+    if(!TAG_TO_CATALOGS[t].includes(cid)) TAG_TO_CATALOGS[t].push(cid);
+  }
+}
+TAG_TO_CATALOGS["others"] = ["cat_others"];
+
+const CATALOG_MAP = {};
+for(const c of CATALOG_DEFS){
+  CATALOG_MAP[c.id] = c;
+}
+
+const ALL_CANONICAL_TAGS = SPECIFIC_TAG_DEFS.map(t => t.id);
+const TAGS = ALL_CANONICAL_TAGS;
+
+// 智能别名字典
+const ALIASES = {
+  cats: ["cat", "cats", "kitten", "kittens", "kitty", "猫", "猫咪"],
+  dogs: ["dog", "dogs", "puppy", "puppies", "狗", "狗狗"],
+  birds: ["bird", "birds", "鸟", "鸟类", "飞禽"],
+  wildlife: ["wildlife", "beast", "beasts", "safari", "野兽", "野生动物"],
+  sealife: ["sealife", "sea_life", "marine", "underwater", "oceanlife", "fish", "fishes", "水族", "海洋生物"],
+  mountains: ["mountain", "mountains", "lake", "lakes", "alps", "waterfall", "waterfalls", "山", "山峦", "雪山", "湖泊", "瀑布"],
+  forests: ["forest", "forests", "wood", "woods", "森林", "树林"],
+  oceans: ["ocean", "oceans", "beach", "beaches", "sea", "seas", "coast", "coasts", "shore", "海洋", "海滩", "海岸"],
+  sunsets: ["sunset", "sunsets", "sunrise", "sunrises", "dusk", "dawn", "晚霞", "日落", "朝霞", "夕阳"],
+  landmarks: ["landmark", "landmarks", "city", "cities", "tower", "architecture", "地标", "名胜", "城市"],
+  castles: ["castle", "castles", "palace", "palaces", "城堡", "古堡", "宫殿"],
+  villages: ["village", "villages", "town", "towns", "小镇", "村庄", "水乡", "街景"],
+  flowers: ["flower", "flowers", "floral", "garden", "rose", "roses", "bloom", "花", "花卉", "花园"],
+  botanical: ["botanical", "botanicals", "plant", "plants", "succulent", "succulents", "mushroom", "mushrooms", "植物", "绿植", "多肉", "菌菇"],
+  cottages: ["cottage", "cottages", "cabin", "cabins", "木屋", "乡村木屋", "小屋"],
+  cozy_home: ["cozy_home", "cozyhome", "interior", "interiors", "room", "rooms", "livingroom", "bedroom", "居室", "室内", "温馨室内", "壁炉"],
+  vintage: ["vintage", "retro", "antique", "antiques", "nostalgia", "car", "cars", "automobile", "classiccar", "classiccars", "vintagecar", "vintagecars", "复古", "怀旧", "老车", "古董", "老爷车"],
+  crafts: ["craft", "crafts", "sewing", "knitting", "yarn", "handcraft", "手作", "毛线", "缝纫", "布艺", "编织"],
+  desserts: ["dessert", "desserts", "sweet", "sweets", "cake", "cakes", "bakery", "candy", "candies", "pastry", "pastries", "cookie", "cookies", "coffee", "tea", "coffeetea", "cafe", "afternoontea", "甜点", "烘焙", "蛋糕", "咖啡", "茶饮", "下午茶"],
+  cuisine: ["cuisine", "cuisines", "food", "foods", "meal", "meals", "cooking", "dish", "dishes", "noodle", "noodles", "pizza", "sushi", "ramen", "bbq", "dinner", "美食", "料理", "火锅", "餐饮"],
+  fruits: ["fruit", "fruits", "berry", "berries", "citrus", "orange", "apple", "vegetable", "vegetables", "水果", "鲜果", "果盘"],
+  colors: ["color", "colors", "colour", "colours", "rainbow", "colorful", "色彩", "彩虹", "高饱和", "五彩"],
+  flat_lay: ["flatlay", "flat_lay", "knolling", "平铺", "俯拍"],
+  mandalas: ["mandala", "mandalas", "kaleidoscope", "pattern", "patterns", "曼陀罗", "万花筒", "图腾"],
+  fine_art: ["fineart", "fine_art", "masterpiece", "oilpainting", "oil_painting", "painting", "paintings", "名画", "经典名画", "古典艺术", "油画"],
+  illustrations: ["illustration", "illustrations", "illust", "cartoon", "drawing", "drawings", "clipart", "插画", "治愈插画", "手绘"],
+  oriental: ["oriental", "guochao", "chinese", "asian_art", "国风", "古风", "东方", "国潮"],
+  mythical: ["mythical", "myth", "dragon", "dragons", "unicorn", "unicorns", "fairy", "fairies", "fantasy_creature", "神兽", "奇幻神兽", "独角兽"],
+  zodiac: ["zodiac", "astrology", "constellation", "constellations", "horoscope", "star", "stars", "星座", "星盘", "星象"],
+  holidays: ["holiday", "holidays", "christmas", "xmas", "noel", "santa", "halloween", "pumpkin", "pumpkins", "witch", "easter", "thanksgiving", "newyear", "valentine", "carnival", "节日", "节庆", "假日", "圣诞", "圣诞节", "万圣", "万圣节", "复活节", "感恩节", "新年", "元旦"],
+  seasons: ["season", "seasons", "seasonal", "spring", "summer", "autumn", "winter", "四季", "时令", "节气"],
+  others: ["others", "other", "misc", "杂项", "其他"]
+};
+
+const TAG_LOOKUP_MAP = {};
+for(const [tagKey, aliases] of Object.entries(ALIASES)){
+  TAG_LOOKUP_MAP[tagKey.replace(/_/g, "")] = tagKey;
+  for(const a of aliases){
+    const norm = String(a).trim().toLowerCase().replace(/[_\-\s]/g, "");
+    TAG_LOOKUP_MAP[norm] = tagKey;
+  }
+}
+for(const item of SPECIFIC_TAG_DEFS){
+  TAG_LOOKUP_MAP[item.name.toLowerCase().replace(/_/g, "")] = item.id;
+  TAG_LOOKUP_MAP[item.zh.toLowerCase().replace(/_/g, "")] = item.id;
+}
+
+function normalizeTagName(tag){
+  if(!tag) return null;
+  const norm = String(tag).trim().toLowerCase().replace(/[_\-\s]/g, "");
+  if(!norm) return null;
+  if(TAG_LOOKUP_MAP[norm]) return TAG_LOOKUP_MAP[norm];
+  if(norm.endsWith("ies") && norm.length > 4){
+    const cand = norm.slice(0, -3) + "y";
+    if(TAG_LOOKUP_MAP[cand]) return TAG_LOOKUP_MAP[cand];
+  } else if(norm.endsWith("es") && norm.length > 3){
+    const cand = norm.slice(0, -2);
+    if(TAG_LOOKUP_MAP[cand]) return TAG_LOOKUP_MAP[cand];
+  } else if(norm.endsWith("s") && !norm.endsWith("ss") && norm.length > 2){
+    const cand = norm.slice(0, -1);
+    if(TAG_LOOKUP_MAP[cand]) return TAG_LOOKUP_MAP[cand];
+  }
+  return null;
+}
+
+function matchDirPart(part){
+  const pLower = part.toLowerCase().trim();
+  if(pLower.startsWith("cat_") || CATALOG_DEFS.some(c => c.id === pLower)) return null;
+  const t = normalizeTagName(part);
+  if(t && t !== "others") return t;
+  const words = part.split(/[^a-zA-Z0-9\u4e00-\u9fa5]+/).filter(Boolean);
+  for(const w of words){
+    const matched = normalizeTagName(w);
+    if(matched && matched !== "others") return matched;
+  }
+  return null;
+}
+
+function guessTagsFromPath(imgPath){
+  const parts = imgPath.replace(/\\/g,"/").split("/").filter(Boolean);
+  if(parts.length >= 2){
+    for(let i = parts.length - 2; i >= 0; i--){
+      const part = parts[i];
+      const pLower = part.toLowerCase().trim();
+      if(pLower.startsWith("cat_") || CATALOG_DEFS.some(c => c.id === pLower)) continue;
+
+      // 1. 整段目录名匹配
+      const t = normalizeTagName(part);
+      if(t && t !== "others") return [t];
+
+      // 2. 目录名按分隔符分词匹配
+      const words = part.split(/[^a-zA-Z0-9\u4e00-\u9fa5]+/).filter(Boolean);
+      const matched = [];
+      for(const w of words){
+        const m = normalizeTagName(w);
+        if(m && m !== "others" && !matched.includes(m)){
+          matched.push(m);
+        }
+      }
+      if(matched.length) return matched;
+    }
+  }
+
+  // 严格只按目录识别，绝对不识别文件名
+  return ["others"];
+}
+
+function getCatalogsForTags(tags){
+  const cats = [];
+  const list = Array.isArray(tags) ? tags : [tags];
+  for(const t of list){
+    const canon = normalizeTagName(t) || "others";
+    const mapped = TAG_TO_CATALOGS[canon] || ["cat_others"];
+    for(const c of mapped){
+      if(!cats.includes(c)) cats.push(c);
+    }
+  }
+  return cats.length ? cats : ["cat_others"];
+}
 
 let state = {
   dir: "", outDir: "", httpBase: "http://192.168.1.118/data/www/game/test", version: "",
@@ -310,9 +542,13 @@ let state = {
   recordMap: new Map(),
   selected: new Set(),
   active: null,
-  q: "", filterTag: "", onlyReview:false, onlyUncorrected:false,
+  q: "",
+  filterCatalog: "", // 当前按分类筛选 (cat_nature 等)
+  filterTag: "",     // 当前按具体标签筛选 (mountains 等)
+  onlyReview: false,
+  onlyUncorrected: false,
   tagFile: null,
-  selectMode: "single", // single | multi  — 新增多选模式
+  selectMode: "single", // single | multi
 };
 
 const $ = id=>document.getElementById(id);
@@ -323,36 +559,38 @@ function log(msg){
 }
 function toast(msg){ log(msg); }
 
-function effectiveTag(r){
-  if(!r) return "Others";
-  return (r.correctedTag && r.correctedTag.trim()) ? r.correctedTag.trim() : (r.tag || "Others");
+function effectiveTags(r){
+  if(!r) return ["others"];
+  if(Array.isArray(r.tags) && r.tags.length){
+    const norm = r.tags.map(t => normalizeTagName(t) || t).filter(Boolean);
+    return norm.length ? norm : ["others"];
+  }
+  if(r.correctedTag){
+    const canon = normalizeTagName(r.correctedTag);
+    if(canon) return [canon];
+  }
+  if(r.tag && r.tag !== "others") {
+    const canon = normalizeTagName(r.tag);
+    return canon ? [canon] : ["others"];
+  }
+  return ["others"];
 }
-function guessTagFromPath(imgPath){
-  const parts = imgPath.replace(/\\/g,"/").split("/");
-  if(parts.length < 2) return null;
-  const dirName = parts[parts.length - 2].trim();
-  if(!dirName) return null;
-  const match = TAGS.find(t => t.toLowerCase() === dirName.toLowerCase());
-  if(match) return match;
-  for(const en in ZH) if(dirName === ZH[en]) return en;
-  return null;
-}
+
 function isReviewed(r){
   if(!r) return true;
   if(r.review_required) return true;
-  const eff = effectiveTag(r);
+  const tags = effectiveTags(r);
   const c = Number(r.confidence || 0);
-  return c < 0.75 || eff === "Others";
+  return c < 0.75 || tags.includes("others");
 }
+
 function flagFor(r){
   if(!r) return {cls:"bad", text:"未标记"};
-  const eff = effectiveTag(r);
+  const tags = effectiveTags(r);
+  if(tags.includes("others")) return {cls:"bad", text:"待复核"};
   const c = Number(r.confidence||0);
-  const corrected = !!(r.correctedTag && r.correctedTag.trim());
-  if(corrected) return {cls:"ok", text:"已校正"};
-  if(eff==="Others" || c < 0.6) return {cls:"bad", text:"待复核"};
-  if(c < 0.75) return {cls:"warn", text:"低置信"};
-  return {cls:"ok", text:"已通过"};
+  if(c < 0.75) return {cls:"warn", text:`低置信 (${tags.length})`};
+  return {cls:"ok", text:`已打标 (${tags.length})`};
 }
 
 function thumbUrl(absPath, size=360){
@@ -363,6 +601,7 @@ function thumbUrl(absPath, size=360){
   }
   return `/api/thumb?path=${encodeURIComponent(full)}&size=${size}`;
 }
+
 function fileUrl(absPath){
   let full = absPath;
   if(!/^[A-Za-z]:\\/.test(absPath) && !absPath.startsWith("/")){
@@ -380,25 +619,121 @@ function updateModeUI(){
   $("gridModeHint").textContent = hint;
 }
 
+function doBulk(action="set"){
+  const tag = $("bulkTag").value;
+  if(!tag){ toast("请先选择批量操作的标签"); return; }
+  if(!state.selected.size){ toast("请先选择要操作的图片"); return; }
+  let count = 0;
+  for(const path of state.selected){
+    let r = state.recordMap.get(path);
+    if(!r){
+      const tList = (action === "del") ? ["others"] : [tag];
+      r = {
+        path, file: path.split("/").pop(),
+        tags: tList,
+        catalogs: getCatalogsForTags(tList),
+        confidence: 1.0,
+        review_required: tList.includes("others"),
+        subject: "", scene: "", reason: "批量操作: " + tList.join(",")
+      };
+      state.recordMap.set(path, r);
+    } else {
+      let tList = Array.isArray(r.tags) ? [...r.tags] : [];
+      if(action === "set"){
+        tList = [tag];
+      } else if(action === "add"){
+        if(!tList.includes(tag)) tList.push(tag);
+        if(tag !== "others") tList = tList.filter(x => x !== "others");
+      } else if(action === "del"){
+        tList = tList.filter(x => x !== tag);
+        if(!tList.length) tList = ["others"];
+      }
+      r.tags = tList;
+      r.catalogs = getCatalogsForTags(tList);
+      r.reason = `批量${action==='set'?'设置':action==='add'?'追加':'移除'}: ${tag}`;
+    }
+    count++;
+  }
+  renderDetail(); renderGrid(); renderStats(); updateSelHint();
+  const actName = action === "set" ? "设置" : (action === "add" ? "追加" : "移除");
+  toast(`已批量对 ${count} 张图片${actName}标签 [${tag}] (${TAG_ZH[tag]||""})`);
+}
+
 function initStatic(){
   const ft=$("filterTag"), bt=$("bulkTag");
-  for(const t of TAGS){
-    const o1=document.createElement("option"); o1.value=t; o1.textContent=`${t} · ${ZH[t]}`; ft.appendChild(o1);
-    const o2=document.createElement("option"); o2.value=t; o2.textContent=`${t} · ${ZH[t]}`; bt.appendChild(o2);
+  ft.innerHTML = `<option value="">全部 Tag</option>`;
+  bt.innerHTML = `<option value="">选择批量标签…</option>`;
+
+  // 按 11 个 Catalog 构建下拉分组
+  for(const c of CATALOG_DEFS){
+    const grp1 = document.createElement("optgroup");
+    grp1.label = `${c.icon} ${c.zh} (${c.name})`;
+    const grp2 = document.createElement("optgroup");
+    grp2.label = `${c.icon} ${c.zh} (${c.name})`;
+
+    const tagsInCat = CATALOG_TO_TAGS_MAP[c.id] || [];
+    for(const t of tagsInCat){
+      const o1 = document.createElement("option");
+      o1.value = t;
+      o1.textContent = `${t} · ${TAG_ZH[t]||""}`;
+      grp1.appendChild(o1);
+
+      const o2 = document.createElement("option");
+      o2.value = t;
+      o2.textContent = `${t} · ${TAG_ZH[t]||""}`;
+      grp2.appendChild(o2);
+    }
+    ft.appendChild(grp1);
+    bt.appendChild(grp2);
   }
-  const grid=$("tagGrid");
-  for(const t of TAGS){
-    const lab=document.createElement("label"); lab.className="tag-opt";
-    lab.innerHTML = `<input type="radio" name="ctag" value="${t}" /> <span><b>${t}</b> <span class="zh">· ${ZH[t]}</span></span>`;
-    lab.addEventListener("click", ()=>{
-      const v=t;
-      const r=state.recordMap.get(state.active);
+
+  // 右侧详情标签编辑网格 — 按 11 分类组织，多选 checkbox
+  const grid = $("tagGrid");
+  grid.innerHTML = "";
+  for(const c of CATALOG_DEFS){
+    const sec = document.createElement("div");
+    sec.className = "tag-section";
+    const head = document.createElement("div");
+    head.className = "tag-section-head";
+    head.innerHTML = `<span>${c.icon} <b>${c.zh}</b> <span style="color:var(--muted);font-weight:normal">${c.name}</span></span>`;
+    sec.appendChild(head);
+
+    const sgrid = document.createElement("div");
+    sgrid.className = "tag-section-grid";
+    const tagsInCat = CATALOG_TO_TAGS_MAP[c.id] || [];
+    for(const t of tagsInCat){
+      const lab = document.createElement("label");
+      lab.className = "tag-opt";
+      lab.dataset.tag = t;
+      lab.innerHTML = `<input type="checkbox" name="ptag" value="${t}" /> <span><b>${t}</b> <span class="zh">· ${TAG_ZH[t]||""}</span></span>`;
+      sgrid.appendChild(lab);
+    }
+    sec.appendChild(sgrid);
+    grid.appendChild(sec);
+  }
+
+  // 监听多选修改
+  grid.addEventListener("change", (e)=>{
+    if(e.target && e.target.name === "ptag"){
+      const tag = e.target.value;
+      const checked = e.target.checked;
+      const r = state.recordMap.get(state.active);
       if(!r) return;
-      r.correctedTag = v;
+      let tags = effectiveTags(r).slice();
+      if(checked){
+        if(!tags.includes(tag)) tags.push(tag);
+        if(tag !== "others") tags = tags.filter(x => x !== "others");
+      } else {
+        tags = tags.filter(x => x !== tag);
+        if(!tags.length) tags = ["others"];
+      }
+      r.tags = tags;
+      r.catalogs = getCatalogsForTags(tags);
+      r.reason = "手动勾选修改: " + tags.join(", ");
       renderDetail(); renderGrid(); renderStats(); updateSelHint();
-    });
-    grid.appendChild(lab);
-  }
+    }
+  });
+
   // mode seg
   document.querySelectorAll("#modeSeg button").forEach(b=>{
     b.addEventListener("click", ()=>{
@@ -416,18 +751,15 @@ function initStatic(){
   $("btnRefresh").addEventListener("click", doScan);
   $("btnSave").addEventListener("click", doSave);
   $("btnExport").addEventListener("click", openExportModal);
-  // 批量选择操作 — 新增 全选/取消全选/反选
+  // 批量选择操作
   $("btnSelectAll").addEventListener("click", ()=>{
     filtered().forEach(i=> state.selected.add(i.path));
     renderGrid(); updateSelHint(); toast(`已全选 ${state.selected.size} 张（当前视图）`);
   });
   $("btnDeselectAll").addEventListener("click", ()=>{
-    // 取消全选：若有筛选则仅清除视图内，否则清空全部
     const vis = new Set(filtered().map(i=> i.path));
     if(vis.size && state.selected.size){
-      // 若当前视图有选中，优先清除视图内
       let n=0; for(const p of vis) if(state.selected.delete(p)) n++;
-      // 若视图内无选中则清空全部
       if(n===0) state.selected.clear();
     } else {
       state.selected.clear();
@@ -443,13 +775,17 @@ function initStatic(){
     }
     renderGrid(); updateSelHint(); toast(`反选完成：+${added} / -${removed}`);
   });
-  $("btnBulk").addEventListener("click", doBulk);
-  $("btnClearCorrect").addEventListener("click", ()=>{
+  $("btnBulkSet").addEventListener("click", ()=> doBulk("set"));
+  $("btnBulkAdd").addEventListener("click", ()=> doBulk("add"));
+  $("btnBulkDel").addEventListener("click", ()=> doBulk("del"));
+  $("btnClearTags").addEventListener("click", ()=>{
     const r=state.recordMap.get(state.active); if(!r) return;
-    r.correctedTag=null; renderDetail(); renderGrid(); renderStats();
+    r.tags = ["others"];
+    r.catalogs = ["cat_others"];
+    r.reason = "清空为 Others";
+    renderDetail(); renderGrid(); renderStats();
   });
   $("btnNext").addEventListener("click", ()=>{
-    const r=state.recordMap.get(state.active); if(r && !r.correctedTag) { toast("请先选择校正标签"); return; }
     const list=filtered();
     const idx=list.findIndex(x=> x.path===state.active);
     const nxt = idx>=0 && idx+1<list.length ? list[idx+1] : list[0];
@@ -468,7 +804,17 @@ function initStatic(){
     b.addEventListener("click", ()=> switchExportType(b.dataset.type));
   });
   $("q").addEventListener("input", e=>{ state.q=e.target.value.trim().toLowerCase(); renderGrid(); renderStats(); });
-  $("filterTag").addEventListener("change", e=>{ state.filterTag=e.target.value; renderGrid(); renderStats(); });
+  $("filterTag").addEventListener("change", e=>{
+    state.filterTag = e.target.value;
+    if(state.filterTag && state.filterCatalog){
+      const allowed = CATALOG_TO_TAGS_MAP[state.filterCatalog] || [];
+      if(!allowed.includes(state.filterTag)){
+        const cats = TAG_TO_CATALOGS[state.filterTag] || [];
+        state.filterCatalog = cats[0] || "";
+      }
+    }
+    renderGrid(); renderStats();
+  });
   $("onlyReview").addEventListener("change", e=>{ state.onlyReview=e.target.checked; renderGrid(); renderStats(); });
   $("onlyUncorrected").addEventListener("change", e=>{ state.onlyUncorrected=e.target.checked; renderGrid(); renderStats(); });
   $("srcDir").addEventListener("change", e=> state.dir=e.target.value.trim());
@@ -479,7 +825,7 @@ function initStatic(){
     e.preventDefault();
     try{
       const r=await fetch("/api/health"); const j=await r.json();
-      toast(`health: has_pil=${j.has_pil} tags=${j.tags.length}`);
+      toast(`health: has_pil=${j.has_pil} catalogs=${j.catalogs?.length} tags=${j.tags?.length}`);
     }catch(err){ toast("health failed: "+err); }
   });
   const saved = JSON.parse(localStorage.getItem("studio_cfg")||"{}");
@@ -505,15 +851,19 @@ function initStatic(){
 }
 
 function filtered(){
-  const q=state.q;
+  const q = state.q;
   return state.images.filter(img=>{
-    const r=state.recordMap.get(img.path);
-    const eff = r ? effectiveTag(r) : "Others";
-    if(state.filterTag && eff !== state.filterTag) return false;
+    const r = state.recordMap.get(img.path);
+    const tags = r ? effectiveTags(r) : ["others"];
+    const cats = r?.catalogs || getCatalogsForTags(tags);
+    if(state.filterCatalog){
+      if(!cats.includes(state.filterCatalog)) return false;
+    }
+    if(state.filterTag && !tags.includes(state.filterTag)) return false;
     if(state.onlyReview && !isReviewed(r)) return false;
-    if(state.onlyUncorrected && r && r.correctedTag) return false;
+    if(state.onlyUncorrected && r && (r.manual || r.correctedTag)) return false;
     if(q){
-      const hay = [img.file, img.path, r?.subject||"", r?.scene||"", r?.reason||"", eff].join(" ").toLowerCase();
+      const hay = [img.file, img.path, r?.subject||"", r?.scene||"", r?.reason||"", ...tags].join(" ").toLowerCase();
       if(!hay.includes(q)) return false;
     }
     return true;
@@ -523,15 +873,28 @@ function filtered(){
 function renderStats(){
   const total = state.images.length;
   const byTag = {};
-  let review=0, uncorrected=0;
+  const byCatalog = {};
+  const byTagInCat = {};
+  let review = 0, uncorrected = 0;
   for(const img of state.images){
-    const r=state.recordMap.get(img.path);
-    const eff = r? effectiveTag(r): "Others";
-    byTag[eff]=(byTag[eff]||0)+1;
+    const r = state.recordMap.get(img.path);
+    const tags = r ? effectiveTags(r) : ["others"];
+    const cats = r?.catalogs || getCatalogsForTags(tags);
+    for(const t of tags){
+      byTag[t] = (byTag[t] || 0) + 1;
+    }
+    for(const c of cats){
+      byCatalog[c] = (byCatalog[c] || 0) + 1;
+      if(state.filterCatalog === c){
+        for(const t of tags){
+          byTagInCat[t] = (byTagInCat[t] || 0) + 1;
+        }
+      }
+    }
     if(isReviewed(r)) review++;
-    if(!r || !r.correctedTag) uncorrected++;
+    if(!r || (!r.manual && !r.correctedTag)) uncorrected++;
   }
-  const stats=$("stats");
+  const stats = $("stats");
   stats.innerHTML = `
     <span class="chip"><span class="dot ok"></span> 共 <b>${total}</b> 张</span>
     <span class="chip warn"><span class="dot warn"></span> 待复核 <b>${review}</b></span>
@@ -539,48 +902,120 @@ function renderStats(){
     ${state.tagFile?`<span class="chip ok">tags.json: <b>${state.tagFile.split(/[\\/]/).pop()}</b> · ${state.tagFile}</span>`:`<span class="chip bad">未检测到 tags.json（将新建）</span>`}
     <span class="hint">已选 <b>${state.selected.size}</b> · 视图 <b>${filtered().length}</b> · 模式 <b>${state.selectMode==="multi"?"多选":"单选"}</b></span>
   `;
-  $("leftTotal").textContent = `(${total})`;
+  $("leftTotal").textContent = state.filterCatalog ? `(${byCatalog[state.filterCatalog]||0}/${total})` : `(${total})`;
   const info = state.dir ? `${state.dir} · ${total} 张` : "-";
   $("leftScanInfo").textContent = info;
-  const el2=$("leftScanInfo2"); if(el2) el2.textContent=info;
-  const list=$("tagList");
-  list.innerHTML="";
-  const entries = Object.entries(byTag).sort((a,b)=> b[1]-a[1]);
-  if(!entries.length){
-    list.innerHTML=`<div class="hint" style="padding:4px">暂无统计，扫描后显示</div>`;
-  } else {
-    // "全部" chip — clears tag filter
-    const allChip=document.createElement("button");
-    allChip.className="tag-chip" + (state.filterTag==="" ? " active":"");
-    allChip.innerHTML=`<b>全部</b> <span class="zh">All</span> <span class="cnt">${total}</span>`;
-    allChip.addEventListener("click", ()=>{
-      state.filterTag="";
-      $("filterTag").value="";
+  const el2 = $("leftScanInfo2"); if(el2) el2.textContent = info;
+
+  // 保持 filterTag 下拉选项值同步
+  if($("filterTag")) $("filterTag").value = state.filterTag;
+
+  // 1. Catalog chips (主分类导航栏)
+  const catList = $("catalogList");
+  catList.innerHTML = "";
+  const allCatChip = document.createElement("button");
+  allCatChip.className = "cat-chip" + (state.filterCatalog === "" ? " active" : "");
+  allCatChip.innerHTML = `<b>全部分类</b> <span class="cnt">${total}</span>`;
+  allCatChip.addEventListener("click", ()=>{
+    state.filterCatalog = "";
+    renderGrid(); renderStats();
+  });
+  catList.appendChild(allCatChip);
+
+  for(const cat of CATALOG_DEFS){
+    const cnt = byCatalog[cat.id] || 0;
+    const chip = document.createElement("button");
+    chip.className = "cat-chip" + (state.filterCatalog === cat.id ? " active" : "") + (cnt === 0 ? " is-zero" : "");
+    chip.innerHTML = `<span>${cat.icon}</span> <b>${cat.zh}</b> <span class="cnt">${cnt}</span>`;
+    chip.addEventListener("click", ()=>{
+      const nextCatalog = state.filterCatalog === cat.id ? "" : cat.id;
+      state.filterCatalog = nextCatalog;
+      if(nextCatalog){
+        const allowedTags = CATALOG_TO_TAGS_MAP[nextCatalog] || [];
+        if(state.filterTag && !allowedTags.includes(state.filterTag)){
+          state.filterTag = "";
+          if($("filterTag")) $("filterTag").value = "";
+        }
+      }
       renderGrid(); renderStats();
     });
-    list.appendChild(allChip);
-    for(const [tag,cnt] of entries){
-      const chip=document.createElement("button");
-      chip.className="tag-chip" + (state.filterTag===tag ? " active":"");
-      chip.innerHTML=`<b>${tag}</b> <span class="zh">${ZH[tag]||""}</span> <span class="cnt">${cnt}</span>`;
+    catList.appendChild(chip);
+  }
+
+  // 2. Tag chips (具体标签分布)
+  const tagList = $("tagList");
+  tagList.innerHTML = "";
+  if(!total){
+    tagList.innerHTML = `<div class="hint" style="padding:4px">暂无统计，扫描后显示</div>`;
+  } else {
+    let candidateTags = [];
+    let tagCountMap = {};
+    let currentScopeTotal = 0;
+
+    if(state.filterCatalog){
+      // 点击特定 catalog：下方只显示该 catalog 的 tags（包括图片数为 0 的 tag）
+      currentScopeTotal = byCatalog[state.filterCatalog] || 0;
+      tagCountMap = byTagInCat;
+      const baseTags = CATALOG_TO_TAGS_MAP[state.filterCatalog] || [];
+      candidateTags = [...baseTags];
+      // 兜底防御：若存在属于当前分类但不在静态映射中的非标 tag，也一并显示
+      for(const t of Object.keys(byTagInCat)){
+        if(!candidateTags.includes(t)) candidateTags.push(t);
+      }
+      // 排序规则：有图的排在前面（按数量降序），数量为0的排在后面（按分类下初始定义顺序）
+      candidateTags.sort((a, b) => {
+        const cntA = tagCountMap[a] || 0;
+        const cntB = tagCountMap[b] || 0;
+        if(cntB !== cntA) return cntB - cntA;
+        const idxA = baseTags.indexOf(a);
+        const idxB = baseTags.indexOf(b);
+        if(idxA !== -1 && idxB !== -1) return idxA - idxB;
+        return a.localeCompare(b);
+      });
+    } else {
+      // 全部分类模式：显示全部有效标签（包含 0 图标签）
+      currentScopeTotal = total;
+      tagCountMap = byTag;
+      const allCanon = [...ALL_CANONICAL_TAGS];
+      candidateTags = [...allCanon];
+      for(const t of Object.keys(byTag)){
+        if(!candidateTags.includes(t)) candidateTags.push(t);
+      }
+      // 有图的排在前面（按数量倒序），数量为0的按字母顺序排在后面
+      candidateTags.sort((a, b) => {
+        const cntA = tagCountMap[a] || 0;
+        const cntB = tagCountMap[b] || 0;
+        if(cntB !== cntA) return cntB - cntA;
+        return a.localeCompare(b);
+      });
+    }
+
+    // 全部标签 chip
+    const allTagChip = document.createElement("button");
+    allTagChip.className = "tag-chip" + (state.filterTag === "" ? " active" : "");
+    const subLabel = state.filterCatalog ? (CATALOG_MAP[state.filterCatalog]?.zh || "当前") : "All";
+    allTagChip.innerHTML = `<b>全部标签</b> <span class="zh">${subLabel}</span> <span class="cnt">${currentScopeTotal}</span>`;
+    allTagChip.addEventListener("click", ()=>{
+      state.filterTag = "";
+      if($("filterTag")) $("filterTag").value = "";
+      renderGrid(); renderStats();
+    });
+    tagList.appendChild(allTagChip);
+
+    // 具体各个 tag chip（0 图的也显示，并带 is-zero 虚线弱化样式）
+    for(const tag of candidateTags){
+      const cnt = tagCountMap[tag] || 0;
+      const isZero = cnt === 0;
+      const chip = document.createElement("button");
+      chip.className = "tag-chip" + (state.filterTag === tag ? " active" : "") + (isZero ? " is-zero" : "");
+      chip.title = `${tag} (${TAG_ZH[tag]||""}): ${cnt} 张图片`;
+      chip.innerHTML = `<b>${tag}</b> <span class="zh">${TAG_ZH[tag]||""}</span> <span class="cnt">${cnt}</span>`;
       chip.addEventListener("click", ()=>{
-        state.filterTag = state.filterTag===tag ? "" : tag;
-        $("filterTag").value=state.filterTag;
+        state.filterTag = state.filterTag === tag ? "" : tag;
+        if($("filterTag")) $("filterTag").value = state.filterTag;
         renderGrid(); renderStats();
       });
-      list.appendChild(chip);
-    }
-    for(const t of TAGS){
-      if(!(t in byTag)){
-        const chip=document.createElement("button");
-        chip.className="tag-chip";
-        chip.style.opacity=.45;
-        chip.innerHTML=`<span>${t}</span> <span class="zh">${ZH[t]}</span> <span class="cnt">0</span>`;
-        chip.addEventListener("click", ()=>{
-          state.filterTag=t; $("filterTag").value=t; renderGrid(); renderStats();
-        });
-        list.appendChild(chip);
-      }
+      tagList.appendChild(chip);
     }
   }
   $("countHint").textContent = `视图 ${filtered().length} / ${total}`;
@@ -598,8 +1033,8 @@ function renderGrid(){
   empty.style.display="none";
   for(const img of list){
     const r=state.recordMap.get(img.path);
-    const eff = r? effectiveTag(r): "Others";
-    const conf = r? Number(r.confidence||0):0;
+    const tags = r ? effectiveTags(r) : ["others"];
+    const conf = r ? Number(r.confidence||0) : 0;
     const flag = flagFor(r);
     const sel = state.selected.has(img.path);
     const active = state.active===img.path;
@@ -607,6 +1042,13 @@ function renderGrid(){
     card.className="card" + (sel? " selected":"") ;
     card.style.outline = active ? "2px solid #1a73e8" : "";
     if(active) card.style.boxShadow = "0 0 0 2px #1a73e8 inset";
+
+    const tagsHtml = tags.map(t => {
+      const isEff = (r && (r.manual || r.correctedTag));
+      const zh = TAG_ZH[t] ? ` · ${TAG_ZH[t]}` : "";
+      return `<span class="badge-tag ${isEff ? 'effective' : ''}" title="${t}">${t}${zh}</span>`;
+    }).join(" ");
+
     card.innerHTML=`
       <div class="thumb">
         <img loading="lazy" src="${thumbUrl(img.path, 360)}" alt="" onerror="this.style.opacity=.25" />
@@ -615,23 +1057,19 @@ function renderGrid(){
       </div>
       <div class="meta">
         <div class="name" title="${img.path}">${img.file}</div>
-        <div class="badge">
-          <span class="badge-tag ${r && r.correctedTag ? 'effective':''}">${eff} · ${ZH[eff]||""}</span>
+        <div class="badge" style="display:flex;flex-wrap:wrap;gap:4px;align-items:center;">
+          ${tagsHtml}
           <span class="badge-conf">${conf? conf.toFixed(2):"--"}</span>
         </div>
-        ${r && r.reason ? `<div class="hint" style="font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${r.reason}</div>` : ``}
+        ${r && r.reason ? `<div class="hint" style="font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${r.reason}">${r.reason}</div>` : ``}
       </div>
     `;
     card.addEventListener("click", (e)=>{
-      // 关键：根据模式分流
       if(state.selectMode==="multi"){
-        // 多选模式：点图直接切换选中
         if(sel) state.selected.delete(img.path); else state.selected.add(img.path);
-        // 同步详情为当前图，方便右侧校正
         state.active = img.path;
         renderDetail(); renderGrid(); updateSelHint(); renderStats();
       } else {
-        // 单选模式：Ctrl/⌘ 切换选中，其余为查看
         if(e.ctrlKey || e.metaKey){
           if(sel) state.selected.delete(img.path); else state.selected.add(img.path);
           renderGrid(); updateSelHint(); renderStats();
@@ -642,7 +1080,6 @@ function renderGrid(){
       }
     });
     card.addEventListener("dblclick", ()=>{
-      // 双击在两种模式下都切换选中（便捷）
       if(state.selected.has(img.path)) state.selected.delete(img.path); else state.selected.add(img.path);
       renderGrid(); updateSelHint(); renderStats();
     });
@@ -650,7 +1087,6 @@ function renderGrid(){
     selEl.addEventListener("click", (e)=>{
       e.stopPropagation();
       if(sel) state.selected.delete(img.path); else state.selected.add(img.path);
-      // 点击勾选时也激活详情
       state.active = img.path;
       renderDetail(); renderGrid(); updateSelHint(); renderStats();
     });
@@ -662,28 +1098,63 @@ function renderDetail(){
   const path = state.active;
   const r = path ? state.recordMap.get(path) : null;
   const img = path ? state.images.find(x=> x.path===path) : null;
-  $("detailTitle").textContent = path ? path.split("/").pop() : "未选中";
+  $("detailTitle").textContent = path ? path.split(/[\\/]/).pop() : "未选中";
   const prev=$("preview");
   if(!path || !img){
     prev.innerHTML=`<span class="hint">未选中图片</span>`;
-    $("dFile").textContent="-"; $("dPath").textContent="-"; $("dAi").textContent="-"; $("dConf").textContent="-"; $("dSub").textContent="-"; $("dReason").textContent="-"; $("dReview").textContent="-";
+    $("dFile").textContent="-"; $("dPath").textContent="-"; $("dCurrentTags").innerHTML="-"; $("dCatalog").textContent="-"; $("dReason").textContent="-"; $("dReview").textContent="-";
     return;
   }
   prev.innerHTML=`<img src="${fileUrl(path)}" alt="" style="max-height:360px" onerror="this.style.display='none'" />`;
   $("dFile").textContent = img.file;
   $("dPath").textContent = img.path;
-  $("dAi").textContent = r ? `${r.tag} · ${ZH[r.tag]||""}` : "—";
-  $("dConf").textContent = r ? Number(r.confidence||0).toFixed(2) : "—";
-  $("dSub").textContent = r ? `${r.subject||"-"} / ${r.scene||"-"}` : "-";
-  $("dReason").textContent = r ? (r.reason||"-") : "-";
-  $("dReview").textContent = r ? (isReviewed(r) ? "需要复核" : "已通过") + (r.correctedTag ? ` · 已校正为 ${r.correctedTag}` : "") : "未标记";
-  const eff = r ? effectiveTag(r) : null;
-  document.querySelectorAll(".tag-opt").forEach(el=>{
-    const inp=el.querySelector("input");
-    const v=inp.value;
-    const active = eff===v;
-    el.classList.toggle("active", active);
-    inp.checked = active;
+
+  const tags = r ? effectiveTags(r) : ["others"];
+  const cats = r?.catalogs || getCatalogsForTags(tags);
+
+  // Render dCurrentTags as interactive chips with remove buttons
+  const curDiv = $("dCurrentTags");
+  curDiv.innerHTML = "";
+  for(const t of tags){
+    const chip = document.createElement("span");
+    chip.className = "badge-tag effective";
+    chip.style.cssText = "cursor:pointer;display:inline-flex;align-items:center;gap:4px;padding:2px 6px;";
+    chip.title = "点击移除该标签";
+    chip.innerHTML = `${t} <span style="font-weight:normal;opacity:.8">· ${TAG_ZH[t]||""}</span> <span style="color:#d93025;font-weight:bold;margin-left:2px">✕</span>`;
+    chip.addEventListener("click", ()=>{
+      let nextTags = tags.filter(x => x !== t);
+      if(!nextTags.length) nextTags = ["others"];
+      r.tags = nextTags;
+      r.catalogs = getCatalogsForTags(nextTags);
+      r.manual = true;
+      r.confidence = 1.0;
+      r.reason = `手动移除标签: ${t}`;
+      renderDetail(); renderGrid(); renderStats(); updateSelHint();
+    });
+    curDiv.appendChild(chip);
+  }
+
+  // dCatalog
+  const catNames = cats.map(cid => {
+    const cDef = CATALOG_MAP[cid];
+    return cDef ? `${cDef.icon} ${cDef.zh} (${cDef.name})` : cid;
+  });
+  $("dCatalog").textContent = catNames.join(" / ") || "-";
+
+  // dReason
+  $("dReason").textContent = r ? (r.reason || "-") : "-";
+
+  // dReview
+  let revText = isReviewed(r) ? "需要复核" : "已打标";
+  if(r && (r.manual || r.correctedTag)) revText += " · 已人工校正";
+  $("dReview").textContent = revText;
+
+  // Sync checkboxes in #tagGrid
+  document.querySelectorAll("#tagGrid input[name='ptag']").forEach(inp=>{
+    const checked = tags.includes(inp.value);
+    inp.checked = checked;
+    const opt = inp.closest(".tag-opt");
+    if(opt) opt.classList.toggle("active", checked);
   });
 }
 
@@ -706,50 +1177,45 @@ async function doScan(){
     state.records = j.tagRecords || [];
     state.recordMap.clear();
     let autoCount = 0;
-    if(!state.records.length){
-      for(const img of state.images){
-        const guessed = guessTagFromPath(img.path);
-        if(guessed) autoCount++;
+
+    for(const rec of state.records){
+      const key = (rec.path||rec.file||"").replace(/\\/g,"/");
+      let tags = effectiveTags(rec);
+      if(!tags.length) tags = ["others"];
+      rec.tags = tags;
+      rec.catalogs = rec.catalogs || getCatalogsForTags(tags);
+      state.recordMap.set(key, rec);
+    }
+
+    for(const img of state.images){
+      if(!state.recordMap.has(img.path)){
+        const guessed = guessTagsFromPath(img.path);
+        const isMatched = guessed.length > 0 && !guessed.includes("others");
+        if(isMatched) autoCount++;
+        const tags = isMatched ? guessed : ["others"];
+        const cats = getCatalogsForTags(tags);
         state.recordMap.set(img.path, {
-          path:img.path, file:img.file,
-          tag: guessed || "Others",
-          confidence: guessed ? 1.0 : 0,
-          correctedTag: null,
-          review_required: !guessed,
-          subject:"", scene:"",
-          reason: guessed ? "目录自动识别: "+guessed : "未打标"
+          path: img.path, file: img.file,
+          tags: tags,
+          catalogs: cats,
+          confidence: isMatched ? 1.0 : 0,
+          review_required: tags.includes("others"),
+          subject: "", scene: "",
+          reason: isMatched ? "目录自动识别: "+tags.join(", ") : "未打标"
         });
-      }
-    } else {
-      for(const rec of state.records){
-        const key = (rec.path||rec.file||"").replace(/\\/g,"/");
-        state.recordMap.set(key, rec);
-      }
-      for(const img of state.images){
-        if(!state.recordMap.has(img.path)){
-          const guessed = guessTagFromPath(img.path);
-          if(guessed) autoCount++;
-          state.recordMap.set(img.path, {
-            path:img.path, file:img.file,
-            tag: guessed || "Others",
-            confidence: guessed ? 1.0 : 0,
-            correctedTag: null,
-            review_required: !guessed,
-            subject:"", scene:"",
-            reason: guessed ? "目录自动识别: "+guessed : "新增未打标"
-          });
-        } else {
-          // 对已有记录中 tag 为 Others 且未校正的，尝试目录自动识别
-          const rec = state.recordMap.get(img.path);
-          if(rec && !rec.correctedTag && (!rec.tag || rec.tag === "Others")){
-            const guessed = guessTagFromPath(img.path);
-            if(guessed){
-              rec.tag = guessed;
-              rec.confidence = 1.0;
-              rec.reason = "目录自动识别: "+guessed;
-              rec.review_required = false;
-              autoCount++;
-            }
+      } else {
+        // 对已有记录中 tags 仅为 others 的，尝试自动识别
+        const rec = state.recordMap.get(img.path);
+        if(rec && !rec.manual && !rec.correctedTag && (rec.tags.length === 0 || (rec.tags.length === 1 && rec.tags[0] === "others"))){
+          const guessed = guessTagsFromPath(img.path);
+          const isMatched = guessed.length > 0 && !guessed.includes("others");
+          if(isMatched){
+            rec.tags = guessed;
+            rec.catalogs = getCatalogsForTags(guessed);
+            rec.confidence = 1.0;
+            rec.reason = "目录自动识别: " + guessed.join(", ");
+            rec.review_required = false;
+            autoCount++;
           }
         }
       }
@@ -757,13 +1223,18 @@ async function doScan(){
     state.active = state.images[0]?.path || null;
     state.selected.clear();
     renderStats(); renderGrid(); renderDetail(); updateSelHint();
-    toast(`扫描完成: ${state.images.length} 张, tagFile=${state.tagFile||"无"}, 目录自动识别 ${autoCount} 张`);
+    toast(`扫描完成: ${state.images.length} 张, tagFile=${state.tagFile||"无"}, 路径自动识别 ${autoCount} 张`);
   }catch(e){ toast("扫描异常: "+e); console.error(e); }
 }
 
 async function doSave(){
   if(!state.dir){ toast("缺少源目录"); return; }
   const list = Array.from(state.recordMap.values());
+  for(const r of list){
+    const tags = effectiveTags(r);
+    r.tags = tags;
+    r.catalogs = getCatalogsForTags(tags);
+  }
   list.sort((a,b)=> (a.path||"").localeCompare(b.path||""));
   try{
     const res = await fetch("/api/tags", {
@@ -832,8 +1303,16 @@ async function doExport(){
     // include tags records
     const records = [];
     for(const r of state.recordMap.values()){
-      records.push({path:r.path, tag:effectiveTag(r), correctedTag:r.correctedTag||null,
-        confidence:r.confidence, reviewRequired:r.reviewRequired, reason:r.reason||""});
+      const tags = effectiveTags(r);
+      const cats = r.catalogs || getCatalogsForTags(tags);
+      records.push({
+        path: r.path,
+        tags: tags,
+        catalogs: cats,
+        confidence: r.confidence,
+        reviewRequired: isReviewed(r),
+        reason: r.reason || ""
+      });
     }
     body.tagsRecords = records;
   } else if(type==="daily"){

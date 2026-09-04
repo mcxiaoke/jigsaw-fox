@@ -20,6 +20,7 @@ import sys
 import threading
 import urllib.parse
 import webbrowser
+import re
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 from typing import Any
@@ -33,56 +34,246 @@ except ImportError:
     HAS_PIL = False
 
 # ---------------------------------------------------------------------------
-# Tag vocab (21) — aligned with docs/jigsaw-image-tagging-specification.md v1.1
+# Catalogs (11) & Specific Tags (32 + Others)
+# Aligned with docs/jigsaw-catalog-tags-mapping-specification-20260904.md v2.2
+# Catalogs have 'cat_' prefix; Specific Tags are lowercase with NO prefix.
 # ---------------------------------------------------------------------------
 
-TAGS_21 = [
-    "Animals",
-    "Pets",
-    "Nature",
-    "Landscapes",
-    "Flowers",
-    "Ocean",
-    "Birds",
-    "Cities",
-    "Architecture",
-    "Food",
-    "Art",
-    "Fantasy",
-    "Space",
-    "Transportation",
-    "People",
-    "Sports",
-    "Seasons",
-    "Holidays",
-    "Abstract",
-    "Cartoon",
-    "Others",
+CATALOG_DEFS: list[dict[str, Any]] = [
+    {"id": "cat_nature", "name": "Nature", "zh": "自然风光", "icon": "🌲"},
+    {"id": "cat_animals", "name": "Animals", "zh": "动物萌宠", "icon": "🐾"},
+    {"id": "cat_colors", "name": "Colors", "zh": "缤纷色彩", "icon": "🌈"},
+    {"id": "cat_flowers", "name": "Flowers", "zh": "花卉园艺", "icon": "🌸"},
+    {"id": "cat_cozy", "name": "Cozy", "zh": "温馨生活", "icon": "☕"},
+    {"id": "cat_travel", "name": "Travel", "zh": "城市旅行", "icon": "✈️"},
+    {"id": "cat_food", "name": "Food", "zh": "美食甜品", "icon": "🍰"},
+    {"id": "cat_art", "name": "Art", "zh": "唯美艺术", "icon": "🎨"},
+    {"id": "cat_fantasy", "name": "Fantasy", "zh": "奇幻仙境", "icon": "✨"},
+    {"id": "cat_holidays", "name": "Holidays", "zh": "节日时令", "icon": "🎉"},
+    {"id": "cat_others", "name": "Others", "zh": "其他分类", "icon": "📦"},
 ]
 
-TAG_ZH: dict[str, str] = {
-    "Animals": "动物",
-    "Pets": "宠物",
-    "Nature": "自然",
-    "Landscapes": "风景",
-    "Flowers": "花卉",
-    "Ocean": "海洋",
-    "Birds": "鸟类",
-    "Cities": "城市",
-    "Architecture": "建筑",
-    "Food": "美食",
-    "Art": "艺术",
-    "Fantasy": "奇幻",
-    "Space": "太空",
-    "Transportation": "交通",
-    "People": "人物",
-    "Sports": "运动",
-    "Seasons": "四季",
-    "Holidays": "节日",
-    "Abstract": "抽象",
-    "Cartoon": "卡通",
-    "Others": "其他",
+SPECIFIC_TAG_DEFS: list[dict[str, Any]] = [
+    # 动物萌宠 (5)
+    {"id": "cats", "name": "Cats", "zh": "猫咪", "catalogs": ["cat_animals"]},
+    {"id": "dogs", "name": "Dogs", "zh": "狗狗", "catalogs": ["cat_animals"]},
+    {"id": "birds", "name": "Birds", "zh": "飞禽鸟类", "catalogs": ["cat_animals"]},
+    {"id": "wildlife", "name": "Wildlife", "zh": "陆地野兽", "catalogs": ["cat_animals", "cat_nature"]},
+    {"id": "sealife", "name": "SeaLife", "zh": "海洋水族", "catalogs": ["cat_animals", "cat_nature"]},
+    # 自然风光 (4)
+    {"id": "mountains", "name": "Mountains", "zh": "山峦湖泊", "catalogs": ["cat_nature"]},
+    {"id": "forests", "name": "Forests", "zh": "森林自然", "catalogs": ["cat_nature"]},
+    {"id": "oceans", "name": "Oceans", "zh": "海洋海岸", "catalogs": ["cat_nature", "cat_travel"]},
+    {"id": "sunsets", "name": "Sunsets", "zh": "日落晚霞", "catalogs": ["cat_nature"]},
+    # 建筑旅行 (3)
+    {"id": "landmarks", "name": "Landmarks", "zh": "名胜地标", "catalogs": ["cat_travel"]},
+    {"id": "castles", "name": "Castles", "zh": "古堡宫殿", "catalogs": ["cat_travel", "cat_fantasy"]},
+    {"id": "villages", "name": "Villages", "zh": "街景小镇", "catalogs": ["cat_travel"]},
+    # 花卉园艺 (2)
+    {"id": "flowers", "name": "Flowers", "zh": "花卉花园", "catalogs": ["cat_flowers"]},
+    {"id": "botanical", "name": "Botanical", "zh": "绿植微观", "catalogs": ["cat_flowers"]},
+    # 温馨生活 (4)
+    {"id": "cottages", "name": "Cottages", "zh": "乡村木屋", "catalogs": ["cat_cozy"]},
+    {"id": "cozy_home", "name": "CozyHome", "zh": "温馨室内", "catalogs": ["cat_cozy"]},
+    {"id": "vintage", "name": "Vintage", "zh": "复古珍奇", "catalogs": ["cat_cozy", "cat_travel"]},
+    {"id": "crafts", "name": "Crafts", "zh": "手作布艺", "catalogs": ["cat_cozy", "cat_colors"]},
+    # 美食甜品 (3)
+    {"id": "desserts", "name": "Desserts", "zh": "甜点茶饮", "catalogs": ["cat_food"]},
+    {"id": "cuisine", "name": "Cuisine", "zh": "环球料理", "catalogs": ["cat_food"]},
+    {"id": "fruits", "name": "Fruits", "zh": "鲜果时蔬", "catalogs": ["cat_food"]},
+    # 缤纷色彩 (3)
+    {"id": "colors", "name": "Colors", "zh": "彩虹色彩", "catalogs": ["cat_colors", "cat_fantasy"]},
+    {"id": "flat_lay", "name": "FlatLay", "zh": "俯拍平铺", "catalogs": ["cat_colors"]},
+    {"id": "mandalas", "name": "Mandalas", "zh": "曼陀罗图腾", "catalogs": ["cat_colors", "cat_art"]},
+    # 唯美艺术 (3)
+    {"id": "fine_art", "name": "FineArt", "zh": "经典名画", "catalogs": ["cat_art"]},
+    {"id": "illustrations", "name": "Illustrations", "zh": "治愈插画", "catalogs": ["cat_art"]},
+    {"id": "oriental", "name": "Oriental", "zh": "国风东方", "catalogs": ["cat_art"]},
+    # 奇幻神秘 (2)
+    {"id": "mythical", "name": "Mythical", "zh": "奇幻神兽", "catalogs": ["cat_fantasy"]},
+    {"id": "zodiac", "name": "Zodiac", "zh": "星座星象", "catalogs": ["cat_fantasy"]},
+    # 节日时令 (2)
+    {"id": "holidays", "name": "Holidays", "zh": "节庆假日", "catalogs": ["cat_holidays"]},
+    {"id": "seasons", "name": "Seasons", "zh": "四季节令", "catalogs": ["cat_holidays", "cat_nature"]},
+    # 兜底 (1)
+    {"id": "others", "name": "Others", "zh": "其他分类", "catalogs": ["cat_others"]},
+]
+
+TAG_ZH: dict[str, str] = {item["id"]: item["zh"] for item in SPECIFIC_TAG_DEFS}
+
+CATALOG_TO_TAGS_MAP: dict[str, list[str]] = {
+    "cat_nature": ["mountains", "forests", "oceans", "sunsets", "seasons"],
+    "cat_animals": ["cats", "dogs", "birds", "wildlife", "sealife"],
+    "cat_colors": ["colors", "flat_lay", "mandalas", "crafts"],
+    "cat_flowers": ["flowers", "botanical"],
+    "cat_cozy": ["cottages", "cozy_home", "vintage", "crafts"],
+    "cat_travel": ["landmarks", "castles", "villages", "vintage"],
+    "cat_food": ["desserts", "cuisine", "fruits"],
+    "cat_art": ["fine_art", "illustrations", "oriental", "mandalas"],
+    "cat_fantasy": ["mythical", "zodiac", "colors"],
+    "cat_holidays": ["holidays", "seasons"],
+    "cat_others": ["others"],
 }
+
+TAG_TO_CATALOGS: dict[str, list[str]] = {}
+for cid, tlist in CATALOG_TO_TAGS_MAP.items():
+    for t in tlist:
+        TAG_TO_CATALOGS.setdefault(t, []).append(cid)
+TAG_TO_CATALOGS.setdefault("others", ["cat_others"])
+
+ALL_CANONICAL_TAGS = [item["id"] for item in SPECIFIC_TAG_DEFS]
+TAGS_21 = ALL_CANONICAL_TAGS
+
+# Comprehensive synonym and alias dictionary for smart path & filename recognition
+ALIASES: dict[str, list[str]] = {
+    "cats": ["cat", "cats", "kitten", "kittens", "kitty", "猫", "猫咪"],
+    "dogs": ["dog", "dogs", "puppy", "puppies", "狗", "狗狗"],
+    "birds": ["bird", "birds", "鸟", "鸟类", "飞禽"],
+    "wildlife": ["wildlife", "beast", "beasts", "safari", "野兽", "野生动物"],
+    "sealife": ["sealife", "sea_life", "marine", "underwater", "oceanlife", "fish", "fishes", "水族", "海洋生物"],
+    "mountains": ["mountain", "mountains", "lake", "lakes", "alps", "waterfall", "waterfalls", "山", "山峦", "雪山", "湖泊", "瀑布"],
+    "forests": ["forest", "forests", "wood", "woods", "森林", "树林"],
+    "oceans": ["ocean", "oceans", "beach", "beaches", "sea", "seas", "coast", "coasts", "shore", "海洋", "海滩", "海岸"],
+    "sunsets": ["sunset", "sunsets", "sunrise", "sunrises", "dusk", "dawn", "晚霞", "日落", "朝霞", "夕阳"],
+    "landmarks": ["landmark", "landmarks", "city", "cities", "tower", "architecture", "地标", "名胜", "城市"],
+    "castles": ["castle", "castles", "palace", "palaces", "城堡", "古堡", "宫殿"],
+    "villages": ["village", "villages", "town", "towns", "小镇", "村庄", "水乡", "街景"],
+    "flowers": ["flower", "flowers", "floral", "garden", "rose", "roses", "bloom", "花", "花卉", "花园"],
+    "botanical": ["botanical", "botanicals", "plant", "plants", "succulent", "succulents", "mushroom", "mushrooms", "植物", "绿植", "多肉", "菌菇"],
+    "cottages": ["cottage", "cottages", "cabin", "cabins", "木屋", "乡村木屋", "小屋"],
+    "cozy_home": ["cozy_home", "cozyhome", "interior", "interiors", "room", "rooms", "livingroom", "bedroom", "居室", "室内", "温馨室内", "壁炉"],
+    "vintage": ["vintage", "retro", "antique", "antiques", "nostalgia", "car", "cars", "automobile", "classiccar", "classiccars", "vintagecar", "vintagecars", "复古", "怀旧", "老车", "古董", "老爷车"],
+    "crafts": ["craft", "crafts", "sewing", "knitting", "yarn", "handcraft", "手作", "毛线", "缝纫", "布艺", "编织"],
+    "desserts": ["dessert", "desserts", "sweet", "sweets", "cake", "cakes", "bakery", "candy", "candies", "pastry", "pastries", "cookie", "cookies", "coffee", "tea", "coffeetea", "cafe", "afternoontea", "甜点", "烘焙", "蛋糕", "咖啡", "茶饮", "下午茶"],
+    "cuisine": ["cuisine", "cuisines", "food", "foods", "meal", "meals", "cooking", "dish", "dishes", "noodle", "noodles", "pizza", "sushi", "ramen", "bbq", "dinner", "美食", "料理", "火锅", "餐饮"],
+    "fruits": ["fruit", "fruits", "berry", "berries", "citrus", "orange", "apple", "vegetable", "vegetables", "水果", "鲜果", "果盘"],
+    "colors": ["color", "colors", "colour", "colours", "rainbow", "colorful", "色彩", "彩虹", "高饱和", "五彩"],
+    "flat_lay": ["flatlay", "flat_lay", "knolling", "平铺", "俯拍"],
+    "mandalas": ["mandala", "mandalas", "kaleidoscope", "pattern", "patterns", "曼陀罗", "万花筒", "图腾"],
+    "fine_art": ["fineart", "fine_art", "masterpiece", "oilpainting", "oil_painting", "painting", "paintings", "名画", "经典名画", "古典艺术", "油画"],
+    "illustrations": ["illustration", "illustrations", "illust", "cartoon", "drawing", "drawings", "clipart", "插画", "治愈插画", "手绘"],
+    "oriental": ["oriental", "guochao", "chinese", "asian_art", "国风", "古风", "东方", "国潮"],
+    "mythical": ["mythical", "myth", "dragon", "dragons", "unicorn", "unicorns", "fairy", "fairies", "fantasy_creature", "神兽", "奇幻神兽", "独角兽"],
+    "zodiac": ["zodiac", "astrology", "constellation", "constellations", "horoscope", "star", "stars", "星座", "星盘", "星象"],
+    "holidays": ["holiday", "holidays", "christmas", "xmas", "noel", "santa", "halloween", "pumpkin", "pumpkins", "witch", "easter", "thanksgiving", "newyear", "valentine", "carnival", "节日", "节庆", "假日", "圣诞", "圣诞节", "万圣", "万圣节", "复活节", "感恩节", "新年", "元旦"],
+    "seasons": ["season", "seasons", "seasonal", "spring", "summer", "autumn", "winter", "四季", "时令", "节气"],
+    "others": ["others", "other", "misc", "杂项", "其他"],
+}
+
+TAG_LOOKUP_MAP: dict[str, str] = {}
+for tag_key, aliases in ALIASES.items():
+    TAG_LOOKUP_MAP[tag_key.lower().replace("_", "")] = tag_key
+    for a in aliases:
+        norm = a.lower().replace("_", "").replace("-", "").replace(" ", "")
+        TAG_LOOKUP_MAP[norm] = tag_key
+
+for item in SPECIFIC_TAG_DEFS:
+    TAG_LOOKUP_MAP[item["name"].lower().replace("_", "")] = item["id"]
+    TAG_LOOKUP_MAP[item["zh"].lower().replace("_", "")] = item["id"]
+
+
+def normalize_token(w: str | None) -> str | None:
+    """Normalize word/token to canonical tag key, handling case and singular/plural."""
+    if not w or not str(w).strip():
+        return None
+    raw = str(w).strip().lower()
+    norm = re.sub(r"[_\-\s]+", "", raw)
+    if not norm:
+        return None
+    if norm in TAG_LOOKUP_MAP:
+        return TAG_LOOKUP_MAP[norm]
+    # Check plural endings (ies -> y, es, s)
+    if norm.endswith("ies") and len(norm) > 4:
+        cand = norm[:-3] + "y"
+        if cand in TAG_LOOKUP_MAP:
+            return TAG_LOOKUP_MAP[cand]
+    elif norm.endswith("es") and len(norm) > 3:
+        cand = norm[:-2]
+        if cand in TAG_LOOKUP_MAP:
+            return TAG_LOOKUP_MAP[cand]
+    elif norm.endswith("s") and not norm.endswith("ss") and len(norm) > 2:
+        cand = norm[:-1]
+        if cand in TAG_LOOKUP_MAP:
+            return TAG_LOOKUP_MAP[cand]
+    return None
+
+
+def normalize_tag(tag: str | None) -> str | None:
+    """Normalize any tag string, tag ID, or directory name to canonical tag key."""
+    return normalize_token(tag)
+
+
+def get_catalogs_for_tags(tags: list[str]) -> list[str]:
+    """Get list of mapped catalog IDs for a list of tags. Defaults to ['cat_others']."""
+    cats: list[str] = []
+    for t in tags:
+        canon = normalize_token(t) or "others"
+        for c in TAG_TO_CATALOGS.get(canon, []):
+            if c not in cats:
+                cats.append(c)
+    return cats if cats else ["cat_others"]
+
+
+def get_catalogs_for_tag(tag: str | None) -> list[str]:
+    """Get list of mapped catalog IDs for a single tag. Defaults to ['cat_others']."""
+    return get_catalogs_for_tags([tag] if tag else [])
+
+
+def match_dir_part(part: str) -> str | None:
+    """Try to match a directory component to a canonical tag key."""
+    p_lower = part.lower().strip()
+    if p_lower.startswith("cat_") or any(c["id"] == p_lower for c in CATALOG_DEFS):
+        return None
+    t = normalize_token(part)
+    if t and t != "others":
+        return t
+    words = re.split(r"[^a-zA-Z0-9\u4e00-\u9fa5]+", part)
+    for w in words:
+        if not w:
+            continue
+        t = normalize_token(w)
+        if t and t != "others":
+            return t
+    return None
+
+
+def guess_tags_from_path(img_path: str | Path) -> list[str]:
+    """
+    Tag recognition from directory only:
+    Check parent directories from innermost upwards. If any directory matches a tag,
+    return matched tag(s).
+    Strictly do NOT check filename.
+    If no parent directory matched any tag, return ['others'].
+    """
+    parts = Path(img_path).parts
+    if len(parts) >= 2:
+        for part in reversed(parts[:-1]):
+            p_lower = part.lower().strip()
+            if p_lower.startswith("cat_") or any(c["id"] == p_lower for c in CATALOG_DEFS):
+                continue
+            # 1. Try full directory name
+            t = normalize_token(part)
+            if t and t != "others":
+                return [t]
+            # 2. Try splitting directory name by delimiters
+            words = re.split(r"[^a-zA-Z0-9\u4e00-\u9fa5]+", part)
+            matched_tags: list[str] = []
+            for w in words:
+                if not w:
+                    continue
+                matched = normalize_token(w)
+                if matched and matched != "others" and matched not in matched_tags:
+                    matched_tags.append(matched)
+            if matched_tags:
+                return matched_tags
+
+    return ["others"]
+
+
+def guess_tag_from_path(img_path: str | Path) -> str | None:
+    """Legacy helper: returns primary guessed tag."""
+    tags = guess_tags_from_path(img_path)
+    return tags[0] if tags and tags != ["others"] else None
 
 IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".webp", ".bmp", ".gif", ".tif", ".tiff"}
 
@@ -91,19 +282,19 @@ IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".webp", ".bmp", ".gif", ".tif", ".tiff"}
 # events.json: handled separately if needed
 
 
-def scan_images(root: Path) -> list[Path]:
+def scan_images(root: str | Path) -> list[Path]:
+    r = Path(root)
     return sorted(
-        p for p in root.rglob("*") if p.is_file() and p.suffix.lower() in IMAGE_EXTS
+        p for p in r.rglob("*") if p.is_file() and p.suffix.lower() in IMAGE_EXTS
     )
 
 
-def find_tags_file(root: Path) -> Path | None:
+def find_tags_file(root: str | Path) -> Path | None:
+    r = Path(root)
     for name in ("tags.json", "ai_tags.json", "puzzle_tags.json", ".puzzle_tags.json"):
-        cand = root / name
-        # also check one level up for convenience?
+        cand = r / name
         if cand.exists():
             return cand
-    # also search one deep subdirs? no, keep simple: only root
     return None
 
 
@@ -116,28 +307,47 @@ def load_tags_file(p: Path) -> Any:
 
 def normalize_tags_records(raw: Any, root: Path) -> tuple[list[dict[str, Any]], str]:
     """
-    Normalize both formats:
+    Normalize both legacy and multi-tag formats:
       - ai_tag_images.py: list[{path, sha1, tag, confidence, review_required, ...}]
-      - studio intermediate dict: {version, images:[{file, tag, correctedTag, ...}]}
+      - studio intermediate dict: {version, images:[{file, tags:[...], ...}]}
+      - studio v2.2 list: list[{path, tags:[...], catalogs:[...], ...}]
     Returns (records_list, format_name)
-      records_list items: {path, file, tag, confidence, correctedTag, review_required, subject, scene, reason, sha1}
+      records_list items: {path, file, tags, catalogs, confidence, review_required, subject, scene, reason, sha1, model}
     """
     records: list[dict[str, Any]] = []
 
+    def extract_tags(item: dict[str, Any], rel_path: str) -> list[str]:
+        if "tags" in item and isinstance(item["tags"], list) and item["tags"]:
+            res: list[str] = []
+            for t in item["tags"]:
+                canon = normalize_token(str(t)) or str(t).strip().lower()
+                if canon and canon not in res:
+                    res.append(canon)
+            if res:
+                return res
+        raw_t = (item.get("correctedTag") or item.get("tag") or "").strip()
+        if raw_t:
+            canon = normalize_token(raw_t) or "others"
+            return [canon]
+        if rel_path:
+            return guess_tags_from_path(root / rel_path)
+        return ["others"]
+
     if isinstance(raw, list):
-        # ai_tag_images output
         for item in raw:
             if not isinstance(item, dict):
                 continue
-            rel = item.get("path") or item.get("file") or ""
+            rel = (item.get("path") or item.get("file") or "").replace("\\", "/")
+            tags = extract_tags(item, rel)
+            cats = get_catalogs_for_tags(tags)
             records.append(
                 {
                     "path": rel,
                     "file": Path(rel).name,
-                    "tag": item.get("tag", "Others"),
+                    "tags": tags,
+                    "catalogs": cats,
                     "confidence": float(item.get("confidence", 0) or 0),
-                    "correctedTag": item.get("correctedTag"),
-                    "review_required": bool(item.get("review_required", False)),
+                    "review_required": bool(item.get("review_required", False)) or ("others" in tags),
                     "subject": item.get("subject", ""),
                     "scene": item.get("scene", ""),
                     "reason": item.get("reason", ""),
@@ -148,20 +358,19 @@ def normalize_tags_records(raw: Any, root: Path) -> tuple[list[dict[str, Any]], 
         return records, "list"
 
     if isinstance(raw, dict):
-        # dict wrappers
-        # studio format {images:[...]}
         if "images" in raw and isinstance(raw["images"], list):
             for item in raw["images"]:
-                rel = item.get("file") or item.get("path") or ""
-                # if file contains subdir, keep it
+                rel = (item.get("file") or item.get("path") or "").replace("\\", "/")
+                tags = extract_tags(item, rel)
+                cats = get_catalogs_for_tags(tags)
                 records.append(
                     {
                         "path": rel,
                         "file": Path(rel).name,
-                        "tag": item.get("tag", "Others"),
+                        "tags": tags,
+                        "catalogs": cats,
                         "confidence": float(item.get("confidence", 0) or 0),
-                        "correctedTag": item.get("correctedTag"),
-                        "review_required": bool(item.get("review_required", False)),
+                        "review_required": bool(item.get("review_required", False)) or ("others" in tags),
                         "subject": item.get("subject", ""),
                         "scene": item.get("scene", ""),
                         "reason": item.get("reason", ""),
@@ -170,7 +379,6 @@ def normalize_tags_records(raw: Any, root: Path) -> tuple[list[dict[str, Any]], 
                     }
                 )
             return records, "dict-images"
-        # legacy {levels:[...]} ignore
         return records, "dict-unknown"
 
     return records, "unknown"
@@ -184,50 +392,53 @@ def build_main_levels(
 ) -> list[dict[str, Any]]:
     """
     Build levels for main.json from records + filesystem.
-    Effective tag = correctedTag if present else tag
-    Url = http_base + "/main/" + filename (preserve ext)  — or subpath if needed
-    Order = natural sort order (1-indexed for display, but pipeline uses numeric suffix)
-    For now we number from 101 to preserve main:101 canonical (configurable)
+    Url = http_base + "/main/" + filename (preserve ext)
+    Order = natural sort order (1-indexed for display)
+    Tags = array of tags, completely compatible with Dart LevelItem(url, tags, order).
     """
-    # Map path -> effective tag
-    tag_map: dict[str, str] = {}
+    tag_map: dict[str, list[str]] = {}
     for r in records:
-        eff = (r.get("correctedTag") or r.get("tag") or "Others").strip()
-        if eff not in TAGS_21:
-            eff = "Others"
-        # normalize path key: posix relative
         key = (r.get("path") or r.get("file") or "").replace("\\", "/")
-        tag_map[key] = eff
-        # also index by basename for convenience
+        tags = r.get("tags")
+        if not tags and (r.get("correctedTag") or r.get("tag")):
+            canon = normalize_token(str(r.get("correctedTag") or r.get("tag"))) or "others"
+            tags = [canon]
+        if tags and isinstance(tags, list):
+            norm_tags = [normalize_token(t) or t.lower() for t in tags]
+        else:
+            norm_tags = ["others"]
+        tag_map[key] = norm_tags
         bn = Path(key).name
         if bn not in tag_map:
-            tag_map[bn] = eff
+            tag_map[bn] = norm_tags
 
     levels: list[dict[str, Any]] = []
-    # natural sort by name
     sorted_paths = sorted(
         image_paths, key=lambda p: p.relative_to(root).as_posix().lower()
     )
 
     base = http_base.rstrip("/")
-    # Detect start order from http_base? keep 101 default
-    # If image count huge, continue from 101
     start = 101
 
     for idx, p in enumerate(sorted_paths):
-        rel = p.relative_to(root).as_posix()
+        rel = p.relative_to(root).as_posix().replace("\\", "/")
         bn = p.name
-        # try rel, then bn
-        eff = tag_map.get(rel) or tag_map.get(bn) or "Others"
-        # effective tags is single-element array (single primary tag)
+        tags = tag_map.get(rel) or tag_map.get(bn)
+        if not tags or tags == ["others"]:
+            guessed = guess_tags_from_path(p)
+            if guessed:
+                tags = guessed
+        if not tags:
+            tags = ["others"]
+        tags = [normalize_token(t) or t.lower() for t in tags]
+
         url = f"{base}/main/{urllib.parse.quote(bn)}"
         levels.append(
             {
                 "url": url,
-                "tags": [eff],
+                "tags": tags,
                 "order": start + idx,
-                "_file": rel,  # debug, stripped before write
-                "_effectiveTag": eff,
+                "_file": rel,
             }
         )
 
@@ -360,7 +571,16 @@ class Handler(BaseHTTPRequestHandler):
             self._serve_file(self.serve_dir / "index.html", "text/html; charset=utf-8")
             return
         if path == "/api/health":
-            self._json({"ok": True, "has_pil": HAS_PIL, "tags": TAGS_21})
+            self._json({
+                "ok": True,
+                "has_pil": HAS_PIL,
+                "tags": ALL_CANONICAL_TAGS,
+                "catalogs": CATALOG_DEFS,
+                "specific_tags": SPECIFIC_TAG_DEFS,
+                "catalog_tags_map": CATALOG_TO_TAGS_MAP,
+                "tag_to_catalogs": TAG_TO_CATALOGS,
+                "tag_zh": TAG_ZH,
+            })
             return
         if path == "/api/scan":
             self._handle_scan(qs)
@@ -471,7 +691,7 @@ class Handler(BaseHTTPRequestHandler):
         for p in images:
             try:
                 stat = p.stat()
-                rel = p.relative_to(root).as_posix()
+                rel = p.relative_to(root).as_posix().replace("\\", "/")
                 img_list.append(
                     {
                         "path": rel,
@@ -483,23 +703,57 @@ class Handler(BaseHTTPRequestHandler):
             except Exception:
                 continue
 
-        # stats by effective tag
+        # If no tags file existed, auto initialize tag_records using guess_tags_from_path!
+        if tag_records is None:
+            tag_records = []
+            for p in images:
+                rel = p.relative_to(root).as_posix().replace("\\", "/")
+                guessed = guess_tags_from_path(p)
+                cats = get_catalogs_for_tags(guessed)
+                tag_records.append({
+                    "path": rel,
+                    "file": p.name,
+                    "tags": guessed,
+                    "catalogs": cats,
+                    "confidence": 1.0 if guessed != ["others"] else 0.0,
+                    "review_required": (guessed == ["others"]),
+                    "subject": "",
+                    "scene": "",
+                    "reason": f"自动识别: {', '.join(guessed)}" if guessed != ["others"] else "未打标",
+                    "sha1": "",
+                    "model": "rule",
+                })
+        else:
+            # Check for any new images not in tag_records
+            known_paths = {r["path"].replace("\\", "/") for r in tag_records}
+            for p in images:
+                rel = p.relative_to(root).as_posix().replace("\\", "/")
+                if rel not in known_paths:
+                    guessed = guess_tags_from_path(p)
+                    cats = get_catalogs_for_tags(guessed)
+                    tag_records.append({
+                        "path": rel,
+                        "file": p.name,
+                        "tags": guessed,
+                        "catalogs": cats,
+                        "confidence": 1.0 if guessed != ["others"] else 0.0,
+                        "review_required": (guessed == ["others"]),
+                        "subject": "",
+                        "scene": "",
+                        "reason": f"新增自动识别: {', '.join(guessed)}" if guessed != ["others"] else "新增未打标",
+                        "sha1": "",
+                        "model": "rule",
+                    })
+
+        # stats by tags
         tag_stats: dict[str, int] = {}
         review_count = 0
-        if tag_records is not None:
-            # quick map for stats
-            for r in tag_records:
-                eff = r.get("correctedTag") or r.get("tag") or "Others"
-                tag_stats[eff] = tag_stats.get(eff, 0) + 1
-                if r.get("review_required"):
-                    review_count += 1
-                # low confidence also
-                try:
-                    if float(r.get("confidence", 1)) < 0.75:
-                        # already counted if review_required, but ensure
-                        pass
-                except Exception:
-                    pass
+        for r in tag_records:
+            tags = r.get("tags", [])
+            for t in tags:
+                tag_stats[t] = tag_stats.get(t, 0) + 1
+            if r.get("review_required") or "others" in tags:
+                review_count += 1
 
         self._json(
             {
@@ -525,7 +779,6 @@ class Handler(BaseHTTPRequestHandler):
         root = Path(dir_s)
         tag_file = find_tags_file(root)
         if tag_file is None:
-            # also allow explicit tags.json path via ?path=
             alt = qs.get("path", [None])[0]
             if alt and Path(alt).exists():
                 tag_file = Path(alt)
@@ -538,7 +791,6 @@ class Handler(BaseHTTPRequestHandler):
     def _handle_post_tags(self, data):
         dir_s = data.get("dir") or data.get("root") or ""
         records = data.get("records") or data.get("images") or data.get("tags")
-        # flexible: allow either list of records, or object {images:[...]}
         if not dir_s:
             self._json({"error": "missing dir"}, 400)
             return
@@ -550,19 +802,13 @@ class Handler(BaseHTTPRequestHandler):
             self._json({"error": "missing records"}, 400)
             return
 
-        # normalize incoming records to ai_tag_images list format for compatibility
-        # incoming may be [{path, tag, confidence, correctedTag, ...}]
-        # we want to persist as list[{path, tag, correctedTag, confidence, review_required, ...}]
-        # Keep existing sha1 if available
         existing_raw = None
         tag_file = root / "tags.json"
         existing = find_tags_file(root)
         if existing and existing.exists():
             existing_raw = load_tags_file(existing)
-            # if existing was list, keep sha1 mapping
             tag_file = existing
 
-        # Build sha map from existing list
         sha_map: dict[str, str] = {}
         if isinstance(existing_raw, list):
             for item in existing_raw:
@@ -570,7 +816,6 @@ class Handler(BaseHTTPRequestHandler):
                     sha_map[item["path"]] = item.get("sha1", "")
 
         out_list: list[dict[str, Any]] = []
-        # records may be dict with images
         flat: list[dict[str, Any]]
         if isinstance(records, dict) and "images" in records:
             flat = records["images"]  # type: ignore
@@ -585,48 +830,48 @@ class Handler(BaseHTTPRequestHandler):
             rel = (item.get("path") or item.get("file") or "").replace("\\", "/")
             if not rel:
                 continue
-            tag = (item.get("correctedTag") or item.get("tag") or "Others").strip()
-            if tag not in TAGS_21:
-                # allow tag vocab case-insensitive mapping? keep as-is but validate
-                # try capitalize
-                cap = tag[:1].upper() + tag[1:].lower() if tag else "Others"
-                if cap in TAGS_21:
-                    tag = cap
-                else:
-                    tag = "Others"
+
+            raw_tags = item.get("tags")
+            tags_list: list[str] = []
+            if isinstance(raw_tags, list):
+                for t in raw_tags:
+                    canon = normalize_token(str(t)) or str(t).strip().lower()
+                    if canon and canon not in tags_list:
+                        tags_list.append(canon)
+            elif item.get("correctedTag") or item.get("tag"):
+                raw_s = str(item.get("correctedTag") or item.get("tag"))
+                canon = normalize_token(raw_s) or "others"
+                tags_list = [canon]
+
+            if not tags_list:
+                tags_list = ["others"]
+
+            cats = get_catalogs_for_tags(tags_list)
             conf = item.get("confidence", 0.8)
             try:
                 conf = float(conf)
             except Exception:
                 conf = 0.8
-            eff = tag  # for review flag, use effective
+
             review = bool(item.get("review_required", False))
-            # auto review if low confidence or Others
-            if conf < 0.75 or eff == "Others":
-                # keep existing review flag if explicitly set false? but spec says auto
-                # we compute but allow manual override via review_required field
-                if "review_required" not in item:
-                    review = conf < 0.75 or eff == "Others"
+            if conf < 0.75 or "others" in tags_list:
+                review = True
 
             out_list.append(
                 {
                     "path": rel,
                     "sha1": item.get("sha1") or sha_map.get(rel, ""),
-                    "tag": item.get("tag") or tag,
-                    "correctedTag": item.get("correctedTag"),
-                    # Store effective tag as tag if correctedTag present? Keep both.
-                    # For ai compatibility, store final tag as effective? But we keep tag + correctedTag
+                    "tags": tags_list,
+                    "catalogs": cats,
                     "confidence": conf,
                     "subject": item.get("subject", ""),
                     "scene": item.get("scene", ""),
                     "reason": item.get("reason", ""),
                     "review_required": review,
                     "model": item.get("model", "manual"),
-                    "taxonomy_version": "jigsaw-tag-v1.1-21",
+                    "taxonomy_version": "jigsaw-tag-v2.2-32",
                 }
             )
-            # Ensure tag field reflects effective for downstream?
-            # We keep tag as original AI, correctedTag as manual.
 
         # atomic write
         tmp = tag_file.with_suffix(tag_file.suffix + ".tmp")
