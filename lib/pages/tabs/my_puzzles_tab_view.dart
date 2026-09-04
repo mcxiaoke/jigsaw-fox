@@ -100,14 +100,14 @@ class _MyPuzzlesTabViewState extends State<MyPuzzlesTabView> {
         bytes = await file.readAsBytes();
       } else {
         final data = await rootBundle.load(assetSamples[0]);
-        bytes = data.buffer.asUint8List();
+        bytes = data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes);
       }
     } else if (item.imagePathOrUrl.startsWith('assets/')) {
       final data = await rootBundle.load(item.imagePathOrUrl);
-      bytes = data.buffer.asUint8List();
+      bytes = data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes);
     } else {
       final data = await rootBundle.load(assetSamples[0]);
-      bytes = data.buffer.asUint8List();
+      bytes = data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes);
     }
     if (!mounted) return;
     final canonicalId = GameRepository.canonicalForCustom(item.id);

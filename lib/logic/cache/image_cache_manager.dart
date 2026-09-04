@@ -437,8 +437,9 @@ class ImageCacheManager {
             }
           }
           final tmpFile = File(tmpPath);
-          if (!await tmpFile.exists() || await tmpFile.length() == 0)
+          if (!await tmpFile.exists() || await tmpFile.length() == 0) {
             return null;
+          }
           const maxNetBytes = 20 * 1024 * 1024;
           if (await tmpFile.length() > maxNetBytes) {
             try {

@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:math' as math;
 import 'dart:ui' as ui;
 
 import 'package:flutter/foundation.dart';
@@ -113,8 +114,8 @@ class AppCachedImageProvider extends ImageProvider<AppImageKey> {
                     ? intrinsicWidth
                     : intrinsicHeight);
             return ui.TargetImageSize(
-              width: (intrinsicWidth * ratio).round(),
-              height: (intrinsicHeight * ratio).round(),
+              width: math.max(1, (intrinsicWidth * ratio).round()),
+              height: math.max(1, (intrinsicHeight * ratio).round()),
             );
           }
           return ui.TargetImageSize(

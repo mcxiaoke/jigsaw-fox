@@ -125,7 +125,10 @@ class _HomeTabViewState extends State<HomeTabView> {
 
   Future<void> _openLevel(LevelItem level) async {
     final bytes = await rootBundle.load(level.assetPath);
-    final imgBytes = bytes.buffer.asUint8List();
+    final imgBytes = bytes.buffer.asUint8List(
+      bytes.offsetInBytes,
+      bytes.lengthInBytes,
+    );
     if (!mounted) return;
     final canonicalId = GameRepository.canonicalForLevel(level.index);
     final handled = await ResumeHelper.tryHandleResumeFlow(

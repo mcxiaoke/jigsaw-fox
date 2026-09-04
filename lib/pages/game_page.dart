@@ -147,7 +147,10 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
       );
       image.dispose();
       if (pixelData == null) return;
-      final bytes = pixelData.buffer.asUint8List();
+      final bytes = pixelData.buffer.asUint8List(
+        pixelData.offsetInBytes,
+        pixelData.lengthInBytes,
+      );
       final pixelCount = w * h;
       if (pixelCount <= 0) return;
       var r = 0, g = 0, b = 0;
@@ -671,7 +674,10 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
 
     final nextLevel = _repo.levels[nextIndex - 1];
     final bytes = await rootBundle.load(nextLevel.assetPath);
-    final imgBytes = bytes.buffer.asUint8List();
+    final imgBytes = bytes.buffer.asUint8List(
+      bytes.offsetInBytes,
+      bytes.lengthInBytes,
+    );
 
     if (!mounted) return;
     // 从文件级快照读取续玩（Item 的旧快照字段遗留 fallback 已移除——

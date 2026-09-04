@@ -67,8 +67,9 @@ class DailyContentPipeline {
       // 2. 解压到临时目录（P07 后台 Isolate 避免 ANR）
       final archive = await compute(_decodeZipIsolate, bytes);
       // zip bomb 防护
-      if (archive.length > 2000)
+      if (archive.length > 2000) {
         throw Exception('Zip file count excessive ${archive.length}');
+      }
       if (tempExtractDir.existsSync()) {
         tempExtractDir.deleteSync(recursive: true);
       }

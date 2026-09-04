@@ -158,11 +158,17 @@ class _DailyTabViewState extends State<DailyTabView> {
         imgBytes = await file.readAsBytes();
       } else {
         final bytes = await rootBundle.load(assetSamples[0]);
-        imgBytes = bytes.buffer.asUint8List();
+        imgBytes = bytes.buffer.asUint8List(
+          bytes.offsetInBytes,
+          bytes.lengthInBytes,
+        );
       }
     } catch (_) {
       final bytes = await rootBundle.load(assetSamples[0]);
-      imgBytes = bytes.buffer.asUint8List();
+      imgBytes = bytes.buffer.asUint8List(
+        bytes.offsetInBytes,
+        bytes.lengthInBytes,
+      );
     }
     if (!mounted) return;
 

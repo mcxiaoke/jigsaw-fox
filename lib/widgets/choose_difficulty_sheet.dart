@@ -42,25 +42,47 @@ class _JigsawOverlayPainter extends CustomPainter {
     ..color = const Color(0xEEFFFFFF)
     ..isAntiAlias = true;
 
-  @override
-  void paint(Canvas canvas, Size size) {
-    if (rows <= 0 || cols <= 0 || size.width <= 0 || size.height <= 0) return;
+  // P11 性能：缓存合并 Path，避免每帧重建 16~100 个贝塞尔
+  Path? _cachedLinePath;
+  Path? _cachedShadowPath;
+  Size? _cachedSize;
+  int? _cachedRows;
+  int? _cachedCols;
 
+  void _ensureCache(Size size) {
+    if (_cachedLinePath != null &&
+        _cachedShadowPath != null &&
+        _cachedSize == size &&
+        _cachedRows == rows &&
+        _cachedCols == cols) {
+      return;
+    }
     final pieceW = size.width / cols;
     final pieceH = size.height / rows;
-
+    final line = Path();
+    final shadow = Path();
     for (var r = 0; r < rows; r++) {
       for (var c = 0; c < cols; c++) {
         final edges = edgeLayout.edgesFor(r, c);
         final shape = PieceShape(edges: edges, width: pieceW, height: pieceH);
-
-        canvas.save();
-        canvas.translate(c * pieceW, r * pieceH);
-        canvas.drawPath(shape.path, _shadowPaint);
-        canvas.drawPath(shape.path, _linePaint);
-        canvas.restore();
+        // 将局部 path 平移到全局坐标
+        line.addPath(shape.path, Offset(c * pieceW, r * pieceH));
+        shadow.addPath(shape.path, Offset(c * pieceW, r * pieceH));
       }
     }
+    _cachedLinePath = line;
+    _cachedShadowPath = shadow;
+    _cachedSize = size;
+    _cachedRows = rows;
+    _cachedCols = cols;
+  }
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (rows <= 0 || cols <= 0 || size.width <= 0 || size.height <= 0) return;
+    _ensureCache(size);
+    canvas.drawPath(_cachedShadowPath!, _shadowPaint);
+    canvas.drawPath(_cachedLinePath!, _linePaint);
   }
 
   @override

@@ -188,8 +188,9 @@ class EventsContentPipeline {
 
         // 2. 解压到临时目录（P07 Isolate）
         final archive = await compute(_decodeZipIsolate, bytes);
-        if (archive.length > 2000)
+        if (archive.length > 2000) {
           throw Exception('Zip file count excessive ${archive.length}');
+        }
         if (tempExtractDir.existsSync()) {
           tempExtractDir.deleteSync(recursive: true);
         }

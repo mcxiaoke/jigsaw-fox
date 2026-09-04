@@ -77,3 +77,41 @@
 - `flutter test`: 247 passed
 - 人工：下载大图弱网 403 重试、缩略图并发 4 场景推演不再 OOM；`ZipDecoder` 已离主线程
 
+### 提交
+- `bab9552 fix(P1): stage2 network streaming + unzip isolate + hive + lifecycle + sync lock`
+
+---
+
+## 阶段三：P2 体验与规范（Buffer防御 / 安全 / 细粒度性能） 2026-09-04 16:30
+
+### 范围
+- P04 `asUint8List` 13处防御性补齐（实际 9 处剩余未修复）
+- P12 `OnlineImagePicker` JS 注入 `jsonEncode`
+- P13 `TargetImageSize` `max(1, round)` 防 0 崩溃
+- P11 难度弹窗贝塞尔缓存（合并 Path，GC 降低）
+- P10/P17/P23/P24~P26 等 **暂搁置**（见风险段）
+
+### 变更详情
+
+| 编号 | 文件:行号 | 改动 | 验证 |
+|---|---|---|---|
+| P04 | `lib/pages/tabs/home_tab_view.dart:128` `lib/pages/tabs/daily_tab_view.dart:161,165` `lib/pages/tabs/my_puzzles_tab_view.dart:103,107,110` `lib/pages/event_levels_page.dart:74` `lib/pages/game_page.dart:150,674` | `buffer.asUint8List()` → `buffer.asUint8List(offsetInBytes,lengthInBytes)` 9处补齐（剩余 4处在 stage1/2 已修：`crop:361`, `share:105`, `my_center:168,205`, `game:132`, `image_source:31`） | `analyze` 0, `test` 247 pass |
+| P12 | `lib/pages/online_image_picker_page.dart:139-150` | `replaceAll("'","\\'")` → `jsonEncode(targetUrl)` 标准转义，插值 `fetch($jsUrl` 而非 `'$escapedUrl'` | 同上 |
+| P13 | `lib/logic/cache/app_cached_image_provider.dart:115-118` `lib/logic/cache/app_cached_network_image_provider.dart:108-112` | `TargetImageSize` `width/height` `round()` → `math.max(1, round())`，极端比例不为 0 | 同上 |
+| P11 | `lib/widgets/choose_difficulty_sheet.dart:33-72` | 新增 `_cachedLinePath/_cachedShadowPath/_cachedSize/_cachedRows/_cachedCols`，`_ensureCache(Size)` 合并所有片 Path 为单一 Path，按 Size/rows/cols 失效重建，`paint` 仅 `drawPath` 两次，GC 与 CPU 显著降低 | 同上 |
+
+### 风险/搁置（影响面大，暂缓）
+- **P10 Flame 持续满帧**：无 `pauseEngine` 时 60/120FPS + `clipPath` 耗电。已有视锥剔除剔除 85%~90%，收益边际，需手势/拖拽时 `resumeEngine`、闲置 1s `pauseEngine` 及已锁定集群合批底图，改动牵涉游戏循环与手势状态机，**搁置**。
+- **P17 三重 OOM 难度感知解码**：同阶段二搁置理由，**继续搁置**，需独立分支 + 真机 3C 压测（2160/4320 分辨率、400块放大细节对比）。
+- **P23 daily build 同步I/O + 365 查询**：`daily_tab_view:107 listSync` 与 `275 _calculateStreak` 在 `build`，正确修复需 `initState` 异步缓存 + `contentUpdateNotifier` 失效，目前 `build` 已有 `Future.wait` 外层异步且 365 次为内存 O(1)，掉帧感知弱，**搁置**以避免引入异步状态竞态。
+- **P24~P26 引擎 O(N²)/O(N³)/散落重叠/epsilon**：属 P2 性能/算法权衡，450 块 20万次/9000万次仅极端规格，`compute` 已缓解主线程 ANR，**搁置**到长期优化。
+- **P26 长期项**（缓存非原子、重试、Auto-GC误删、minAppVersion 未用、DownloadManager TOCTOU 等）列为后续技术债，不纳入本次。
+
+### 验证
+- `flutter analyze`: No issues found
+- `flutter test`: 247 passed
+- `flutter build windows --debug`: 阶段三末统一执行
+
+### 提交
+- 待 Stage3 commit（见 git log）
+

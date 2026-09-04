@@ -136,14 +136,14 @@ class _OnlineImagePickerPageState extends State<OnlineImagePickerPage> {
     AppLogger.webview.info(
       '[WebView:InAppFetch:Start] Executing authenticated in-webview fetch for: $targetUrl',
     );
-    final escapedUrl = targetUrl.replaceAll("'", "\\'");
+    final jsUrl = jsonEncode(targetUrl);
     final jsCode =
         '''
       (async function() {
         try {
           const controller = new AbortController();
           const timeoutId = setTimeout(() => controller.abort(), 25000);
-          const res = await fetch('$escapedUrl', {
+          const res = await fetch($jsUrl, {
             credentials: 'include',
             signal: controller.signal
           });

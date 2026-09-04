@@ -71,7 +71,10 @@ class _EventLevelsPageState extends State<EventLevelsPage> {
       if (!mounted) return;
       if (localPath.startsWith('assets/')) {
         final data = await DefaultAssetBundle.of(context).load(localPath);
-        imgBytes = data.buffer.asUint8List();
+        imgBytes = data.buffer.asUint8List(
+          data.offsetInBytes,
+          data.lengthInBytes,
+        );
       } else if (File(localPath).existsSync()) {
         imgBytes = await File(localPath).readAsBytes();
       }
