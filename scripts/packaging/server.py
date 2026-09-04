@@ -27,6 +27,7 @@ from typing import Any
 # Pillow optional for thumbnails
 try:
     from PIL import Image  # type: ignore
+
     HAS_PIL = True
 except ImportError:
     HAS_PIL = False
@@ -36,17 +37,50 @@ except ImportError:
 # ---------------------------------------------------------------------------
 
 TAGS_21 = [
-    "Animals", "Pets", "Nature", "Landscapes", "Flowers", "Ocean", "Birds",
-    "Cities", "Architecture", "Food", "Art", "Fantasy", "Space", "Transportation",
-    "People", "Sports", "Seasons", "Holidays", "Abstract", "Cartoon", "Others",
+    "Animals",
+    "Pets",
+    "Nature",
+    "Landscapes",
+    "Flowers",
+    "Ocean",
+    "Birds",
+    "Cities",
+    "Architecture",
+    "Food",
+    "Art",
+    "Fantasy",
+    "Space",
+    "Transportation",
+    "People",
+    "Sports",
+    "Seasons",
+    "Holidays",
+    "Abstract",
+    "Cartoon",
+    "Others",
 ]
 
 TAG_ZH: dict[str, str] = {
-    "Animals": "动物", "Pets": "宠物", "Nature": "自然", "Landscapes": "风景",
-    "Flowers": "花卉", "Ocean": "海洋", "Birds": "鸟类", "Cities": "城市",
-    "Architecture": "建筑", "Food": "美食", "Art": "艺术", "Fantasy": "奇幻",
-    "Space": "太空", "Transportation": "交通", "People": "人物", "Sports": "运动",
-    "Seasons": "四季", "Holidays": "节日", "Abstract": "抽象", "Cartoon": "卡通",
+    "Animals": "动物",
+    "Pets": "宠物",
+    "Nature": "自然",
+    "Landscapes": "风景",
+    "Flowers": "花卉",
+    "Ocean": "海洋",
+    "Birds": "鸟类",
+    "Cities": "城市",
+    "Architecture": "建筑",
+    "Food": "美食",
+    "Art": "艺术",
+    "Fantasy": "奇幻",
+    "Space": "太空",
+    "Transportation": "交通",
+    "People": "人物",
+    "Sports": "运动",
+    "Seasons": "四季",
+    "Holidays": "节日",
+    "Abstract": "抽象",
+    "Cartoon": "卡通",
     "Others": "其他",
 }
 
@@ -59,8 +93,7 @@ IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".webp", ".bmp", ".gif", ".tif", ".tiff"}
 
 def scan_images(root: Path) -> list[Path]:
     return sorted(
-        p for p in root.rglob("*")
-        if p.is_file() and p.suffix.lower() in IMAGE_EXTS
+        p for p in root.rglob("*") if p.is_file() and p.suffix.lower() in IMAGE_EXTS
     )
 
 
@@ -97,29 +130,8 @@ def normalize_tags_records(raw: Any, root: Path) -> tuple[list[dict[str, Any]], 
             if not isinstance(item, dict):
                 continue
             rel = item.get("path") or item.get("file") or ""
-            records.append({
-                "path": rel,
-                "file": Path(rel).name,
-                "tag": item.get("tag", "Others"),
-                "confidence": float(item.get("confidence", 0) or 0),
-                "correctedTag": item.get("correctedTag"),
-                "review_required": bool(item.get("review_required", False)),
-                "subject": item.get("subject", ""),
-                "scene": item.get("scene", ""),
-                "reason": item.get("reason", ""),
-                "sha1": item.get("sha1", ""),
-                "model": item.get("model", ""),
-            })
-        return records, "list"
-
-    if isinstance(raw, dict):
-        # dict wrappers
-        # studio format {images:[...]}
-        if "images" in raw and isinstance(raw["images"], list):
-            for item in raw["images"]:
-                rel = item.get("file") or item.get("path") or ""
-                # if file contains subdir, keep it
-                records.append({
+            records.append(
+                {
                     "path": rel,
                     "file": Path(rel).name,
                     "tag": item.get("tag", "Others"),
@@ -131,7 +143,32 @@ def normalize_tags_records(raw: Any, root: Path) -> tuple[list[dict[str, Any]], 
                     "reason": item.get("reason", ""),
                     "sha1": item.get("sha1", ""),
                     "model": item.get("model", ""),
-                })
+                }
+            )
+        return records, "list"
+
+    if isinstance(raw, dict):
+        # dict wrappers
+        # studio format {images:[...]}
+        if "images" in raw and isinstance(raw["images"], list):
+            for item in raw["images"]:
+                rel = item.get("file") or item.get("path") or ""
+                # if file contains subdir, keep it
+                records.append(
+                    {
+                        "path": rel,
+                        "file": Path(rel).name,
+                        "tag": item.get("tag", "Others"),
+                        "confidence": float(item.get("confidence", 0) or 0),
+                        "correctedTag": item.get("correctedTag"),
+                        "review_required": bool(item.get("review_required", False)),
+                        "subject": item.get("subject", ""),
+                        "scene": item.get("scene", ""),
+                        "reason": item.get("reason", ""),
+                        "sha1": item.get("sha1", ""),
+                        "model": item.get("model", ""),
+                    }
+                )
             return records, "dict-images"
         # legacy {levels:[...]} ignore
         return records, "dict-unknown"
@@ -168,7 +205,9 @@ def build_main_levels(
 
     levels: list[dict[str, Any]] = []
     # natural sort by name
-    sorted_paths = sorted(image_paths, key=lambda p: p.relative_to(root).as_posix().lower())
+    sorted_paths = sorted(
+        image_paths, key=lambda p: p.relative_to(root).as_posix().lower()
+    )
 
     base = http_base.rstrip("/")
     # Detect start order from http_base? keep 101 default
@@ -182,15 +221,115 @@ def build_main_levels(
         eff = tag_map.get(rel) or tag_map.get(bn) or "Others"
         # effective tags is single-element array (single primary tag)
         url = f"{base}/main/{urllib.parse.quote(bn)}"
-        levels.append({
-            "url": url,
-            "tags": [eff],
-            "order": start + idx,
-            "_file": rel,  # debug, stripped before write
-            "_effectiveTag": eff,
-        })
+        levels.append(
+            {
+                "url": url,
+                "tags": [eff],
+                "order": start + idx,
+                "_file": rel,  # debug, stripped before write
+                "_effectiveTag": eff,
+            }
+        )
 
     return levels
+
+
+# ---------------------------------------------------------------------------
+# Export helpers — format conversion, rename, daily.json builder
+# ---------------------------------------------------------------------------
+
+
+def convert_image(
+    src_path: Path, dst_path: Path, fmt: str = "original", quality: int = 85
+) -> tuple[bool, str | None]:
+    """Convert image format using PIL. Returns (success, error_msg)."""
+    if fmt == "original" or not HAS_PIL:
+        if src_path.resolve() != dst_path.resolve():
+            shutil.copy2(src_path, dst_path)
+        return True, None
+    try:
+        with Image.open(src_path) as im:  # type: ignore
+            try:
+                from PIL import ImageOps  # type: ignore
+
+                im = ImageOps.exif_transpose(im)  # type: ignore
+            except Exception:
+                pass
+            if im.mode not in ("RGB", "RGBA"):
+                im = im.convert("RGB")  # type: ignore
+            if fmt == "webp":
+                im.save(dst_path, "WEBP", quality=quality, method=6)  # type: ignore
+            elif fmt in ("jpg", "jpeg"):
+                if im.mode == "RGBA":
+                    bg = Image.new("RGB", im.size, (255, 255, 255))  # type: ignore
+                    bg.paste(im, mask=im.split()[3])  # type: ignore
+                    im = bg  # type: ignore
+                im.save(dst_path, "JPEG", quality=quality, optimize=True)  # type: ignore
+            elif fmt == "png":
+                im.save(dst_path, "PNG", optimize=True)  # type: ignore
+            else:
+                shutil.copy2(src_path, dst_path)
+            return True, None
+    except Exception as e:
+        return False, str(e)
+
+
+def make_rename(
+    original_name: str, idx: int, rule: str, fmt: str, month: str = ""
+) -> str:
+    """Generate new filename based on rename rule."""
+    if rule == "none":
+        if fmt != "original":
+            return Path(original_name).stem + f".{fmt}"
+        return original_name
+    elif rule == "sequence":
+        ext = f".{fmt}" if fmt != "original" else Path(original_name).suffix
+        return f"{idx:03d}{ext}"
+    elif rule == "date":
+        ext = f".{fmt}" if fmt != "original" else ".webp"
+        if month:
+            dd = f"{idx:02d}"
+            return f"{month}{dd}{ext}"
+        import datetime as _dt
+
+        return f"{_dt.datetime.now().strftime('%Y%m%d')}_{idx:03d}{ext}"
+    return original_name
+
+
+def build_daily_json(
+    out_p: Path, http_base: str, current_month: str, log
+) -> dict[str, Any]:
+    """Read existing daily.json, upsert current month, return payload."""
+    daily_json = out_p / "daily.json"
+    existing: dict[str, Any] = {}
+    if daily_json.exists():
+        try:
+            existing = json.loads(daily_json.read_text(encoding="utf-8"))
+        except Exception:
+            existing = {}
+    months = existing.get("months", [])
+    month_entry = {
+        "month": current_month,
+        "type": "zip",
+        "url": f"{http_base}/daily/{current_month}.zip",
+    }
+    found = False
+    for i, m in enumerate(months):
+        if m.get("month") == current_month:
+            months[i] = month_entry
+            found = True
+            break
+    if not found:
+        months.insert(0, month_entry)
+    return {
+        "version": existing.get("version", 0),
+        "updatedAt": __import__("datetime")
+        .datetime.now(__import__("datetime").timezone.utc)
+        .isoformat()
+        .replace("+00:00", "Z"),
+        "currentMonth": current_month,
+        "months": months,
+    }
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -269,6 +408,9 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/api/export/daily":
             self._handle_export_daily(data)
             return
+        if path == "/api/export":
+            self._handle_export(data)
+            return
 
         self.send_error(404, f"Not found POST {path}")
 
@@ -330,12 +472,14 @@ class Handler(BaseHTTPRequestHandler):
             try:
                 stat = p.stat()
                 rel = p.relative_to(root).as_posix()
-                img_list.append({
-                    "path": rel,
-                    "file": p.name,
-                    "size": stat.st_size,
-                    "mtime": int(stat.st_mtime),
-                })
+                img_list.append(
+                    {
+                        "path": rel,
+                        "file": p.name,
+                        "size": stat.st_size,
+                        "mtime": int(stat.st_mtime),
+                    }
+                )
             except Exception:
                 continue
 
@@ -345,7 +489,7 @@ class Handler(BaseHTTPRequestHandler):
         if tag_records is not None:
             # quick map for stats
             for r in tag_records:
-                eff = (r.get("correctedTag") or r.get("tag") or "Others")
+                eff = r.get("correctedTag") or r.get("tag") or "Others"
                 tag_stats[eff] = tag_stats.get(eff, 0) + 1
                 if r.get("review_required"):
                     review_count += 1
@@ -357,17 +501,21 @@ class Handler(BaseHTTPRequestHandler):
                 except Exception:
                     pass
 
-        self._json({
-            "dir": str(root.resolve()),
-            "tagFile": str(tag_file.resolve()) if tag_file else None,
-            "tagFormat": tag_format,
-            "tagError": tag_error,
-            "tagRecords": tag_records,
-            "rawTags": raw_tags if isinstance(raw_tags, list) and len(str(raw_tags)) < 20000 else None,
-            "images": img_list,
-            "total": len(img_list),
-            "stats": {"byTag": tag_stats, "reviewCount": review_count},
-        })
+        self._json(
+            {
+                "dir": str(root.resolve()),
+                "tagFile": str(tag_file.resolve()) if tag_file else None,
+                "tagFormat": tag_format,
+                "tagError": tag_error,
+                "tagRecords": tag_records,
+                "rawTags": raw_tags
+                if isinstance(raw_tags, list) and len(str(raw_tags)) < 20000
+                else None,
+                "images": img_list,
+                "total": len(img_list),
+                "stats": {"byTag": tag_stats, "reviewCount": review_count},
+            }
+        )
 
     def _handle_get_tags(self, qs):
         dir_s = (qs.get("dir") or [""])[0]
@@ -458,32 +606,38 @@ class Handler(BaseHTTPRequestHandler):
                 # keep existing review flag if explicitly set false? but spec says auto
                 # we compute but allow manual override via review_required field
                 if "review_required" not in item:
-                    review = (conf < 0.75 or eff == "Others")
+                    review = conf < 0.75 or eff == "Others"
 
-            out_list.append({
-                "path": rel,
-                "sha1": item.get("sha1") or sha_map.get(rel, ""),
-                "tag": item.get("tag") or tag,
-                "correctedTag": item.get("correctedTag"),
-                # Store effective tag as tag if correctedTag present? Keep both.
-                # For ai compatibility, store final tag as effective? But we keep tag + correctedTag
-                "confidence": conf,
-                "subject": item.get("subject", ""),
-                "scene": item.get("scene", ""),
-                "reason": item.get("reason", ""),
-                "review_required": review,
-                "model": item.get("model", "manual"),
-                "taxonomy_version": "jigsaw-tag-v1.1-21",
-            })
+            out_list.append(
+                {
+                    "path": rel,
+                    "sha1": item.get("sha1") or sha_map.get(rel, ""),
+                    "tag": item.get("tag") or tag,
+                    "correctedTag": item.get("correctedTag"),
+                    # Store effective tag as tag if correctedTag present? Keep both.
+                    # For ai compatibility, store final tag as effective? But we keep tag + correctedTag
+                    "confidence": conf,
+                    "subject": item.get("subject", ""),
+                    "scene": item.get("scene", ""),
+                    "reason": item.get("reason", ""),
+                    "review_required": review,
+                    "model": item.get("model", "manual"),
+                    "taxonomy_version": "jigsaw-tag-v1.1-21",
+                }
+            )
             # Ensure tag field reflects effective for downstream?
             # We keep tag as original AI, correctedTag as manual.
 
         # atomic write
         tmp = tag_file.with_suffix(tag_file.suffix + ".tmp")
-        tmp.write_text(json.dumps(out_list, ensure_ascii=False, indent=2), encoding="utf-8")
+        tmp.write_text(
+            json.dumps(out_list, ensure_ascii=False, indent=2), encoding="utf-8"
+        )
         tmp.replace(tag_file)
 
-        self._json({"ok": True, "file": str(tag_file.resolve()), "count": len(out_list)})
+        self._json(
+            {"ok": True, "file": str(tag_file.resolve()), "count": len(out_list)}
+        )
 
     def _handle_thumb(self, qs):
         path_s = (qs.get("path") or qs.get("p") or [""])[0]
@@ -517,6 +671,7 @@ class Handler(BaseHTTPRequestHandler):
                     # exif transpose
                     try:
                         from PIL import ImageOps  # type: ignore
+
                         im = ImageOps.exif_transpose(im)  # type: ignore
                     except Exception:
                         pass
@@ -527,6 +682,7 @@ class Handler(BaseHTTPRequestHandler):
                     im.thumbnail((size, size), Image.LANCZOS)  # type: ignore
                     # save to bytes
                     import io
+
                     buf = io.BytesIO()
                     # Use WEBP for smaller transfer if supported, else JPEG
                     # Browser supports webp, but to keep simple use JPEG
@@ -566,10 +722,480 @@ class Handler(BaseHTTPRequestHandler):
         ctype, _ = mimetypes.guess_type(str(p))
         self._serve_file(p, ctype or "application/octet-stream")
 
+    # ------------------------------------------------------------------
+    # Unified export — POST /api/export
+    # ------------------------------------------------------------------
+
+    def _handle_export(self, data):
+        import datetime as dt
+
+        exp_type = data.get("type", "main")
+        src = (data.get("srcDir") or "").strip()
+        out = (data.get("outDir") or "").strip()
+        http_base = (data.get("httpBase") or "").strip().rstrip("/")
+        fmt = data.get("format", "original")
+        rename_rule = data.get("rename", "none")
+        title = data.get("title", "")
+        output_mode = data.get("outputMode", "zip")
+        raw_records = data.get("tagsRecords") or []
+
+        logs: list[dict[str, str]] = []
+
+        def log(msg, level="info"):
+            logs.append(
+                {
+                    "t": dt.datetime.now().strftime("%H:%M:%S"),
+                    "level": level,
+                    "msg": msg,
+                }
+            )
+
+        if not src or not out:
+            self._json({"ok": False, "error": "missing srcDir/outDir"}, 400)
+            return
+        src_p = Path(src)
+        out_p = Path(out)
+        if not src_p.exists() or not src_p.is_dir():
+            self._json({"ok": False, "error": f"src not found: {src}"}, 404)
+            return
+
+        log(f"开始导出 {exp_type}...")
+        log(f"源: {src}")
+        log(f"输出: {out}")
+        if fmt != "original":
+            log(f"格式转换: {fmt}")
+        if rename_rule != "none":
+            log(f"重命名: {rename_rule}")
+
+        out_p.mkdir(parents=True, exist_ok=True)
+        files: list[str] = []
+
+        try:
+            if exp_type == "main":
+                r = self._exp_main(
+                    src_p, out_p, http_base, fmt, rename_rule, data, raw_records, log
+                )
+            elif exp_type == "daily":
+                r = self._exp_daily(
+                    src_p, out_p, http_base, fmt, rename_rule, data, log
+                )
+            elif exp_type == "event":
+                r = self._exp_event(
+                    src_p, out_p, http_base, fmt, rename_rule, data, output_mode, log
+                )
+            elif exp_type == "collection":
+                r = self._exp_collection(
+                    src_p, out_p, http_base, fmt, rename_rule, data, output_mode, log
+                )
+            else:
+                self._json(
+                    {"ok": False, "error": f"unknown type: {exp_type}", "logs": logs},
+                    400,
+                )
+                return
+
+            files = r.get("files", [])
+            log("导出完成", "ok")
+            self._json(
+                {
+                    "ok": True,
+                    "type": exp_type,
+                    "summary": r.get("summary", ""),
+                    "files": files,
+                    "logs": logs,
+                }
+            )
+        except Exception as e:
+            import traceback
+
+            log(f"导出异常: {e}", "err")
+            log(traceback.format_exc().splitlines()[-1], "err")
+            self._json({"ok": False, "error": str(e), "logs": logs})
+
+    def _exp_main(
+        self, src_p, out_p, http_base, fmt, rename_rule, data, raw_records, log
+    ):
+        images = scan_images(src_p)
+        log(f"扫描到 {len(images)} 张图片")
+        tag_file = find_tags_file(src_p)
+        records: list[dict[str, Any]] = []
+        if tag_file and tag_file.exists():
+            raw = load_tags_file(tag_file)
+            records, _ = normalize_tags_records(raw, src_p)
+        if raw_records:
+            records, _ = normalize_tags_records(raw_records, src_p)
+
+        levels = build_main_levels(records, images, src_p, http_base)
+        start_order = int(data.get("startOrder", 101))
+        version = data.get("version")
+        try:
+            version = int(version) if version not in (None, "") else 0
+        except Exception:
+            version = 0
+        if version <= 0:
+            existing = out_p / "main.json"
+            if existing.exists():
+                try:
+                    version = (
+                        int(
+                            json.loads(existing.read_text(encoding="utf-8")).get(
+                                "version", 0
+                            )
+                        )
+                        + 1
+                    )
+                except Exception:
+                    version = 101
+            else:
+                version = 101
+
+        import datetime as dt
+
+        payload = {
+            "version": version,
+            "updatedAt": dt.datetime.now(dt.timezone.utc)
+            .isoformat()
+            .replace("+00:00", "Z"),
+            "levels": [
+                {k: v for k, v in lv.items() if not k.startswith("_")} for lv in levels
+            ],
+        }
+        main_dir = out_p / "main"
+        main_dir.mkdir(parents=True, exist_ok=True)
+        main_json = out_p / "main.json"
+        tmp = main_json.with_suffix(".json.tmp")
+        tmp.write_text(
+            json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8"
+        )
+        tmp.replace(main_json)
+        log(f"main.json 已写入 (version={version})")
+        files = [str(main_json.resolve())]
+
+        converted = 0
+        errors: list[str] = []
+        for idx, p in enumerate(
+            sorted(images, key=lambda x: x.relative_to(src_p).as_posix().lower())
+        ):
+            try:
+                new_name = make_rename(p.name, start_order + idx, rename_rule, fmt)
+                dst = main_dir / new_name
+                ok, err = convert_image(p, dst, fmt)
+                if ok:
+                    converted += 1
+                else:
+                    errors.append(f"{p.name}: {err}")
+            except Exception as e:
+                errors.append(f"{p.name}: {e}")
+        log(
+            f"图片处理: {converted}/{len(images)}"
+            + (f", {len(errors)} 失败" if errors else "")
+        )
+        if errors:
+            for e in errors[:5]:
+                log(f"  {e}", "warn")
+
+        m_note = self._update_manifest(
+            out_p, "main", version, http_base, f"{http_base}/main.json", log
+        )
+        if m_note:
+            files.append(str((out_p / "manifest.json").resolve()))
+        return {
+            "summary": f"{len(images)} 张 -> main.json (version={version})",
+            "files": files,
+        }
+
+    def _exp_daily(self, src_p, out_p, http_base, fmt, rename_rule, data, log):
+        import re as _re
+        import zipfile
+        import datetime as dt
+
+        month = (data.get("month") or data.get("YYYYMM") or "").strip()
+        if not _re.match(r"^\d{6}$", month):
+            raise ValueError(f"month must be YYYYMM, got: {month}")
+        images = scan_images(src_p)
+        log(f"扫描到 {len(images)} 张图片, 月份 {month}")
+        daily_dir = out_p / "daily"
+        daily_dir.mkdir(parents=True, exist_ok=True)
+        zip_path = daily_dir / f"{month}.zip"
+        images_sorted = sorted(images, key=lambda p: p.name.lower())
+        with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
+            for idx, p in enumerate(images_sorted, start=1):
+                m = _re.match(r"^(\d{8})\.", p.name)
+                if m and rename_rule != "sequence":
+                    arc_name = p.name
+                    if fmt != "original":
+                        arc_name = Path(p.name).stem + f".{fmt}"
+                else:
+                    arc_name = make_rename(p.name, idx, rename_rule, fmt, month)
+                if fmt != "original" and HAS_PIL:
+                    import io
+                    import tempfile
+
+                    tmpf = Path(tempfile.gettempdir()) / f"_conv_{arc_name}"
+                    ok, _ = convert_image(p, tmpf, fmt)
+                    if ok:
+                        zf.write(tmpf, arcname=arc_name)
+                        tmpf.unlink(missing_ok=True)
+                        continue
+                zf.write(p, arcname=arc_name)
+        log(f"ZIP 打包完成: {zip_path.name}")
+        files = [str(zip_path.resolve())]
+
+        daily_payload = build_daily_json(out_p, http_base, month, log)
+        daily_payload["version"] = int(daily_payload.get("version", 0)) + 1
+        daily_json = out_p / "daily.json"
+        tmp2 = daily_json.with_suffix(".json.tmp")
+        tmp2.write_text(
+            json.dumps(daily_payload, ensure_ascii=False, indent=2), encoding="utf-8"
+        )
+        tmp2.replace(daily_json)
+        log(f"daily.json 已写入 (version={daily_payload['version']})")
+        files.append(str(daily_json.resolve()))
+
+        self._update_manifest(
+            out_p,
+            "daily",
+            daily_payload["version"],
+            http_base,
+            f"{http_base}/daily.json",
+            log,
+        )
+        files.append(str((out_p / "manifest.json").resolve()))
+        return {
+            "summary": f"{len(images_sorted)} 张 -> {month}.zip + daily.json",
+            "files": files,
+        }
+
+    def _exp_event(
+        self, src_p, out_p, http_base, fmt, rename_rule, data, output_mode, log
+    ):
+        return self._exp_event_or_collection(
+            src_p,
+            out_p,
+            http_base,
+            fmt,
+            rename_rule,
+            data,
+            output_mode,
+            log,
+            kind="event",
+        )
+
+    def _exp_collection(
+        self, src_p, out_p, http_base, fmt, rename_rule, data, output_mode, log
+    ):
+        return self._exp_event_or_collection(
+            src_p,
+            out_p,
+            http_base,
+            fmt,
+            rename_rule,
+            data,
+            output_mode,
+            log,
+            kind="collection",
+        )
+
+    def _exp_event_or_collection(
+        self,
+        src_p,
+        out_p,
+        http_base,
+        fmt,
+        rename_rule,
+        data,
+        output_mode,
+        log,
+        kind="event",
+    ):
+        import zipfile
+        import datetime as dt
+
+        if kind == "event":
+            item_id = (data.get("eventId") or "").strip()
+            json_name = "events.json"
+            sub_dir_name = "events"
+            module_name = "events"
+        else:
+            item_id = (data.get("collectionId") or "").strip()
+            json_name = "collections.json"
+            sub_dir_name = "collections"
+            module_name = "collections"
+        if not item_id:
+            raise ValueError(
+                f"missing {'eventId' if kind == 'event' else 'collectionId'}"
+            )
+        title = data.get("title", item_id)
+        desc = data.get("description", "")
+        display_order = int(data.get("displayOrder", 1))
+        images = scan_images(src_p)
+        log(f"扫描到 {len(images)} 张图片, {kind} ID: {item_id}")
+        sub_dir = out_p / sub_dir_name
+        sub_dir.mkdir(parents=True, exist_ok=True)
+        files: list[str] = []
+        cover_url = ""
+        level_urls: list[str] = []
+        zip_url = ""
+
+        if output_mode == "zip":
+            zip_path = sub_dir / f"{item_id}.zip"
+            images_sorted = sorted(images, key=lambda p: p.name.lower())
+            with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
+                for idx, p in enumerate(images_sorted, start=1):
+                    arc_name = (
+                        make_rename(p.name, idx, rename_rule, fmt)
+                        if rename_rule != "none"
+                        else p.name
+                    )
+                    if fmt != "original" and HAS_PIL:
+                        import tempfile
+
+                        tmpf = Path(tempfile.gettempdir()) / f"_conv_{arc_name}"
+                        ok, _ = convert_image(p, tmpf, fmt)
+                        if ok:
+                            zf.write(tmpf, arcname=arc_name)
+                            tmpf.unlink(missing_ok=True)
+                            continue
+                    zf.write(p, arcname=arc_name)
+            zip_url = f"{http_base}/{sub_dir_name}/{item_id}.zip"
+            if images_sorted:
+                cover_url = f"{http_base}/{sub_dir_name}/{item_id}_cover.webp"
+                cover_src = images_sorted[0]
+                cover_dst = sub_dir / f"{item_id}_cover.webp"
+                convert_image(cover_src, cover_dst, "webp")
+            log(f"ZIP 打包完成: {zip_path.name}")
+            files.append(str(zip_path.resolve()))
+        else:
+            item_img_dir = sub_dir / item_id
+            item_img_dir.mkdir(parents=True, exist_ok=True)
+            images_sorted = sorted(images, key=lambda p: p.name.lower())
+            for idx, p in enumerate(images_sorted, start=1):
+                new_name = (
+                    make_rename(p.name, idx, rename_rule, fmt)
+                    if rename_rule != "none"
+                    else p.name
+                )
+                if fmt != "original" and fmt != "":
+                    stem = Path(new_name).stem
+                    new_name = f"{stem}.{fmt}"
+                dst = item_img_dir / new_name
+                convert_image(p, dst, fmt)
+                level_urls.append(f"{http_base}/{sub_dir_name}/{item_id}/{new_name}")
+            if images_sorted:
+                cover_url = level_urls[0] if level_urls else ""
+            log(f"Array 模式: {len(level_urls)} 张图片复制完成")
+            files.append(str(item_img_dir.resolve()))
+
+        out_json = sub_dir / json_name
+        existing: list = []
+        if out_json.exists():
+            try:
+                existing = json.loads(out_json.read_text(encoding="utf-8"))
+                if not isinstance(existing, list):
+                    existing = []
+            except Exception:
+                existing = []
+        item: dict[str, Any] = {
+            "id": item_id,
+            "title": title,
+            "desc": desc,
+        }
+        if cover_url:
+            item["coverUrl"] = cover_url
+        if kind == "event":
+            item["status"] = data.get("status", "active")
+            st = data.get("startTime")
+            et = data.get("endTime")
+            if st:
+                item["startTime"] = st
+            if et:
+                item["endTime"] = et
+        item["displayOrder"] = display_order
+        if output_mode == "zip":
+            item["type"] = "zip"
+            item["zipUrl"] = zip_url
+        else:
+            item["type"] = "array"
+            item["levels"] = level_urls
+        found = False
+        for i, ex in enumerate(existing):
+            if isinstance(ex, dict) and ex.get("id") == item_id:
+                existing[i] = item
+                found = True
+                break
+        if not found:
+            existing.append(item)
+        tmp = out_json.with_suffix(".json.tmp")
+        tmp.write_text(
+            json.dumps(existing, ensure_ascii=False, indent=2), encoding="utf-8"
+        )
+        tmp.replace(out_json)
+        log(
+            f"{json_name} 已写入 ({len(existing)} 条, {'更新' if found else '新增'} {item_id})"
+        )
+        files.append(str(out_json.resolve()))
+
+        existing_version = 0
+        if out_json.exists():
+            try:
+                existing_version = len(existing)
+            except Exception:
+                pass
+        new_version = existing_version + 1
+        self._update_manifest(
+            out_p,
+            module_name,
+            new_version,
+            http_base,
+            f"{http_base}/{sub_dir_name}/{json_name}",
+            log,
+        )
+        files.append(str((out_p / "manifest.json").resolve()))
+        return {
+            "summary": f"{len(images)} 张 -> {item_id} ({output_mode})",
+            "files": files,
+        }
+
+    def _update_manifest(self, out_p, module_name, version, http_base, url, log):
+        manifest = out_p / "manifest.json"
+        if not manifest.exists():
+            return None
+        try:
+            mj = json.loads(manifest.read_text(encoding="utf-8"))
+            if "modules" not in mj:
+                mj["modules"] = {}
+            if module_name not in mj["modules"]:
+                mj["modules"][module_name] = {}
+            mj["modules"][module_name]["url"] = url
+            mj["modules"][module_name]["version"] = version
+            import datetime as dt
+
+            mj["updatedAt"] = (
+                dt.datetime.now(dt.timezone.utc).isoformat().replace("+00:00", "Z")
+            )
+            tmp = manifest.with_suffix(".json.tmp")
+            tmp.write_text(
+                json.dumps(mj, ensure_ascii=False, indent=2), encoding="utf-8"
+            )
+            tmp.replace(manifest)
+            log(f"manifest.json {module_name}.version -> {version}")
+            return f"{module_name}.version -> {version}"
+        except Exception as e:
+            log(f"manifest update failed: {e}", "warn")
+            return None
+
     def _handle_export_main(self, data):
         src = (data.get("srcDir") or data.get("dir") or "").strip()
         out = (data.get("outDir") or data.get("out") or "").strip()
-        http_base = (data.get("httpBase") or data.get("base") or "http://192.168.1.118/data/www/game/test").strip().rstrip("/")
+        http_base = (
+            (
+                data.get("httpBase")
+                or data.get("base")
+                or "http://192.168.1.118/data/www/game/test"
+            )
+            .strip()
+            .rstrip("/")
+        )
         version = data.get("version")
         try:
             version = int(version) if version not in (None, "") else 0
@@ -614,8 +1240,13 @@ class Handler(BaseHTTPRequestHandler):
 
         payload = {
             "version": version,
-            "updatedAt": __import__("datetime").datetime.now(__import__("datetime").timezone.utc).isoformat().replace("+00:00", "Z"),
-            "levels": [{k: v for k, v in lv.items() if not k.startswith("_")} for lv in levels],
+            "updatedAt": __import__("datetime")
+            .datetime.now(__import__("datetime").timezone.utc)
+            .isoformat()
+            .replace("+00:00", "Z"),
+            "levels": [
+                {k: v for k, v in lv.items() if not k.startswith("_")} for lv in levels
+            ],
         }
 
         # ensure out dirs
@@ -626,7 +1257,9 @@ class Handler(BaseHTTPRequestHandler):
         # write main.json atomically
         main_json = out_p / "main.json"
         tmp = main_json.with_suffix(".json.tmp")
-        tmp.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+        tmp.write_text(
+            json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8"
+        )
         tmp.replace(main_json)
 
         # copy images
@@ -654,27 +1287,35 @@ class Handler(BaseHTTPRequestHandler):
                     mj["modules"]["main"]["url"] = f"{http_base}/main.json"
                     mj["updatedAt"] = payload["updatedAt"]
                     tmp2 = manifest.with_suffix(".json.tmp")
-                    tmp2.write_text(json.dumps(mj, ensure_ascii=False, indent=2), encoding="utf-8")
+                    tmp2.write_text(
+                        json.dumps(mj, ensure_ascii=False, indent=2), encoding="utf-8"
+                    )
                     tmp2.replace(manifest)
                     manifest_note = f"manifest.json main.version -> {version}"
             except Exception as e:
                 manifest_note = f"manifest update failed: {e}"
 
-        self._json({
-            "ok": True,
-            "mainJson": str(main_json.resolve()),
-            "version": version,
-            "total": len(levels),
-            "copied": copied,
-            "errors": errors,
-            "manifest": manifest_note,
-            "levelsPreview": payload["levels"][:3],
-        })
+        self._json(
+            {
+                "ok": True,
+                "mainJson": str(main_json.resolve()),
+                "version": version,
+                "total": len(levels),
+                "copied": copied,
+                "errors": errors,
+                "manifest": manifest_note,
+                "levelsPreview": payload["levels"][:3],
+            }
+        )
 
     def _handle_export_events(self, data):
         # Minimal stub for prototype: create events.json with provided events
         out = (data.get("outDir") or "").strip()
-        http_base = (data.get("httpBase") or "http://192.168.1.118/data/www/game/test").strip().rstrip("/")
+        http_base = (
+            (data.get("httpBase") or "http://192.168.1.118/data/www/game/test")
+            .strip()
+            .rstrip("/")
+        )
         events = data.get("events") or []
         if not out:
             self._json({"error": "missing outDir"}, 400)
@@ -696,6 +1337,7 @@ class Handler(BaseHTTPRequestHandler):
                 if src_p.exists():
                     zip_path = events_dir / f"{eid}.zip"
                     import zipfile
+
                     with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
                         for p in scan_images(src_p):
                             zf.write(p, arcname=p.name)
@@ -711,7 +1353,9 @@ class Handler(BaseHTTPRequestHandler):
 
         out_json = events_dir / "events.json"
         tmp = out_json.with_suffix(".json.tmp")
-        tmp.write_text(json.dumps(events, ensure_ascii=False, indent=2), encoding="utf-8")
+        tmp.write_text(
+            json.dumps(events, ensure_ascii=False, indent=2), encoding="utf-8"
+        )
         tmp.replace(out_json)
 
         self._json({"ok": True, "file": str(out_json.resolve()), "count": len(events)})
@@ -731,6 +1375,7 @@ class Handler(BaseHTTPRequestHandler):
             return
         images = scan_images(src_p)
         import zipfile
+
         zip_path = out_p / f"{month}.zip"
         # Sort and rename to YYYYMMDD.webp sequentially
         images_sorted = sorted(images, key=lambda p: p.name.lower())
@@ -740,6 +1385,7 @@ class Handler(BaseHTTPRequestHandler):
                 dd = f"{idx:02d}"
                 # If image already named YYYYMMDD, keep it
                 import re
+
                 m = re.match(r"^(\d{8})\.", p.name)
                 if m:
                     arc = p.name
@@ -751,15 +1397,26 @@ class Handler(BaseHTTPRequestHandler):
                     arc = f"{month}{dd}{ext}"
                 zf.write(p, arcname=arc)
 
-        self._json({"ok": True, "zip": str(zip_path.resolve()), "count": len(images_sorted)})
+        self._json(
+            {"ok": True, "zip": str(zip_path.resolve()), "count": len(images_sorted)}
+        )
 
 
 def main():
     ap = argparse.ArgumentParser(description="Content Packaging Studio")
     ap.add_argument("--port", type=int, default=5173, help="port (default 5173)")
-    ap.add_argument("--host", default="127.0.0.1", help="bind host (default 127.0.0.1, use 0.0.0.0 to expose)")
+    ap.add_argument(
+        "--host",
+        default="127.0.0.1",
+        help="bind host (default 127.0.0.1, use 0.0.0.0 to expose)",
+    )
     ap.add_argument("--open", action="store_true", help="auto open browser")
-    ap.add_argument("--dir", type=Path, default=Path(__file__).parent, help="serve dir (default scripts/packaging)")
+    ap.add_argument(
+        "--dir",
+        type=Path,
+        default=Path(__file__).parent,
+        help="serve dir (default scripts/packaging)",
+    )
     args = ap.parse_args()
 
     Handler.serve_dir = args.dir.resolve()

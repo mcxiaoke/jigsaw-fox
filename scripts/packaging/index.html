@@ -142,6 +142,31 @@ input,select,textarea{font:inherit}
 .log{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:12px;background:#0f172a;color:#cbd5e1;border-radius:10px;padding:10px;max-height:160px;overflow:auto;white-space:pre-wrap}
 .empty{padding:28px;text-align:center;color:var(--muted)}
 .empty b{color:var(--text)}
+
+/* export modal */
+.modal-overlay{position:fixed;inset:0;background:rgba(15,23,42,.55);backdrop-filter:blur(3px);z-index:50;display:none;align-items:center;justify-content:center}
+.modal-overlay.show{display:flex}
+.modal{background:var(--card);border-radius:16px;width:min(760px,94vw);max-height:90vh;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 24px 80px rgba(0,0,0,.25)}
+.modal-head{padding:16px 20px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:12px}
+.modal-head h2{margin:0;font-size:16px;flex:1}
+.modal-body{padding:16px 20px;overflow:auto;display:flex;flex-direction:column;gap:14px}
+.modal-foot{padding:12px 20px;border-top:1px solid var(--line);display:flex;gap:8px;align-items:center}
+.export-tabs{display:flex;gap:0;border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.export-tabs button{border:0;background:transparent;padding:8px 16px;cursor:pointer;font-size:13px;font-weight:600;color:var(--muted);border-right:1px solid var(--line)}
+.export-tabs button:last-child{border-right:0}
+.export-tabs button.active{background:var(--accent);color:#fff}
+.export-field{display:none}
+.export-field.show{display:flex;flex-direction:column;gap:8px}
+.export-row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.export-row label{display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--muted);font-weight:600}
+.export-row label input,.export-row label select{border:1px solid var(--line);border-radius:8px;padding:8px 10px;outline:none;font-size:13px}
+.export-row label input:focus,.export-row label select:focus{border-color:var(--accent)}
+.export-log{background:#0f172a;border-radius:10px;padding:10px;font-family:ui-monospace,Consolas,monospace;font-size:12px;color:#cbd5e1;max-height:180px;overflow:auto;white-space:pre-wrap;display:none}
+.export-log.show{display:block}
+.export-log .ll-info{color:#93c5fd}
+.export-log .ll-ok{color:#86efac}
+.export-log .ll-warn{color:#fcd34d}
+.export-log .ll-err{color:#fca5a5}
 </style>
 </head>
 <body>
@@ -155,7 +180,7 @@ input,select,textarea{font:inherit}
     </div>
     <div class="header-actions">
       <button class="btn" id="btnSave">💾 保存 tags.json</button>
-      <button class="btn primary" id="btnExport">📦 导出 main.json</button>
+      <button class="btn primary" id="btnExport">📦 导出</button>
       <button class="btn" id="btnCopyLog">复制日志</button>
     </div>
   </div>
@@ -225,8 +250,6 @@ input,select,textarea{font:inherit}
           <span class="hint" id="leftScanInfo" style="margin-left:6px"></span>
           <div class="tag-bar-actions">
             <button class="btn small" id="btnRefresh">刷新</button>
-            <button class="btn small" id="btnExportDaily">📅 导出 daily ZIP</button>
-            <button class="btn small" id="btnExportEvents">🎉 导出 events.json</button>
           </div>
         </div>
         <div class="tag-chips" id="tagList"></div>
@@ -303,6 +326,16 @@ function toast(msg){ log(msg); }
 function effectiveTag(r){
   if(!r) return "Others";
   return (r.correctedTag && r.correctedTag.trim()) ? r.correctedTag.trim() : (r.tag || "Others");
+}
+function guessTagFromPath(imgPath){
+  const parts = imgPath.replace(/\\/g,"/").split("/");
+  if(parts.length < 2) return null;
+  const dirName = parts[parts.length - 2].trim();
+  if(!dirName) return null;
+  const match = TAGS.find(t => t.toLowerCase() === dirName.toLowerCase());
+  if(match) return match;
+  for(const en in ZH) if(dirName === ZH[en]) return en;
+  return null;
 }
 function isReviewed(r){
   if(!r) return true;
@@ -382,9 +415,7 @@ function initStatic(){
   $("btnScan").addEventListener("click", doScan);
   $("btnRefresh").addEventListener("click", doScan);
   $("btnSave").addEventListener("click", doSave);
-  $("btnExport").addEventListener("click", doExportMain);
-  $("btnExportDaily").addEventListener("click", doExportDaily);
-  $("btnExportEvents").addEventListener("click", ()=> toast("events 导出请在下方输入活动信息后调用 /api/export/events（原型仅支持 main）"));
+  $("btnExport").addEventListener("click", openExportModal);
   // 批量选择操作 — 新增 全选/取消全选/反选
   $("btnSelectAll").addEventListener("click", ()=>{
     filtered().forEach(i=> state.selected.add(i.path));
@@ -427,6 +458,14 @@ function initStatic(){
   });
   $("btnCopyLog").addEventListener("click", ()=>{
     navigator.clipboard.writeText($("log").textContent||""); toast("日志已复制");
+  });
+  // export modal
+  $("btnDoExport").addEventListener("click", doExport);
+  $("btnCancelExport").addEventListener("click", closeExportModal);
+  $("btnCloseExport").addEventListener("click", closeExportModal);
+  $("btnSaveLog").addEventListener("click", saveExportLog);
+  $("exportTabs").querySelectorAll("button").forEach(b=>{
+    b.addEventListener("click", ()=> switchExportType(b.dataset.type));
   });
   $("q").addEventListener("input", e=>{ state.q=e.target.value.trim().toLowerCase(); renderGrid(); renderStats(); });
   $("filterTag").addEventListener("change", e=>{ state.filterTag=e.target.value; renderGrid(); renderStats(); });
@@ -510,6 +549,16 @@ function renderStats(){
   if(!entries.length){
     list.innerHTML=`<div class="hint" style="padding:4px">暂无统计，扫描后显示</div>`;
   } else {
+    // "全部" chip — clears tag filter
+    const allChip=document.createElement("button");
+    allChip.className="tag-chip" + (state.filterTag==="" ? " active":"");
+    allChip.innerHTML=`<b>全部</b> <span class="zh">All</span> <span class="cnt">${total}</span>`;
+    allChip.addEventListener("click", ()=>{
+      state.filterTag="";
+      $("filterTag").value="";
+      renderGrid(); renderStats();
+    });
+    list.appendChild(allChip);
     for(const [tag,cnt] of entries){
       const chip=document.createElement("button");
       chip.className="tag-chip" + (state.filterTag===tag ? " active":"");
@@ -656,9 +705,20 @@ async function doScan(){
     state.tagFile = j.tagFile || null;
     state.records = j.tagRecords || [];
     state.recordMap.clear();
+    let autoCount = 0;
     if(!state.records.length){
       for(const img of state.images){
-        state.recordMap.set(img.path, {path:img.path,file:img.file,tag:"Others",confidence:0,correctedTag:null,review_required:true,subject:"",scene:"",reason:"未打标"});
+        const guessed = guessTagFromPath(img.path);
+        if(guessed) autoCount++;
+        state.recordMap.set(img.path, {
+          path:img.path, file:img.file,
+          tag: guessed || "Others",
+          confidence: guessed ? 1.0 : 0,
+          correctedTag: null,
+          review_required: !guessed,
+          subject:"", scene:"",
+          reason: guessed ? "目录自动识别: "+guessed : "未打标"
+        });
       }
     } else {
       for(const rec of state.records){
@@ -667,14 +727,37 @@ async function doScan(){
       }
       for(const img of state.images){
         if(!state.recordMap.has(img.path)){
-          state.recordMap.set(img.path, {path:img.path,file:img.file,tag:"Others",confidence:0,correctedTag:null,review_required:true,subject:"",scene:"",reason:"新增未打标"});
+          const guessed = guessTagFromPath(img.path);
+          if(guessed) autoCount++;
+          state.recordMap.set(img.path, {
+            path:img.path, file:img.file,
+            tag: guessed || "Others",
+            confidence: guessed ? 1.0 : 0,
+            correctedTag: null,
+            review_required: !guessed,
+            subject:"", scene:"",
+            reason: guessed ? "目录自动识别: "+guessed : "新增未打标"
+          });
+        } else {
+          // 对已有记录中 tag 为 Others 且未校正的，尝试目录自动识别
+          const rec = state.recordMap.get(img.path);
+          if(rec && !rec.correctedTag && (!rec.tag || rec.tag === "Others")){
+            const guessed = guessTagFromPath(img.path);
+            if(guessed){
+              rec.tag = guessed;
+              rec.confidence = 1.0;
+              rec.reason = "目录自动识别: "+guessed;
+              rec.review_required = false;
+              autoCount++;
+            }
+          }
         }
       }
     }
     state.active = state.images[0]?.path || null;
     state.selected.clear();
     renderStats(); renderGrid(); renderDetail(); updateSelHint();
-    toast(`扫描完成: ${state.images.length} 张, tagFile=${state.tagFile||"无"}`);
+    toast(`扫描完成: ${state.images.length} 张, tagFile=${state.tagFile||"无"}, 目录自动识别 ${autoCount} 张`);
   }catch(e){ toast("扫描异常: "+e); console.error(e); }
 }
 
@@ -693,63 +776,208 @@ async function doSave(){
   }catch(e){ toast("保存异常: "+e); }
 }
 
-async function doExportMain(){
+// ── Export modal ──────────────────────────────────────────────
+let _exportLog = [];
+function openExportModal(){
+  _exportLog = [];
+  $("exportLog").classList.remove("show");
+  $("exportLog").textContent = "";
+  $("expHint").textContent = "";
+  // pre-fill from common fields
+  $("expVersion").value = $("version").value || "";
+  const now = new Date();
+  $("expMonth").value = String(now.getFullYear()) + String(now.getMonth()+1).padStart(2,"0");
+  switchExportType("main");
+  $("exportModal").classList.add("show");
+}
+function closeExportModal(){ $("exportModal").classList.remove("show"); }
+function switchExportType(t){
+  $("exportTabs").querySelectorAll("button").forEach(b=>{
+    b.classList.toggle("active", b.dataset.type===t);
+  });
+  // show/hide fields
+  const show = (id,on)=>{ const el=$(id); if(el) el.closest("label").style.display = on?"":"none"; };
+  show("expVersion", t==="main");
+  show("expMonth", t==="daily");
+  show("expItemId", t==="event"||t==="collection");
+  show("expTitle", t==="event"||t==="collection");
+  show("expDesc", t==="event"||t==="collection");
+  show("expOutputMode", t==="event"||t==="collection");
+  show("expStatus", t==="event");
+  show("expTime", t==="event");
+}
+function appendExportLog(msg, level){
+  if(!level) level="info";
+  _exportLog.push({t:new Date().toTimeString().slice(0,8), level, msg});
+  const el = $("exportLog");
+  el.classList.add("show");
+  const line = document.createElement("div");
+  line.className = "ll-"+level;
+  line.textContent = `[${level.toUpperCase()}] ${msg}`;
+  el.appendChild(line);
+  el.scrollTop = el.scrollHeight;
+}
+async function doExport(){
   const src = $("srcDir").value.trim();
   const out = $("outDir").value.trim();
   const base = $("httpBase").value.trim();
-  const ver = $("version").value.trim();
-  if(!src || !out){ toast("请填写源目录和输出目录"); return; }
-  let others=0;
-  for(const r of state.recordMap.values()){
-    const eff=effectiveTag(r);
-    if(eff==="Others") others++;
+  if(!src || !out){ appendExportLog("请填写源目录和输出目录", "err"); return; }
+  const type = $("exportTabs").querySelector("button.active").dataset.type;
+  const fmt = $("expFormat").value;
+  const rename = $("expRename").value;
+  const body = { type, srcDir:src, outDir:out, httpBase:base, format:fmt, rename };
+  if(type==="main"){
+    const v = $("expVersion").value.trim();
+    if(v) body.version = parseInt(v);
+    // include tags records
+    const records = [];
+    for(const r of state.recordMap.values()){
+      records.push({path:r.path, tag:effectiveTag(r), correctedTag:r.correctedTag||null,
+        confidence:r.confidence, reviewRequired:r.reviewRequired, reason:r.reason||""});
+    }
+    body.tagsRecords = records;
+  } else if(type==="daily"){
+    const m = $("expMonth").value.trim();
+    if(!/^\d{6}$/.test(m)){ appendExportLog("month 必须为 YYYYMM 格式", "err"); return; }
+    body.month = m;
+  } else if(type==="event"||type==="collection"){
+    const id = $("expItemId").value.trim();
+    if(!id){ appendExportLog(`请填写 ${type==="event"?"eventId":"collectionId"}`, "err"); return; }
+    body.title = $("expTitle").value.trim() || id;
+    body.description = $("expDesc").value.trim();
+    body.outputMode = $("expOutputMode").value;
+    if(type==="event"){
+      body.eventId = id;
+      body.status = $("expStatus").value.trim() || "active";
+      const tm = $("expTime").value.trim();
+      if(tm){
+        const parts = tm.split("~").map(s=>s.trim()).filter(Boolean);
+        if(parts[0]) body.startTime = parts[0];
+        if(parts[1]) body.endTime = parts[1];
+      }
+    } else {
+      body.collectionId = id;
+    }
   }
-  if(others>0){
-    if(!confirm(`仍有 ${others} 张为 Others，确认导出？`)) return;
-  }
-  toast(`导出 main.json 中... src=${src} out=${out}`);
+  $("btnDoExport").disabled = true;
+  appendExportLog(`开始导出 ${type}...`, "info");
   try{
-    const res = await fetch("/api/export/main", {
+    const res = await fetch("/api/export", {
       method:"POST", headers:{"Content-Type":"application/json"},
-      body: JSON.stringify({srcDir:src, outDir:out, httpBase:base, version: ver})
+      body: JSON.stringify(body)
     });
-    const j=await res.json();
-    if(!res.ok){ toast(`导出失败: ${j.error}`); return; }
-    toast(`导出成功: version=${j.version} total=${j.total} copied=${j.copied} -> ${j.mainJson} ${j.manifest? "("+j.manifest+")":""}`);
-    if(j.errors && j.errors.length) toast("部分复制失败: "+j.errors.slice(0,3).join("; "));
-  }catch(e){ toast("导出异常: "+e); }
-}
-
-async function doExportDaily(){
-  const src = $("srcDir").value.trim();
-  const out = $("outDir").value.trim();
-  if(!src || !out){ toast("请填写源目录和输出目录"); return; }
-  const month = prompt("请输入月份 YYYYMM，例如 202609", new Date().toISOString().slice(0,7).replace("-",""));
-  if(!month) return;
-  try{
-    const res = await fetch("/api/export/daily", {
-      method:"POST", headers:{"Content-Type":"application/json"},
-      body: JSON.stringify({srcDir:src, outDir:out, month})
-    });
-    const j=await res.json();
-    if(!res.ok){ toast(`daily导出失败: ${j.error}`); return; }
-    toast(`daily导出成功: ${j.count} 张 -> ${j.zip}`);
-  }catch(e){ toast("daily异常: "+e); }
-}
-
-function doBulk(){
-  const tag=$("bulkTag").value;
-  if(!tag){ toast("请选择批量标签"); return; }
-  if(!state.selected.size){ toast("请先在网格中多选图片（切换到多选模式后直接点图，或单选模式用 Ctrl+点）"); return; }
-  let n=0;
-  for(const p of state.selected){
-    const r=state.recordMap.get(p);
-    if(r){ r.correctedTag=tag; n++; }
+    const j = await res.json();
+    if(j.logs && j.logs.length){
+      for(const l of j.logs){ appendExportLog(l.msg, l.level); }
+    }
+    if(!res.ok || !j.ok){
+      appendExportLog(`导出失败: ${j.error||res.statusText}`, "err");
+    } else {
+      appendExportLog(`导出完成: ${j.summary||"ok"}`, "ok");
+      if(j.files && j.files.length){
+        j.files.forEach(f=> appendExportLog(`  -> ${f}`, "info"));
+      }
+    }
+  }catch(e){
+    appendExportLog("导出异常: "+e, "err");
+  } finally {
+    $("btnDoExport").disabled = false;
   }
-  toast(`批量已设 ${n} 张为 ${tag}`);
-  renderGrid(); renderDetail(); renderStats();
 }
+function saveExportLog(){
+  const text = _exportLog.map(l=>`[${l.t}] ${l.level.toUpperCase()}: ${l.msg}`).join("\n");
+  if(!text){ toast("日志为空"); return; }
+  const blob = new Blob([text], {type:"text/plain"});
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = `export-${new Date().toISOString().slice(0,10)}.log`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+  toast("日志已保存");
+}
+</script>
 
+ <!-- export modal -->
+<div class="modal-overlay" id="exportModal">
+  <div class="modal">
+    <div class="modal-head">
+      <h2>📦 导出</h2>
+      <div class="export-tabs" id="exportTabs">
+        <button data-type="main" class="active">Main</button>
+        <button data-type="daily">Daily</button>
+        <button data-type="event">Event</button>
+        <button data-type="collection">Collection</button>
+      </div>
+      <button class="btn small" id="btnCloseExport">✕</button>
+    </div>
+    <div class="modal-body">
+      <!-- common fields -->
+      <div class="export-row">
+        <label>格式转换
+          <select id="expFormat">
+            <option value="original">不转换（原图）</option>
+            <option value="webp">WebP (quality 85)</option>
+            <option value="jpg">JPG (quality 90)</option>
+            <option value="png">PNG</option>
+          </select>
+        </label>
+        <label>重命名规则
+          <select id="expRename">
+            <option value="none">保持原名</option>
+            <option value="sequence">序号 (001, 002...)</option>
+            <option value="date">日期 (YYYYMMDD)</option>
+          </select>
+        </label>
+      </div>
+      <div class="export-row">
+        <label>version (main 专用)
+          <input id="expVersion" type="number" placeholder="留空自动自增" />
+        </label>
+        <label>month YYYYMM (daily 专用)
+          <input id="expMonth" placeholder="202609" />
+        </label>
+      </div>
+      <div class="export-row">
+        <label>ID (event/collection 专用)
+          <input id="expItemId" placeholder="如 halloween2026" />
+        </label>
+        <label>title (event/collection)
+          <input id="expTitle" placeholder="活动标题" />
+        </label>
+      </div>
+      <div class="export-row">
+        <label>description (event/collection)
+          <input id="expDesc" placeholder="描述（可选）" />
+        </label>
+        <label>输出模式 (event/collection)
+          <select id="expOutputMode">
+            <option value="zip">ZIP 打包</option>
+            <option value="array">Array 散列</option>
+          </select>
+        </label>
+      </div>
+      <div class="export-row">
+        <label>status (event)
+          <input id="expStatus" placeholder="active" value="active" />
+        </label>
+        <label>startTime / endTime (event)
+          <input id="expTime" placeholder="2026-10-01 ~ 2026-10-31" />
+        </label>
+      </div>
+      <!-- log area -->
+      <div class="export-log" id="exportLog"></div>
+    </div>
+    <div class="modal-foot">
+      <span class="hint" id="expHint"></span>
+      <span class="grow" style="flex:1"></span>
+      <button class="btn small" id="btnSaveLog">💾 保存日志</button>
+      <button class="btn" id="btnCancelExport">取消</button>
+      <button class="btn primary" id="btnDoExport">开始导出</button>
+    </div>
+  </div>
+</div>
+
+<script>
 initStatic();
 </script>
 </body>
