@@ -15,6 +15,18 @@
         <div class="logo-icon">🧩</div>
         <span>Content Studio</span>
         <span class="brand-sub">拼图内容打包工作台 v2.3</span>
+
+        <!-- 服务端连接状态指示器 -->
+        <div
+          class="server-status-badge"
+          :class="serverOnline ? 'online' : 'offline'"
+          :title="serverOnline ? '本地服务端运行正常 (点击立即检测)' : '服务端已断开！请检查后台 python studio/server.py (点击重试)'"
+          @click="checkServerHealth(true)"
+        >
+          <span class="status-dot"></span>
+          <span class="status-text">{{ serverOnline ? '服务在线' : '服务已断开' }}</span>
+          <span v-if="!serverOnline" class="reconnect-hint">点击重试</span>
+        </div>
       </div>
 
       <div class="header-actions">
@@ -35,6 +47,18 @@
         </button>
       </div>
     </header>
+
+    <!-- 服务端离线警示通知条 -->
+    <div v-if="!serverOnline" class="server-offline-banner">
+      <div class="banner-content">
+        <span>⚠</span>
+        <span><b>服务端已断开连接</b>：图片缩略图及功能暂不可用，请检查命令行 <code>python studio/server.py</code> 是否处于运行状态。</span>
+      </div>
+      <button class="btn-retry" :disabled="isCheckingServer" @click="checkServerHealth(true)">
+        <span v-if="isCheckingServer">🔄 检测中...</span>
+        <span v-else>🔄 立即重试连接</span>
+      </button>
+    </div>
 
     <!-- 配置栏 -->
     <section class="config-bar">
@@ -213,6 +237,7 @@
               :src="getThumbUrl(item.path, cardZoom * 2)"
               loading="lazy"
               :alt="item.file"
+              @error="handleImageError"
             />
           </div>
 
@@ -370,6 +395,7 @@
             class="viewer-img"
             :src="getFileUrl(currentViewerItem.path)"
             :alt="currentViewerItem.file"
+            @error="handleImageError"
           />
           <button class="viewer-nav-btn next" @click="nextViewer">❯</button>
         </div>

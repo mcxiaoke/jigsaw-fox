@@ -2,6 +2,24 @@
  * studio.static.js.api — REST API 请求客户端
  */
 
+export async function checkHealth(timeoutMs = 2500) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const res = await fetch("/api/health?t=" + Date.now(), {
+      signal: controller.signal,
+      cache: "no-store",
+    });
+    clearTimeout(timer);
+    if (!res.ok) return false;
+    const data = await res.json();
+    return Boolean(data && data.ok);
+  } catch (_) {
+    clearTimeout(timer);
+    return false;
+  }
+}
+
 export async function fetchTaxonomy() {
   const res = await fetch("/api/taxonomy");
   if (!res.ok) throw new Error("获取分类体系元数据失败");
@@ -66,11 +84,6 @@ export function getFileUrl(absOrRelPath, baseDir = "") {
   }
   const dirParam = baseDir ? `&dir=${encodeURIComponent(baseDir)}` : "";
   return `/api/file?path=${encodeURIComponent(full)}${dirParam}`;
-}
-
-export async function checkHealth() {
-  const res = await fetch("/api/health");
-  return await res.json();
 }
 
 function jsonStringifySafe(obj) {

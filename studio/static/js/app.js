@@ -526,9 +526,47 @@ createApp({
     };
 
     // -----------------------------------------------------------------------
+    // 服务端连通状态与心跳监测
+    // -----------------------------------------------------------------------
+    const serverOnline = ref(true);
+    const isCheckingServer = ref(false);
+    const thumbEpoch = ref(0);
+
+    const checkServerHealth = async (interactive = false) => {
+      if (isCheckingServer.value) return;
+      isCheckingServer.value = true;
+      try {
+        const isUp = await checkHealth(2500);
+        const wasOnline = serverOnline.value;
+        serverOnline.value = isUp;
+        if (!wasOnline && isUp) {
+          showToast("服务端连接已恢复！");
+          thumbEpoch.value = Date.now();
+        } else if (wasOnline && !isUp) {
+          showToast("警告：与本地服务端断开连接！");
+        } else if (interactive && isUp) {
+          showToast("服务端运行正常 (连接畅通)");
+        }
+      } finally {
+        isCheckingServer.value = false;
+      }
+    };
+
+    const handleImageError = () => {
+      if (serverOnline.value) {
+        checkServerHealth();
+      }
+    };
+
+    // -----------------------------------------------------------------------
     // 键盘快捷键监听
     // -----------------------------------------------------------------------
     onMounted(async () => {
+      checkServerHealth();
+      setInterval(() => {
+        checkServerHealth();
+      }, 3000);
+
       try {
         const tax = await fetchTaxonomy();
         mainTags.value = tax.main_tags || tax.tags || tax.catalogs || [];
@@ -570,10 +608,18 @@ createApp({
       });
     });
 
-    const thumbUrl = (path, size = 360) => getThumbUrl(path, size, srcDir.value);
+    const thumbUrl = (path, size = 360) => {
+      const base = getThumbUrl(path, size, srcDir.value);
+      return thumbEpoch.value ? `${base}&_e=${thumbEpoch.value}` : base;
+    };
     const fileUrl = (path) => getFileUrl(path, srcDir.value);
 
     return {
+      serverOnline,
+      isCheckingServer,
+      checkServerHealth,
+      handleImageError,
+      viewerIndex,
       mainTags,
       mainTagsRow1,
       mainTagsRow2,
