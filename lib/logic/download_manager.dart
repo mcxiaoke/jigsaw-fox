@@ -48,7 +48,7 @@ class DownloadManager {
     try {
       // 先收集后批量删（§5.4：box.keys 迭代中 delete 属未定义行为）
       final keys = _box.keys
-          .cast<String>()
+          .whereType<String>()
           .where((k) => k.startsWith(_keyPrefix))
           .toList();
       final list = <DownloadedImageItem>[];
@@ -238,26 +238,38 @@ class DownloadManager {
             : 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
       };
 
-      Response<List<int>> response;
+      // P14 流式下载：直接落盘避免 2× RAM
+      final partFile = File('$filePath.part');
+      if (await partFile.exists()) {
+        try {
+          await partFile.delete();
+        } catch (_) {}
+      }
+      Future<void> doDownload(Map<String, dynamic> hdrs) async {
+        await _dio.download(
+          sourceUrl,
+          partFile.path,
+          options: Options(headers: hdrs),
+          onReceiveProgress: (received, total) {
+            if (total > 0 && onProgress != null) {
+              onProgress(received / total);
+            } else if (onProgress != null && received % (512 * 1024) == 0) {
+              // chunked 场景 progress 兜底
+            }
+          },
+        );
+      }
+
       try {
         AppLogger.download.info(
           'Dio requesting ${AppLogger.sanitizeUrl(sourceUrl)}',
         );
-        response = await _dio.get<List<int>>(
-          sourceUrl,
-          options: Options(responseType: ResponseType.bytes, headers: headers),
-          onReceiveProgress: (received, total) {
-            if (total > 0 && onProgress != null) {
-              onProgress(received / total);
-            }
-          },
-        );
+        await doDownload(headers);
       } on DioException catch (dioErr) {
         AppLogger.download.warning(
           'DioError status=${dioErr.response?.statusCode} url=${AppLogger.sanitizeUrl(sourceUrl)}',
           dioErr,
         );
-        // If 403 or error occurred, retry once with desktop browser headers and referer
         if (dioErr.response?.statusCode == 403 ||
             dioErr.response?.statusCode == 401) {
           AppLogger.download.info(
@@ -271,24 +283,36 @@ class DownloadManager {
             if (refererUrl != null && refererUrl.isNotEmpty)
               'Referer': refererUrl,
           };
-          response = await _dio.get<List<int>>(
-            sourceUrl,
-            options: Options(
-              responseType: ResponseType.bytes,
-              headers: retryHeaders,
-            ),
-          );
+          // 清理残损 part
+          if (await partFile.exists()) {
+            try {
+              await partFile.delete();
+            } catch (_) {}
+          }
+          await doDownload(retryHeaders);
         } else {
           rethrow;
         }
       }
 
-      final data = response.data;
-      if (data == null || data.isEmpty) {
+      if (!await partFile.exists() || await partFile.length() == 0) {
         throw Exception('下载数据为空');
       }
-      rawBytes = Uint8List.fromList(data);
-      await targetFile.writeAsBytes(rawBytes);
+      const maxImageBytes = 50 * 1024 * 1024;
+      final partLen = await partFile.length();
+      if (partLen > maxImageBytes) {
+        try {
+          await partFile.delete();
+        } catch (_) {}
+        throw Exception('图片过大 $partLen > $maxImageBytes');
+      }
+      if (await targetFile.exists()) {
+        try {
+          await targetFile.delete();
+        } catch (_) {}
+      }
+      await partFile.rename(targetFile.path);
+      rawBytes = await targetFile.readAsBytes();
       AppLogger.download.info(
         'DioSuccess downloaded ${rawBytes.length} bytes to ${AppLogger.sanitizePath(filePath)}',
       );
@@ -397,7 +421,7 @@ class DownloadManager {
     }
     // 先收集后批量删（§5.4）
     final keys = _box.keys
-        .cast<String>()
+        .whereType<String>()
         .where((k) => k.startsWith(_keyPrefix))
         .toList();
     for (final key in keys) {
@@ -441,7 +465,7 @@ class DownloadManager {
     // ③ 清 box keys + itemsNotifier + _initialized 标志
     try {
       final keys = _box.keys
-          .cast<String>()
+          .whereType<String>()
           .where((k) => k.startsWith(_keyPrefix))
           .toList();
       for (final key in keys) {

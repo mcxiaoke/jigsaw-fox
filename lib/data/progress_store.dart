@@ -200,7 +200,7 @@ class ProgressStore {
     if (_index != null) return; // 幂等守卫（等价原 `if (_prefs != null) return`）
     final map = <String, LevelProgress>{};
     try {
-      for (final key in _box.keys.cast<String>()) {
+      for (final key in _box.keys.whereType<String>()) {
         final raw = _box.get(key) as String?;
         if (raw == null) continue;
         try {

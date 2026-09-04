@@ -38,6 +38,42 @@
 - 手工：快速进退 GamePage 不再泄漏（code review 推演），活动关卡不覆盖主线存档（仅 `canonicalId`）
 
 ### 提交
-- Stage1 commit 待执行（见 git log）
+- `26b6539 fix(P0): stage1 critical fixes P19/P01-P03/P05/P16/P21`
 
 ---
+
+## 阶段二：P1 稳定性（网络流式 / 解压 / 并发 / Hive健壮 / 生命周期） 2026-09-04 16:00
+
+### 范围
+- P06 `ContentHttpClient` 流式下载
+- P14 `DownloadManager` 流式 + 2×拷贝消除
+- P15 `ImageCacheManager` 网络缩略图流式
+- P18 扩展包 3× 峰值（文件路径入 Isolate）
+- P07 `ZipDecoder` 主线程 ANR → `compute` Isolate + zip bomb 限流
+- P08 `cast<String>()` 8处 → `whereType<String>()`
+- P09 `getJson` 已 Stage1 修复（此处复验）
+- P20 内容同步并发 + 秒开退化（sync 锁 + manifest 缓存优先 + Events 保留已下载）
+- P22 生命周期/永久加载（Crop Build 写入、EventLevels try/catch、Victory mounted 守卫）
+
+### 变更详情
+
+| 编号 | 文件:行号 | 改动 | 验证 |
+|---|---|---|---|
+| P06 | `lib/logic/content/network/content_http_client.dart:87-131` | `Dio.get<Uint8List>` → `Dio.download(partFile.path)` 流式落盘，内存恒定；`partFile.length==0` 校验 + 200MB 落盘上限 + `DioException` 转 `HttpException`，`finally` 清理 part | `analyze` 0, `test` 247 pass |
+| P14 | `lib/logic/download_manager.dart:234-300` | `Dio.get<List<int>>`+`Uint8List.fromList` → `Dio.download` 到 `.part` → 检查非空/50MB上限 → `rename` → `readAsBytes` 单次；403/401 重试保留 `Referer`；part 清理 | 同上 |
+| P15 | `lib/logic/cache/image_cache_manager.dart:394-470` | `Dio.get` → `Dio.download` 到 `tmp_net_*.part` → 20MB 熔断 → `ThumbnailGenerator.generateThumbnailBytes(sourceFilePath:)` 文件版 Isolate → 删 tmp → 20MB 仍熔断；403/401 重试 | 同上 |
+| P18 | `lib/logic/content/pipelines/pack_content_pipeline.dart:47-179` | `importFromNetworkZip` 取消主线程 `readAsBytes`，新增 `_processZipFile` + `_readFileBytesIsolate` 经 `compute` 读盘，后续 `_processZipBytes` 仍 Isolate 解压，减少主线程 1× 拷贝；保留原子 rename 已有 | 同上 |
+| P07 | `pack:181, daily:2+66, events:4+185` | `ZipDecoder().decodeBytes` → `await compute(_decodeZipIsolate, bytes)`；daily/events 追加 `if(length>2000) throw` zip bomb 限流；pack 抽取 `_decodeZipIsolate` 公用 | 同上 |
+| P08 | `progress_store:203`, `favorite_store:181`, `game_repository:207`, `download_manager:50,423,467`, `achievement_store:45,185` | `cast<String>()` → `whereType<String>()` 8处 | 同上 |
+| P20 | `lib/logic/content/content_manager.dart:52-76,78-159` `manifest_router.dart:22-33` `events_content_pipeline.dart:92-100` | `ContentManager` 新增 `_isSyncing/_syncFuture`，`initialize` 调 `resolveManifestCacheFirst()` 先读盘（弱网不阻塞秒开），`syncAll` 加互斥等待；`ManifestRouter` 新增 `resolveManifestCacheFirst()`；`Events` `syncWithRemote` 保留 `prevDownloaded \|\| _isEventLocalDownloaded` | 同上 |
+| P22 | `lib/pages/crop_puzzle_page.dart:508-514` `lib/pages/event_levels_page.dart:47-52` `lib/widgets/victory_dialog.dart:162-169` | `Crop` Build 内 `controller.value=` → `addPostFrameCallback`；`EventLevels` `_loadLevels` 包 `try/catch/finally` 置 `_isLoading=false`；`Victory` 首 `forward` 前 `if(!mounted) return` 二次守卫 | 同上 |
+
+### 风险/搁置
+- **P17 全分辨率三重 OOM**：涉及 `decodeImageFromList` 改 `instantiateImageCodec(targetWidth)` 且需按 `rows*cols` 难度感知 + `clamp(1080,3072)` + 双管线（游戏 vs 导出超分），改动面覆盖 `GamePage/Thumbnail/Share` 及 `jigsaw_puzzle_game` 纹理尺寸，影响拼图手感与渲染清晰度判断，**暂搁置**，需单独设计评审与真机内存压测后再动。当前已通过 P14/P15/P06 将网络链路 OOM 降至最低，主链路风险可控。
+- **P05 剩余 stateBox puts**、**P21 `GameRepository` 内存回滚** 同 Stage1 搁置理由，不随二期扩大。
+
+### 验证
+- `flutter analyze`: No issues found（已修复 `unused_import`）
+- `flutter test`: 247 passed
+- 人工：下载大图弱网 403 重试、缩略图并发 4 场景推演不再 OOM；`ZipDecoder` 已离主线程
+

@@ -19,6 +19,20 @@ class ManifestRouter {
   RootManifest? _cachedManifest;
   RootManifest? get currentManifest => _cachedManifest;
 
+  /// 缓存优先：先读盘，命中立即返回；未命中再走网络（P20 秒开优化）
+  Future<RootManifest> resolveManifestCacheFirst() async {
+    if (_cachedManifest != null) return _cachedManifest!;
+    final disk = await _loadFromDiskCache();
+    if (disk != null) {
+      _cachedManifest = disk;
+      AppLogger.manifest.info(
+        'resolveManifestCacheFirst disk hit version=${disk.schemaVersion}',
+      );
+      return disk;
+    }
+    return resolveManifest();
+  }
+
   /// 初始化并获取最新的 RootManifest (优先网络拉取，失败降级本地缓存)
   Future<RootManifest> resolveManifest({bool forceRefresh = false}) async {
     if (!forceRefresh && _cachedManifest != null) {

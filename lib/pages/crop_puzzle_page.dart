@@ -507,10 +507,13 @@ class _CropPuzzlePageState extends State<CropPuzzlePage> {
 
                     if (_needsResetMatrix && _decodedImage != null) {
                       _needsResetMatrix = false;
-                      _transformController.value = _getInitialMatrix(
-                        viewportSize,
-                        _decodedImage,
-                      );
+                      WidgetsBinding.instance.addPostFrameCallback((_) {
+                        if (!mounted) return;
+                        _transformController.value = _getInitialMatrix(
+                          viewportSize,
+                          _decodedImage,
+                        );
+                      });
                     }
 
                     final maxAllowedScale = _calculateMaxScale(

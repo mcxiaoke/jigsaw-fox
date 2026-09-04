@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 import 'package:archive/archive.dart';
+import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
 import '../models/canonical_id.dart';
 import '../models/puzzle_event_item.dart';
@@ -94,7 +95,11 @@ class EventsContentPipeline {
         if (raw is Map<String, dynamic>) {
           try {
             final item = PuzzleEventItem.fromJson(raw);
-            final isDownloaded = _isEventLocalDownloaded(item);
+            // P20 保留已下载标记，避免竞态回退
+            final prevDownloaded =
+                _eventsMap[item.id]?.isLocalDownloaded == true;
+            final isDownloaded =
+                prevDownloaded || _isEventLocalDownloaded(item);
             final updatedItem = item.copyWith(isLocalDownloaded: isDownloaded);
             _eventsMap[item.id] = updatedItem;
             updatedEvents.add(updatedItem);
@@ -181,8 +186,10 @@ class EventsContentPipeline {
         );
         final bytes = await zipFile.readAsBytes();
 
-        // 2. 解压到临时目录
-        final archive = ZipDecoder().decodeBytes(bytes);
+        // 2. 解压到临时目录（P07 Isolate）
+        final archive = await compute(_decodeZipIsolate, bytes);
+        if (archive.length > 2000)
+          throw Exception('Zip file count excessive ${archive.length}');
         if (tempExtractDir.existsSync()) {
           tempExtractDir.deleteSync(recursive: true);
         }
@@ -308,5 +315,9 @@ class EventsContentPipeline {
     } catch (e, st) {
       AppLogger.events.warning('Persist events cache failed', e, st);
     }
+  }
+
+  static Archive _decodeZipIsolate(List<int> bytes) {
+    return ZipDecoder().decodeBytes(bytes);
   }
 }

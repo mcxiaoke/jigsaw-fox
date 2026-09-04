@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'package:archive/archive.dart';
+import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
 import '../models/canonical_id.dart';
 import '../models/puzzle_level_item.dart';
@@ -63,8 +64,11 @@ class DailyContentPipeline {
         'Downloaded daily zip $yyyyMm bytes=${bytes.length}',
       );
 
-      // 2. 解压到临时目录
-      final archive = ZipDecoder().decodeBytes(bytes);
+      // 2. 解压到临时目录（P07 后台 Isolate 避免 ANR）
+      final archive = await compute(_decodeZipIsolate, bytes);
+      // zip bomb 防护
+      if (archive.length > 2000)
+        throw Exception('Zip file count excessive ${archive.length}');
       if (tempExtractDir.existsSync()) {
         tempExtractDir.deleteSync(recursive: true);
       }
@@ -193,5 +197,9 @@ class DailyContentPipeline {
     } catch (_) {
       return null;
     }
+  }
+
+  static Archive _decodeZipIsolate(List<int> bytes) {
+    return ZipDecoder().decodeBytes(bytes);
   }
 }

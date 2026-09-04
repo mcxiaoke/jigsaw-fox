@@ -42,7 +42,7 @@ class AchievementStore {
     _starredCache.clear();
 
     // 一次性前缀扫描（§3.3 例外 / §4.3）：先收集 key 再逐个读，不在迭代中写
-    final keys = _box.keys.cast<String>().toList();
+    final keys = _box.keys.whereType<String>().toList();
     for (final key in keys) {
       // 显式前缀匹配：substring 取剩余整体作为 id/cid/metric
       if (key.startsWith(_prefixCounter)) {
@@ -183,7 +183,7 @@ class AchievementStore {
     _initialized = true;
     try {
       final keys = _box.keys
-          .cast<String>()
+          .whereType<String>()
           .where(
             (k) =>
                 k.startsWith(_prefixCounter) ||

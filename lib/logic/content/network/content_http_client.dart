@@ -1,6 +1,5 @@
 import 'dart:convert';
 import 'dart:io';
-import 'dart:typed_data';
 import 'package:dio/dio.dart';
 
 import '../../../services/app_logger.dart';
@@ -85,25 +84,28 @@ class ContentHttpClient {
     }
 
     try {
-      final response = await _dio.get<Uint8List>(
+      // P06 流式下载：Dio.download 直接落盘，内存恒定几十KB
+      await _dio.download(
         url,
+        partFile.path,
         options: Options(
-          responseType: ResponseType.bytes,
-          receiveTimeout: timeout ?? const Duration(seconds: 30),
+          receiveTimeout: timeout ?? const Duration(seconds: 60),
         ),
         onReceiveProgress: onProgress,
       );
 
-      if (response.statusCode != 200 ||
-          response.data == null ||
-          response.data!.isEmpty) {
-        throw HttpException(
-          'HTTP ${response.statusCode}: Empty response for $url',
-        );
+      if (!partFile.existsSync() || await partFile.length() == 0) {
+        throw HttpException('HTTP 200: Empty response for $url');
       }
-
-      // 写入临时文件
-      await partFile.writeAsBytes(response.data!, flush: true);
+      // 简单大小防护（防止 zip bomb 落盘撑爆）
+      const maxDiskBytes = 200 * 1024 * 1024;
+      final partLen = await partFile.length();
+      if (partLen > maxDiskBytes) {
+        try {
+          await partFile.delete();
+        } catch (_) {}
+        throw HttpException('File too large $partLen > $maxDiskBytes for $url');
+      }
 
       // 原子重命名为目标文件
       if (destFile.existsSync()) {
@@ -111,9 +113,24 @@ class ContentHttpClient {
       }
       final finalFile = await partFile.rename(destinationPath);
       AppLogger.network.info(
-        'downloadFile success ${AppLogger.sanitizeUrl(url)} ${sw.elapsedMilliseconds}ms bytes=${response.data!.length}',
+        'downloadFile success ${AppLogger.sanitizeUrl(url)} ${sw.elapsedMilliseconds}ms bytes=$partLen',
       );
       return finalFile;
+    } on DioException catch (e, st) {
+      AppLogger.network.severe(
+        'downloadFile DioError status=${e.response?.statusCode} ${AppLogger.sanitizeUrl(url)} ${sw.elapsedMilliseconds}ms',
+        e,
+        st,
+      );
+      if (partFile.existsSync()) {
+        try {
+          partFile.deleteSync();
+        } catch (_) {}
+      }
+      // 统一转为 HttpException 保持调用方兼容
+      throw HttpException(
+        'HTTP ${e.response?.statusCode ?? "error"}: ${e.message} for $url',
+      );
     } catch (e, st) {
       AppLogger.network.severe(
         'downloadFile failed ${AppLogger.sanitizeUrl(url)} ${sw.elapsedMilliseconds}ms',

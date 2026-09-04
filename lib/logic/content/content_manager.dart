@@ -49,13 +49,19 @@ class ContentManager {
 
   RootManifest? get currentManifest => manifestRouter.currentManifest;
 
+  bool _isSyncing = false;
+  Future<void>? _syncFuture;
+
   /// 1. 初始化所有本地缓存与扩展包 (冷启动快速秒开)
+  /// P20 优化：manifest 先读盘缓存，避免弱网 4-16s 阻塞秒开
   Future<void> initialize() async {
     AppLogger.content.info('ContentManager initialize start');
     final sw = Stopwatch()..start();
     try {
+      // manifest 先尝试磁盘缓存，网络留后台 syncAll
+      final manifestFuture = manifestRouter.resolveManifestCacheFirst();
       await Future.wait([
-        manifestRouter.resolveManifest(),
+        manifestFuture,
         mainPipeline.initializeFromCache(),
         eventsPipeline.initializeFromCache(),
         packPipeline.loadAllPacks(),
@@ -69,69 +75,86 @@ class ContentManager {
     }
   }
 
-  /// 2. 全局网络增量同步
+  /// 2. 全局网络增量同步（P20 加互斥锁，二次调用等待首次结果）
   Future<void> syncAll({DateTime? overrideToday}) async {
-    AppLogger.content.info('syncAll start overrideToday=$overrideToday');
-    final sw = Stopwatch()..start();
-    // 1. 获取最新 Root Manifest
-    final manifest = await manifestRouter.resolveManifest(forceRefresh: true);
-    AppLogger.content.info(
-      'syncAll manifest resolved version=${manifest.schemaVersion} main=${AppLogger.sanitizeUrl(manifest.mainModule.url)} events=${AppLogger.sanitizeUrl(manifest.eventsModule.url)}',
-    );
-
-    // 2. 并发同步各模块元数据
-    try {
-      await Future.wait([
-        // 同步首页关卡
-        mainPipeline
-            .syncWithRemote(
-              remoteUrl: manifest.mainModule.url,
-              remoteVersion: manifest.mainModule.version,
-            )
-            .then(
-              (v) => AppLogger.content.info(
-                'main sync done hasNew=$v levels=${mainPipeline.levels.length}',
-              ),
-            ),
-        // 同步活动列表 (自动触发 Auto-GC)
-        eventsPipeline
-            .syncWithRemote(remoteUrl: manifest.eventsModule.url)
-            .then(
-              (v) => AppLogger.content.info(
-                'events sync done $v events=${eventsPipeline.visibleEvents.length}',
-              ),
-            ),
-        // 预备当月每日挑战
-        () async {
-          final currentMonth = overrideToday != null
-              ? _formatCurrentMonth(overrideToday)
-              : (manifest.dailyModule.currentMonth.isNotEmpty
-                    ? manifest.dailyModule.currentMonth
-                    : _formatCurrentMonth(DateTime.now()));
-          if (manifest.dailyModule.zipUrlPattern.isNotEmpty) {
-            final ok = await dailyPipeline.ensureMonthReady(
-              yyyyMm: currentMonth,
-              zipUrlPattern: manifest.dailyModule.zipUrlPattern,
-              overrideToday: overrideToday,
-            );
-            AppLogger.content.info(
-              'daily ensureMonthReady $currentMonth ok=$ok levels=${dailyPipeline.getLevelsForMonth(currentMonth, overrideToday: overrideToday).length}',
-            );
-          } else {
-            AppLogger.content.fine(
-              'daily zipUrlPattern empty skip month $currentMonth',
-            );
-          }
-        }(),
-      ]);
-      AppLogger.content.info('syncAll done ${sw.elapsedMilliseconds}ms');
-    } catch (e, st) {
-      AppLogger.content.severe(
-        'syncAll failed ${sw.elapsedMilliseconds}ms',
-        e,
-        st,
+    if (_isSyncing) {
+      AppLogger.content.info('syncAll already in progress, wait previous');
+      try {
+        await _syncFuture;
+      } catch (_) {}
+      return;
+    }
+    _isSyncing = true;
+    final future = () async {
+      AppLogger.content.info('syncAll start overrideToday=$overrideToday');
+      final sw = Stopwatch()..start();
+      // 1. 获取最新 Root Manifest
+      final manifest = await manifestRouter.resolveManifest(forceRefresh: true);
+      AppLogger.content.info(
+        'syncAll manifest resolved version=${manifest.schemaVersion} main=${AppLogger.sanitizeUrl(manifest.mainModule.url)} events=${AppLogger.sanitizeUrl(manifest.eventsModule.url)}',
       );
-      rethrow;
+
+      // 2. 并发同步各模块元数据
+      try {
+        await Future.wait([
+          // 同步首页关卡
+          mainPipeline
+              .syncWithRemote(
+                remoteUrl: manifest.mainModule.url,
+                remoteVersion: manifest.mainModule.version,
+              )
+              .then(
+                (v) => AppLogger.content.info(
+                  'main sync done hasNew=$v levels=${mainPipeline.levels.length}',
+                ),
+              ),
+          // 同步活动列表 (自动触发 Auto-GC)
+          eventsPipeline
+              .syncWithRemote(remoteUrl: manifest.eventsModule.url)
+              .then(
+                (v) => AppLogger.content.info(
+                  'events sync done $v events=${eventsPipeline.visibleEvents.length}',
+                ),
+              ),
+          // 预备当月每日挑战
+          () async {
+            final currentMonth = overrideToday != null
+                ? _formatCurrentMonth(overrideToday)
+                : (manifest.dailyModule.currentMonth.isNotEmpty
+                      ? manifest.dailyModule.currentMonth
+                      : _formatCurrentMonth(DateTime.now()));
+            if (manifest.dailyModule.zipUrlPattern.isNotEmpty) {
+              final ok = await dailyPipeline.ensureMonthReady(
+                yyyyMm: currentMonth,
+                zipUrlPattern: manifest.dailyModule.zipUrlPattern,
+                overrideToday: overrideToday,
+              );
+              AppLogger.content.info(
+                'daily ensureMonthReady $currentMonth ok=$ok levels=${dailyPipeline.getLevelsForMonth(currentMonth, overrideToday: overrideToday).length}',
+              );
+            } else {
+              AppLogger.content.fine(
+                'daily zipUrlPattern empty skip month $currentMonth',
+              );
+            }
+          }(),
+        ]);
+        AppLogger.content.info('syncAll done ${sw.elapsedMilliseconds}ms');
+      } catch (e, st) {
+        AppLogger.content.severe(
+          'syncAll failed ${sw.elapsedMilliseconds}ms',
+          e,
+          st,
+        );
+        rethrow;
+      }
+    }();
+    _syncFuture = future;
+    try {
+      await future;
+    } finally {
+      _isSyncing = false;
+      _syncFuture = null;
     }
   }
 

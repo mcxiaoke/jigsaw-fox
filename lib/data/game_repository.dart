@@ -205,7 +205,7 @@ class GameRepository {
     final rawItems = <CustomPuzzleItem>[];
     // 先收集后处理（§5.4）
     final keys = collectionsBox.keys
-        .cast<String>()
+        .whereType<String>()
         .where((k) => k.startsWith(_customKeyPrefix))
         .toList();
     for (final key in keys) {

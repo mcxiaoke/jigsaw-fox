@@ -161,9 +161,11 @@ class _VictoryDialogState extends State<VictoryDialog>
 
   Future<void> _startAnimation() async {
     // 1. Fade in overlay
+    if (!mounted) return;
     _fadeController.forward();
 
     await Future.delayed(const Duration(milliseconds: 200));
+    if (!mounted) return;
 
     // 2. Scale in image
     _imageController.forward();

@@ -391,78 +391,76 @@ class ImageCacheManager {
           }
         }
 
-        // 下载原图字节（带 403/401 重试一次，类似 DownloadManager）
-        Uint8List? rawBytes;
+        // P15 流式下载到临时文件再后台缩略，避免全量 RAM
+        String? tmpPath;
         try {
-          final response = await _dio.get<List<int>>(
-            url,
-            options: Options(
-              responseType: ResponseType.bytes,
-              headers: {
-                'Accept':
-                    'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8',
-                'User-Agent':
-                    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
-              },
-            ),
-          );
-          final data = response.data;
-          if (data != null && data.isNotEmpty) {
-            rawBytes = Uint8List.fromList(data);
-          }
-        } on DioException catch (dioErr) {
-          // 403/401 时尝试带 Referer 重试一次
-          if (dioErr.response?.statusCode == 403 ||
-              dioErr.response?.statusCode == 401) {
-            try {
-              final retryResponse = await _dio.get<List<int>>(
-                url,
-                options: Options(
-                  responseType: ResponseType.bytes,
-                  headers: {
-                    'Accept':
-                        'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8',
-                    'User-Agent':
-                        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
-                  },
-                ),
-              );
-              final data = retryResponse.data;
-              if (data != null && data.isNotEmpty) {
-                rawBytes = Uint8List.fromList(data);
+          final tmpFileName =
+              'tmp_net_${cacheKey}_${DateTime.now().millisecondsSinceEpoch}.part';
+          final tmpDir =
+              _cacheDir?.path ?? (await getApplicationSupportDirectory()).path;
+          tmpPath = '$tmpDir/$tmpFileName';
+          final headers = {
+            'Accept':
+                'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8',
+            'User-Agent':
+                'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+          };
+          try {
+            await _dio.download(
+              url,
+              tmpPath,
+              options: Options(headers: headers),
+            );
+          } on DioException catch (dioErr) {
+            if (dioErr.response?.statusCode == 403 ||
+                dioErr.response?.statusCode == 401) {
+              try {
+                await _dio.download(
+                  url,
+                  tmpPath,
+                  options: Options(headers: headers),
+                );
+              } catch (e, st) {
+                AppLogger.imageCache.warning(
+                  'Network thumbnail retry failed url=${AppLogger.sanitizeUrl(url)}',
+                  e,
+                  st,
+                );
+                return null;
               }
-            } catch (e, st) {
+            } else {
               AppLogger.imageCache.warning(
-                'Network thumbnail retry failed url=${AppLogger.sanitizeUrl(url)}',
-                e,
-                st,
+                'Network thumbnail download failed url=${AppLogger.sanitizeUrl(url)} status=${dioErr.response?.statusCode}',
+                dioErr,
               );
+              return null;
             }
-          } else {
-            AppLogger.imageCache.warning(
-              'Network thumbnail download failed url=${AppLogger.sanitizeUrl(url)} status=${dioErr.response?.statusCode}',
-              dioErr,
-            );
           }
-        } catch (e, st) {
-          AppLogger.imageCache.warning(
-            'Network thumbnail download error url=${AppLogger.sanitizeUrl(url)}',
-            e,
-            st,
-          );
-        }
-
-        if (rawBytes == null || rawBytes.isEmpty) return null;
-
-        // 后台 Isolate 下采样生成缩略图 JPEG
-        final generatedBytes =
-            await ThumbnailGenerator.generateThumbnailFromBytes(
-              rawBytes: rawBytes,
-              targetDimension: dimension.pixels,
-              quality: quality,
+          final tmpFile = File(tmpPath);
+          if (!await tmpFile.exists() || await tmpFile.length() == 0)
+            return null;
+          const maxNetBytes = 20 * 1024 * 1024;
+          if (await tmpFile.length() > maxNetBytes) {
+            try {
+              await tmpFile.delete();
+            } catch (_) {}
+            AppLogger.imageCache.warning(
+              'Network thumbnail too large url=${AppLogger.sanitizeUrl(url)}',
             );
+            return null;
+          }
+          // 后台 Isolate 从文件直接下采样
+          final generatedBytes =
+              await ThumbnailGenerator.generateThumbnailBytes(
+                sourceFilePath: tmpPath,
+                targetDimension: dimension.pixels,
+                quality: quality,
+              );
+          try {
+            await tmpFile.delete();
+          } catch (_) {}
+          if (generatedBytes == null || generatedBytes.isEmpty) return null;
 
-        if (generatedBytes != null && generatedBytes.isNotEmpty) {
           try {
             final targetPath = getThumbnailFilePath(url, dimension: dimension);
             final targetFile = File(targetPath);
@@ -481,9 +479,20 @@ class ImageCacheManager {
           }
           _memoryCache.put(cacheKey, generatedBytes);
           return generatedBytes;
+        } catch (e, st) {
+          AppLogger.imageCache.warning(
+            'Network thumbnail download error url=${AppLogger.sanitizeUrl(url)}',
+            e,
+            st,
+          );
+          // 清理残留 tmp
+          if (tmpPath != null) {
+            try {
+              await File(tmpPath).delete();
+            } catch (_) {}
+          }
+          return null;
         }
-
-        return null;
       },
     );
   }

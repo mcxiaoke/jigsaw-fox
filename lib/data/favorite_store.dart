@@ -179,7 +179,7 @@ class FavoriteStore {
     try {
       // 先收集后处理（§5.4：box.keys 迭代中不做写操作）
       final keys = _box.keys
-          .cast<String>()
+          .whereType<String>()
           .where((k) => k.startsWith(_keyPrefix))
           .toList();
       for (final key in keys) {

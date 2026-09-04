@@ -46,9 +46,15 @@ class _EventLevelsPageState extends State<EventLevelsPage> {
 
   Future<void> _loadLevels() async {
     setState(() => _isLoading = true);
-    await _content.ensureEventDownloaded(_currentEvent);
-    _levels = _content.getEventLevels(_currentEvent);
-    setState(() => _isLoading = false);
+    try {
+      await _content.ensureEventDownloaded(_currentEvent);
+      _levels = _content.getEventLevels(_currentEvent);
+    } catch (e) {
+      // P13 永久 loading 防护：网络失败仍需置位
+      _levels = [];
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
   }
 
   Future<void> _openLevel(PuzzleLevelItem level, int index) async {

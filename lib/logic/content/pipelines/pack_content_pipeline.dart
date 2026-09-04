@@ -117,12 +117,12 @@ class PackContentPipeline {
     );
     try {
       final downloadedZip = await _httpClient.downloadFile(zipUrl, tempZipPath);
-      final bytes = await downloadedZip.readAsBytes();
       final uriName = p.basenameWithoutExtension(Uri.parse(zipUrl).path);
       final defaultTitle = uriName.isEmpty ? '网络图包' : uriName;
 
-      final pack = await _processZipBytes(
-        bytes: bytes,
+      // P18 优化：直接传文件路径给 Isolate，避免主线程二次 readAsBytes 拷贝
+      final pack = await _processZipFile(
+        zipFilePath: downloadedZip.path,
         defaultTitle: defaultTitle,
         sourceType: 'network_url',
         sourceOrigin: zipUrl,
@@ -130,7 +130,9 @@ class PackContentPipeline {
 
       // 清理临时文件
       if (downloadedZip.existsSync()) {
-        downloadedZip.deleteSync();
+        try {
+          downloadedZip.deleteSync();
+        } catch (_) {}
       }
       return pack;
     } catch (e, st) {
@@ -149,6 +151,38 @@ class PackContentPipeline {
     }
   }
 
+  /// 文件路径版：后台 Isolate 读取并解压，避免主线程 3× 峰值（P18）
+  Future<PuzzlePackItem> _processZipFile({
+    required String zipFilePath,
+    required String defaultTitle,
+    required String sourceType,
+    required String sourceOrigin,
+  }) async {
+    final bytes = await compute(_readFileBytesIsolate, zipFilePath);
+    if (bytes == null) throw Exception('读取 ZIP 文件失败: $zipFilePath');
+    return _processZipBytes(
+      bytes: bytes,
+      defaultTitle: defaultTitle,
+      sourceType: sourceType,
+      sourceOrigin: sourceOrigin,
+    );
+  }
+
+  static Uint8List? _readFileBytesIsolate(String path) {
+    try {
+      final f = File(path);
+      if (!f.existsSync()) return null;
+      return f.readAsBytesSync();
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// 后台 Isolate 解压（P07 避免主线程 ANR，P18 削峰）
+  static Archive _decodeZipIsolate(List<int> bytes) {
+    return ZipDecoder().decodeBytes(bytes);
+  }
+
   /// 核心解压、安全审查、元数据推导与落盘
   Future<PuzzlePackItem> _processZipBytes({
     required List<int> bytes,
@@ -159,7 +193,8 @@ class PackContentPipeline {
     AppLogger.pack.info(
       '_processZipBytes title=$defaultTitle source=$sourceType bytes=${bytes.length}',
     );
-    final archive = ZipDecoder().decodeBytes(bytes);
+    // P07 后台解压；保留原始 bytes 大小日志，但解压本身在 Isolate
+    final archive = await compute(_decodeZipIsolate, bytes);
     if (archive.isEmpty) {
       AppLogger.pack.warning(
         '_processZipBytes empty archive title=$defaultTitle',
