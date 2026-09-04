@@ -646,12 +646,6 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
     SoundService.I.play(Sfx.hint);
   }
 
-  String get _timeString {
-    final m = (_seconds ~/ 60).toString().padLeft(2, '0');
-    final s = (_seconds % 60).toString().padLeft(2, '0');
-    return '$m:$s';
-  }
-
   String get _pageTitle {
     if (widget.packTitle != null && widget.packTitle!.isNotEmpty) {
       return widget.packTitle!;
@@ -1271,65 +1265,6 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
                     ),
                   );
                 },
-              ),
-
-            // 6. Floating Victory Banner when solved and dialog closed
-            if (_isSolved)
-              Positioned(
-                bottom: 16 + MediaQuery.paddingOf(context).bottom,
-                left: 20,
-                right: 20,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 20,
-                    vertical: 12,
-                  ),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF1F2937),
-                    borderRadius: BorderRadius.circular(24),
-                    boxShadow: const [
-                      BoxShadow(
-                        color: Colors.black38,
-                        blurRadius: 10,
-                        offset: Offset(0, 4),
-                      ),
-                    ],
-                  ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        '🎉 通关！耗时 $_timeString',
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 15,
-                        ),
-                      ),
-                      Row(
-                        children: [
-                          TextButton(
-                            onPressed: _showVictoryDialog,
-                            child: const Text(
-                              '结算成绩',
-                              style: TextStyle(color: Colors.amber),
-                            ),
-                          ),
-                          FilledButton(
-                            onPressed: () => Navigator.pop(context),
-                            style: FilledButton.styleFrom(
-                              backgroundColor: Colors.white,
-                            ),
-                            child: const Text(
-                              '返回',
-                              style: TextStyle(color: Color(0xFF1F2937)),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
               ),
           ],
         ),
