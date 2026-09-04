@@ -80,17 +80,24 @@ Future<Box<T>> safeOpenBox<T>(String name) async {
 
 /// 对象型 box（progress / collections）统一写入：值统一为 JSON String，
 /// 根除「未注册 TypeAdapter 的嵌套 Map 重启后退化成 Map[dynamic,dynamic]」崩溃
-/// （设计 §3.2）。
-Future<void> putJson(
-  Box<dynamic> box,
-  String key,
-  Map<String, dynamic> value,
-) => box.put(key, jsonEncode(value));
+/// （设计 §3.2）。写入自动纳入 [_pendingWrites] 队列，供关窗时 `await`。
+Future<void> putJson(Box<dynamic> box, String key, Map<String, dynamic> value) {
+  final f = box.put(key, jsonEncode(value));
+  // 纳入全局挂起队列（P05 关窗丢档防护）
+  StorageManager.instance._trackWrite(f);
+  return f;
+}
 
 /// 与 [putJson] 配对的读取（jsonDecode 任何层级都返回 Map[String, dynamic]）。
 Map<String, dynamic>? getJson(Box<dynamic> box, String key) {
-  final raw = box.get(key) as String?;
+  final raw = box.get(key);
   if (raw == null) return null;
+  if (raw is! String) {
+    AppLogger.repo.warning(
+      'getJson type mismatch key=$key type=${raw.runtimeType}',
+    );
+    return null;
+  }
   try {
     return jsonDecode(raw) as Map<String, dynamic>;
   } catch (e, st) {
@@ -135,6 +142,8 @@ class StorageManager {
   // 兜底重建次数按 box 计数（防御极端 IO 故障下的死循环）
   final Set<String> _fallbackDone = <String>{};
   Future<void>? _backupLock;
+  // P05 关窗丢档防护：跟踪所有挂起的 put 写入
+  final List<Future<void>> _pendingWrites = <Future<void>>[];
 
   Directory? _hiveDirCache;
   Directory? _backupsRootCache;
@@ -391,6 +400,24 @@ class StorageManager {
     stateBox = null;
   }
 
+  // --- P05 挂起写入跟踪 ---
+
+  void _trackWrite(Future<void> f) {
+    _pendingWrites.add(f);
+    f.whenComplete(() => _pendingWrites.remove(f));
+  }
+
+  /// 等待所有挂起写入完成（关窗前调用）
+  Future<void> waitPendingWrites() async {
+    if (_pendingWrites.isEmpty) return;
+    final pending = List<Future<void>>.from(_pendingWrites);
+    try {
+      await Future.wait(pending);
+    } catch (e, st) {
+      AppLogger.repo.warning('waitPendingWrites some failed', e, st);
+    }
+  }
+
   /// 逐 box try/catch 刷盘：一个 box flush 失败不阻断其余
   Future<void> flushPendingWrites() async {
     final boxes = [
@@ -422,6 +449,7 @@ class StorageManager {
     _backupsRootCache = null;
     _appSupport = null;
     _backupLock = null;
+    _pendingWrites.clear();
   }
 
   /// hive_ce 的 Hive.close() **不 flush**——storage_backend_vm._closeInternal
@@ -449,6 +477,11 @@ class StorageManager {
   /// isTestInstance 直接 return。写失败静默降级，不阻塞启动。
   Future<void> _doBackup() async {
     if (isTestInstance) return;
+    // P21 备份前确保落盘，避免备份陈旧
+    try {
+      await waitPendingWrites();
+      await flushPendingWrites();
+    } catch (_) {}
     try {
       final hiveDir = await _hiveDirectory();
       final backupsRoot = await _backupsRoot();

@@ -102,7 +102,8 @@ class _EventLevelsPageState extends State<EventLevelsPage> {
             builder: (_) => GamePage(
               imageBytes: imgBytes!,
               difficulty: diff,
-              levelIndex: index,
+              canonicalId: level.id,
+              packTitle: _currentEvent.title,
             ),
           ),
         );

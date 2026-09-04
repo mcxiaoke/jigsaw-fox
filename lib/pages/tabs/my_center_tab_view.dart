@@ -154,33 +154,55 @@ class _MyCenterTabViewState extends State<MyCenterTabView> {
   }
 
   Future<Uint8List> _resolveImageBytes(UnifiedPuzzleCardData card) async {
+    const maxBytes = 20 * 1024 * 1024;
     try {
       if (card.isLocalFile) {
         final file = File(card.imagePathOrUrl);
         if (file.existsSync()) {
-          return await file.readAsBytes();
+          final len = await file.length();
+          if (len <= maxBytes) return await file.readAsBytes();
         }
       }
       if (card.imagePathOrUrl.startsWith('assets/')) {
         final data = await rootBundle.load(card.imagePathOrUrl);
-        return data.buffer.asUint8List();
+        return data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes);
       }
       if (card.imagePathOrUrl.startsWith('http://') ||
           card.imagePathOrUrl.startsWith('https://')) {
         final uri = Uri.tryParse(card.imagePathOrUrl);
         if (uri != null) {
-          final client = HttpClient();
-          final req = await client.getUrl(uri);
-          final res = await req.close();
-          if (res.statusCode == 200) {
-            return await consolidateHttpClientResponseBytes(res);
+          final client = HttpClient()
+            ..connectionTimeout = const Duration(seconds: 8)
+            ..idleTimeout = const Duration(seconds: 8);
+          try {
+            final req = await client.getUrl(uri);
+            final res = await req.close().timeout(const Duration(seconds: 15));
+            if (res.statusCode == 200) {
+              // chunked 场景 contentLength == -1，需流式限长
+              if (res.contentLength > maxBytes) {
+                throw Exception('image too large ${res.contentLength}');
+              }
+              final bytes = await consolidateHttpClientResponseBytes(
+                res,
+              ).timeout(const Duration(seconds: 20));
+              if (bytes.length > maxBytes) {
+                throw Exception('image too large ${bytes.length}');
+              }
+              // contentLength == -1 且超长已被上一行拦截
+              if (res.contentLength == -1 && bytes.length > maxBytes) {
+                throw Exception('image chunked too large');
+              }
+              return bytes;
+            }
+          } finally {
+            client.close(force: true);
           }
         }
       }
     } catch (_) {}
     // 兜底图
     final data = await rootBundle.load('assets/samples/animal_01.webp');
-    return data.buffer.asUint8List();
+    return data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes);
   }
 
   Future<void> _handleCardClick(UnifiedPuzzleCardData card) async {

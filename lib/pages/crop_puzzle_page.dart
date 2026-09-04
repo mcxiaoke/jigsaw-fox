@@ -349,16 +349,23 @@ class _CropPuzzlePageState extends State<CropPuzzlePage> {
         paint,
       );
 
-      final croppedImage = await recorder.endRecording().toImage(
-        targetWidthInt,
-        targetHeightInt,
-      );
-
-      final byteData = await croppedImage.toByteData(
-        format: ui.ImageByteFormat.png,
-      );
-      if (byteData == null) throw Exception('图片导出失败');
-      Uint8List pngBytes = byteData.buffer.asUint8List();
+      final picture = recorder.endRecording();
+      ui.Image? croppedImage;
+      Uint8List pngBytes;
+      try {
+        croppedImage = await picture.toImage(targetWidthInt, targetHeightInt);
+        final byteData = await croppedImage.toByteData(
+          format: ui.ImageByteFormat.png,
+        );
+        if (byteData == null) throw Exception('图片导出失败');
+        pngBytes = byteData.buffer.asUint8List(
+          byteData.offsetInBytes,
+          byteData.lengthInBytes,
+        );
+      } finally {
+        croppedImage?.dispose();
+        picture.dispose();
+      }
 
       // 5. 低分辨率智能判定：若实际裁切像素短边 <= 750 或 长边 <= 1000，调用非 AI 超分辨率管线进行 2x 增强
       if (ImageUpscaler.shouldUpscale(

@@ -96,13 +96,22 @@ class _ShareCardGeneratorState extends State<ShareCardGenerator>
           _repaintKey.currentContext!.findRenderObject()
               as RenderRepaintBoundary;
       final image = await boundary.toImage(pixelRatio: 2.0);
-      final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
-      if (byteData == null) throw Exception('Failed to encode PNG');
+      try {
+        final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
+        if (byteData == null) throw Exception('Failed to encode PNG');
 
-      final dir = await getTemporaryDirectory();
-      final ts = DateTime.now().millisecondsSinceEpoch;
-      final file = File('${dir.path}/share_card_$ts.png');
-      await file.writeAsBytes(byteData.buffer.asUint8List());
+        final dir = await getTemporaryDirectory();
+        final ts = DateTime.now().millisecondsSinceEpoch;
+        final file = File('${dir.path}/share_card_$ts.png');
+        await file.writeAsBytes(
+          byteData.buffer.asUint8List(
+            byteData.offsetInBytes,
+            byteData.lengthInBytes,
+          ),
+        );
+      } finally {
+        image.dispose();
+      }
 
       if (mounted) {
         GameToast.show(

@@ -208,7 +208,25 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
   }
 
   Future<void> _loadImage() async {
-    final img = await decodeFlameImage(widget.imageBytes);
+    ui.Image? img;
+    try {
+      img = await decodeFlameImage(widget.imageBytes);
+    } catch (e, st) {
+      AppLogger.game.severe('decodeFlameImage failed', e, st);
+      if (mounted) {
+        // 坏图容错：避免永久转圈，提示并返回
+        GameToast.show(
+          context,
+          message: '图片解码失败，请重试',
+          type: GameToastType.error,
+        );
+      }
+      return;
+    }
+    if (!mounted) {
+      img.dispose();
+      return;
+    }
     _gameImage = img;
     PuzzleDifficulty effectiveDiff;
     // 若有快照，优先使用快照中的 rows/cols，避免 adaptive 覆盖导致 _applyBoardState 静默丢弃（P0-1）

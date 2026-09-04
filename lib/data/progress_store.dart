@@ -275,12 +275,19 @@ class ProgressStore {
       AppLogger.repo.warning('ProgressStore.save skip empty canonicalId');
       return;
     }
+    final prev = _index![cid];
+    // 内存优先（UI 立即响应）但失败回滚，避免内存/磁盘分裂（P21）
+    _index![cid] = p;
     try {
-      // 内存优先（UI 立即响应），再落 box——维持写侧内存一致性（§3.3）
-      _index![cid] = p;
       await putJson(_box, cid, p.toJson());
       _notifyProgressChanged();
     } catch (e, st) {
+      // 磁盘满等失败：回滚内存，保持一致
+      if (prev == null) {
+        _index!.remove(cid);
+      } else {
+        _index![cid] = prev;
+      }
       AppLogger.repo.warning('ProgressStore.save fail cid=$cid', e, st);
     }
   }
@@ -638,7 +645,12 @@ class ProgressStore {
               : '',
         );
         idx[cid] = corrected;
-        await putJson(_box, cid, corrected.toJson());
+        try {
+          await putJson(_box, cid, corrected.toJson());
+        } catch (e, st) {
+          AppLogger.repo.warning('reconcileSnapshots put fail cid=$cid', e, st);
+          continue;
+        }
         dirty = true;
       }
     }

@@ -163,6 +163,8 @@ class LinenTextureManager {
     }
 
     final picture = recorder.endRecording();
-    return picture.toImage(width, height);
+    final image = await picture.toImage(width, height);
+    picture.dispose();
+    return image;
   }
 }

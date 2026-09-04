@@ -40,11 +40,14 @@ void _initLifecycleHooks() {
     onInactive: _handleBackgroundSync, // 失焦（有节流，防频繁磁盘复制）
     onPause: _handleBackgroundSync, // 移动端退后台（桌面不触发，保留兼容）
     onExitRequested: () async {
-      // 桌面端点 X / Alt+F4：进程终止前最后的同步机会
+      // 桌面端点 X / Alt+F4：进程终止前最后的同步机会（P05 等待挂起put）
       try {
         if (!StorageManager.instance.isTestInstance) {
+          await StorageManager.instance.waitPendingWrites();
           await StorageManager.instance.flushPendingWrites();
           await StorageManager.instance.backupNow();
+        } else {
+          await StorageManager.instance.waitPendingWrites();
         }
         await StorageManager.instance.closeAll();
       } catch (e, st) {
