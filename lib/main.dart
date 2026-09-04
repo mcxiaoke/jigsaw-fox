@@ -1,11 +1,6 @@
-import 'dart:io';
 import 'dart:ui';
 
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_inappwebview/flutter_inappwebview.dart';
-import 'package:path_provider/path_provider.dart';
-
 import 'data/favorite_store.dart';
 import 'data/game_repository.dart';
 import 'data/storage_manager.dart';
@@ -17,9 +12,7 @@ import 'services/achievement_store.dart';
 import 'services/app_logger.dart';
 import 'services/economy_service.dart';
 import 'services/sound_service.dart';
-
-/// Global Windows WebViewEnvironment instance for InAppWebView
-WebViewEnvironment? globalWebViewEnvironment;
+import 'services/webview_service.dart';
 
 /// 桌面生命周期监听器（**必须顶层持有**，设计 §7.5）。
 ///
@@ -93,28 +86,8 @@ void main() async {
       150 * 1024 * 1024; // 150 MB
   AppLogger.system.info('ImageCache tuned maxSize=500 maxBytes=150MB');
 
-  // Initialize WebViewEnvironment on Windows desktop to prevent blank screen and crash
-  if (!kIsWeb && defaultTargetPlatform == TargetPlatform.windows) {
-    try {
-      final appSupportDir = await getApplicationSupportDirectory();
-      final envDir = Directory('${appSupportDir.path}/inappwebview_env');
-      if (!await envDir.exists()) {
-        await envDir.create(recursive: true);
-      }
-      globalWebViewEnvironment = await WebViewEnvironment.create(
-        settings: WebViewEnvironmentSettings(userDataFolder: envDir.path),
-      );
-      AppLogger.webview.info(
-        'Global WebViewEnvironment initialized dir=${envDir.path}',
-      );
-    } catch (e, stack) {
-      AppLogger.webview.severe(
-        'Failed to initialize WebViewEnvironment',
-        e,
-        stack,
-      );
-    }
-  }
+  // Initialize and detect WebView2 environment
+  await WebViewService.init();
 
   // 生命周期钩子必须在 runApp() 之前注册一次（引用由顶层变量持有防 GC）
   _initLifecycleHooks();

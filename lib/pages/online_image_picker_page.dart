@@ -3,13 +3,13 @@ import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:phosphoricons_flutter/phosphoricons_flutter.dart';
+import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 
 import '../data/models/downloaded_image_item.dart';
 import '../services/app_logger.dart';
 import '../logic/download_manager.dart';
-import '../main.dart';
+import '../services/webview_service.dart';
 import '../theme/app_palette.dart';
 import '../widgets/downloaded_drawer_sheet.dart';
 import '../widgets/game_toast.dart';
@@ -39,6 +39,15 @@ class OnlineImagePickerPage extends StatefulWidget {
     BuildContext context, {
     GallerySite initialSite = GallerySite.pixabay,
   }) {
+    if (!WebViewService.isOnlineSearchAvailable) {
+      GameToast.show(
+        context,
+        icon: PhosphorIconsRegular.warningCircle,
+        message: '当前系统未安装 WebView2 运行时，无法使用在线搜图',
+        type: GameToastType.warning,
+      );
+      return Future.value();
+    }
     return Navigator.of(context).push<void>(
       MaterialPageRoute(
         builder: (_) => OnlineImagePickerPage(initialSite: initialSite),
@@ -556,7 +565,7 @@ class _OnlineImagePickerPageState extends State<OnlineImagePickerPage> {
           children: [
             // 1. Cross-Platform Embedded InAppWebView
             InAppWebView(
-              webViewEnvironment: globalWebViewEnvironment,
+              webViewEnvironment: WebViewService.environment,
               initialUrlRequest: URLRequest(url: WebUri(_currentSite.url)),
               initialSettings: InAppWebViewSettings(
                 useShouldOverrideUrlLoading: true,

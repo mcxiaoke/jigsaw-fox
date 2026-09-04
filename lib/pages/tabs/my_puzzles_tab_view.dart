@@ -13,6 +13,7 @@ import '../../logic/content/app_content.dart';
 import '../../logic/content/models/puzzle_pack_item.dart';
 import '../../logic/download_manager.dart';
 import '../../logic/image_source.dart';
+import '../../services/webview_service.dart';
 import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
 import '../../widgets/app_cached_image.dart';
@@ -319,6 +320,15 @@ class _MyPuzzlesTabViewState extends State<MyPuzzlesTabView> {
                               palette: palette,
                               styles: styles,
                               onTap: () async {
+                                if (!WebViewService.isOnlineSearchAvailable) {
+                                  GameToast.show(
+                                    context,
+                                    icon: PhosphorIconsRegular.warningCircle,
+                                    message: '当前系统未安装 WebView2 运行时，无法使用在线搜图',
+                                    type: GameToastType.warning,
+                                  );
+                                  return;
+                                }
                                 await OnlineImagePickerPage.push(context);
                               },
                             ),

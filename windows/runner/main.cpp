@@ -39,5 +39,10 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
   }
 
   ::CoUninitialize();
+
+  // All window teardown and Dart cleanups (Hive flush/close) have completed.
+  // Terminate immediately to avoid inappwebview DLL crash during CRT onexit table.
+  ::TerminateProcess(::GetCurrentProcess(), 0);
+
   return EXIT_SUCCESS;
 }
