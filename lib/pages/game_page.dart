@@ -61,6 +61,7 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
 
   bool _isSolved = false;
   bool _isPaused = false;
+  bool _isPopping = false;
   int _seconds = 0;
   final _secondsNotifier = ValueNotifier<int>(0);
   Timer? _timer;
@@ -105,9 +106,9 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
     super.didChangeAppLifecycleState(state);
     if (state == AppLifecycleState.paused ||
         state == AppLifecycleState.hidden ||
-        state == AppLifecycleState.detached ||
-        state == AppLifecycleState.inactive) {
+        state == AppLifecycleState.detached) {
       AppLogger.game.info('GamePage lifecycle $state -> flushSync save');
+      SoundService.I.stopAll();
       _reportPlaySeconds(); // 切后台/暂停：上报游玩时长增量（设计 §8.1）
       _flushSync();
     }
@@ -567,24 +568,23 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
       );
     }
 
-    // 3. 经济与金币发奖
+    // 3. 经济发奖与成就评估并行执行，减少主 isolate 阻塞时长
     final tier = (_effectiveDifficulty ?? widget.difficulty).tierIndex;
-    final reward = await EconomyService.instance.calculateAndAwardCompletion(
-      tierIndex: tier,
-      stars: stars,
-      isFirstCompletion: updateResult.record.playCount <= 1,
-      deltaStars: updateResult.deltaStars,
-    );
-
-    // 4. 成就系统事件评估
-    // （playSeconds 已在结算前上报，onPuzzleSolved 不再重复累加时长）
     _reportPlaySeconds();
     final ptype = widget.dailyDateStr != null
         ? 'daily'
         : (widget.customId != null
               ? 'custom'
               : (widget.packTitle != null ? 'pack' : 'main'));
-    final newAchievements = await AchievementService.instance.onPuzzleSolved(
+
+    final rewardFuture = EconomyService.instance.calculateAndAwardCompletion(
+      tierIndex: tier,
+      stars: stars,
+      isFirstCompletion: updateResult.record.playCount <= 1,
+      deltaStars: updateResult.deltaStars,
+    );
+
+    final newAchievementsFuture = AchievementService.instance.onPuzzleSolved(
       actualPieces: actualPieces,
       elapsedSeconds: _seconds,
       hintsUsed: hints,
@@ -595,10 +595,21 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
       isFirstNoHintWin: updateResult.isFirstNoHintWin,
     );
 
-    // 5. 删除快照
-    await SnapshotStore.instance.delete(cid, dkey);
+    final results = await Future.wait([rewardFuture, newAchievementsFuture]);
+    final reward = results[0] as SettlementRewardResult;
+    final newAchievements = results[1] as List<AchievementDefinition>;
 
-    // 6. 显示通关弹窗
+    // 4. 后台异步删除快照，附加 catchError 避免 unobserved exception
+    unawaited(
+      SnapshotStore.instance.delete(cid, dkey).catchError((
+        Object e,
+        StackTrace st,
+      ) {
+        AppLogger.game.warning('delete snapshot failed after win', e, st);
+      }),
+    );
+
+    // 5. 显示通关弹窗
     if (mounted) {
       _showVictoryDialog(
         stars: stars,
@@ -856,6 +867,7 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    SoundService.I.stopAll();
     _saveDebounce?.cancel();
     _reportPlaySeconds(); // 退出/弃局：上报剩余游玩时长（设计 §8.1 弃局同样计入）
     // 最后机会同步保存（避免 dispose 逃逸 Timer）
@@ -889,9 +901,19 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
         icon: Icon(PhosphorIconsBold.arrowLeft, color: _headerIconColor),
         tooltip: '返回',
         onPressed: () async {
+          if (_isPopping) return;
+          _isPopping = true;
           SoundService.I.play(Sfx.tap);
-          await _flushSave();
-          if (mounted) Navigator.of(context).pop();
+          try {
+            await _flushSave();
+          } catch (e, st) {
+            AppLogger.game.warning('flush save error on back pressed', e, st);
+          }
+          if (mounted) {
+            Navigator.of(context).pop();
+          } else {
+            _isPopping = false;
+          }
         },
       ),
       title: const SizedBox.shrink(),
@@ -1048,10 +1070,19 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
     return PopScope(
       canPop: false,
       onPopInvokedWithResult: (didPop, result) async {
-        if (didPop) return;
+        if (didPop || _isPopping) return;
+        _isPopping = true;
         SoundService.I.play(Sfx.tap);
-        await _flushSave();
-        if (context.mounted) Navigator.of(context).pop(result);
+        try {
+          await _flushSave();
+        } catch (e, st) {
+          AppLogger.game.warning('flush save error on pop gesture', e, st);
+        }
+        if (context.mounted) {
+          Navigator.of(context).pop(result);
+        } else {
+          _isPopping = false;
+        }
       },
       child: Scaffold(
         backgroundColor: const Color(0xFFE2E6EA),

@@ -140,6 +140,7 @@ class _SettingsPageState extends State<SettingsPage> {
                       _repo.soundEnabled = v;
                       SoundService.I.play(Sfx.switchToggle, ignoreMute: true);
                     } else {
+                      SoundService.I.stopAll();
                       SoundService.I.play(Sfx.switchToggle, ignoreMute: true);
                       _repo.soundEnabled = v;
                     }

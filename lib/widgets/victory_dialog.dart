@@ -154,9 +154,19 @@ class _VictoryDialogState extends State<VictoryDialog>
     _statProgress = CurvedAnimation(
       parent: _statController,
       curve: Curves.easeOutCubic,
-    );
+    )..addListener(_onStatProgressChanged);
 
     _startAnimation();
+  }
+
+  void _onStatProgressChanged() {
+    if (!mounted) return;
+    final p = _statProgress.value;
+    setState(() {
+      _displayedTime = (widget.elapsedSeconds * p).round();
+      _displayedMoves = (widget.moveCount * p).round();
+      _displayedCoins = (widget.rewardCoins * p).round();
+    });
   }
 
   Future<void> _startAnimation() async {
@@ -176,7 +186,7 @@ class _VictoryDialogState extends State<VictoryDialog>
     for (int i = 0; i < widget.stars; i++) {
       if (!mounted) return;
       setState(() => _litStars = i + 1);
-      SoundService.I.play(Sfx.snap, ignoreMute: true);
+      SoundService.I.play(Sfx.snap);
       await Future.delayed(const Duration(milliseconds: 400));
     }
 
@@ -184,15 +194,6 @@ class _VictoryDialogState extends State<VictoryDialog>
 
     // 4. Roll up stats
     _statController.forward();
-    _statController.addListener(() {
-      if (!mounted) return;
-      final p = _statProgress.value;
-      setState(() {
-        _displayedTime = (widget.elapsedSeconds * p).round();
-        _displayedMoves = (widget.moveCount * p).round();
-        _displayedCoins = (widget.rewardCoins * p).round();
-      });
-    });
   }
 
   @override
@@ -201,6 +202,7 @@ class _VictoryDialogState extends State<VictoryDialog>
     _fadeController.dispose();
     _imageController.dispose();
     _starController.dispose();
+    _statProgress.removeListener(_onStatProgressChanged);
     _statController.dispose();
     super.dispose();
   }

@@ -7,21 +7,25 @@
 - 资源：`assets/audio/` 27 个 `*.wav`（`pcm_s16le 48kHz mono` 原始文件，未转 OGG），`pubspec.yaml:54` 引入 `flame_audio`，`pubspec.yaml:82` `assets/audio/` 目录自动收录
 - 服务：`lib/services/sound_service.dart:1` 单例 `SoundService.I`，按**事件名** `Sfx` 播放，内部统一判断 `GameRepository.soundEnabled`，`WidgetsBinding.runtimeType.contains('Test')` 时静默（避免 `flutter test` 的 `MissingPluginException` 误报）
 - 特性：多变体随机（`glue1/2/3`、`preview1/2/3`）、80ms 节流防爆音、音量分级（短促 0.8 / 胜利 0.9~1.0 / whoosh 0.6）、预加载失败不阻塞
-- 决策：经评估 `flutter_soloud`（自带解码、低延迟）暂不引入；`flame_audio` 仅用 `audioCache.loadAll` + `FlameAudio.play` 两个基础能力，无 `BGM/AudioPool` 等 Flame 特有依赖，当前 WAV 已满足全平台一致性，无需双格式与 Windows 编解码兜底
+- 决策：经评估 `flutter_soloud`（自带解码、低延迟）暂不引入；采用自主设计的固定容量 LRU 复用池（`_kPoolSize = 6`），彻底杜绝无界 `new AudioPlayer` 导致的句柄与 COM/SoundPool 流泄漏；当前 WAV 资产全平台统一，无需双格式与 Windows 编解码兜底
 
 ## 二、架构
 
 ```
 GamePage / JigsawPuzzleGame / MainScreen Tab / Settings UI
         ↓  SoundService.I.play(Sfx.xxx)
-SoundService ──→ FlameAudio.play(file, volume)  // 前缀 assets/audio/, 全 wav
-        ↓
-  读取 GameRepository.instance.soundEnabled 实时静默
-  Random 变体 + 节流 + 音量分级 + then(onError) + Test 静默容错
+SoundService
+   ├─ 静音拦截 (读取 GameRepository.instance.soundEnabled 实时静默)
+   ├─ 独立细粒度节流 (snap 80ms, place 60ms, tap 70ms, coinsFly 200ms, hint 300ms...)
+   └─ 固定容量播放器池 (6 槽位 _SoundSlot)
+         ├─ 空闲槽位分配 / LRU 非胜利音效抢占
+         ├─ Random 变体 + 音量分级 + 预估时长自动归还 (兼容 Android SoundPool 无完成回调)
+         └─ onPlayerComplete 平台提前归还双保险
 ```
 
-- 初始化：`lib/main.dart:48` `GameRepository.init()` 之后 `await SoundService.I.init()`，`FlameAudio.audioCache.loadAll(allAssets)` 预加载 27 wav
+- 初始化：`lib/main.dart` 中 `SoundService.I.init()` 预加载 27 wav 并初始化 6 个常驻 AudioPlayer
 - 单例：`SoundService.instance` / `SoundService.I`，`_initialized` 哨兵，`_rng` 内部持有，`_isTest` 静默
+- 生命周期：提供 `stopAll()`，在页面销毁与进入后台时立即切断挂起声音
 
 ## 三、API
 
@@ -38,8 +42,10 @@ enum Sfx {
 class SoundService {
   static final SoundService instance = SoundService._();
   static SoundService get I => instance;
-  Future<void> init(); // 预加载 allAssets
+  Future<void> init(); // 预加载 allAssets 并初始化 6 个复用播放器
   void play(Sfx sfx, {bool ignoreMute = false, double? volume});
+  void stopAll(); // 立即停止所有活跃声音并重置池状态
+  Future<void> dispose(); // 完全释放播放器池
   void playSnap() => play(Sfx.snap);
   void playTap()  => play(Sfx.tap);
   void playSwitchToggle() => play(Sfx.switchToggle, ignoreMute: true);
