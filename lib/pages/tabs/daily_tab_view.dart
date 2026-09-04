@@ -699,6 +699,7 @@ class _DailyTabViewState extends State<DailyTabView> {
   ) {
     final progress = ProgressStore.instance.getLevelProgress(item.id);
     final dayNumber = _extractDayNumber(item.dailyDate);
+    final isNew = item.isNew && !progress.isCompleted;
 
     return InkWell(
       onTap: () => _openDaily(item),
@@ -786,6 +787,30 @@ class _DailyTabViewState extends State<DailyTabView> {
                       fontSize: 11,
                       fontWeight: FontWeight.bold,
                       color: palette.brand,
+                    ),
+                  ),
+                ),
+              ),
+            if (isNew)
+              Positioned(
+                bottom: 8,
+                left: 8,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 2,
+                  ),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFC97A2E),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: const Text(
+                    'New',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 10,
+                      fontWeight: FontWeight.w800,
+                      fontStyle: FontStyle.italic,
                     ),
                   ),
                 ),

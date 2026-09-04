@@ -940,6 +940,29 @@ class _LevelCard extends StatelessWidget {
                   ),
                 ),
               ),
+            if (level.progressPercent > 0 && !level.isCompleted)
+              Positioned(
+                top: 6,
+                right: 6,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 7,
+                    vertical: 2.5,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Colors.black.withValues(alpha: 0.6),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Text(
+                    '${level.progressPercent}%',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 10,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ),
             // 可选：最高块数（首期不显示，二期启用）
             // Positioned(right:6, bottom:6, child: Container(padding: EdgeInsets.symmetric(horizontal:6, vertical:2), decoration:BoxDecoration(color: Colors.black54, borderRadius: BorderRadius.circular(6)), child: Text('◈ ${level.difficulty.pieceCount}', style: TextStyle(color: Colors.white, fontSize:10))))
           ],

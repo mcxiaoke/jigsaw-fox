@@ -3,7 +3,6 @@ import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:phosphoricons_flutter/phosphoricons_flutter.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 import '../data/favorite_store.dart';
 import '../data/game_repository.dart';
@@ -302,85 +301,6 @@ class _ChooseDifficultySheetState extends State<ChooseDifficultySheet> {
   }
 
   Future<void> _handleStart(PuzzleDifficulty diff) async {
-    final palette = AppPalette.of(context);
-    // 基于当前比例推荐起步档位判断是否存在越级跳档（跨越至少 2 个层级且 >= 2.5x，防小白误触防劝退）
-    final baseTier = _currentTiers.firstWhere(
-      (t) => t.difficulty.recommended,
-      orElse: () => _currentTiers.first,
-    );
-    final basePieces = baseTier.difficulty.pieceCount;
-    final isBigJump =
-        diff.pieceCount >= basePieces * 2.5 &&
-        (diff.tierIndex - baseTier.difficulty.tierIndex >= 2);
-    if (isBigJump) {
-      final prefs = await SharedPreferences.getInstance();
-      final skip = prefs.getBool('skip_l2_gap_warning') ?? false;
-      if (!skip && mounted) {
-        var doNotShowAgain = false;
-        final confirmed = await showDialog<bool>(
-          context: context,
-          builder: (ctx) => StatefulBuilder(
-            builder: (ctx, setDialogState) => AlertDialog(
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
-              ),
-              title: Row(
-                children: [
-                  Icon(PhosphorIconsBold.info, color: palette.warning),
-                  const SizedBox(width: 8),
-                  const Text('难度提示'),
-                ],
-              ),
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    '当前 ${diff.pieceCount} 块相比推荐档 $basePieces 块难度提升较大，碎片较为小巧。是否继续进入挑战？',
-                  ),
-                  const SizedBox(height: 24),
-                  Row(
-                    children: [
-                      Checkbox(
-                        value: doNotShowAgain,
-                        onChanged: (v) =>
-                            setDialogState(() => doNotShowAgain = v ?? false),
-                      ),
-                      Text(
-                        '不再提示此类跨度',
-                        style: TextStyle(
-                          fontSize: 13,
-                          color: palette.primaryText,
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.of(ctx).pop(false),
-                  child: const Text('换个难度'),
-                ),
-                FilledButton(
-                  style: FilledButton.styleFrom(backgroundColor: palette.brand),
-                  onPressed: () => Navigator.of(ctx).pop(true),
-                  child: const Text('立即挑战'),
-                ),
-              ],
-            ),
-          ),
-        );
-
-        // 仅当玩家确认进入（立即挑战）且勾选"不再提示"时才写入，避免"换个难度"也永久跳过提示
-        if (doNotShowAgain && confirmed == true) {
-          await prefs.setBool('skip_l2_gap_warning', true);
-        }
-
-        if (confirmed != true) return;
-      }
-    }
-
     if (mounted) {
       Navigator.of(context).pop();
       widget.onStart(diff);

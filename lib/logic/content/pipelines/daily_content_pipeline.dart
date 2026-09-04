@@ -170,6 +170,7 @@ class DailyContentPipeline {
             dailyDate: dateStr,
             isTimeLocked: isLocked,
             order: int.tryParse(dateStr) ?? 0,
+            addedAt: DateTime(year, month, day),
           ),
         );
       }

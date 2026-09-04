@@ -159,11 +159,7 @@ class _SettingsButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return IconButton(
-      icon: Icon(
-        PhosphorIconsBold.gear,
-        color: palette.secondaryText,
-        size: 22,
-      ),
+      icon: Icon(PhosphorIconsBold.gear, color: palette.brand, size: 22),
       tooltip: '设置',
       onPressed: () async {
         await SettingsPage.open(context);

@@ -110,14 +110,7 @@ class _SettingsPageState extends State<SettingsPage> {
         elevation: 0.5,
         scrolledUnderElevation: 0.5,
         centerTitle: false,
-        title: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(PhosphorIconsFill.gearSix, color: palette.brand, size: 24),
-            const SizedBox(width: 8),
-            Text('游戏设置', style: styles.h3.copyWith(fontSize: 19)),
-          ],
-        ),
+        title: Text('游戏设置', style: styles.h3.copyWith(fontSize: 19)),
       ),
       body: Center(
         child: ConstrainedBox(
