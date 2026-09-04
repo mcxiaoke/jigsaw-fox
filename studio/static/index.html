@@ -1,0 +1,435 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Content Studio — 拼图内容打包工作台</title>
+  <link rel="stylesheet" href="/static/css/studio.css" />
+  <script src="/static/vendor/vue.global.prod.js"></script>
+</head>
+<body>
+  <div id="app" class="app-container" :style="{ '--card-size': cardZoom + 'px' }" v-cloak>
+    <!-- 头部导航 -->
+    <header class="header">
+      <div class="brand">
+        <div class="logo-icon">🧩</div>
+        <span>Content Studio</span>
+        <span class="brand-sub">拼图内容打包工作台 v2.3</span>
+      </div>
+
+      <div class="header-actions">
+        <span v-if="records.length > 0" class="btn sm" style="cursor: default; background: #f8fafc;">
+          总计: <b>{{ records.length }}</b> 张
+        </span>
+        <span v-if="unreviewedCount > 0" class="btn sm" style="cursor: default; background: #fef2f2; color: #dc2626; border-color: #fecaca;">
+          待复核: <b>{{ unreviewedCount }}</b>
+        </span>
+
+        <button class="btn success" @click="doSave" :disabled="isSaving || records.length === 0">
+          <span v-if="isSaving">💾 保存中...</span>
+          <span v-else>💾 保存 tags.json</span>
+        </button>
+
+        <button class="btn primary" @click="openExport" :disabled="records.length === 0">
+          🚀 导出资产
+        </button>
+      </div>
+    </header>
+
+    <!-- 配置栏 -->
+    <section class="config-bar">
+      <div class="field-group">
+        <label>图片源目录 (Source Directory)</label>
+        <input class="field-input" type="text" v-model="srcDir" placeholder="例如: C:\Home\Temp\Jigsaw_Organized" @change="persistConfig" />
+      </div>
+      <div class="field-group">
+        <label>输出目录 (Output Directory)</label>
+        <input class="field-input" type="text" v-model="outDir" placeholder="例如: D:\puzzle\out 或 X:\www\game\test" @change="persistConfig" />
+      </div>
+      <div class="field-group">
+        <label>HTTP 根地址 (HTTP Base)</label>
+        <input class="field-input" type="text" v-model="httpBase" placeholder="http://192.168.1.118/data/www/game/test" @change="persistConfig" />
+      </div>
+      <div>
+        <button class="btn primary" @click="doScan" :disabled="isScanning">
+          <span v-if="isScanning">🔍 扫描中...</span>
+          <span v-else>🔍 扫描目录</span>
+        </button>
+      </div>
+    </section>
+
+    <!-- 主工作区：左侧垂直 Tag 列表 + 右侧内容区 (针对大屏与 4K 优化) -->
+    <div class="studio-workspace">
+      <!-- 左侧标签导航侧边栏 -->
+      <aside class="tag-sidebar">
+        <div class="sidebar-header">
+          <span>分类标签 TAGS</span>
+          <span class="sidebar-badge">14+1</span>
+        </div>
+
+        <nav class="sidebar-nav">
+          <!-- 全部 -->
+          <div
+            class="tag-nav-item"
+            :class="{ active: activeTag === '' }"
+            @click="activeTag = ''"
+          >
+            <span class="icon">🌟</span>
+            <div class="label-group">
+              <span class="zh">全部</span>
+              <span class="en">All</span>
+            </div>
+            <span class="count">{{ records.length }}</span>
+          </div>
+
+          <!-- 14 主 Tags -->
+          <div
+            v-for="t in mainTags"
+            :key="t.id"
+            class="tag-nav-item"
+            :class="{ active: activeTag === t.id, 'is-zero': !(tagCounts[t.id] > 0) }"
+            :title="t.desc"
+            @click="activeTag = (activeTag === t.id ? '' : t.id)"
+          >
+            <span class="icon">{{ t.icon }}</span>
+            <div class="label-group">
+              <span class="zh">{{ t.zh }}</span>
+              <span class="en">{{ t.name }}</span>
+            </div>
+            <span class="count">{{ tagCounts[t.id] || 0 }}</span>
+          </div>
+        </nav>
+      </aside>
+
+      <!-- 右侧主内容区 (工具栏 + 图片网格) -->
+      <section class="studio-main-content">
+        <!-- 过滤器与批量操作栏 -->
+        <div class="toolbar">
+      <!-- 搜索 -->
+      <div class="search-box">
+        <span class="icon">🔍</span>
+        <input type="text" v-model="searchQuery" placeholder="搜索文件名、标签、描述..." />
+      </div>
+
+      <!-- 仅看待复核 -->
+      <label class="filter-toggle">
+        <input type="checkbox" v-model="onlyUnreviewed" />
+        <span style="color: #ea580c; font-weight: 600;">仅看待复核 ({{ unreviewedCount }})</span>
+      </label>
+
+      <!-- 缩放控制 -->
+      <div class="zoom-ctrl">
+        <span>大小</span>
+        <input type="range" min="140" max="320" step="10" v-model="cardZoom" />
+      </div>
+
+      <!-- 排序 -->
+      <div style="display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-muted);">
+        <span>排序:</span>
+        <select v-model="sortBy" style="border: 1px solid var(--line); border-radius: 4px; padding: 3px 6px;">
+          <option value="name">文件名</option>
+          <option value="mtime">修改时间</option>
+          <option value="confidence">置信度</option>
+        </select>
+      </div>
+
+      <!-- 批量操作控制台 -->
+      <div class="batch-bar">
+        <span class="selected-badge">已选: {{ selectedCount }} 项</span>
+        <button class="btn sm" @click="selectAllFiltered">全选</button>
+        <button class="btn sm" @click="clearSelection" :disabled="selectedCount === 0">全不选</button>
+        <button class="btn sm" @click="invertSelection">反选</button>
+        <button class="btn sm" @click="selectUnreviewedOnly">选待复核</button>
+
+        <!-- 批量标签修改选择器 -->
+        <select v-model="batchTagTarget" style="border: 1px solid var(--line); border-radius: 4px; padding: 4px 8px; font-size: 12px;">
+          <option value="">-- 选择目标标签 --</option>
+          <option v-for="t in mainTags" :key="t.id" :value="t.id">
+            {{ t.icon }} {{ t.zh }} ({{ t.name }})
+          </option>
+        </select>
+
+        <button class="btn sm primary" :disabled="selectedCount === 0 || !batchTagTarget" @click="batchSetTag(batchTagTarget)">
+          覆盖 (Set)
+        </button>
+        <button class="btn sm" :disabled="selectedCount === 0 || !batchTagTarget" @click="batchAddTag(batchTagTarget)">
+          追加 (Add)
+        </button>
+        <button class="btn sm" :disabled="selectedCount === 0 || !batchTagTarget" @click="batchRemoveTag(batchTagTarget)">
+          移除 (Del)
+        </button>
+        <button class="btn sm" :disabled="selectedCount === 0" @click="batchClearTags">
+          重置
+        </button>
+        <button class="btn sm" :disabled="selectedCount === 0" @click="batchSetReviewed(true)">
+          ✔ 已复核
+        </button>
+        <button class="btn sm" :disabled="selectedCount === 0" @click="batchSetReviewed(false)">
+          ⚠ 待复核
+        </button>
+      </div>
+    </div>
+
+    <!-- 主展示区：图片网格 -->
+    <main class="main-viewport">
+      <div v-if="filteredRecords.length === 0" style="text-align: center; padding: 80px 20px; color: var(--text-muted);">
+        <p style="font-size: 32px; margin-bottom: 12px;">🖼️</p>
+        <p v-if="records.length === 0">尚未扫描图片。请在上方输入源目录并点击「扫描目录」。</p>
+        <p v-else>当前筛选条件下无图片。</p>
+      </div>
+
+      <div class="image-grid">
+        <div
+          v-for="item in filteredRecords"
+          :key="item.path"
+          class="img-card"
+          :class="{ selected: isSelected(item) }"
+          @click="toggleSelect(item)"
+          @dblclick.stop="openViewer(item)"
+        >
+          <!-- 复选框 -->
+          <input
+            type="checkbox"
+            class="card-check"
+            :checked="isSelected(item)"
+            @click.stop="toggleSelect(item)"
+          />
+
+          <!-- 状态小圆点 -->
+          <div
+            class="card-status-dot"
+            :class="{
+              'status-ok': !item.review_required && !item.tags.some(t => t.toLowerCase() === 'others'),
+              'status-warn': item.review_required && !item.tags.some(t => t.toLowerCase() === 'others'),
+              'status-bad': item.tags.some(t => t.toLowerCase() === 'others')
+            }"
+            :title="item.review_required ? '待复核' : '正常'"
+          ></div>
+
+          <!-- 缩略图 -->
+          <div class="img-thumb-wrap">
+            <img
+              class="img-thumb"
+              :src="getThumbUrl(item.path, cardZoom * 2)"
+              loading="lazy"
+              :alt="item.file"
+            />
+          </div>
+
+          <!-- 卡片内容 -->
+          <div class="card-body">
+            <div class="card-title" :title="item.path">{{ item.file }}</div>
+            <div class="card-tags">
+              <span
+                v-for="t in item.tags"
+                :key="t"
+                class="tag-badge"
+                :class="{ 'badge-others': t.toLowerCase() === 'others' }"
+                :title="tagDesc[t] || t"
+              >
+                {{ tagIcon[t] || '🏷️' }} {{ tagZh[t] || t }}
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+  </section>
+</div>
+
+<!-- 资产导出模态框 -->
+    <div v-if="exportModalOpen" class="modal-mask" @click.self="closeExport">
+      <div class="modal-dialog">
+        <div class="modal-header">
+          <h3>🚀 导出打包资产</h3>
+          <button class="modal-close" @click="closeExport">×</button>
+        </div>
+
+        <div class="modal-body">
+          <!-- 导出类型选项卡 -->
+          <div class="tab-group">
+            <div class="tab-item" :class="{ active: exportType === 'main' }" @click="exportType = 'main'">
+              Main 关卡
+            </div>
+            <div class="tab-item" :class="{ active: exportType === 'daily' }" @click="exportType = 'daily'">
+              Daily 日历
+            </div>
+            <div class="tab-item" :class="{ active: exportType === 'event' }" @click="exportType = 'event'">
+              Event 活动
+            </div>
+            <div class="tab-item" :class="{ active: exportType === 'collection' }" @click="exportType = 'collection'">
+              Collection 合集
+            </div>
+          </div>
+
+          <!-- 通用设置: 格式与重命名 -->
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+            <div class="field-group">
+              <label>图片输出格式</label>
+              <select class="field-input" v-model="exportConfig.format">
+                <option value="webp">WebP (推荐，体积小)</option>
+                <option value="jpg">JPEG (标准)</option>
+                <option value="png">PNG (无损)</option>
+                <option value="original">保持原图格式</option>
+              </select>
+            </div>
+            <div class="field-group">
+              <label>重命名规则</label>
+              <select class="field-input" v-model="exportConfig.rename">
+                <option value="none">保持原文件名</option>
+                <option value="sequence">数字序号递增 (如 101.webp)</option>
+                <option value="date">日期格式 (如 20260901.webp)</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Main 关卡特定字段 -->
+          <div v-if="exportType === 'main'" style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+            <div class="field-group">
+              <label>起始关卡序号 (Start Order)</label>
+              <input class="field-input" type="number" v-model="exportConfig.startOrder" />
+            </div>
+            <div class="field-group">
+              <label>版本号 (留空则自动读取并在原基础上 +1)</label>
+              <input class="field-input" type="text" v-model="exportConfig.version" placeholder="自增" />
+            </div>
+          </div>
+
+          <!-- Daily 日历特定字段 -->
+          <div v-if="exportType === 'daily'">
+            <div class="field-group">
+              <label>目标月份 (YYYYMM)</label>
+              <input class="field-input" type="text" v-model="exportConfig.month" placeholder="202609" />
+            </div>
+          </div>
+
+          <!-- Event / Collection 特定字段 -->
+          <div v-if="exportType === 'event' || exportType === 'collection'" style="display: flex; flex-direction: column; gap: 10px;">
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+              <div class="field-group">
+                <label>{{ exportType === 'event' ? '活动 ID (eventId)' : '合集 ID (collectionId)' }}</label>
+                <input class="field-input" type="text" v-model="exportConfig.eventId" v-if="exportType === 'event'" placeholder="halloween2026" />
+                <input class="field-input" type="text" v-model="exportConfig.collectionId" v-else placeholder="masterpieces_v1" />
+              </div>
+              <div class="field-group">
+                <label>打包输出模式</label>
+                <select class="field-input" v-model="exportConfig.outputMode">
+                  <option value="zip">单个 ZIP 压缩包 + 封面</option>
+                  <option value="array">散图目录 (Array)</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="field-group">
+              <label>标题 (Title)</label>
+              <input class="field-input" type="text" v-model="exportConfig.title" placeholder="万圣狂欢节" />
+            </div>
+          </div>
+
+          <!-- 控制台日志区域 -->
+          <div v-if="exportLogs.length > 0" class="console-box">
+            <div v-for="(l, i) in exportLogs" :key="i" class="log-line" :class="l.level">
+              <span class="t">[{{ l.t }}]</span>
+              <span class="msg">{{ l.msg }}</span>
+            </div>
+          </div>
+
+          <div v-if="exportSummary" style="padding: 8px 12px; background: #ecfdf5; color: #047857; border-radius: 6px; font-weight: 600;">
+            🎉 {{ exportSummary }}
+          </div>
+        </div>
+
+        <div class="modal-footer">
+          <button v-if="exportLogs.length > 0" class="btn" @click="copyExportLogs">📋 复制日志</button>
+          <button class="btn" @click="closeExport" :disabled="isExporting">关闭</button>
+          <button class="btn primary" @click="runExport" :disabled="isExporting">
+            <span v-if="isExporting">⏳ 正在导出...</span>
+            <span v-else>立即开始导出</span>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 高清大图查看器 Modal -->
+    <div v-if="viewerModalOpen" class="modal-mask" @click.self="closeViewer">
+      <div class="viewer-dialog">
+        <div class="viewer-header">
+          <div>
+            <b>{{ currentViewerItem?.file }}</b>
+            <span style="color: #94a3b8; font-size: 11px; margin-left: 10px;">
+              [{{ viewerIndex + 1 }} / {{ filteredRecords.length }}] {{ currentViewerItem?.path }}
+            </span>
+          </div>
+          <button class="modal-close" style="color: #fff;" @click="closeViewer">×</button>
+        </div>
+
+        <div class="viewer-content">
+          <button class="viewer-nav-btn prev" @click="prevViewer">❮</button>
+          <img
+            v-if="currentViewerItem"
+            class="viewer-img"
+            :src="getFileUrl(currentViewerItem.path)"
+            :alt="currentViewerItem.file"
+          />
+          <button class="viewer-nav-btn next" @click="nextViewer">❯</button>
+        </div>
+
+        <!-- 底部快速打标与复核栏 -->
+        <div class="viewer-footer" v-if="currentViewerItem">
+          <div class="viewer-tags-section">
+            <span class="label">当前标签:</span>
+            <div class="current-tags-row">
+              <span
+                v-for="t in currentViewerItem.tags"
+                :key="t"
+                class="viewer-tag-badge"
+                @click="toggleViewerTag(t)"
+                :title="'点击移除 ' + (tagZh[t] || t)"
+              >
+                {{ tagIcon[t] || '🏷️' }} {{ tagZh[t] || t }} ✕
+              </span>
+            </div>
+          </div>
+
+          <div class="viewer-quick-tags">
+            <span class="label">快速添加/移除:</span>
+            <div class="quick-chips">
+              <button
+                v-for="t in mainTags"
+                :key="t.id"
+                class="btn xs"
+                :class="{ 'btn-active-tag': currentViewerItem.tags && currentViewerItem.tags.includes(t.id) }"
+                @click="toggleViewerTag(t.id)"
+              >
+                {{ t.icon }} {{ t.zh }}
+              </button>
+            </div>
+          </div>
+
+          <div class="viewer-review-action">
+            <button
+              class="btn sm"
+              :class="currentViewerItem.review_required ? 'warn' : 'success'"
+              @click="toggleViewerReview"
+            >
+              <span v-if="currentViewerItem.review_required">⚠ 标记已复核</span>
+              <span v-else>✔ 标记待复核</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Toast 轻提示 -->
+    <div v-if="toast.show" class="toast-msg">
+      <span>🔔</span>
+      <span>{{ toast.text }}</span>
+    </div>
+  </div>
+
+  <!-- 引入本地分类常量 (离线/异常降级备用) -->
+  <script src="/static/js/taxonomy.js"></script>
+  <!-- 引入主应用 -->
+  <script type="module" src="/static/js/app.js"></script>
+</body>
+</html>
