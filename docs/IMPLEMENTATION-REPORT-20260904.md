@@ -113,5 +113,37 @@
 - `flutter build windows --debug`: 阶段三末统一执行
 
 ### 提交
-- 待 Stage3 commit（见 git log）
+- `cbb80b6 fix(P2): stage3 buffer/js/targetSize + painter cache`
+
+---
+
+## 全量核对 2026-09-04 16:35（阶段三末）
+
+### 三阶段汇总
+| 阶段 | 已修复 | 搁置 | Commit |
+|---|---|---|---|
+| 阶段一 P0 | P19,P01,P02,P03,P05(part),P16,P21(part) | GameRepository内存回滚/stateBox pending | `26b6539` |
+| 阶段二 P1 | P06,P14,P15,P18(part),P07,P08,P09(复验),P20(part),P22 | P17 三重 OOM 难度感知 | `bab9552` |
+| 阶段三 P2 | P04,P12,P13,P11(cache) | P10 pauseEngine, P17, P23 buildIO, P24~26算法, P26长期 | `cbb80b6` |
+
+**共修复 19 项（P01~P09,P11~P16,P18~P22中部分，P22,P20部分），搁置 7 项高风险需单独立项**（P10,P17,P23,P24~P26长期，另 P05/P21 残余、P18 完全文件流）。搁置项已在上表说明理由，均为影响面大或需真机压测/设计评审。
+
+### 最终验证（2026-09-04 16:35）
+- `flutter analyze`: **No issues found**（`curly_braces` 已修复）
+- `flutter test`: **247 passed**（0 failed, 全绿）
+- `flutter build windows --debug`: **Built build\windows\x64\runner\Debug\JigsawFox.exe 17.2s**
+- `grep buffer.asUint8List()` 无参: **0 处**（13处已全补）
+- `grep cast<String>`: **0 处（lib）**（8→0）
+- `grep _pendingWrites`: 队列存在且 `waitPendingWrites` 在 `main onExitRequested` 调用
+- `grep HttpClient()`: 仅 `my_center_tab_view` 一处且已 `close(force:true)` + 超时 + 熔断
+- `grep jsonEncode.*targetUrl`: P12 已 `jsonEncode` 替换 `replaceAll`
+- `grep TargetImageSize`: 已 `math.max(1,`
+- 手工抽检：`event_levels_page:99` canonicalId 正确；`game_page:213` dispose guard；`share/linen` dispose；`downloadManager/imageCache` 流式；`manifest cacheFirst`；`chooseDifficulty` 缓存 Path
+
+### 风险与后续
+- 搁置项需在 `P17` 分支单测：对比 1080/2160/3072 封顶下高难度放大清晰度 + 低端 3GB 内存 70MB 峰值回归。
+- 建议下一迭代补 `game_repository` 内存回滚单测、`daily_tab_view` 异步缓存、`jigsaw_puzzle_game` `pauseEngine` 空闲挂起。
+- 本次 3 阶段共 3 commits，均未 `push`，符合红线。
+
+> 报告生成：`docs/IMPLEMENTATION-REPORT-20260904.md`，变更摘要已同步 `docs/CHANGES-20260904.md` 顶部。
 
