@@ -1,12 +1,12 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "version": "3.0.0",
-  "updated_at": "2026-09-04",
+  "version": "3.1.0",
+  "updated_at": "2026-09-05",
   "specification_reference": "docs/catalog-tags-mapping-specification.md",
   "grid": {
     "columns": 3,
-    "rows": 5,
-    "total_slots": 15,
+    "rows": 6,
+    "total_slots": 18,
     "include_all": true
   },
   "main_tags": [
@@ -66,15 +66,26 @@
       "order": 5
     },
     {
-      "id": "Travel",
-      "name": "Travel",
-      "zh": "旅行",
-      "icon": "✈️",
+      "id": "Cities",
+      "name": "Cities",
+      "zh": "城市",
+      "icon": "🏙️",
       "category_type": "objective_subject",
-      "description": "城市天际线、名胜古迹、欧式古堡",
-      "examples": ["世界名胜建筑", "都市街景", "欧式古堡宫殿", "水乡石桥小镇"],
+      "description": "城市天际线、都市夜景、市井街巷、水乡运河",
+      "examples": ["都市天际线", "繁华夜景", "老城街区", "水乡石桥运河", "欧洲小镇"],
       "grid_row": 3,
       "order": 6
+    },
+    {
+      "id": "Structures",
+      "name": "Structures",
+      "zh": "建筑",
+      "icon": "🏛️",
+      "category_type": "objective_subject",
+      "description": "知名地标建筑、古堡宫殿、桥梁灯塔、几何构造",
+      "examples": ["世界地标建筑", "欧式古堡宫殿", "跨海大桥", "海岸灯塔", "教堂神庙", "极简室内建筑"],
+      "grid_row": 3,
+      "order": 7
     },
     {
       "id": "Vehicles",
@@ -82,21 +93,32 @@
       "zh": "交通",
       "icon": "🚂",
       "category_type": "objective_subject",
-      "description": "交通载具、复古工业机械",
-      "examples": ["老爷车超跑", "蒸汽火车", "古典帆船游轮", "飞机热气球"],
-      "grid_row": 3,
-      "order": 7
-    },
-    {
-      "id": "Cozy",
-      "name": "Cozy",
-      "zh": "温馨",
-      "icon": "☕",
-      "category_type": "atmosphere",
-      "description": "治愈慢生活、室内温暖角、复古手作",
-      "examples": ["壁炉书房", "童话木屋", "编织手作", "黑胶打字机", "闲适阅读"],
+      "description": "交通载具、工业机械、出行工具",
+      "examples": ["老爷车超跑", "蒸汽火车", "古典帆船游轮", "飞机热气球", "复古机车"],
       "grid_row": 3,
       "order": 8
+    },
+    {
+      "id": "People",
+      "name": "People",
+      "zh": "人物",
+      "icon": "👥",
+      "category_type": "objective_subject",
+      "description": "人物肖像、时尚写真、童话角色、日常生活人物",
+      "examples": ["人物肖像", "时尚写真", "童话角色", "日常慢调生活", "亲子情侣", "街头抓拍"],
+      "grid_row": 4,
+      "order": 9
+    },
+    {
+      "id": "Objects",
+      "name": "Objects",
+      "zh": "物品",
+      "icon": "📦",
+      "category_type": "objective_subject",
+      "description": "复古器物、静物台饰、日常用品、手工工艺品",
+      "examples": ["黑胶打字机", "手作编织工艺品", "玩具乐高", "乐器器皿", "静物台饰"],
+      "grid_row": 4,
+      "order": 10
     },
     {
       "id": "Food",
@@ -107,7 +129,7 @@
       "description": "烘焙甜点、环球料理、鲜果茶饮",
       "examples": ["西点蛋糕", "环球美食料理", "时蔬鲜果", "拿铁咖啡下午茶"],
       "grid_row": 4,
-      "order": 9
+      "order": 11
     },
     {
       "id": "Art",
@@ -115,10 +137,10 @@
       "zh": "艺术",
       "icon": "🎨",
       "category_type": "style",
-      "description": "传世名画、唯美插画、二次元、国风",
-      "examples": ["古典油画", "绘本水彩插画", "二次元动漫", "中国国风水墨"],
-      "grid_row": 4,
-      "order": 10
+      "description": "艺术插画、手绘绘本、AI生成插画、传世名画",
+      "examples": ["AI生成插画", "手绘绘本插画", "二次元动漫", "古典油画", "国风水墨"],
+      "grid_row": 5,
+      "order": 12
     },
     {
       "id": "Fantasy",
@@ -126,43 +148,56 @@
       "zh": "奇幻",
       "icon": "✨",
       "category_type": "imagination",
-      "description": "魔法神兽、深空星系、占星图腾",
-      "examples": ["神兽巨龙", "浮空仙境", "宇航员深空星云", "十二星座图腾"],
-      "grid_row": 4,
-      "order": 11
-    },
-    {
-      "id": "Colors",
-      "name": "Colors",
-      "zh": "缤纷",
-      "icon": "🌈",
-      "category_type": "mechanism",
-      "description": "曼陀罗图腾、平铺静物、彩虹渐变",
-      "examples": ["对称万花筒", "器物平铺Flat-Lay", "彩虹高饱和色相", "抽象流体"],
+      "description": "魔法神兽、深空星系、占星图腾、神秘异界",
+      "examples": ["神兽巨龙", "浮空仙境", "宇航员深空星云", "十二星座图腾", "魔法幻想"],
       "grid_row": 5,
-      "order": 12
+      "order": 13
     },
     {
       "id": "Holidays",
       "name": "Holidays",
-      "zh": "节日",
+      "zh": "庆典",
       "icon": "🎉",
       "category_type": "festival",
-      "description": "节庆假日、民俗庆典、仪式装扮",
-      "examples": ["圣诞节彩灯礼物", "万圣节南瓜", "除夕春节", "感恩节复活节"],
+      "description": "节庆假日、盛大庆典、民俗活动、体育运动赛事",
+      "examples": ["圣诞节节庆", "万圣节南瓜", "除夕春节灯笼", "嘉年华狂欢游行", "体育竞技与运动会"],
       "grid_row": 5,
-      "order": 13
+      "order": 14
+    },
+    {
+      "id": "Colors",
+      "name": "Colors",
+      "zh": "色彩",
+      "icon": "🌈",
+      "category_type": "form_attribute",
+      "is_supplementary": true,
+      "description": "【附加Tag】彩虹色谱渐变、纯色冲击、强烈撞色、流体色相（运营手动指定）",
+      "examples": ["彩虹渐变", "高饱和多色撞色", "纯单色调美学", "流体色彩"],
+      "grid_row": 6,
+      "order": 15
+    },
+    {
+      "id": "Composition",
+      "name": "Composition",
+      "zh": "组合",
+      "icon": "🧩",
+      "category_type": "form_attribute",
+      "is_supplementary": true,
+      "description": "【附加Tag】平铺俯拍、模块化排布、拼贴组合、万花筒对称（运营手动指定）",
+      "examples": ["器物平铺Flat-Lay", "模块整齐排布Knolling", "拼贴画Collage", "对称万花筒"],
+      "grid_row": 6,
+      "order": 16
     },
     {
       "id": "Others",
       "name": "Others",
       "zh": "其他",
-      "icon": "📦",
+      "icon": "💡",
       "category_type": "fallback",
-      "description": "体育运动、无法归类的特殊小众素材",
-      "examples": ["竞技体育", "无法归类的杂项素材兜底"],
-      "grid_row": 5,
-      "order": 14
+      "description": "无法明确归类的特殊杂项素材兜底",
+      "examples": ["无法归类的杂项素材兜底"],
+      "grid_row": 6,
+      "order": 17
     }
   ],
   "tag_patterns": {
@@ -172,7 +207,7 @@
       "ocean", "sea\\b", "beach", "coast", "reef", "wave", "iceberg",
       "sunset", "sunrise", "dusk", "dawn", "twilight", "horizon",
       "waterfall", "lake", "river", "creek", "stream", "fjord",
-      "desert", "dune", "aurora", "sky", "cloud", "rainbow"
+      "desert", "dune", "aurora", "sky", "cloud"
     ],
     "Nature": [
       "nature", "botanical", "succulent", "cactus", "bonsai", "fern", "leaf", "foliage",
@@ -203,13 +238,16 @@
       "guinea_pig", "hamster", "chinchilla", "hedgehog", "capybara", "ferret",
       "goldfish", "betta", "aquarium", "budgie", "call_duck"
     ],
-    "Travel": [
-      "travel", "place", "trip", "tour",
-      "cit(y|ies)", "urban", "skyline", "metropolis", "street", "alley", "canal", "night_view",
-      "landmark", "monument", "eiffel", "taj_mahal", "colosseum", "pyramid", "big_ben",
+    "Cities": [
+      "^cit(y|ies)$", "urban", "skyline", "metropolis", "street", "alley", "canal", "night_view",
+      "cityscape", "downtown", "old_town", "water_town", "cotswolds", "santorini", "village", "town"
+    ],
+    "Structures": [
+      "^structures?$", "architecture", "building", "bridge", "landmark", "monument",
+      "eiffel", "taj_mahal", "colosseum", "pyramid", "big_ben",
       "castle", "palace", "chateau", "fortress", "manor",
-      "village", "town", "old_town", "water_town", "cotswolds", "santorini",
-      "architecture", "building", "bridge", "cathedral", "church", "temple", "shrine", "pagoda", "windmill", "lighthouse"
+      "cathedral", "church", "temple", "shrine", "pagoda", "windmill", "lighthouse",
+      "interior", "living_room", "bedroom", "study", "fireplace", "hearth", "cottage", "cabin", "log_cabin", "chalet", "thatched"
     ],
     "Vehicles": [
       "vehicle", "transport",
@@ -218,13 +256,14 @@
       "ship\\b", "ships\\b", "boat", "sailboat", "tall_ship", "yacht", "cruise", "gondola", "canoe", "vessel",
       "aircraft", "airplane", "plane\\b", "planes\\b", "biplane", "balloon", "hot_air_balloon", "helicopter", "airship"
     ],
-    "Cozy": [
-      "cozy", "coziness", "cozyhome", "snug", "hygge",
-      "interior", "room", "living_room", "bedroom", "study", "reading_nook", "windowsill", "balcony", "kitchen", "fireplace", "hearth", "bookshelf",
-      "cottage", "cabin", "log_cabin", "chalet", "thatched",
-      "lifestyle", "reading", "picnic", "slow_living", "tea_time", "people",
-      "craft", "handicraft", "knitting", "yarn", "wool", "sewing", "embroidery", "patchwork", "pottery", "woodworking",
-      "vintage", "retro", "nostalgia", "americana", "antique", "typewriter", "gramophone"
+    "People": [
+      "^people$", "^person$", "portrait", "human", "girl", "boy", "woman", "man\\b", "lady",
+      "child\\b", "children", "couple", "family", "lifestyle", "reading", "picnic", "model", "figure"
+    ],
+    "Objects": [
+      "^objects?$", "item", "craft", "handicraft", "knitting", "yarn", "wool", "sewing", "embroidery", "patchwork", "pottery", "woodworking",
+      "vintage", "retro", "nostalgia", "americana", "antique", "typewriter", "gramophone",
+      "clock", "book", "toy", "lego", "instrument", "still_life", "tableware"
     ],
     "Food": [
       "food", "meal", "dish", "gourmet",
@@ -239,7 +278,8 @@
       "painting", "oil_painting", "watercolor", "acrylic", "canvas", "impressionism", "van_gogh", "monet",
       "illustration", "storybook", "picture_book", "whimsical", "hand_drawn", "sketch",
       "anime", "manga", "cartoon", "chibi", "ghibli", "cel_shaded",
-      "oriental", "asian_art", "chinese_painting", "gongbi", "ink_wash", "blue_green_landscape", "ukiyo_e"
+      "oriental", "asian_art", "chinese_painting", "gongbi", "ink_wash", "blue_green_landscape", "ukiyo_e",
+      "ai_art", "ai_generated", "digital_art", "concept_art"
     ],
     "Fantasy": [
       "fantasy", "fairy_tale", "enchanted",
@@ -248,23 +288,23 @@
       "space", "universe", "cosmos", "galaxy", "galaxies", "nebula", "planet", "saturn", "earth", "moon", "astronaut", "spaceship", "space_station", "sci_fi",
       "zodiac", "astrology", "horoscope", "constellation", "tarot"
     ],
-    "Colors": [
-      "color", "colorful", "rainbow", "gradient", "vibrant_palette",
-      "mandala", "kaleidoscope", "fractal", "symmetry", "stained_glass", "mosaic",
-      "flat_?lay", "knolling", "collage", "assortment", "overhead_table",
-      "abstract", "fluid_art", "acrylic_pour", "marble_texture", "pattern", "geometry"
-    ],
     "Holidays": [
-      "holiday", "festival", "celebration",
+      "holiday", "festival", "celebration", "carnival", "parade",
       "christmas", "xmas", "santa", "reindeer", "gingerbread",
       "halloween", "jack_o_lantern", "pumpkin",
       "easter", "easter_egg",
       "new_?year", "spring_festival", "chinese_new_year", "lunar_new_year", "lantern",
-      "thanksgiving", "turkey", "valentine"
+      "thanksgiving", "turkey", "valentine",
+      "\\bsports?\\b", "athletics?", "stadium", "skiing", "surfing", "soccer", "football", "basketball", "olympics?", "marathon", "championship"
+    ],
+    "Colors": [
+      "^colors?$", "^rainbow$", "^gradients?$", "^vibrant_palette$", "^monochrome$"
+    ],
+    "Composition": [
+      "^composition$", "^flat_?lays?$", "^knolling$", "^collages?$", "^assortment$", "^mandala$", "^kaleidoscopes?$"
     ],
     "Others": [
-      "\\bsports?\\b", "athletics?", "stadium", "skiing", "surfing", "soccer", "football",
-      "\\bothers?\\b", "\\bmisc\\b"
+      "^others?$", "^misc$"
     ]
   },
   "zh_alias_map": {
@@ -274,15 +314,18 @@
     "花卉": "Flowers", "花朵": "Flowers", "花园": "Flowers", "花海": "Flowers", "插花": "Flowers", "玫瑰": "Flowers", "牡丹": "Flowers", "郁金香": "Flowers",
     "动物": "Animals", "野生动物": "Animals", "野兽": "Animals", "鸟类": "Animals", "飞禽": "Animals", "海洋水族": "Animals", "水族": "Animals",
     "宠物": "Pets", "萌宠": "Pets", "猫咪": "Pets", "猫": "Pets", "狗狗": "Pets", "狗": "Pets", "兔子": "Pets", "仓鼠": "Pets", "荷兰猪": "Pets",
-    "旅行": "Travel", "城市": "Travel", "建筑": "Travel", "地标": "Travel", "古堡": "Travel", "城堡": "Travel", "小镇": "Travel", "古镇": "Travel", "街景": "Travel",
+    "城市": "Cities", "都市": "Cities", "天际线": "Cities", "街景": "Cities", "夜景": "Cities", "水乡": "Cities", "小镇": "Cities", "古镇": "Cities", "运河": "Cities",
+    "建筑": "Structures", "地标": "Structures", "古堡": "Structures", "城堡": "Structures", "宫殿": "Structures", "大厦": "Structures", "桥梁": "Structures", "大桥": "Structures", "灯塔": "Structures", "教堂": "Structures", "寺庙": "Structures",
     "交通": "Vehicles", "机械": "Vehicles", "汽车": "Vehicles", "跑车": "Vehicles", "火车": "Vehicles", "列车": "Vehicles", "船舶": "Vehicles", "帆船": "Vehicles", "飞机": "Vehicles",
-    "温馨": "Cozy", "生活": "Cozy", "室内": "Cozy", "木屋": "Cozy", "手作": "Cozy", "复古": "Cozy", "日常": "Cozy",
+    "人物": "People", "人像": "People", "肖像": "People", "写真": "People", "女孩": "People", "女性": "People", "情侣": "People", "亲子": "People", "童话角色": "People",
+    "物品": "Objects", "器物": "Objects", "静物": "Objects", "复古": "Objects", "手作": "Objects", "工艺品": "Objects", "玩具": "Objects", "乐器": "Objects", "道具": "Objects",
     "美食": "Food", "料理": "Food", "甜品": "Food", "甜点": "Food", "烘焙": "Food", "蛋糕": "Food", "水果": "Food", "咖啡": "Food", "茶饮": "Food",
-    "艺术": "Art", "名画": "Art", "油画": "Art", "插画": "Art", "绘本": "Art", "动漫": "Art", "二次元": "Art", "国风": "Art", "水墨": "Art",
-    "奇幻": "Fantasy", "科幻": "Fantasy", "神兽": "Fantasy", "巨龙": "Fantasy", "魔法": "Fantasy", "太空": "Fantasy", "星云": "Fantasy", "星座": "Fantasy",
-    "缤纷": "Colors", "色彩": "Colors", "曼陀罗": "Colors", "平铺": "Colors", "色块": "Colors", "抽象": "Colors",
-    "节日": "Holidays", "节庆": "Holidays", "圣诞": "Holidays", "万圣": "Holidays", "复活节": "Holidays", "春节": "Holidays", "新年": "Holidays",
-    "其他": "Others", "运动": "Others", "体育": "Others"
+    "艺术": "Art", "插画": "Art", "手绘": "Art", "名画": "Art", "油画": "Art", "绘本": "Art", "动漫": "Art", "二次元": "Art", "国风": "Art", "水墨": "Art", "AI生成": "Art", "AI绘画": "Art",
+    "奇幻": "Fantasy", "科幻": "Fantasy", "神兽": "Fantasy", "巨龙": "Fantasy", "魔法": "Fantasy", "太空": "Fantasy", "星云": "Fantasy", "星座": "Fantasy", "占星": "Fantasy",
+    "庆典": "Holidays", "节日": "Holidays", "节庆": "Holidays", "活动": "Holidays", "运动会": "Holidays", "体育": "Holidays", "赛事": "Holidays", "嘉年华": "Holidays", "圣诞": "Holidays", "万圣": "Holidays", "春节": "Holidays",
+    "色彩": "Colors", "缤纷": "Colors", "彩虹": "Colors", "色调": "Colors", "撞色": "Colors", "渐变": "Colors",
+    "组合": "Composition", "平铺": "Composition", "排布": "Composition", "拼贴": "Composition", "曼陀罗": "Composition", "万花筒": "Composition",
+    "其他": "Others", "杂项": "Others"
   },
   "legacy_map": {
     "cat_nature": "Nature",
@@ -290,14 +333,16 @@
     "cat_pets": "Pets",
     "cat_colors": "Colors",
     "cat_flowers": "Flowers",
-    "cat_cozy": "Cozy",
-    "cat_travel": "Travel",
-    "cat_vehicles": "Vehicles",
     "cat_food": "Food",
     "cat_art": "Art",
     "cat_fantasy": "Fantasy",
     "cat_holidays": "Holidays",
     "cat_landscapes": "Landscapes",
-    "cat_others": "Others"
+    "cat_vehicles": "Vehicles",
+    "cat_travel": "Cities",
+    "cat_cozy": "Objects",
+    "cat_others": "Others",
+    "Travel": "Cities",
+    "Cozy": "Objects"
   }
 }

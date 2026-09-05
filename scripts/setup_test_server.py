@@ -2,10 +2,12 @@
 """
 在测试服务器 X:\\www\\game\\test 下构建丰富的拼图内容测试数据。
 包含：
-1. manifest.json (Root Manifest)
-2. main.json + main/ 关卡图片 (101~120，20关，多标签)
-3. daily/202608.zip (每日挑战 8 月 31 天整包，20260801.jpg ~ 20260831.jpg)
-4. events/ 包含 5 个不同类型的丰富活动 (Zip 与 Array 模式)
+1. main.json + main/ 关卡图片 (101~120，20关，多标签)
+2. daily/ 202609/202608/202607.zip (每日挑战整包)
+3. events/ 包含 5 个不同类型的丰富活动 (Zip 与 Array 模式)
+4. collections/ 包含 4 个合集 (Zip 与 Array 模式)
+5. manifest.json (Root Manifest)
+6. packs/ 扩展测试图包
 """
 
 import os
@@ -19,17 +21,24 @@ SRC_ANIMALS = Path("temp/animals-cropped")
 SRC_TESTIMAGES = Path("temp/testimages")
 HTTP_BASE = "http://192.168.1.118/data/www/game/test"
 
+
 def main():
     print(f"Setting up rich test server data at {BASE_DIR}...")
     BASE_DIR.mkdir(parents=True, exist_ok=True)
-    
+
     # 收集源图片
     src_images = []
     if SRC_ANIMALS.exists():
-        src_images.extend(sorted(list(SRC_ANIMALS.glob("*.jpg")) + list(SRC_ANIMALS.glob("*.png"))))
+        src_images.extend(
+            sorted(list(SRC_ANIMALS.glob("*.jpg")) + list(SRC_ANIMALS.glob("*.png")))
+        )
     if SRC_TESTIMAGES.exists():
-        src_images.extend(sorted(list(SRC_TESTIMAGES.glob("*.jpg")) + list(SRC_TESTIMAGES.glob("*.png"))))
-        
+        src_images.extend(
+            sorted(
+                list(SRC_TESTIMAGES.glob("*.jpg")) + list(SRC_TESTIMAGES.glob("*.png"))
+            )
+        )
+
     if not src_images:
         print("Error: No source images found!")
         return
@@ -39,7 +48,7 @@ def main():
     # 1. 部署首页主线 main/ (20 关: 101 ~ 120)
     main_dir = BASE_DIR / "main"
     main_dir.mkdir(exist_ok=True)
-    
+
     predefined_tags = [
         ["animal", "ocean", "cute"],
         ["bird", "nature", "colorful"],
@@ -62,7 +71,7 @@ def main():
         ["art", "watercolor", "flower"],
         ["animal", "rabbit", "cute"],
     ]
-    
+
     main_levels = []
     for i in range(20):
         num = 101 + i
@@ -71,17 +80,14 @@ def main():
         dst_name = f"{num}{ext}"
         dst_path = main_dir / dst_name
         shutil.copy2(src_img, dst_path)
-        
+
         tags = predefined_tags[i % len(predefined_tags)]
-        main_levels.append({
-            "url": f"{HTTP_BASE}/main/{dst_name}",
-            "tags": tags
-        })
-        
+        main_levels.append({"url": f"{HTTP_BASE}/main/{dst_name}", "tags": tags})
+
     main_json = {
         "version": 120,
         "updatedAt": "2026-08-27T06:00:00Z",
-        "levels": main_levels
+        "levels": main_levels,
     }
     with open(BASE_DIR / "main.json", "w", encoding="utf-8") as f:
         json.dump(main_json, f, ensure_ascii=False, indent=2)
@@ -110,19 +116,18 @@ def main():
     make_daily_zip("202607", 31, 15)
 
     # 202609.json 列表清单备用
-    daily_json_09 = [
-        f"{HTTP_BASE}/daily/202609/{day:02d}.webp"
-        for day in range(1, 31)
-    ]
+    daily_json_09 = [f"{HTTP_BASE}/daily/202609/{day:02d}.webp" for day in range(1, 31)]
     with open(daily_dir / "202609.json", "w", encoding="utf-8") as f:
         json.dump(daily_json_09, f, ensure_ascii=False, indent=2)
 
-    print(f"[OK] daily/ 202609.zip (30 days), 202608.zip (31 days), 202607.zip (31 days) created.")
+    print(
+        f"[OK] daily/ 202609.zip (30 days), 202608.zip (31 days), 202607.zip (31 days) created."
+    )
 
     # 3. 部署丰富活动中心 events/
     events_dir = BASE_DIR / "events"
     events_dir.mkdir(exist_ok=True)
-    
+
     # 辅助函数：创建活动 Zip
     def make_event_zip(zip_name, count, offset):
         zpath = events_dir / zip_name
@@ -148,7 +153,7 @@ def main():
 
     # 活动 4 封面 (Array 模式)
     shutil.copy2(src_images[40 % len(src_images)], events_dir / "cover_animals.jpg")
-    
+
     # 活动 5 封面 (Array 模式)
     shutil.copy2(src_images[50 % len(src_images)], events_dir / "cover_arch.jpg")
 
@@ -163,7 +168,7 @@ def main():
             "zipUrl": f"{HTTP_BASE}/events/cyberpunk_2026.zip",
             "startTime": "2026-08-01T00:00:00Z",
             "endTime": "2026-09-10T00:00:00Z",
-            "displayOrder": 1
+            "displayOrder": 1,
         },
         {
             "id": "nature_wonders",
@@ -175,7 +180,7 @@ def main():
             "zipUrl": f"{HTTP_BASE}/events/nature_wonders.zip",
             "startTime": "2026-08-10T00:00:00Z",
             "endTime": "2026-09-20T00:00:00Z",
-            "displayOrder": 2
+            "displayOrder": 2,
         },
         {
             "id": "cute_animals_party",
@@ -189,11 +194,11 @@ def main():
                 f"{HTTP_BASE}/main/103.jpg",
                 f"{HTTP_BASE}/main/104.jpg",
                 f"{HTTP_BASE}/main/109.jpg",
-                f"{HTTP_BASE}/main/114.jpg"
+                f"{HTTP_BASE}/main/114.jpg",
             ],
             "startTime": "2026-08-15T00:00:00Z",
             "endTime": "2026-09-05T00:00:00Z",
-            "displayOrder": 3
+            "displayOrder": 3,
         },
         {
             "id": "oil_art_gallery",
@@ -205,7 +210,7 @@ def main():
             "zipUrl": f"{HTTP_BASE}/events/oil_art.zip",
             "startTime": "2026-08-20T00:00:00Z",
             "endTime": "2026-09-30T00:00:00Z",
-            "displayOrder": 4
+            "displayOrder": 4,
         },
         {
             "id": "ancient_architecture",
@@ -217,63 +222,158 @@ def main():
             "levels": [
                 f"{HTTP_BASE}/main/107.jpg",
                 f"{HTTP_BASE}/main/112.jpg",
-                f"{HTTP_BASE}/main/118.jpg"
+                f"{HTTP_BASE}/main/118.jpg",
             ],
             "startTime": "2026-07-01T00:00:00Z",
             "endTime": "2026-08-15T00:00:00Z",
-            "displayOrder": 5
+            "displayOrder": 5,
         },
-        {
-            "id": "expired_cleanup_test",
-            "status": "disabled"
-        }
+        {"id": "expired_cleanup_test", "status": "disabled"},
     ]
     with open(events_dir / "events.json", "w", encoding="utf-8") as f:
         json.dump(events_json, f, ensure_ascii=False, indent=2)
     print(f"[OK] events/events.json ({len(events_json)} events) and zips created.")
 
-    # 4. 部署根清单 manifest.json
+    # 4. 部署合集中心 collections/
+    collections_dir = BASE_DIR / "collections"
+    collections_dir.mkdir(exist_ok=True)
+
+    # 辅助函数：创建合集 Zip
+    def make_collection_zip(zip_name, count, offset):
+        zpath = collections_dir / zip_name
+        with zipfile.ZipFile(zpath, "w", zipfile.ZIP_DEFLATED) as zf:
+            for i in range(1, count + 1):
+                src_img = src_images[(i + offset) % len(src_images)]
+                ext = src_img.suffix
+                arcname = f"{i:02d}{ext}"
+                zf.write(src_img, arcname=arcname)
+        return zpath
+
+    # 辅助函数：创建合集 Array 目录，返回 levels URL 列表
+    def make_collection_array(dir_name, count, offset):
+        sub_dir = collections_dir / dir_name
+        sub_dir.mkdir(exist_ok=True)
+        levels = []
+        for idx in range(count):
+            src_img = src_images[(offset + idx) % len(src_images)]
+            ext = src_img.suffix
+            fname = f"{idx + 1:02d}{ext}"
+            shutil.copy2(src_img, sub_dir / fname)
+            levels.append(f"{HTTP_BASE}/collections/{dir_name}/{fname}")
+        return levels
+
+    # 合集 1: 春日花语 (Zip, 6 张)
+    make_collection_zip("spring_flowers.zip", 6, 60)
+    shutil.copy2(
+        src_images[60 % len(src_images)], collections_dir / "cover_flowers.jpg"
+    )
+
+    # 合集 2: 世界城市地标 (Array, 5 张)
+    city_levels = make_collection_array("city_landmarks", 5, 65)
+    shutil.copy2(src_images[65 % len(src_images)], collections_dir / "cover_city.jpg")
+
+    # 合集 3: 猫咪美术馆 (Zip, 4 张)
+    make_collection_zip("cat_art_gallery.zip", 4, 70)
+    shutil.copy2(
+        src_images[70 % len(src_images)], collections_dir / "cover_cat_art.jpg"
+    )
+
+    # 合集 4: 海洋探险 (Array, 3 张)
+    ocean_levels = make_collection_array("ocean_adventure", 3, 75)
+    shutil.copy2(src_images[75 % len(src_images)], collections_dir / "cover_ocean.jpg")
+
+    collections_json = [
+        {
+            "id": "spring_flowers",
+            "title": "春日花语 \u00b7 百花图鉴",
+            "desc": "收录樱花、郁金香、向日葵等 6 幅春日花卉拼图合集。",
+            "coverUrl": f"{HTTP_BASE}/collections/cover_flowers.jpg",
+            "displayOrder": 1,
+            "type": "zip",
+            "zipUrl": f"{HTTP_BASE}/collections/spring_flowers.zip",
+            "totalCount": 6,
+            "fileSizeBytes": (collections_dir / "spring_flowers.zip").stat().st_size,
+        },
+        {
+            "id": "city_landmarks",
+            "title": "世界城市地标",
+            "desc": "从巴黎铁塔到东京塔，5 座经典城市地标的拼图合集。",
+            "coverUrl": f"{HTTP_BASE}/collections/cover_city.jpg",
+            "displayOrder": 2,
+            "type": "array",
+            "levels": city_levels,
+            "totalCount": len(city_levels),
+            "fileSizeBytes": 0,
+        },
+        {
+            "id": "cat_art_gallery",
+            "title": "猫咪美术馆",
+            "desc": "4 幅以猫咪为主角的治愈系插画拼图合集。",
+            "coverUrl": f"{HTTP_BASE}/collections/cover_cat_art.jpg",
+            "displayOrder": 3,
+            "type": "zip",
+            "zipUrl": f"{HTTP_BASE}/collections/cat_art_gallery.zip",
+            "totalCount": 4,
+            "fileSizeBytes": (collections_dir / "cat_art_gallery.zip").stat().st_size,
+        },
+        {
+            "id": "ocean_adventure",
+            "title": "海洋探险",
+            "desc": "3 幅海洋世界主题拼图，即点即玩。",
+            "coverUrl": f"{HTTP_BASE}/collections/cover_ocean.jpg",
+            "displayOrder": 4,
+            "type": "array",
+            "levels": ocean_levels,
+            "totalCount": len(ocean_levels),
+            "fileSizeBytes": 0,
+        },
+    ]
+    with open(collections_dir / "collections.json", "w", encoding="utf-8") as f:
+        json.dump(collections_json, f, ensure_ascii=False, indent=2)
+    print(
+        f"[OK] collections/collections.json ({len(collections_json)} collections) and zips created."
+    )
+
+    # 5. 部署根清单 manifest.json
     root_manifest = {
         "schemaVersion": 3,
         "updatedAt": "2026-09-02T13:05:00Z",
         "appConfig": {
             "minAppVersion": "1.0.0",
-            "notice": "欢迎体验全动态活动与多标签关卡！"
+            "notice": "欢迎体验全动态活动与多标签关卡！",
         },
         "modules": {
-            "main": {
-                "url": f"{HTTP_BASE}/main.json",
-                "version": 120
-            },
+            "main": {"url": f"{HTTP_BASE}/main.json", "version": 120},
             "daily": {
                 "currentMonth": "202609",
                 "zipUrlPattern": f"{HTTP_BASE}/daily/{{YYYYMM}}.zip",
                 "listUrlPattern": f"{HTTP_BASE}/daily/{{YYYYMM}}.json",
-                "version": 20260902
+                "version": 20260902,
             },
-            "events": {
-                "url": f"{HTTP_BASE}/events/events.json",
-                "version": 15
-            }
-        }
+            "events": {"url": f"{HTTP_BASE}/events/events.json", "version": 15},
+            "collections": {
+                "url": f"{HTTP_BASE}/collections/collections.json",
+                "version": 1,
+            },
+        },
     }
     with open(BASE_DIR / "manifest.json", "w", encoding="utf-8") as f:
         json.dump(root_manifest, f, ensure_ascii=False, indent=2)
     print("[OK] manifest.json created at root.")
 
-    # 5. 部署扩展测试图包 packs/
+    # 6. 部署扩展测试图包 packs/
     packs_dir = BASE_DIR / "packs"
     packs_dir.mkdir(exist_ok=True)
 
-    # 5.1 纯图片测试包 (零元数据) cats_pure_images.zip
+    # 6.1 纯图片测试包 (零元数据) cats_pure_images.zip
     cats_zip_path = packs_dir / "cats_pure_images.zip"
     with zipfile.ZipFile(cats_zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
         for idx in range(6):
             src_img = src_images[(idx + 3) % len(src_images)]
-            zf.write(src_img, arcname=f"cat_{idx+1:02d}.jpg")
+            zf.write(src_img, arcname=f"cat_{idx + 1:02d}.jpg")
     print("[OK] packs/cats_pure_images.zip (6 pure images) created.")
 
-    # 5.2 创作者标准扩展包 (带 pack.json 元数据) cyberpunk_with_manifest.zip
+    # 6.2 创作者标准扩展包 (带 pack.json 元数据) cyberpunk_with_manifest.zip
     cyber_zip_path = packs_dir / "cyberpunk_with_manifest.zip"
     with zipfile.ZipFile(cyber_zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
         # 封面图
@@ -281,7 +381,7 @@ def main():
         # 关卡图片
         for idx in range(6):
             src_img = src_images[(idx + 7) % len(src_images)]
-            zf.write(src_img, arcname=f"level_{idx+1:02d}.jpg")
+            zf.write(src_img, arcname=f"level_{idx + 1:02d}.jpg")
         # pack.json
         cyber_manifest = {
             "id": "cyberpunk_neon_2026",
@@ -290,13 +390,15 @@ def main():
             "author": "NeonArtist",
             "version": 1,
             "cover": "cover.jpg",
-            "tags": ["科幻", "夜景", "建筑"]
+            "tags": ["科幻", "夜景", "建筑"],
         }
-        zf.writestr("pack.json", json.dumps(cyber_manifest, ensure_ascii=False, indent=2))
+        zf.writestr(
+            "pack.json", json.dumps(cyber_manifest, ensure_ascii=False, indent=2)
+        )
     print("[OK] packs/cyberpunk_with_manifest.zip (with pack.json) created.")
 
     print("\nAll rich test server data successfully deployed to X:\\www\\game\\test !")
 
+
 if __name__ == "__main__":
     main()
-

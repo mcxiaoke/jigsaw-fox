@@ -5,6 +5,7 @@ studio.test_studio — Content Studio 核心功能与自动化回归测试套件
 """
 
 import json
+import logging
 import shutil
 import sys
 import tempfile
@@ -16,10 +17,25 @@ _root_dir = _pkg_dir.parent
 if str(_root_dir) not in sys.path:
     sys.path.insert(0, str(_root_dir))
 
+from studio.core.export_tracker import (
+    get_exported_hashes,
+    get_exported_map,
+    load_exported_ledger,
+    record_exports,
+    save_exported_ledger,
+)
 from studio.core.image_proc import HAS_PIL, convert_image, generate_thumbnail_bytes, make_rename
-from studio.core.scanner import find_tags_file, get_image_info, scan_images
+from studio.core.scanner import (
+    compute_file_sha256,
+    find_tags_file,
+    get_image_info,
+    scan_image_infos,
+    scan_images,
+)
 from studio.core.tags_manager import merge_scanned_images, normalize_records, save_tags_file
 from studio.exporters import get_exporter
+from studio.server import DEFAULT_LOG_FILE, logger, setup_logger
+from studio.test_frontend import TestFrontendSmoke
 from studio.taxonomy import (
     ALL_CANONICAL_TAGS,
     CATALOG_DEFS,
@@ -37,15 +53,20 @@ class TestTaxonomy(unittest.TestCase):
     """测试分类与标签体系 (SSOT)"""
 
     def test_definitions(self):
-        self.assertEqual(len(CATALOG_DEFS), 14)
-        self.assertEqual(len(SPECIFIC_TAG_DEFS), 14)
-        self.assertEqual(len(ALL_CANONICAL_TAGS), 14)
+        self.assertEqual(len(CATALOG_DEFS), 17)
+        self.assertEqual(len(SPECIFIC_TAG_DEFS), 17)
+        self.assertEqual(len(ALL_CANONICAL_TAGS), 17)
         self.assertIn("Pets", ALL_CANONICAL_TAGS)
         self.assertIn("Landscapes", ALL_CANONICAL_TAGS)
         self.assertIn("Colors", ALL_CANONICAL_TAGS)
+        self.assertIn("Composition", ALL_CANONICAL_TAGS)
         self.assertIn("Holidays", ALL_CANONICAL_TAGS)
         self.assertIn("Flowers", ALL_CANONICAL_TAGS)
         self.assertIn("Animals", ALL_CANONICAL_TAGS)
+        self.assertIn("Cities", ALL_CANONICAL_TAGS)
+        self.assertIn("Structures", ALL_CANONICAL_TAGS)
+        self.assertIn("People", ALL_CANONICAL_TAGS)
+        self.assertIn("Objects", ALL_CANONICAL_TAGS)
 
     def test_normalization(self):
         # 英文单复数与细分词识别归一化
@@ -53,17 +74,30 @@ class TestTaxonomy(unittest.TestCase):
         self.assertEqual(normalize_token("Cats"), "Pets")
         self.assertEqual(normalize_token("ocean"), "Landscapes")
         self.assertEqual(normalize_token("Oceans"), "Landscapes")
-        self.assertEqual(normalize_token("mandala"), "Colors")
+        self.assertEqual(normalize_token("city"), "Cities")
+        self.assertEqual(normalize_token("castle"), "Structures")
+        self.assertEqual(normalize_token("portrait"), "People")
+        self.assertEqual(normalize_token("clock"), "Objects")
         self.assertEqual(normalize_token("illustration"), "Art")
         self.assertEqual(normalize_token("holiday"), "Holidays")
+        self.assertEqual(normalize_token("sports"), "Holidays")
         self.assertEqual(normalize_token("Christmas"), "Holidays")
+        self.assertEqual(normalize_token("rainbow"), "Colors")
+        self.assertEqual(normalize_token("flat_lay"), "Composition")
 
         # 中文别名
         self.assertEqual(normalize_token("猫咪"), "Pets")
         self.assertEqual(normalize_token("雪山"), "Landscapes")
-        self.assertEqual(normalize_token("复古"), "Cozy")
+        self.assertEqual(normalize_token("城市"), "Cities")
+        self.assertEqual(normalize_token("建筑"), "Structures")
+        self.assertEqual(normalize_token("人物"), "People")
+        self.assertEqual(normalize_token("复古"), "Objects")
+        self.assertEqual(normalize_token("物品"), "Objects")
         self.assertEqual(normalize_token("甜点"), "Food")
         self.assertEqual(normalize_token("花卉"), "Flowers")
+        self.assertEqual(normalize_token("庆典"), "Holidays")
+        self.assertEqual(normalize_token("组合"), "Composition")
+        self.assertEqual(normalize_token("色彩"), "Colors")
 
     def test_path_guessing(self):
         p1 = Path("D:/images/Animals/Cats/001.jpg")
@@ -113,20 +147,32 @@ class TestCoreAndExporters(unittest.TestCase):
         images = scan_images(self.src_dir)
         self.assertEqual(len(images), 3)
 
-        # 合并扫描与智能推断
-        records, stats = merge_scanned_images(images, self.src_dir, None)
+        # 并发提取元数据
+        image_infos = scan_image_infos(images, self.src_dir)
+        self.assertEqual(len(image_infos), 3)
+        sample_info = list(image_infos.values())[0]
+        self.assertEqual(sample_info["width"], 100)
+        self.assertEqual(sample_info["height"], 100)
+        self.assertEqual(sample_info["format"], "JPEG")
+        self.assertGreater(sample_info["size"], 0)
+
+        # 合并扫描与智能推断 (带元数据注入)
+        records, stats = merge_scanned_images(images, self.src_dir, None, image_infos=image_infos)
         self.assertEqual(len(records), 3)
         self.assertEqual(records[0]["tags"], ["Pets"])
         self.assertEqual(records[0]["catalogs"], ["Pets"])
         self.assertFalse(records[0]["review_required"])
+        self.assertEqual(records[0]["width"], 100)
+        self.assertEqual(records[0]["height"], 100)
+        self.assertEqual(records[0]["format"], "JPEG")
 
-        # 保存 tags.json
+        # 保存 tags.json (持久化元数据)
         ok, dest_file, count = save_tags_file(self.src_dir, records)
         self.assertTrue(ok)
         self.assertEqual(count, 3)
         self.assertTrue(Path(dest_file).exists())
 
-        # 重新读取归一化
+        # 重新读取归一化 (校验元数据完整回载)
         tag_file = find_tags_file(self.src_dir)
         self.assertIsNotNone(tag_file)
         loaded = json.loads(tag_file.read_text(encoding="utf-8"))
@@ -134,6 +180,10 @@ class TestCoreAndExporters(unittest.TestCase):
         self.assertEqual(fmt_name, "list")
         self.assertEqual(len(norm_records), 3)
         self.assertEqual(norm_records[0]["tags"], ["Pets"])
+        self.assertEqual(norm_records[0]["width"], 100)
+        self.assertEqual(norm_records[0]["height"], 100)
+        self.assertEqual(norm_records[0]["format"], "JPEG")
+        self.assertGreater(norm_records[0]["size"], 0)
 
     def test_main_exporter(self):
         logs = []
@@ -158,6 +208,8 @@ class TestCoreAndExporters(unittest.TestCase):
         self.assertTrue(main_json.exists())
         data = json.loads(main_json.read_text(encoding="utf-8"))
         self.assertEqual(data["version"], 5)
+        self.assertEqual(data["count"], 3)
+        self.assertIn("updatedAt", data)
         self.assertEqual(len(data["levels"]), 3)
         self.assertEqual(data["levels"][0]["order"], 101)
         self.assertEqual(data["levels"][0]["tags"], ["Pets"])
@@ -169,6 +221,8 @@ class TestCoreAndExporters(unittest.TestCase):
         self.assertIn("main", m_data["modules"])
         self.assertEqual(m_data["modules"]["main"]["version"], 5)
         self.assertEqual(m_data["modules"]["main"]["url"], "http://test.local/data/main.json")
+        self.assertEqual(m_data["modules"]["main"]["count"], 3)
+        self.assertIn("updatedAt", m_data["modules"]["main"])
 
     def test_daily_exporter(self):
         logs = []
@@ -195,13 +249,18 @@ class TestCoreAndExporters(unittest.TestCase):
         self.assertTrue(daily_json.exists())
         d_data = json.loads(daily_json.read_text(encoding="utf-8"))
         self.assertEqual(d_data["currentMonth"], "202609")
+        self.assertEqual(d_data["count"], 3)
+        self.assertIn("updatedAt", d_data)
         self.assertEqual(len(d_data["months"]), 1)
         self.assertEqual(d_data["months"][0]["month"], "202609")
+        self.assertEqual(d_data["months"][0]["count"], 3)
+        self.assertIn("updatedAt", d_data["months"][0])
 
         manifest_json = self.out_dir / "manifest.json"
         self.assertTrue(manifest_json.exists())
         m_data = json.loads(manifest_json.read_text(encoding="utf-8"))
         self.assertIn("daily", m_data["modules"])
+        self.assertEqual(m_data["modules"]["daily"]["count"], 3)
 
     def test_event_exporter(self):
         logs = []
@@ -231,7 +290,509 @@ class TestCoreAndExporters(unittest.TestCase):
         ev_data = json.loads(events_json.read_text(encoding="utf-8"))
         self.assertEqual(len(ev_data), 1)
         self.assertEqual(ev_data[0]["id"], "test_event_2026")
+        self.assertEqual(ev_data[0]["count"], 3)
+        self.assertIn("updatedAt", ev_data[0])
+
+    def test_collection_exporter(self):
+        logs = []
+        exporter = get_exporter(
+            exp_type="collection",
+            data={
+                "collectionId": "test_col_2026",
+                "title": "测试官方合集",
+                "outputMode": "zip",
+                "format": "webp" if HAS_PIL else "original",
+                "rename": "none",
+            },
+            src_p=self.src_dir,
+            out_p=self.out_dir,
+            http_base="http://test.local/data",
+            log_fn=lambda msg, lvl="info": logs.append((lvl, msg)),
+        )
+        exporter.validate()
+        result = exporter.execute()
+
+        self.assertTrue(result.success)
+        col_zip = self.out_dir / "collections" / "test_col_2026.zip"
+        self.assertTrue(col_zip.exists())
+
+        cols_json = self.out_dir / "collections" / "collections.json"
+        self.assertTrue(cols_json.exists())
+        col_data = json.loads(cols_json.read_text(encoding="utf-8"))
+        self.assertEqual(len(col_data), 1)
+        self.assertEqual(col_data[0]["id"], "test_col_2026")
+        self.assertEqual(col_data[0]["count"], 3)
+        self.assertIn("updatedAt", col_data[0])
+
+
+class TestExportTracker(unittest.TestCase):
+    """测试已导出账本管理 (exported.json)"""
+
+    def setUp(self):
+        self.test_dir = Path(tempfile.mkdtemp(prefix="studio_tracker_"))
+
+    def tearDown(self):
+        shutil.rmtree(self.test_dir, ignore_errors=True)
+
+    def test_load_and_save_empty_ledger(self):
+        ledger = load_exported_ledger(self.test_dir)
+        self.assertEqual(ledger["total_exported"], 0)
+        self.assertEqual(len(ledger["hashes"]), 0)
+
+        ok, msg = save_exported_ledger(self.test_dir, ledger)
+        self.assertTrue(ok)
+        self.assertTrue((self.test_dir / "exported.json").exists())
+
+    def test_record_exports(self):
+        items = [
+            {
+                "hash": "abc123def456",
+                "path": "Animals/lion.jpg",
+                "export_type": "main",
+                "target": "main/101.webp",
+                "order": 101,
+            },
+            {
+                "hash": "789xyz000111",
+                "path": "Flowers/rose.jpg",
+                "export_type": "daily",
+                "target": "daily/202609.zip#20260901.webp",
+                "month": "202609",
+            },
+        ]
+        ledger, new_count = record_exports(self.test_dir, items)
+        self.assertEqual(new_count, 2)
+        self.assertEqual(ledger["total_exported"], 2)
+
+        # 校验哈希集合
+        hashes = get_exported_hashes(self.test_dir)
+        self.assertIn("abc123def456", hashes)
+        self.assertIn("789xyz000111", hashes)
+
+        # 校验路径映射
+        exp_map = get_exported_map(self.test_dir)
+        self.assertIn("Animals/lion.jpg", exp_map)
+        self.assertEqual(exp_map["Animals/lion.jpg"]["order"], 101)
+
+
+class TestHashAndReconciliation(unittest.TestCase):
+    """测试 SHA-256 增量哈希计算与改名/移动自动认领引擎"""
+
+    def setUp(self):
+        self.test_dir = Path(tempfile.mkdtemp(prefix="studio_recon_"))
+        self.src_dir = self.test_dir / "src"
+        self.src_dir.mkdir()
+
+    def tearDown(self):
+        shutil.rmtree(self.test_dir, ignore_errors=True)
+
+    def test_compute_file_sha256(self):
+        sample_file = self.src_dir / "test.txt"
+        sample_file.write_text("Hello Jigsaw Fox Studio!", encoding="utf-8")
+        h = compute_file_sha256(sample_file)
+        self.assertEqual(len(h), 64)
+
+        # 验证相同内容哈希严格相等
+        copy_file = self.src_dir / "test_copy.txt"
+        copy_file.write_text("Hello Jigsaw Fox Studio!", encoding="utf-8")
+        self.assertEqual(compute_file_sha256(copy_file), h)
+
+    def test_auto_reconciliation_on_rename_or_move(self):
+        if not HAS_PIL:
+            self.skipTest("Pillow not installed")
+
+        from PIL import Image
+
+        # 1. 初始状态：生成一张原始图片 Animals/old_cat.jpg
+        orig_dir = self.src_dir / "Animals"
+        orig_dir.mkdir(parents=True)
+        img_p = orig_dir / "old_cat.jpg"
+        im = Image.new("RGB", (120, 120), color=(255, 100, 50))
+        im.save(img_p, "JPEG")
+
+        images = scan_images(self.src_dir)
+        infos = scan_image_infos(images, self.src_dir)
+        records, stats = merge_scanned_images(images, self.src_dir, None, image_infos=infos)
+
+        # 用户进行了精细的人工打标并确认复核
+        records[0]["tags"] = ["Pets"]
+        records[0]["review_required"] = False
+        records[0]["subject"] = "波斯猫"
+        records[0]["scene"] = "室内木地板"
+        save_tags_file(self.src_dir, records)
+
+        old_hash = records[0]["hash"]
+        self.assertTrue(len(old_hash) == 64)
+
+        # 2. 模拟文件在操作系统中被改名并移动到了新目录 Pets/new_kitten.jpg
+        new_dir = self.src_dir / "Pets"
+        new_dir.mkdir(parents=True)
+        new_img_p = new_dir / "new_kitten.jpg"
+        img_p.rename(new_img_p)
+
+        # 3. 再次扫描目录并自动对齐
+        loaded_raw, _ = normalize_records(json.loads((self.src_dir / "tags.json").read_text(encoding="utf-8")), self.src_dir)
+        new_images = scan_images(self.src_dir)
+        new_infos = scan_image_infos(new_images, self.src_dir)
+        new_records, new_stats = merge_scanned_images(new_images, self.src_dir, loaded_raw, image_infos=new_infos)
+
+        # 4. 验证引擎自动识别并完美继承
+        self.assertEqual(len(new_records), 1)
+        self.assertEqual(new_stats["reconciledCount"], 1)
+        self.assertEqual(new_records[0]["path"], "Pets/new_kitten.jpg")
+        self.assertEqual(new_records[0]["file"], "new_kitten.jpg")
+        self.assertEqual(new_records[0]["hash"], old_hash)
+        self.assertEqual(new_records[0]["tags"], ["Pets"])
+        self.assertEqual(new_records[0]["subject"], "波斯猫")
+        self.assertEqual(new_records[0]["scene"], "室内木地板")
+        self.assertFalse(new_records[0]["review_required"])
+
+
+class TestExporterTrackingAndDeduplication(unittest.TestCase):
+    """测试导出器自动记账与防重复排除功能"""
+
+    def setUp(self):
+        self.test_dir = Path(tempfile.mkdtemp(prefix="studio_exp_dedup_"))
+        self.src_dir = self.test_dir / "src"
+        self.out_dir = self.test_dir / "out"
+        self.src_dir.mkdir()
+        self.out_dir.mkdir()
+
+        if HAS_PIL:
+            from PIL import Image
+            for i in range(1, 3):
+                im = Image.new("RGB", (60, 60), color=(50 * i, 100, 150))
+                im.save(self.src_dir / f"img_{i:02d}.jpg", "JPEG")
+
+    def tearDown(self):
+        shutil.rmtree(self.test_dir, ignore_errors=True)
+
+    def test_main_exporter_records_and_deduplicates(self):
+        logs = []
+        # 第一次导出
+        exporter1 = get_exporter(
+            exp_type="main",
+            data={
+                "startOrder": 101,
+                "version": 1,
+                "format": "webp" if HAS_PIL else "original",
+                "excludeExported": False,
+            },
+            src_p=self.src_dir,
+            out_p=self.out_dir,
+            http_base="http://test.local",
+            log_fn=lambda m, l="info": logs.append((l, m)),
+        )
+        res1 = exporter1.execute()
+        self.assertTrue(res1.success)
+
+        # 检查 exported.json 是否已生成
+        exp_file = self.src_dir / "exported.json"
+        self.assertTrue(exp_file.exists())
+        hashes = get_exported_hashes(self.src_dir)
+        self.assertEqual(len(hashes), 2)
+
+        # 第二次导出：开启 excludeExported=True
+        # 由于所有图片都已导出，应抛出无新图片异常
+        exporter2 = get_exporter(
+            exp_type="main",
+            data={
+                "startOrder": 103,
+                "version": 2,
+                "format": "webp" if HAS_PIL else "original",
+                "excludeExported": True,
+            },
+            src_p=self.src_dir,
+            out_p=self.out_dir,
+            http_base="http://test.local",
+            log_fn=lambda m, l="info": logs.append((l, m)),
+        )
+        with self.assertRaises(ValueError) as ctx:
+            exporter2.execute()
+        self.assertIn("已在历史", str(ctx.exception))
+
+
+class TestScannerProgressAndStats(unittest.TestCase):
+    """测试扫描进度指示与统计回调"""
+
+    def setUp(self):
+        self.test_dir = Path(tempfile.mkdtemp(prefix="jigsaw_progress_test_"))
+        self.images = []
+        for i in range(5):
+            p = self.test_dir / f"img_{i}.jpg"
+            p.write_bytes(f"image_data_sample_{i}".encode("utf-8"))
+            self.images.append(p)
+
+    def tearDown(self):
+        shutil.rmtree(self.test_dir, ignore_errors=True)
+
+    def test_progress_callback_and_stats(self):
+        progress_events = []
+
+        def on_progress(completed: int, total: int, hits: int, new_h: int) -> None:
+            progress_events.append((completed, total, hits, new_h))
+
+        stats = {}
+        infos = scan_image_infos(
+            self.images,
+            self.test_dir,
+            progress_callback=on_progress,
+            stats_out=stats,
+        )
+
+        self.assertEqual(len(infos), 5)
+        self.assertEqual(stats.get("total"), 5)
+        self.assertEqual(stats.get("new_hashes"), 5)
+        self.assertEqual(stats.get("cache_hits"), 0)
+        self.assertEqual(len(progress_events), 5)
+        self.assertEqual(progress_events[-1], (5, 5, 0, 5))
+
+        # 第二次扫描传入缓存，测试命中
+        hash_cache = {
+            r["path"]: (r["mtime"], r["size"], r["hash"])
+            for r in infos.values()
+        }
+        stats2 = {}
+        progress_events2 = []
+        infos2 = scan_image_infos(
+            self.images,
+            self.test_dir,
+            hash_cache=hash_cache,
+            progress_callback=lambda c, t, h, n: progress_events2.append((c, t, h, n)),
+            stats_out=stats2,
+        )
+        self.assertEqual(stats2.get("total"), 5)
+        self.assertEqual(stats2.get("cache_hits"), 5)
+        self.assertEqual(stats2.get("new_hashes"), 0)
+        self.assertEqual(progress_events2[-1], (5, 5, 5, 0))
+
+
+class TestServerLogging(unittest.TestCase):
+    """测试服务端日志系统与 CLI 参数"""
+
+    def setUp(self):
+        self.test_dir = Path(tempfile.mkdtemp(prefix="jigsaw_log_test_"))
+        self.log_file = self.test_dir / "test_studio.log"
+
+    def tearDown(self):
+        # 关闭所有属于 test_studio.log 的 FileHandler 句柄，防止 Windows 文件锁定
+        for h in list(logger.handlers):
+            if isinstance(h, logging.FileHandler):
+                h.close()
+                logger.removeHandler(h)
+        shutil.rmtree(self.test_dir, ignore_errors=True)
+        # 恢复默认 logger
+        setup_logger("INFO", DEFAULT_LOG_FILE)
+
+    def test_setup_logger_file_and_levels(self):
+        log = setup_logger(level_name="DEBUG", logfile=self.log_file)
+        self.assertTrue(self.log_file.exists())
+
+        log.debug("DEBUG 调试消息测试")
+        log.info("INFO 正常消息测试")
+        log.warning("WARNING 警告消息测试")
+
+        # 刷新 handlers
+        for h in log.handlers:
+            h.flush()
+
+        content = self.log_file.read_text(encoding="utf-8")
+        self.assertIn("DEBUG 调试消息测试", content)
+        self.assertIn("INFO 正常消息测试", content)
+        self.assertIn("WARNING 警告消息测试", content)
+
+    def test_cli_argument_parser(self):
+        import argparse
+        parser = argparse.ArgumentParser()
+        parser.add_argument("--loglevel", default="INFO")
+        parser.add_argument("--debug", action="store_true")
+        parser.add_argument("--logfile", default=str(DEFAULT_LOG_FILE))
+
+        args = parser.parse_args(["--debug", "--logfile", str(self.log_file)])
+        level = "DEBUG" if args.debug else args.loglevel.upper()
+        self.assertEqual(level, "DEBUG")
+        self.assertEqual(Path(args.logfile), self.log_file)
+
+    def test_studio_server_prevents_port_reuse(self):
+        from studio.server import StudioRequestHandler, StudioServer
+
+        # 绑定空闲动态端口
+        s1 = StudioServer(("127.0.0.1", 0), StudioRequestHandler)
+        port = s1.server_address[1]
+        try:
+            with self.assertRaises(OSError) as ctx:
+                StudioServer(("127.0.0.1", port), StudioRequestHandler)
+            winerr = getattr(ctx.exception, "winerror", None)
+            self.assertTrue(winerr == 10048 or ctx.exception.errno in (98, 48, 10048))
+        finally:
+            s1.server_close()
+
+
+class TestCacheDBAndQuality(unittest.TestCase):
+    """测试 SQLite3 算力缓存引擎与 OpenCV 图像质检集成"""
+
+    def setUp(self):
+        self.test_dir = Path(tempfile.mkdtemp(prefix="studio_cache_test_"))
+        # 生成两个简单的测试图片
+        if HAS_PIL:
+            from PIL import Image
+            # 丰富纹理图片
+            im1 = Image.new("RGB", (200, 200), color=(120, 150, 200))
+            for i in range(200):
+                im1.putpixel((i, i), (255, 0, 0))
+                im1.putpixel((i, 199 - i), (0, 255, 0))
+            im1.save(self.test_dir / "img1.jpg")
+
+            # 纯色死区图片
+            im2 = Image.new("RGB", (200, 200), color=(255, 255, 255))
+            im2.save(self.test_dir / "img2.png")
+
+    def tearDown(self):
+        shutil.rmtree(self.test_dir, ignore_errors=True)
+
+    def test_cache_db_lifecycle(self):
+        from studio.core.cache_db import CacheDB
+
+        with CacheDB(self.test_dir) as db:
+            # 1. 批量插入文件缓存
+            items = [
+                {
+                    "path": "img1.jpg",
+                    "mtime": 1000,
+                    "size": 500,
+                    "hash": "hash111",
+                    "width": 200,
+                    "height": 200,
+                    "format": "JPEG",
+                },
+                {
+                    "path": "sub/img2.png",
+                    "mtime": 2000,
+                    "size": 800,
+                    "hash": "hash222",
+                    "width": 300,
+                    "height": 200,
+                    "format": "PNG",
+                },
+            ]
+            inserted = db.upsert_files(items)
+            self.assertEqual(inserted, 2)
+
+            # 2. 读取缓存
+            cached = db.load_file_cache()
+            self.assertIn("img1.jpg", cached)
+            self.assertIn("sub/img2.png", cached)
+            self.assertEqual(cached["img1.jpg"][2], "hash111")
+            self.assertEqual(cached["img1.jpg"][3], 200)
+
+            # 3. 未评分查询
+            unscored = db.get_unscored_items(limit=10)
+            self.assertEqual(len(unscored), 2)
+
+            # 4. 保存质检结果
+            q_res = {
+                "score": 85,
+                "grade": "S",
+                "status": "PASS",
+                "dead_zone_ratio": 0.01,
+                "crop_suggestion": "无需裁切",
+                "can_upgrade": False,
+                "max_grid": "225 块",
+            }
+            db.save_quality("hash111", q_res)
+            fetched = db.get_quality("hash111")
+            self.assertIsNotNone(fetched)
+            self.assertEqual(fetched["score"], 85)
+            self.assertEqual(fetched["grade"], "S")
+
+            # 5. 再次查询未评分，只剩 1 个
+            unscored_after = db.get_unscored_items(limit=10)
+            self.assertEqual(len(unscored_after), 1)
+            self.assertEqual(unscored_after[0][1], "hash222")
+
+            # 6. 统计信息
+            stats = db.get_stats()
+            self.assertEqual(stats["total_files"], 2)
+            self.assertEqual(stats["total_scored"], 1)
+            self.assertEqual(stats["unscored"], 1)
+
+            # 7. 清理失效路径
+            pruned = db.prune_missing_files(["img1.jpg"])
+            self.assertEqual(pruned, 1)
+            cached_after = db.load_file_cache()
+            self.assertNotIn("sub/img2.png", cached_after)
+            self.assertIn("img1.jpg", cached_after)
+
+    def test_quality_evaluator(self):
+        from studio.core.quality_evaluator import evaluate_image
+
+        p1 = self.test_dir / "img1.jpg"
+        if p1.exists():
+            res = evaluate_image(p1)
+            self.assertIn("score", res)
+            self.assertIn("grade", res)
+            self.assertIn("status", res)
+            self.assertIn("dead_zone_ratio", res)
+            self.assertIn("crop_suggestion", res)
+
+    def test_server_quality_endpoints(self):
+        from studio.server import StudioRequestHandler, StudioServer
+        import threading
+        import time
+        import urllib.parse
+        import urllib.request
+
+        server = StudioServer(("127.0.0.1", 0), StudioRequestHandler)
+        port = server.server_address[1]
+        t = threading.Thread(target=server.serve_forever, daemon=True)
+        t.start()
+        time.sleep(0.1)
+
+        try:
+            # 1. 扫描目录测试，应返回 qualitySummary
+            scan_url = f"http://127.0.0.1:{port}/api/scan?dir={urllib.parse.quote(str(self.test_dir))}"
+            with urllib.request.urlopen(scan_url) as resp:
+                data = json.loads(resp.read().decode("utf-8"))
+                self.assertTrue(data["ok"])
+                self.assertIn("qualitySummary", data["stats"])
+                records = data["records"]
+                self.assertGreaterEqual(len(records), 1)
+
+            # 2. 单张质检 API
+            q_url = f"http://127.0.0.1:{port}/api/quality?path=img1.jpg&dir={urllib.parse.quote(str(self.test_dir))}"
+            with urllib.request.urlopen(q_url) as resp:
+                q_data = json.loads(resp.read().decode("utf-8"))
+                self.assertTrue(q_data["ok"])
+                self.assertIn("quality", q_data)
+                self.assertIn("score", q_data["quality"])
+
+            # 3. 统计 API
+            stats_url = f"http://127.0.0.1:{port}/api/quality/stats?dir={urllib.parse.quote(str(self.test_dir))}"
+            with urllib.request.urlopen(stats_url) as resp:
+                s_data = json.loads(resp.read().decode("utf-8"))
+                self.assertTrue(s_data["ok"])
+                self.assertIn("total_files", s_data["stats"])
+
+            # 4. 批量质检 API
+            batch_url = f"http://127.0.0.1:{port}/api/quality/batch"
+            post_body = json.dumps({"dir": str(self.test_dir), "limit": 10}).encode("utf-8")
+            req = urllib.request.Request(
+                batch_url,
+                data=post_body,
+                headers={"Content-Type": "application/json"},
+                method="POST",
+            )
+            with urllib.request.urlopen(req) as resp:
+                b_data = json.loads(resp.read().decode("utf-8"))
+                self.assertTrue(b_data["ok"])
+                self.assertIn("count", b_data)
+                self.assertIn("items", b_data)
+
+        finally:
+            server.shutdown()
+            server.server_close()
 
 
 if __name__ == "__main__":
     unittest.main()
+

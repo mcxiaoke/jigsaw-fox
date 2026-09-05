@@ -3,8 +3,11 @@
  */
 
 import {
+  batchEvaluateQuality,
   checkHealth,
   executeExport,
+  fetchQuality,
+  fetchQualityStats,
   fetchTags,
   fetchTaxonomy,
   getFileUrl,
@@ -15,7 +18,7 @@ import {
 
 const { createApp, ref, computed, onMounted, watch } = window.Vue;
 
-createApp({
+const app = createApp({
   setup() {
     // -----------------------------------------------------------------------
     // 分类元数据 (从 /api/taxonomy 动态获取，前端单一事实源)
@@ -71,10 +74,47 @@ createApp({
     // -----------------------------------------------------------------------
     const activeTag = ref("");
     const onlyUnreviewed = ref(false);
+    const hideExported = ref(false);
+    const filterGrade = ref(""); // '' | 'S' | 'A' | 'B' | 'C' | 'F' | 'unscored'
     const searchQuery = ref("");
-    const sortBy = ref("name"); // 'name' | 'mtime' | 'confidence'
+    const sortBy = ref("name"); // 'name' | 'quality' | 'mtime' | 'confidence' | 'size' | 'dimension'
     const sortOrder = ref("asc");
-    const cardZoom = ref(190);
+
+    // 质检状态与汇总
+    const isEvaluatingQuality = ref(false);
+    const isBatchEvaluating = ref(false);
+    const qualitySummary = ref({
+      total_files: 0,
+      total_scored: 0,
+      unscored: 0,
+      grades: {},
+      statuses: {},
+    });
+    const unscoredCount = computed(() => records.value.filter((r) => !r.quality).length);
+    const scoredCount = computed(() => records.value.filter((r) => !!r.quality).length);
+    const initialZoom = (() => {
+      try {
+        const saved = parseInt(localStorage.getItem("studio_cardZoom"), 10);
+        if (!isNaN(saved) && saved >= 120 && saved <= 480) {
+          return saved;
+        }
+      } catch (e) {
+        // ignore localStorage access errors
+      }
+      return 190;
+    })();
+    const cardZoom = ref(initialZoom);
+
+    // 持久化用户卡片缩放尺寸偏好
+    watch(cardZoom, (val) => {
+      try {
+        if (typeof val === "number" && !isNaN(val)) {
+          localStorage.setItem("studio_cardZoom", String(val));
+        }
+      } catch (e) {
+        // ignore
+      }
+    });
 
     // -----------------------------------------------------------------------
     // 批量操作参数
@@ -99,6 +139,7 @@ createApp({
       displayOrder: 1,
       status: "active",
       outputMode: "zip",
+      excludeExported: true,
     });
     const isExporting = ref(false);
     const exportLogs = ref([]);
@@ -145,6 +186,20 @@ createApp({
       return cnt;
     });
 
+    // 已导出总数
+    const exportedCount = computed(() => {
+      let cnt = 0;
+      for (const r of records.value) {
+        if (r.exported) cnt++;
+      }
+      return cnt;
+    });
+
+    // 未导出库存数
+    const unexportedCount = computed(() => {
+      return Math.max(0, records.value.length - exportedCount.value);
+    });
+
     // 过滤后的卡片列表
     const filteredRecords = computed(() => {
       let list = records.value;
@@ -161,7 +216,21 @@ createApp({
         );
       }
 
-      // 4. 搜索关键词过滤
+      // 3. 隐藏已导出 (筛选纯新图)
+      if (hideExported.value) {
+        list = list.filter((r) => !r.exported);
+      }
+
+      // 4. 品质评级过滤
+      if (filterGrade.value) {
+        if (filterGrade.value === "unscored") {
+          list = list.filter((r) => !r.quality);
+        } else {
+          list = list.filter((r) => r.quality && (r.quality.grade || "").toUpperCase() === filterGrade.value.toUpperCase());
+        }
+      }
+
+      // 5. 搜索关键词过滤
       const q = searchQuery.value.trim().toLowerCase();
       if (q) {
         list = list.filter((r) => {
@@ -181,8 +250,13 @@ createApp({
         });
       }
 
-      // 5. 排序
+      // 6. 排序
       list = [...list].sort((a, b) => {
+        if (sortBy.value === "quality") {
+          const qa = a.quality ? (a.quality.score || 0) : -1;
+          const qb = b.quality ? (b.quality.score || 0) : -1;
+          return sortOrder.value === "asc" ? qa - qb : qb - qa;
+        }
         if (sortBy.value === "mtime") {
           return sortOrder.value === "asc"
             ? (a.mtime || 0) - (b.mtime || 0)
@@ -192,6 +266,16 @@ createApp({
           return sortOrder.value === "asc"
             ? (a.confidence || 0) - (b.confidence || 0)
             : (b.confidence || 0) - (a.confidence || 0);
+        }
+        if (sortBy.value === "size") {
+          return sortOrder.value === "asc"
+            ? (a.size || 0) - (b.size || 0)
+            : (b.size || 0) - (a.size || 0);
+        }
+        if (sortBy.value === "dimension") {
+          const da = (a.width || 0) * (a.height || 0);
+          const db = (b.width || 0) * (b.height || 0);
+          return sortOrder.value === "asc" ? da - db : db - da;
         }
         // 默认按文件名升序
         const fa = (a.file || "").toLowerCase();
@@ -231,11 +315,96 @@ createApp({
         const res = await scanDirectory(srcDir.value.trim());
         records.value = res.records || [];
         selectedSet.value.clear();
+        if (res.stats && res.stats.qualitySummary) {
+          qualitySummary.value = res.stats.qualitySummary;
+        } else {
+          refreshQualitySummary();
+        }
         showToast(`扫描成功: 共发现 ${res.total || records.value.length} 张图片`);
       } catch (err) {
         showToast(`扫描失败: ${err.message}`);
       } finally {
         isScanning.value = false;
+      }
+    };
+
+    const refreshQualitySummary = () => {
+      const grades = {};
+      const statuses = {};
+      let scored = 0;
+      for (const r of records.value) {
+        if (r.quality) {
+          scored++;
+          const g = (r.quality.grade || "C").toUpperCase();
+          grades[g] = (grades[g] || 0) + 1;
+          const s = (r.quality.status || "PASS").toUpperCase();
+          statuses[s] = (statuses[s] || 0) + 1;
+        }
+      }
+      qualitySummary.value = {
+        total_files: records.value.length,
+        total_scored: scored,
+        unscored: Math.max(0, records.value.length - scored),
+        grades,
+        statuses,
+      };
+    };
+
+    const evalSingleQuality = async (item, force = false) => {
+      if (!item) return;
+      isEvaluatingQuality.value = true;
+      try {
+        const data = await fetchQuality(item.path, item.hash || "", srcDir.value.trim(), force);
+        if (data.quality) {
+          item.quality = data.quality;
+          if (data.hash && !item.hash) {
+            item.hash = data.hash;
+          }
+          refreshQualitySummary();
+          showToast(`质检完成: ${item.file} -> ${data.quality.grade}级 (${data.quality.score}分)`);
+        }
+      } catch (err) {
+        showToast(`质检失败: ${err.message}`);
+      } finally {
+        isEvaluatingQuality.value = false;
+      }
+    };
+
+    const triggerBatchQuality = async () => {
+      if (!srcDir.value.trim()) {
+        showToast("请先指定图片源目录");
+        return;
+      }
+      const unscored = records.value.filter((r) => !r.quality);
+      if (unscored.length === 0) {
+        showToast("当前所有图片均已完成质检评分");
+        return;
+      }
+
+      isBatchEvaluating.value = true;
+      showToast(`开始批量质检 (待评: ${unscored.length} 张)...`);
+      try {
+        const res = await batchEvaluateQuality(srcDir.value.trim(), 30);
+        if (res.items && res.items.length > 0) {
+          const map = new Map(res.items.map((it) => [it.path, it.quality]));
+          for (const r of records.value) {
+            if (map.has(r.path)) {
+              r.quality = map.get(r.path);
+            }
+          }
+          if (res.stats) {
+            qualitySummary.value = res.stats;
+          } else {
+            refreshQualitySummary();
+          }
+          showToast(`批量质检完成: 成功评估 ${res.items.length} 张图片`);
+        } else {
+          showToast("没有更多待质检的图片");
+        }
+      } catch (err) {
+        showToast(`批量质检异常: ${err.message}`);
+      } finally {
+        isBatchEvaluating.value = false;
       }
     };
 
@@ -303,6 +472,47 @@ createApp({
       }
       selectedSet.value = next;
       showToast(`已选中 ${next.size} 项待复核图片`);
+    };
+
+    const selectUnexportedOnly = () => {
+      const next = new Set();
+      for (const r of filteredRecords.value) {
+        if (!r.exported) {
+          next.add(r.path);
+        }
+      }
+      selectedSet.value = next;
+      showToast(`已选中 ${next.size} 项未导出图片`);
+    };
+
+    const formatExportShort = (exp) => {
+      if (!exp) return "";
+      if (exp.export_type === "main") {
+        return exp.order ? `Main #${exp.order}` : "Main";
+      }
+      if (exp.export_type === "daily") {
+        return exp.month ? `Daily ${exp.month}` : "Daily";
+      }
+      if (exp.export_type === "event") {
+        return exp.event_id ? `Event ${exp.event_id}` : "Event";
+      }
+      if (exp.export_type === "collection") {
+        return exp.collection_id ? `Col ${exp.collection_id}` : "Col";
+      }
+      return exp.export_type || "已导出";
+    };
+
+    const getExportTooltip = (exp) => {
+      if (!exp) return "";
+      const lines = [
+        `已导出模块: ${formatExportShort(exp)}`,
+        `目标路径: ${exp.target || "-"}`,
+        `导出时间: ${exp.exported_at ? exp.exported_at.replace("T", " ").slice(0, 19) : "-"}`,
+      ];
+      if (exp.hash) {
+        lines.push(`SHA-256: ${exp.hash.slice(0, 16)}...`);
+      }
+      return lines.join("\n");
     };
 
     // 辅助同步单个 record 的 catalogs
@@ -501,6 +711,7 @@ createApp({
         displayOrder: exportConfig.value.displayOrder,
         status: exportConfig.value.status,
         outputMode: exportConfig.value.outputMode,
+        excludeExported: Boolean(exportConfig.value.excludeExported),
         tagsRecords: records.value,
       };
 
@@ -509,6 +720,16 @@ createApp({
         exportLogs.value = res.logs || [];
         exportSummary.value = res.summary || "导出完成";
         showToast("导出成功！");
+
+        // 重新拉取以实时刷新卡片的已导出角标与统计计数
+        try {
+          const freshData = await scanDirectory(srcDir.value.trim());
+          if (freshData && freshData.records) {
+            records.value = freshData.records;
+          }
+        } catch (_) {
+          // ignore
+        }
       } catch (err) {
         exportLogs.value = err.logs || [
           { t: new Date().toLocaleTimeString(), level: "err", msg: err.message },
@@ -531,21 +752,33 @@ createApp({
     const serverOnline = ref(true);
     const isCheckingServer = ref(false);
     const thumbEpoch = ref(0);
+    let consecutiveFailures = 0;
+    let imgErrorTimer = null;
 
     const checkServerHealth = async (interactive = false) => {
       if (isCheckingServer.value) return;
       isCheckingServer.value = true;
       try {
-        const isUp = await checkHealth(2500);
+        const isUp = await checkHealth(4000);
         const wasOnline = serverOnline.value;
-        serverOnline.value = isUp;
-        if (!wasOnline && isUp) {
-          showToast("服务端连接已恢复！");
-          thumbEpoch.value = Date.now();
-        } else if (wasOnline && !isUp) {
-          showToast("警告：与本地服务端断开连接！");
-        } else if (interactive && isUp) {
-          showToast("服务端运行正常 (连接畅通)");
+        if (isUp) {
+          consecutiveFailures = 0;
+          serverOnline.value = true;
+          if (!wasOnline) {
+            showToast("服务端连接已恢复！");
+            thumbEpoch.value = Date.now();
+          } else if (interactive) {
+            showToast("服务端运行正常 (连接畅通)");
+          }
+        } else {
+          consecutiveFailures++;
+          // 连续两次检测超时/失败才判定离线，消除瞬时高并发或网络抖动误报
+          if (consecutiveFailures >= 2) {
+            serverOnline.value = false;
+            if (wasOnline) {
+              showToast("警告：与本地服务端断开连接！");
+            }
+          }
         }
       } finally {
         isCheckingServer.value = false;
@@ -553,8 +786,12 @@ createApp({
     };
 
     const handleImageError = () => {
+      // 防抖触发健康检测，避免大量缩略图并发加载慢时引发重复无意义请求
       if (serverOnline.value) {
-        checkServerHealth();
+        if (imgErrorTimer) clearTimeout(imgErrorTimer);
+        imgErrorTimer = setTimeout(() => {
+          checkServerHealth();
+        }, 800);
       }
     };
 
@@ -613,8 +850,23 @@ createApp({
       return thumbEpoch.value ? `${base}&_e=${thumbEpoch.value}` : base;
     };
     const fileUrl = (path) => getFileUrl(path, srcDir.value);
+    const formatFileSize = (bytes) => {
+      if (!bytes || bytes <= 0) return "";
+      if (bytes < 1024) return bytes + " B";
+      if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + " KB";
+      return (bytes / (1024 * 1024)).toFixed(1) + " MB";
+    };
+    const getSubDir = (path) => {
+      if (!path) return "";
+      const s = String(path).replace(/\\/g, "/");
+      const idx = s.lastIndexOf("/");
+      if (idx === -1) return "";
+      return s.substring(0, idx);
+    };
 
     return {
+      formatFileSize,
+      getSubDir,
       serverOnline,
       isCheckingServer,
       checkServerHealth,
@@ -637,11 +889,15 @@ createApp({
       isSaving,
       activeTag,
       onlyUnreviewed,
+      hideExported,
       searchQuery,
       sortBy,
+      sortOrder,
       cardZoom,
       tagCounts,
       unreviewedCount,
+      exportedCount,
+      unexportedCount,
       filteredRecords,
       selectedCount,
       isAllFilteredSelected,
@@ -665,6 +921,9 @@ createApp({
       clearSelection,
       invertSelection,
       selectUnreviewedOnly,
+      selectUnexportedOnly,
+      formatExportShort,
+      getExportTooltip,
       batchSetTag,
       batchAddTag,
       batchRemoveTag,
@@ -680,6 +939,23 @@ createApp({
       closeExport,
       runExport,
       copyExportLogs,
+      filterGrade,
+      isEvaluatingQuality,
+      isBatchEvaluating,
+      qualitySummary,
+      unscoredCount,
+      scoredCount,
+      evalSingleQuality,
+      triggerBatchQuality,
     };
   },
-}).mount("#app");
+});
+
+app.config.errorHandler = (err, vm, info) => {
+  console.error('[Studio Vue Error]:', err, info);
+  if (typeof window.renderFatalError === 'function') {
+    window.renderFatalError(err ? (err.message || String(err)) : 'Vue Component Error', 'VueComponent', 0, 0, err);
+  }
+};
+
+window.__STUDIO_VM__ = app.mount("#app");

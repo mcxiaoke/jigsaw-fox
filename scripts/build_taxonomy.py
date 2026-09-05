@@ -43,8 +43,8 @@ def load_and_validate_ssot(path: Path) -> dict[str, Any]:
 
     # 1. 主标签校验
     main_tags = data.get("main_tags")
-    if not isinstance(main_tags, list) or len(main_tags) != 14:
-        raise ValueError(f"main_tags 必须为正好包含 14 个项的列表，当前实际为: {len(main_tags) if isinstance(main_tags, list) else type(main_tags)}")
+    if not isinstance(main_tags, list) or len(main_tags) != 17:
+        raise ValueError(f"main_tags 必须为正好包含 17 个项的列表 (16主业务+1其他)，当前实际为: {len(main_tags) if isinstance(main_tags, list) else type(main_tags)}")
 
     seen_ids = set()
     seen_orders = set()
@@ -65,8 +65,8 @@ def load_and_validate_ssot(path: Path) -> dict[str, Any]:
             raise ValueError(f"主标签 order 重复: {order}")
         seen_orders.add(order)
 
-        if not (1 <= tag["grid_row"] <= 5):
-            raise ValueError(f"主标签 [{tag_id}] 的 grid_row 必须在 1~5 之间，当前为: {tag['grid_row']}")
+        if not (1 <= tag["grid_row"] <= 6):
+            raise ValueError(f"主标签 [{tag_id}] 的 grid_row 必须在 1~6 之间，当前为: {tag['grid_row']}")
 
     # 2. 正则模式库校验
     patterns = data.get("tag_patterns")
@@ -140,7 +140,7 @@ def generate_dart_code(data: dict[str, Any]) -> str:
         "  });",
         "}",
         "",
-        "// 14 个独立静态常量（供代码中防手误引用）",
+        f"// {len(main_tags)} 个独立静态常量（供代码中防手误引用）",
     ]
 
     for tag in main_tags:
@@ -148,7 +148,7 @@ def generate_dart_code(data: dict[str, Any]) -> str:
 
     lines.extend([
         "",
-        "// 14 主 Tags 列表",
+        f"// {len(main_tags)} 主 Tags 列表",
         "const List<PuzzleTagItem> kMainTags = [",
     ])
 
@@ -169,7 +169,7 @@ def generate_dart_code(data: dict[str, Any]) -> str:
     lines.extend([
         "];",
         "",
-        "// 前台 UI 专用 15 项黄金矩阵列表（14 主 Tag + 1 All，完美对齐 3 列 × 5 行网格）",
+        f"// 前台 UI 专用 {len(main_tags) + 1} 项黄金矩阵列表（{len(main_tags)} 主 Tag + 1 All，完美对齐 3 列 × 6 行网格）",
         "const List<Map<String, String>> kHomeTags = [",
         "  {'id': 'all', 'label': '全部', 'icon': '🧩'},",
     ])
@@ -230,7 +230,7 @@ def generate_python_code(data: dict[str, Any]) -> str:
         "from typing import Any",
         "",
         "# ---------------------------------------------------------------------------",
-        "# 1. 核心主 Tags (14 个核心分类)",
+        f"# 1. 核心主 Tags ({len(main_tags)} 个核心分类)",
         "# ---------------------------------------------------------------------------",
         "",
         "MAIN_TAGS: list[dict[str, Any]] = [",

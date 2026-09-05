@@ -14,8 +14,9 @@ import zipfile
 from pathlib import Path
 from typing import Any
 
+from studio.core.export_tracker import get_exported_hashes, record_exports
 from studio.core.image_proc import HAS_PIL, convert_image, make_rename
-from studio.core.scanner import scan_images
+from studio.core.scanner import compute_file_sha256, scan_images
 from studio.exporters.base import BaseExporter, ExportResult
 from studio.exporters.manifest_manager import ManifestManager
 
@@ -35,9 +36,29 @@ class DailyExporter(BaseExporter):
         if not images:
             raise ValueError("源目录中没有找到可打包的图片文件")
 
+        # 防重复过滤 (如果开启了排除已导出)
+        if self.data.get("excludeExported"):
+            exported_hashes = get_exported_hashes(self.src_p)
+            if exported_hashes:
+                filtered_images = []
+                excluded_cnt = 0
+                for p in images:
+                    h = compute_file_sha256(p)
+                    if h in exported_hashes:
+                        excluded_cnt += 1
+                    else:
+                        filtered_images.append(p)
+                if excluded_cnt > 0:
+                    self.log(f"已自动排除 {excluded_cnt} 张已导出的历史图片，剩余 {len(filtered_images)} 张待打包", "info")
+                images = filtered_images
+                if not images:
+                    raise ValueError("所选范围内的图片均已在历史批次中导出，无新图片可供导出")
+
         daily_dir = self.out_p / "daily"
         daily_dir.mkdir(parents=True, exist_ok=True)
         zip_path = daily_dir / f"{month}.zip"
+
+        exported_items: list[dict[str, Any]] = []
 
         # 打包 ZIP
         with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
@@ -49,6 +70,17 @@ class DailyExporter(BaseExporter):
                         arc_name = f"{Path(p.name).stem}.{self.fmt}"
                 else:
                     arc_name = make_rename(p.name, idx, self.rename_rule, self.fmt, month)
+
+                file_hash = compute_file_sha256(p)
+                exported_items.append({
+                    "hash": file_hash,
+                    "path": p.relative_to(self.src_p).as_posix().replace("\\", "/"),
+                    "file_name": p.name,
+                    "file_size": p.stat().st_size if p.exists() else 0,
+                    "export_type": "daily",
+                    "target": f"daily/{month}.zip#{arc_name}",
+                    "month": month,
+                })
 
                 if self.fmt != "original" and HAS_PIL:
                     tmp_conv = Path(tempfile.gettempdir()) / f"_daily_{arc_name}"
@@ -72,9 +104,12 @@ class DailyExporter(BaseExporter):
             except Exception:
                 existing_data = {}
 
+        now_str = dt.datetime.now(dt.timezone.utc).isoformat().replace("+00:00", "Z")
         months_list = existing_data.get("months", [])
         month_entry = {
             "month": month,
+            "count": len(images),
+            "updatedAt": now_str,
             "type": "zip",
             "url": f"{self.http_base}/daily/{month}.zip",
         }
@@ -92,7 +127,8 @@ class DailyExporter(BaseExporter):
         new_version = int(existing_data.get("version", 0)) + 1
         daily_payload = {
             "version": new_version,
-            "updatedAt": dt.datetime.now(dt.timezone.utc).isoformat().replace("+00:00", "Z"),
+            "count": len(images),
+            "updatedAt": now_str,
             "currentMonth": month,
             "months": months_list,
         }
@@ -100,7 +136,7 @@ class DailyExporter(BaseExporter):
         tmp_daily = daily_json.with_suffix(".tmp")
         tmp_daily.write_text(json.dumps(daily_payload, ensure_ascii=False, indent=2), encoding="utf-8")
         tmp_daily.replace(daily_json)
-        self.log(f"daily.json 写入成功 (version={new_version})", "ok")
+        self.log(f"daily.json 写入成功 (version={new_version}, count={len(images)})", "ok")
         files.append(str(daily_json.resolve()))
 
         # 更新 manifest.json
@@ -110,9 +146,17 @@ class DailyExporter(BaseExporter):
             new_version,
             f"{self.http_base}/daily.json",
             self.log,
+            count=len(images),
         )
         if m_file:
             files.append(str(m_file.resolve()))
+
+        # 记录导出账本
+        try:
+            record_exports(self.src_p, exported_items)
+            self.log(f"已成功将 {len(exported_items)} 张图片记入 exported.json 账本", "ok")
+        except Exception as e:
+            self.log(f"更新 exported.json 失败: {e}", "warn")
 
         return ExportResult(
             success=True,

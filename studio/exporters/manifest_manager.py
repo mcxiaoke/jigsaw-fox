@@ -23,11 +23,13 @@ class ManifestManager:
         version: int,
         url: str,
         log_fn: Callable[[str, str], None],
+        count: int | None = None,
     ) -> Path | None:
         manifest_file = out_p / "manifest.json"
+        now_str = dt.datetime.now(dt.timezone.utc).isoformat().replace("+00:00", "Z")
         manifest_data: dict[str, Any] = {
             "version": 1,
-            "updatedAt": dt.datetime.now(dt.timezone.utc).isoformat().replace("+00:00", "Z"),
+            "updatedAt": now_str,
             "modules": {},
         }
 
@@ -42,11 +44,16 @@ class ManifestManager:
                 log_fn(f"读取现有 manifest.json 失败，将重新初始化: {e}", "warn")
 
         # 更新指定模块路由
-        manifest_data["modules"][module_name] = {
+        mod_entry: dict[str, Any] = {
             "url": url,
             "version": version,
+            "updatedAt": now_str,
         }
-        manifest_data["updatedAt"] = dt.datetime.now(dt.timezone.utc).isoformat().replace("+00:00", "Z")
+        if count is not None:
+            mod_entry["count"] = count
+
+        manifest_data["modules"][module_name] = mod_entry
+        manifest_data["updatedAt"] = now_str
 
         try:
             tmp_file = manifest_file.with_suffix(".tmp")

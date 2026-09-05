@@ -5,10 +5,56 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Content Studio — 拼图内容打包工作台</title>
   <link rel="stylesheet" href="/static/css/studio.css" />
+  <script>
+    // 全局脚本与异步异常捕获 (Fatal Error Boundary / 防白屏守卫)
+    window.__STUDIO_FATAL_ERROR__ = false;
+    window.renderFatalError = function (msg, source, line, col, err) {
+      window.__STUDIO_FATAL_ERROR__ = true;
+      var appEl = document.getElementById('app');
+      if (appEl) appEl.removeAttribute('v-cloak');
+      if (document.getElementById('studio-fatal-error-box')) return;
+
+      var box = document.createElement('div');
+      box.id = 'studio-fatal-error-box';
+      box.style.cssText = 'position:fixed;inset:0;background:#0f172a;color:#f8fafc;z-index:999999;padding:24px;font-family:ui-monospace,Menlo,monospace;overflow:auto;display:flex;align-items:center;justify-content:center;';
+
+      var stack = (err && err.stack) ? err.stack : (source + ':' + line + ':' + col);
+      var safeMsg = String(msg || 'Unknown Script Error').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      var safeStack = String(stack).replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+      box.innerHTML =
+        '<div style="max-width:760px;width:100%;background:#1e293b;border:1px solid #ef4444;border-radius:10px;padding:24px;box-shadow:0 20px 25px -5px rgba(0,0,0,0.5);">' +
+          '<div style="display:flex;align-items:center;gap:12px;margin-bottom:14px;">' +
+            '<span style="font-size:26px;">🚨</span>' +
+            '<h2 style="margin:0;font-size:18px;color:#f87171;font-weight:700;">前端脚本异常导致挂载中断 (已拦截)</h2>' +
+          '</div>' +
+          '<p style="margin:0 0 12px;font-size:13px;color:#cbd5e1;line-height:1.6;">' +
+            '页面未能正常挂载渲染。为避免静默白屏，防白屏守卫已捕获该异常：' +
+          '</p>' +
+          '<div style="background:#0f172a;border:1px solid #334155;border-radius:6px;padding:14px;font-size:12px;color:#fb7185;white-space:pre-wrap;word-break:break-all;margin-bottom:18px;max-height:260px;overflow:auto;">' +
+            safeMsg + '\n\n' + safeStack +
+          '</div>' +
+          '<div style="display:flex;gap:10px;">' +
+            '<button onclick="location.reload()" style="background:#ef4444;color:#fff;border:none;padding:8px 16px;border-radius:6px;font-weight:600;cursor:pointer;">🔄 重新加载</button>' +
+            '<button onclick="navigator.clipboard.writeText(document.getElementById(\'studio-fatal-error-box\').innerText).then(function(){alert(\'已复制报错日志到剪贴板\')})" style="background:#334155;color:#e2e8f0;border:none;padding:8px 16px;border-radius:6px;cursor:pointer;">📋 复制错误日志</button>' +
+          '</div>' +
+        '</div>';
+      document.body ? document.body.appendChild(box) : document.addEventListener('DOMContentLoaded', function(){ document.body.appendChild(box); });
+    };
+
+    window.addEventListener('error', function (e) {
+      window.renderFatalError(e.message, e.filename, e.lineno, e.colno, e.error);
+    });
+    window.addEventListener('unhandledrejection', function (e) {
+      var reason = e.reason || 'Unhandled Promise Rejection';
+      var msg = typeof reason === 'object' ? (reason.message || JSON.stringify(reason)) : String(reason);
+      window.renderFatalError(msg, 'promise', 0, 0, reason);
+    });
+  </script>
   <script src="/static/vendor/vue.global.prod.js"></script>
 </head>
 <body>
-  <div id="app" class="app-container" :style="{ '--card-size': cardZoom + 'px' }" v-cloak>
+  <div id="app" class="app-container" v-cloak>
     <!-- 头部导航 -->
     <header class="header">
       <div class="brand">
@@ -32,6 +78,12 @@
       <div class="header-actions">
         <span v-if="records.length > 0" class="btn sm" style="cursor: default; background: #f8fafc;">
           总计: <b>{{ records.length }}</b> 张
+        </span>
+        <span v-if="exportedCount > 0" class="btn sm" style="cursor: default; background: #ecfdf5; color: #059669; border-color: #a7f3d0;" :title="'未用新图库存: ' + unexportedCount + ' 张'">
+          已导出: <b>{{ exportedCount }}</b> (新图: <b>{{ unexportedCount }}</b>)
+        </span>
+        <span v-if="records.length > 0 && qualitySummary && qualitySummary.total_scored > 0" class="btn sm" style="cursor: default; background: #f0fdf4; color: #166534; border-color: #bbf7d0;" :title="'已质检: ' + qualitySummary.total_scored + ' / 未质检: ' + (unscoredCount || 0)">
+          质检: <b>{{ qualitySummary.total_scored }}</b> (S:<b>{{ qualitySummary.grades?.S || 0 }}</b> A:<b>{{ qualitySummary.grades?.A || 0 }}</b> F:<b>{{ qualitySummary.grades?.F || 0 }}</b>)
         </span>
         <span v-if="unreviewedCount > 0" class="btn sm" style="cursor: default; background: #fef2f2; color: #dc2626; border-color: #fecaca;">
           待复核: <b>{{ unreviewedCount }}</b>
@@ -88,7 +140,7 @@
       <aside class="tag-sidebar">
         <div class="sidebar-header">
           <span>分类标签 TAGS</span>
-          <span class="sidebar-badge">14+1</span>
+          <span class="sidebar-badge">{{ mainTags.length }}+1</span>
         </div>
 
         <nav class="sidebar-nav">
@@ -141,10 +193,38 @@
         <span style="color: #ea580c; font-weight: 600;">仅看待复核 ({{ unreviewedCount }})</span>
       </label>
 
+      <!-- 隐藏已导出 -->
+      <label class="filter-toggle" :title="'当前已导出 ' + exportedCount + ' 张，未导出新图库存 ' + unexportedCount + ' 张'">
+        <input type="checkbox" v-model="hideExported" />
+        <span style="color: #059669; font-weight: 600;">隐藏已导出 (未用: {{ unexportedCount }})</span>
+      </label>
+
       <!-- 缩放控制 -->
-      <div class="zoom-ctrl">
+      <div class="zoom-ctrl" :title="'缩略图卡片尺寸: ' + cardZoom + 'px (范围 120px ~ 480px)'">
         <span>大小</span>
-        <input type="range" min="140" max="320" step="10" v-model="cardZoom" />
+        <input
+          type="range"
+          min="120"
+          max="480"
+          step="10"
+          v-model.number="cardZoom"
+          aria-label="卡片缩略图大小"
+        />
+        <span class="zoom-val">{{ cardZoom }}px</span>
+      </div>
+
+      <!-- 品质筛选 -->
+      <div style="display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-muted);">
+        <span>品质:</span>
+        <select v-model="filterGrade" style="border: 1px solid var(--line); border-radius: 4px; padding: 3px 6px;">
+          <option value="">全部品质</option>
+          <option value="S">🏆 S 级 (大师)</option>
+          <option value="A">⭐ A 级 (进阶)</option>
+          <option value="B">👍 B 级 (标准)</option>
+          <option value="C">💡 C 级 (需裁切)</option>
+          <option value="F">⛔ F 级 (建议淘汰)</option>
+          <option value="unscored">❓ 未质检 ({{ unscoredCount }})</option>
+        </select>
       </div>
 
       <!-- 排序 -->
@@ -152,8 +232,11 @@
         <span>排序:</span>
         <select v-model="sortBy" style="border: 1px solid var(--line); border-radius: 4px; padding: 3px 6px;">
           <option value="name">文件名</option>
+          <option value="quality">适玩度得分</option>
           <option value="mtime">修改时间</option>
           <option value="confidence">置信度</option>
+          <option value="size">文件大小</option>
+          <option value="dimension">分辨率</option>
         </select>
       </div>
 
@@ -164,6 +247,11 @@
         <button class="btn sm" @click="clearSelection" :disabled="selectedCount === 0">全不选</button>
         <button class="btn sm" @click="invertSelection">反选</button>
         <button class="btn sm" @click="selectUnreviewedOnly">选待复核</button>
+        <button class="btn sm" @click="selectUnexportedOnly">选未导出</button>
+        <button class="btn sm" :disabled="isBatchEvaluating || records.length === 0" @click="triggerBatchQuality" :title="'批量计算未评分图片的物理适玩度与死区'">
+          <span v-if="isBatchEvaluating">⚡ 质检中...</span>
+          <span v-else>⚡ 批量质检 ({{ unscoredCount }})</span>
+        </button>
 
         <!-- 批量标签修改选择器 -->
         <select v-model="batchTagTarget" style="border: 1px solid var(--line); border-radius: 4px; padding: 4px 8px; font-size: 12px;">
@@ -202,12 +290,12 @@
         <p v-else>当前筛选条件下无图片。</p>
       </div>
 
-      <div class="image-grid">
+      <div class="image-grid" :style="{ '--card-size': cardZoom + 'px' }">
         <div
           v-for="item in filteredRecords"
           :key="item.path"
           class="img-card"
-          :class="{ selected: isSelected(item) }"
+          :class="{ selected: isSelected(item), 'is-exported': !!item.exported }"
           @click="toggleSelect(item)"
           @dblclick.stop="openViewer(item)"
         >
@@ -218,6 +306,15 @@
             :checked="isSelected(item)"
             @click.stop="toggleSelect(item)"
           />
+
+          <!-- 已导出角标 -->
+          <div
+            v-if="item.exported"
+            class="card-exported-badge"
+            :title="getExportTooltip(item.exported)"
+          >
+            ✔ {{ formatExportShort(item.exported) }}
+          </div>
 
           <!-- 状态小圆点 -->
           <div
@@ -239,11 +336,41 @@
               :alt="item.file"
               @error="handleImageError"
             />
+            <!-- 质检角标 -->
+            <div
+              v-if="item.quality"
+              class="card-quality-badge"
+              :class="'grade-' + (item.quality.grade || '').toLowerCase()"
+              :title="'适玩度: ' + item.quality.score + '分 (' + item.quality.grade + '级) | ' + (item.quality.crop_suggestion || '')"
+            >
+              {{ item.quality.grade }} {{ item.quality.score }}
+            </div>
+            <div
+              v-else
+              class="card-quality-badge grade-none"
+              title="尚未质检，点击立即分析"
+              @click.stop="evalSingleQuality(item)"
+            >
+              ? 质检
+            </div>
           </div>
 
           <!-- 卡片内容 -->
           <div class="card-body">
             <div class="card-title" :title="item.path">{{ item.file }}</div>
+            <div class="card-subdir" :title="'相对子目录: ' + (getSubDir(item.path) || '/ (根目录)')">
+              <span class="subdir-icon">📁</span>
+              <span class="subdir-text">{{ getSubDir(item.path) || '/' }}</span>
+            </div>
+            <div class="card-meta" v-if="item.width || item.size || item.format || item.exported || item.quality">
+              <span class="meta-dim" v-if="item.width && item.height">{{ item.width }}×{{ item.height }}</span>
+              <span class="meta-fmt" v-if="item.format">{{ item.format }}</span>
+              <span class="meta-size" v-if="item.size">{{ formatFileSize(item.size) }}</span>
+              <span class="meta-quality" v-if="item.quality" :class="'q-tag-' + (item.quality.grade || '').toLowerCase()" :title="item.quality.crop_suggestion">
+                {{ item.quality.grade }}级 {{ item.quality.score }}分
+              </span>
+              <span class="meta-exported" v-if="item.exported" :title="getExportTooltip(item.exported)">✔ 已导出</span>
+            </div>
             <div class="card-tags">
               <span
                 v-for="t in item.tags"
@@ -351,6 +478,17 @@
             </div>
           </div>
 
+          <!-- 防重复排除已导出选项 -->
+          <div style="margin-top: 12px; padding: 10px 14px; background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 6px;">
+            <label class="filter-toggle" style="cursor: pointer; display: flex; align-items: center; gap: 8px;">
+              <input type="checkbox" v-model="exportConfig.excludeExported" />
+              <span style="font-weight: 600; color: #15803d; font-size: 13px;">🛡️ 自动排除已导出的历史图片 (防跨包重复使用)</span>
+            </label>
+            <div style="font-size: 11px; color: #166534; margin-top: 4px; padding-left: 24px; line-height: 1.4;">
+              基于文件内容 SHA-256 哈希智能比对，即使图片改名或挪动目录也能精准识别过滤。
+            </div>
+          </div>
+
           <!-- 控制台日志区域 -->
           <div v-if="exportLogs.length > 0" class="console-box">
             <div v-for="(l, i) in exportLogs" :key="i" class="log-line" :class="l.level">
@@ -379,9 +517,21 @@
     <div v-if="viewerModalOpen" class="modal-mask" @click.self="closeViewer">
       <div class="viewer-dialog">
         <div class="viewer-header">
-          <div>
+          <div class="viewer-title-box">
             <b>{{ currentViewerItem?.file }}</b>
-            <span style="color: #94a3b8; font-size: 11px; margin-left: 10px;">
+            <span class="viewer-meta-badge" v-if="currentViewerItem?.width && currentViewerItem?.height">
+              📐 {{ currentViewerItem.width }} × {{ currentViewerItem.height }}
+            </span>
+            <span class="viewer-meta-badge fmt" v-if="currentViewerItem?.format">
+              {{ currentViewerItem.format }}
+            </span>
+            <span class="viewer-meta-badge size" v-if="currentViewerItem?.size">
+              {{ formatFileSize(currentViewerItem.size) }}
+            </span>
+            <span class="viewer-meta-badge" v-if="currentViewerItem?.exported" style="background: #059669; color: #fff;">
+              ✔ 已导出至 {{ formatExportShort(currentViewerItem.exported) }}
+            </span>
+            <span style="color: #94a3b8; font-size: 11px; margin-left: 6px;">
               [{{ viewerIndex + 1 }} / {{ filteredRecords.length }}] {{ currentViewerItem?.path }}
             </span>
           </div>
@@ -398,6 +548,49 @@
             @error="handleImageError"
           />
           <button class="viewer-nav-btn next" @click="nextViewer">❯</button>
+        </div>
+
+        <!-- 质检与裁剪建议状态条 -->
+        <div class="viewer-quality-bar" v-if="currentViewerItem">
+          <div class="quality-score-panel" v-if="currentViewerItem.quality">
+            <span class="q-grade-badge" :class="'grade-' + (currentViewerItem.quality.grade || '').toLowerCase()">
+              {{ currentViewerItem.quality.grade }} 级
+            </span>
+            <div class="q-score-box">
+              <span class="q-score-val">适玩度: <b>{{ currentViewerItem.quality.score }}</b> / 100</span>
+              <div class="q-progress-bg">
+                <div class="q-progress-bar" :style="{ width: currentViewerItem.quality.score + '%' }"></div>
+              </div>
+            </div>
+            <div class="q-metric-chips">
+              <span class="q-chip" :title="'全图死区占比: ' + (currentViewerItem.quality.dead_zone_ratio * 100).toFixed(1) + '%'">
+                💀 死区: <b>{{ (currentViewerItem.quality.dead_zone_ratio * 100).toFixed(1) }}%</b>
+              </span>
+              <span class="q-chip" :title="'内部核心盲盒死区占比: ' + (currentViewerItem.quality.core_dead_ratio * 100).toFixed(1) + '%'">
+                🎯 核心死区: <b>{{ (currentViewerItem.quality.core_dead_ratio * 100).toFixed(1) }}%</b>
+              </span>
+              <span class="q-chip" :title="'四周边框死区占比: ' + (currentViewerItem.quality.border_dead_ratio * 100).toFixed(1) + '%'">
+                🖼️ 边框死区: <b>{{ (currentViewerItem.quality.border_dead_ratio * 100).toFixed(1) }}%</b>
+              </span>
+              <span class="q-chip" v-if="currentViewerItem.quality.max_grid">
+                🧩 推荐: <b>{{ currentViewerItem.quality.max_grid }}</b>
+              </span>
+            </div>
+            <div class="q-crop-box" v-if="currentViewerItem.quality.crop_suggestion">
+              <span class="q-crop-icon">✂️</span>
+              <span class="q-crop-text">{{ currentViewerItem.quality.crop_suggestion }}</span>
+            </div>
+            <button class="btn xs" style="background: #334155; color: #fff; border: 1px solid #475569;" @click="evalSingleQuality(currentViewerItem, true)" :disabled="isEvaluatingQuality">
+              🔄 重新质检
+            </button>
+          </div>
+          <div class="quality-unscored-panel" v-else>
+            <span>ℹ️ 该图片尚未执行物理适玩度质检</span>
+            <button class="btn xs primary" @click="evalSingleQuality(currentViewerItem)" :disabled="isEvaluatingQuality">
+              <span v-if="isEvaluatingQuality">⏳ 分析中...</span>
+              <span v-else>⚡ 立即质检</span>
+            </button>
+          </div>
         </div>
 
         <!-- 底部快速打标与复核栏 -->

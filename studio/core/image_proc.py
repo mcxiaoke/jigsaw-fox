@@ -9,8 +9,10 @@ from __future__ import annotations
 import hashlib
 import io
 import mimetypes
+import os
 import shutil
 import sys
+import threading
 from pathlib import Path
 from typing import Any
 
@@ -81,11 +83,11 @@ def generate_thumbnail_bytes(img_path: Path | str, size: int = 360, quality: int
                 im.save(buf, format="JPEG", quality=quality, optimize=True)
                 data = buf.getvalue()
 
-                # 写入服务端磁盘缓存
+                # 写入服务端磁盘缓存 (使用带线程标识的临时文件，防止并发写入冲突)
                 if cache_path:
                     try:
                         cache_path.parent.mkdir(parents=True, exist_ok=True)
-                        tmp_cache = cache_path.with_suffix(".tmp")
+                        tmp_cache = cache_path.with_suffix(f".tmp_{os.getpid()}_{threading.get_ident()}")
                         tmp_cache.write_bytes(data)
                         tmp_cache.replace(cache_path)
                     except Exception:

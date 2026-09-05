@@ -2,7 +2,7 @@
  * studio.static.js.api — REST API 请求客户端
  */
 
-export async function checkHealth(timeoutMs = 2500) {
+export async function checkHealth(timeoutMs = 4000) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
@@ -72,8 +72,8 @@ export function getThumbUrl(absOrRelPath, size = 360, baseDir = "") {
     full = baseDir.replace(/[\\/]+$/, "") + "/" + absOrRelPath.replace(/^[\\/]+/, "");
   }
   const dirParam = baseDir ? `&dir=${encodeURIComponent(baseDir)}` : "";
-  // 尺寸阶梯离散分桶 (240, 360, 480, 640)，极大提高浏览器与服务端的缓存命中复用率
-  const bucketSize = size <= 260 ? 240 : (size <= 380 ? 360 : (size <= 520 ? 480 : 640));
+  // 尺寸阶梯离散分桶 (240, 360, 480, 640, 800)，极大提高浏览器与服务端的缓存命中复用率
+  const bucketSize = size <= 260 ? 240 : (size <= 380 ? 360 : (size <= 520 ? 480 : (size <= 700 ? 640 : 800)));
   return `/api/thumb?path=${encodeURIComponent(full)}&size=${bucketSize}${dirParam}`;
 }
 
@@ -84,6 +84,36 @@ export function getFileUrl(absOrRelPath, baseDir = "") {
   }
   const dirParam = baseDir ? `&dir=${encodeURIComponent(baseDir)}` : "";
   return `/api/file?path=${encodeURIComponent(full)}${dirParam}`;
+}
+
+export async function fetchQuality(path, hash = "", dir = "", force = false) {
+  const params = new URLSearchParams();
+  if (path) params.set("path", path);
+  if (hash) params.set("hash", hash);
+  if (dir) params.set("dir", dir);
+  if (force) params.set("force", "1");
+  const res = await fetch(`/api/quality?${params.toString()}`);
+  const data = await res.json();
+  if (!res.ok || !data.ok) throw new Error(data.error || "获取质检数据失败");
+  return data;
+}
+
+export async function fetchQualityStats(dir) {
+  const res = await fetch(`/api/quality/stats?dir=${encodeURIComponent(dir)}`);
+  const data = await res.json();
+  if (!res.ok || !data.ok) throw new Error(data.error || "获取质检统计失败");
+  return data;
+}
+
+export async function batchEvaluateQuality(dir, limit = 50, paths = []) {
+  const res = await fetch("/api/quality/batch", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ dir, limit, paths }),
+  });
+  const data = await res.json();
+  if (!res.ok || !data.ok) throw new Error(data.error || "批量质检执行失败");
+  return data;
 }
 
 function jsonStringifySafe(obj) {

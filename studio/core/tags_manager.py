@@ -85,7 +85,7 @@ def normalize_records(raw_data: Any, root: Path) -> tuple[list[dict[str, Any]], 
         conf = float(item.get("confidence", 0) or 0)
         review = bool(item.get("review_required", False)) or (conf < 0.75) or ("others" in tags)
 
-        records.append({
+        rec = {
             "path": rel,
             "file": Path(rel).name,
             "tags": tags,
@@ -95,9 +95,28 @@ def normalize_records(raw_data: Any, root: Path) -> tuple[list[dict[str, Any]], 
             "subject": item.get("subject", ""),
             "scene": item.get("scene", ""),
             "reason": item.get("reason", ""),
+            "hash": item.get("hash") or item.get("sha256", ""),
             "sha1": item.get("sha1", ""),
             "model": item.get("model", ""),
-        })
+        }
+        if item.get("exported"):
+            rec["exported"] = item["exported"]
+        if item.get("width"):
+            rec["width"] = int(item["width"])
+        if item.get("height"):
+            rec["height"] = int(item["height"])
+        if item.get("format"):
+            rec["format"] = str(item["format"]).upper()
+        if item.get("size"):
+            rec["size"] = int(item["size"])
+        if item.get("mtime"):
+            rec["mtime"] = int(item["mtime"])
+        if item.get("aspect_ratio"):
+            rec["aspect_ratio"] = float(item["aspect_ratio"])
+        elif rec.get("width") and rec.get("height"):
+            rec["aspect_ratio"] = round(rec["width"] / rec["height"], 2)
+
+        records.append(rec)
 
     return records, format_name
 
@@ -106,41 +125,111 @@ def merge_scanned_images(
     images: list[Path],
     root: Path,
     existing_records: list[dict[str, Any]] | None,
+    image_infos: dict[str, dict[str, Any]] | None = None,
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     """
     将扫描到的实际图片与现有 records 进行对齐：
-    - 已存在的图片保留打标结果；
-    - 新增的图片自动按目录规则推断初始标签；
-    - 统计标签分布与待复核数量。
+    1. 路径完全匹配的已有图片：保留已有打标结果，补充缺失的元数据和 Hash；
+    2. 孤儿记录（磁盘路径已不存在）：若其 Hash 与未认领的新文件 Hash 一致，
+       自动判定为改名或移动，无缝更新路径并 100% 完整继承已有 tags 及人工复核成果；
+    3. 真正的新增图片：自动按目录规则推断初始标签并注入完整元数据；
+    4. 统计标签分布、复核数量及对齐指标。
     """
-    records: list[dict[str, Any]] = list(existing_records) if existing_records else []
-    known_paths = {r["path"].replace("\\", "/") for r in records}
+    existing = list(existing_records) if existing_records else []
+    r_root = Path(root).resolve()
+    disk_paths = {p.resolve().relative_to(r_root).as_posix().replace("\\", "/"): p for p in images}
 
-    for p in images:
-        rel = p.relative_to(root).as_posix().replace("\\", "/")
-        if rel not in known_paths:
-            guessed = guess_tags_from_path(p, root=root)
-            cats = get_catalogs_for_tags(guessed)
-            is_others = any(t.lower() == "others" for t in guessed)
-            records.append({
-                "path": rel,
-                "file": p.name,
-                "tags": guessed,
-                "catalogs": cats,
-                "confidence": 1.0 if not is_others else 0.0,
-                "review_required": is_others,
-                "subject": "",
-                "scene": "",
-                "reason": f"智能推断: {', '.join(guessed)}" if not is_others else "未打标",
-                "sha1": "",
-                "model": "rule",
-            })
-            known_paths.add(rel)
+    active_records: list[dict[str, Any]] = []
+    orphan_records: list[dict[str, Any]] = []
 
-    # 统计指标
+    # 1. 先按磁盘实际存在性分类
+    for r in existing:
+        rel = r.get("path", "").replace("\\", "/")
+        if rel in disk_paths:
+            active_records.append(r)
+        else:
+            orphan_records.append(r)
+
+    # 找出尚未被 active_records 占用的磁盘路径
+    occupied_paths = {r["path"].replace("\\", "/") for r in active_records}
+    unmapped_rel_paths = [rel for rel in disk_paths if rel not in occupied_paths]
+
+    # 2. 自动认领引擎 (Auto-Reconciliation)：对孤儿记录按 SHA-256 Hash 匹配新路径文件
+    orphan_by_hash: dict[str, dict[str, Any]] = {}
+    for o in orphan_records:
+        h = (o.get("hash") or "").strip().lower()
+        if h and h not in orphan_by_hash:
+            orphan_by_hash[h] = o
+
+    reconciled_count = 0
+    remaining_unmapped: list[str] = []
+
+    for rel in unmapped_rel_paths:
+        info = image_infos.get(rel, {}) if image_infos else {}
+        file_hash = (info.get("hash") or "").strip().lower()
+
+        if file_hash and file_hash in orphan_by_hash:
+            # 命中 Hash 相同：判定文件发生了改名或跨目录移动！
+            matched_rec = orphan_by_hash.pop(file_hash)
+            matched_rec["path"] = rel
+            matched_rec["file"] = Path(rel).name
+            for k in ("width", "height", "format", "size", "mtime", "aspect_ratio", "orientation"):
+                if info.get(k):
+                    matched_rec[k] = info.get(k)
+            matched_rec["hash"] = file_hash
+            active_records.append(matched_rec)
+            reconciled_count += 1
+        else:
+            remaining_unmapped.append(rel)
+
+    # 3. 回填已有记录中可能缺失的图片元数据与 Hash
+    if image_infos:
+        for r in active_records:
+            rel = r["path"].replace("\\", "/")
+            if rel in image_infos:
+                info = image_infos[rel]
+                if not r.get("hash") and info.get("hash"):
+                    r["hash"] = info["hash"]
+                for k in ("width", "height", "format", "size", "mtime", "aspect_ratio", "orientation"):
+                    if k not in r or not r[k]:
+                        r[k] = info.get(k)
+
+    # 4. 真正的新增图片：推断初始标签
+    for rel in remaining_unmapped:
+        p = disk_paths[rel]
+        guessed = guess_tags_from_path(p, root=root)
+        cats = get_catalogs_for_tags(guessed)
+        is_others = any(t.lower() == "others" for t in guessed)
+        info = image_infos.get(rel, {}) if image_infos else {}
+        active_records.append({
+            "path": rel,
+            "file": p.name,
+            "tags": guessed,
+            "catalogs": cats,
+            "confidence": 1.0 if not is_others else 0.0,
+            "review_required": is_others,
+            "subject": "",
+            "scene": "",
+            "reason": f"智能推断: {', '.join(guessed)}" if not is_others else "未打标",
+            "hash": info.get("hash", ""),
+            "sha1": "",
+            "model": "rule",
+            "width": info.get("width", 0),
+            "height": info.get("height", 0),
+            "format": info.get("format", ""),
+            "size": info.get("size", 0),
+            "mtime": info.get("mtime", 0),
+            "aspect_ratio": info.get("aspect_ratio", 1.0),
+            "orientation": info.get("orientation", "square"),
+        })
+
+    # 按相对路径小写排序保持稳定
+    active_records.sort(key=lambda r: r["path"].lower())
+
+    # 5. 统计指标
     by_tag: dict[str, int] = {}
     review_count = 0
-    for r in records:
+    for r in active_records:
         for t in r.get("tags", []):
             by_tag[t] = by_tag.get(t, 0) + 1
         if r.get("review_required") or any(t.lower() == "others" for t in r.get("tags", [])):
@@ -150,10 +239,11 @@ def merge_scanned_images(
         "byTag": by_tag,
         "reviewCount": review_count,
         "totalImages": len(images),
-        "totalRecords": len(records),
+        "totalRecords": len(active_records),
+        "reconciledCount": reconciled_count,
     }
 
-    return records, stats
+    return active_records, stats
 
 
 def save_tags_file(root: str | Path, records: list[dict[str, Any]], target_file: Path | None = None) -> tuple[bool, str, int]:
@@ -165,7 +255,8 @@ def save_tags_file(root: str | Path, records: list[dict[str, Any]], target_file:
     r = Path(root).resolve()
     dest = target_file if target_file else (r / "tags.json")
 
-    # 保留原有的 sha1 映射
+    # 保留原有的 sha1 和 hash 映射
+    hash_map: dict[str, str] = {}
     sha_map: dict[str, str] = {}
     if dest.exists():
         try:
@@ -173,7 +264,11 @@ def save_tags_file(root: str | Path, records: list[dict[str, Any]], target_file:
             if isinstance(old_raw, list):
                 for item in old_raw:
                     if isinstance(item, dict) and item.get("path"):
-                        sha_map[item["path"]] = item.get("sha1", "")
+                        pk = item["path"]
+                        if item.get("hash"):
+                            hash_map[pk] = item["hash"]
+                        if item.get("sha1"):
+                            sha_map[pk] = item["sha1"]
         except Exception:
             pass
 
@@ -199,8 +294,9 @@ def save_tags_file(root: str | Path, records: list[dict[str, Any]], target_file:
         conf = float(item.get("confidence", 0.8) or 0.8)
         review = bool(item.get("review_required", False)) or (conf < 0.75) or any(t.lower() == "others" for t in tags_norm)
 
-        out_list.append({
+        out_item = {
             "path": rel,
+            "hash": item.get("hash") or hash_map.get(rel, ""),
             "sha1": item.get("sha1") or sha_map.get(rel, ""),
             "tags": tags_norm,
             "catalogs": cats,
@@ -211,7 +307,21 @@ def save_tags_file(root: str | Path, records: list[dict[str, Any]], target_file:
             "review_required": review,
             "model": item.get("model", "manual"),
             "taxonomy_version": "jigsaw-tag-v3.0-14",
-        })
+        }
+        if item.get("width"):
+            out_item["width"] = int(item["width"])
+        if item.get("height"):
+            out_item["height"] = int(item["height"])
+        if item.get("format"):
+            out_item["format"] = str(item["format"]).upper()
+        if item.get("size"):
+            out_item["size"] = int(item["size"])
+        if item.get("mtime"):
+            out_item["mtime"] = int(item["mtime"])
+        if item.get("aspect_ratio"):
+            out_item["aspect_ratio"] = float(item["aspect_ratio"])
+
+        out_list.append(out_item)
 
     try:
         dest.parent.mkdir(parents=True, exist_ok=True)

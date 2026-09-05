@@ -11,12 +11,15 @@ import argparse
 import datetime as dt
 import hashlib
 import json
+import logging
 import mimetypes
+import socket
 import sys
 import threading
+import time
 import urllib.parse
 import webbrowser
-from http.server import BaseHTTPRequestHandler, HTTPServer
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
 
@@ -26,8 +29,17 @@ _root_dir = _pkg_dir.parent
 if str(_root_dir) not in sys.path:
     sys.path.insert(0, str(_root_dir))
 
+from studio.core.cache_db import CacheDB
+from studio.core.export_tracker import get_exported_map, load_exported_ledger
 from studio.core.image_proc import HAS_PIL, generate_thumbnail_bytes
-from studio.core.scanner import find_tags_file, get_image_info, scan_images
+from studio.core.quality_evaluator import evaluate_image, evaluate_images_batch
+from studio.core.scanner import (
+    compute_file_sha256,
+    find_tags_file,
+    get_image_info,
+    scan_image_infos,
+    scan_images,
+)
 from studio.core.tags_manager import (
     load_tags_file,
     merge_scanned_images,
@@ -47,6 +59,60 @@ from studio.taxonomy import (
 )
 
 STATIC_DIR = Path(__file__).parent / "static"
+DEFAULT_LOG_FILE = _root_dir / "temp" / "studio.log"
+
+logger = logging.getLogger("studio")
+
+
+def setup_logger(
+    level_name: str = "INFO",
+    logfile: Path | str | None = DEFAULT_LOG_FILE,
+) -> logging.Logger:
+    """
+    配置 Content Studio 服务端日志：
+    - 控制台输出：遵循请求级别 (默认为 INFO，启用 --debug 时为 DEBUG)
+    - 文件日志输出：默认保存到 temp/studio.log，完整记录 DEBUG+ 级别便于排错
+    """
+    level = getattr(logging, str(level_name).upper(), logging.INFO)
+    logger.setLevel(logging.DEBUG)
+    for h in list(logger.handlers):
+        try:
+            h.close()
+        except Exception:
+            pass
+    logger.handlers.clear()
+
+    # 1. 控制台 Handler
+    console_handler = logging.StreamHandler(sys.stdout)
+    console_handler.setLevel(level)
+    console_fmt = logging.Formatter(
+        "[%(asctime)s] [%(levelname)s] %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S",
+    )
+    console_handler.setFormatter(console_fmt)
+    logger.addHandler(console_handler)
+
+    # 2. 文件日志 Handler (保存在 temp/ 目录)
+    if logfile and str(logfile).strip().lower() not in ("none", "off", "false", ""):
+        log_path = Path(logfile).resolve()
+        try:
+            log_path.parent.mkdir(parents=True, exist_ok=True)
+            file_handler = logging.FileHandler(str(log_path), encoding="utf-8")
+            file_handler.setLevel(logging.DEBUG)
+            file_fmt = logging.Formatter(
+                "[%(asctime)s] [%(levelname)s] (%(filename)s:%(lineno)d) %(message)s",
+                datefmt="%Y-%m-%d %H:%M:%S",
+            )
+            file_handler.setFormatter(file_fmt)
+            logger.addHandler(file_handler)
+        except Exception as e:
+            logger.warning(f"无法创建日志文件 {log_path}: {e}")
+
+    return logger
+
+
+# 模块加载时默认初始化
+setup_logger("INFO", DEFAULT_LOG_FILE)
 
 
 class StudioRequestHandler(BaseHTTPRequestHandler):
@@ -55,8 +121,31 @@ class StudioRequestHandler(BaseHTTPRequestHandler):
     current_root_dir: Path | None = None
 
     def log_message(self, fmt: str, *args: Any) -> None:
-        # 只输出简洁日志
-        sys.stdout.write(f"[{self.log_date_time_string()}] {fmt % args}\n")
+        msg = fmt % args
+        status_code = 0
+        if len(args) >= 2:
+            try:
+                status_code = int(args[1])
+            except (ValueError, TypeError):
+                status_code = 0
+
+        req_line = getattr(self, "requestline", "") or (args[0] if args else "")
+        req_line_s = str(req_line)
+
+        if status_code >= 500:
+            logger.error(f"[HTTP] {msg}")
+        elif status_code >= 400:
+            logger.warning(f"[HTTP] {msg}")
+        elif (
+            "/api/thumb" in req_line_s
+            or "/static/" in req_line_s
+            or "/favicon.ico" in req_line_s
+            or "/api/health" in req_line_s
+        ):
+            logger.debug(f"[HTTP] {msg}")
+        else:
+            logger.info(f"[HTTP] {msg}")
+
 
     def _cors(self) -> None:
         self.send_header("Access-Control-Allow-Origin", "*")
@@ -123,12 +212,24 @@ class StudioRequestHandler(BaseHTTPRequestHandler):
             self._handle_get_tags(qs)
             return
 
+        if path == "/api/exported":
+            self._handle_get_exported(qs)
+            return
+
         if path == "/api/thumb":
             self._handle_thumb(qs)
             return
 
         if path == "/api/file":
             self._handle_file(qs)
+            return
+
+        if path == "/api/quality":
+            self._handle_get_quality(qs)
+            return
+
+        if path == "/api/quality/stats":
+            self._handle_get_quality_stats(qs)
             return
 
         # 兜底查找静态文件
@@ -163,6 +264,10 @@ class StudioRequestHandler(BaseHTTPRequestHandler):
             self._handle_export(data)
             return
 
+        if path == "/api/quality/batch":
+            self._handle_post_quality_batch(data)
+            return
+
         self.send_error(404, f"Not Found POST: {path}")
 
     # -----------------------------------------------------------------------
@@ -183,13 +288,13 @@ class StudioRequestHandler(BaseHTTPRequestHandler):
         })
 
     def _handle_scan(self, qs: dict[str, list[str]]) -> None:
-        """扫描指定目录下的图片，并加载或推断标签"""
+        """扫描指定目录下的图片，并加载或推断标签与防重导出状态"""
         dir_param = (qs.get("dir") or [""])[0].strip()
         if not dir_param:
             self._error("缺少必要参数 ?dir=PATH")
             return
 
-        root = Path(dir_param)
+        root = Path(dir_param).resolve()
         if not root.exists():
             self._error(f"指定目录不存在: {dir_param}", status=404)
             return
@@ -197,22 +302,112 @@ class StudioRequestHandler(BaseHTTPRequestHandler):
             self._error(f"指定路径不是目录: {dir_param}", status=400)
             return
 
-        StudioRequestHandler.current_root_dir = root.resolve()
-
-        images = scan_images(root)
+        StudioRequestHandler.current_root_dir = root
         tag_file = find_tags_file(root)
         existing_records = None
         format_name = None
 
-        if tag_file:
-            raw_data, err = load_tags_file(tag_file)
-            if not err and raw_data:
-                existing_records, format_name = normalize_records(raw_data, root)
+        with CacheDB(root) as db:
+            # 优先加载 SQLite 算力缓存，确保哪怕未点保存也能 0ms 秒级恢复
+            hash_cache: dict[str, tuple[int, int, str, int, int, str]] = dict(db.load_file_cache())
 
-        records, stats = merge_scanned_images(images, root, existing_records)
+            if tag_file:
+                raw_data, err = load_tags_file(tag_file)
+                if not err and raw_data:
+                    existing_records, format_name = normalize_records(raw_data, root)
+                    for r in existing_records:
+                        p_k = r.get("path", "").replace("\\", "/")
+                        if p_k and r.get("hash") and p_k not in hash_cache:
+                            hash_cache[p_k] = (
+                                int(r.get("mtime", 0)),
+                                int(r.get("size", 0)),
+                                str(r.get("hash", "")),
+                                int(r.get("width", 0)),
+                                int(r.get("height", 0)),
+                                str(r.get("format", "")),
+                            )
 
-        img_infos = [get_image_info(p, root) for p in images]
-        img_infos = [info for info in img_infos if info is not None]
+            images = scan_images(root)
+            total_images = len(images)
+            logger.info(f"[SCAN] 开始扫描目录: {root.resolve()} (发现 {total_images:,} 个图片文件)")
+
+            scan_stats: dict[str, Any] = {}
+            start_time = time.time()
+            last_log_time = 0.0
+
+            def _on_progress(completed: int, total: int, cache_hits: int, new_hashes: int) -> None:
+                nonlocal last_log_time
+                now = time.time()
+                if completed == 1 or completed == total or completed % 500 == 0 or (now - last_log_time >= 1.0):
+                    last_log_time = now
+                    pct = (completed / total * 100) if total else 100.0
+                    logger.info(
+                        f"[SCAN] 进度: {completed:,}/{total:,} ({pct:.1f}%) | "
+                        f"缓存命中: {cache_hits:,} | 新计Hash: {new_hashes:,}"
+                    )
+
+            image_infos = scan_image_infos(
+                images,
+                root,
+                hash_cache=hash_cache,
+                progress_callback=_on_progress,
+                stats_out=scan_stats,
+            )
+            elapsed = max(time.time() - start_time, 0.001)
+            speed = len(images) / elapsed
+
+            # 立即将新发现或更新的图像元数据增量固化至 SQLite 底层数据库，并清理废弃路径
+            db.upsert_files(list(image_infos.values()))
+            db.prune_missing_files(list(image_infos.keys()))
+
+            records, stats = merge_scanned_images(images, root, existing_records, image_infos=image_infos)
+            img_infos = list(image_infos.values())
+
+            # 读取 exported.json 账本并关联到每条记录
+            exp_ledger = load_exported_ledger(root)
+            exp_hashes = exp_ledger.get("hashes", {})
+            exp_map = get_exported_map(root)
+            exported_count = 0
+
+            for r in records:
+                h = (r.get("hash") or "").strip().lower()
+                rel = r.get("path", "").replace("\\", "/")
+                exp_info = exp_hashes.get(h) or exp_map.get(rel)
+                if exp_info:
+                    r["exported"] = exp_info
+                    exported_count += 1
+                else:
+                    r["exported"] = None
+
+            stats["exportedCount"] = exported_count
+            stats["unexportedCount"] = len(records) - exported_count
+
+            # 批量装配已有的 OpenCV 物理质检评分缓存
+            all_hashes = [r.get("hash") for r in records if r.get("hash")]
+            qualities = db.get_qualities(all_hashes)
+            scored_count = 0
+            for r in records:
+                h = (r.get("hash") or "").strip().lower()
+                q = qualities.get(h)
+                if q:
+                    r["quality"] = q
+                    scored_count += 1
+                else:
+                    r["quality"] = None
+
+            db_stats = db.get_stats()
+            stats["scoredCount"] = scored_count
+            stats["unscoredCount"] = len(records) - scored_count
+            stats["qualitySummary"] = db_stats
+
+        logger.info(
+            f"[SCAN] 扫描完成: 共 {len(images):,} 张图片，耗时 {elapsed:.2f}s ({speed:.0f} 张/秒) | "
+            f"缓存命中: {scan_stats.get('cache_hits', 0):,} | 新增哈希: {scan_stats.get('new_hashes', 0):,} | "
+            f"错误: {scan_stats.get('errors', 0):,}"
+        )
+        logger.info(
+            f"[SCAN] 状态统计: 总记录 {len(records):,} 条 | 已导出: {exported_count:,} 条 | 未导出: {len(records) - exported_count:,} 条"
+        )
 
         self._json({
             "ok": True,
@@ -223,6 +418,7 @@ class StudioRequestHandler(BaseHTTPRequestHandler):
             "stats": stats,
             "images": img_infos,
             "total": len(img_infos),
+            "totalExported": exp_ledger.get("total_exported", 0),
         })
 
     def _resolve_image_path(self, path_s: str, qs: dict[str, list[str]]) -> Path | None:
@@ -265,7 +461,7 @@ class StudioRequestHandler(BaseHTTPRequestHandler):
         return None
 
     def _handle_get_tags(self, qs: dict[str, list[str]]) -> None:
-        """读取 tags.json"""
+        """读取 tags.json 并关联导出状态"""
         dir_param = (qs.get("dir") or [""])[0].strip()
         if not dir_param:
             self._error("缺少 ?dir 参数")
@@ -283,7 +479,27 @@ class StudioRequestHandler(BaseHTTPRequestHandler):
             return
 
         records, _ = normalize_records(raw, root)
+        exp_ledger = load_exported_ledger(root)
+        exp_hashes = exp_ledger.get("hashes", {})
+        exp_map = get_exported_map(root)
+
+        for r in records:
+            h = (r.get("hash") or "").strip().lower()
+            rel = r.get("path", "").replace("\\", "/")
+            exp_info = exp_hashes.get(h) or exp_map.get(rel)
+            r["exported"] = exp_info if exp_info else None
+
         self._json({"ok": True, "file": str(tag_file.resolve()), "records": records})
+
+    def _handle_get_exported(self, qs: dict[str, list[str]]) -> None:
+        """读取源目录下的 exported.json 导出账本"""
+        dir_param = (qs.get("dir") or [""])[0].strip()
+        if not dir_param:
+            self._error("缺少 ?dir 参数")
+            return
+        root = Path(dir_param)
+        ledger = load_exported_ledger(root)
+        self._json({"ok": True, "ledger": ledger})
 
     def _handle_post_tags(self, data: dict[str, Any]) -> None:
         """原子写回保存 tags.json"""
@@ -300,9 +516,108 @@ class StudioRequestHandler(BaseHTTPRequestHandler):
 
         ok, msg, count = save_tags_file(root, records)
         if ok:
+            logger.info(f"[TAGS] 保存成功: 文件={msg}, 记录数={count}")
             self._json({"ok": True, "file": msg, "count": count})
         else:
+            logger.error(f"[TAGS] 保存失败: {msg}")
             self._error(f"保存失败: {msg}", status=500)
+
+    def _handle_get_quality(self, qs: dict[str, list[str]]) -> None:
+        """获取或现场执行单张图片的 OpenCV 物理质检与裁剪建议"""
+        path_s = (qs.get("path") or [""])[0].strip()
+        hash_s = (qs.get("hash") or [""])[0].strip().lower()
+        force = (qs.get("force") or ["0"])[0] == "1"
+        dir_param = (qs.get("dir") or [""])[0].strip()
+
+        img_path = self._resolve_image_path(path_s, qs)
+        if not img_path or not img_path.is_file():
+            self._error(f"图片不存在或无法访问: {path_s}", status=404)
+            return
+
+        root = Path(dir_param).resolve() if dir_param else (StudioRequestHandler.current_root_dir or img_path.parent)
+
+        with CacheDB(root) as db:
+            file_hash = hash_s
+            if not file_hash:
+                try:
+                    file_hash = compute_file_sha256(img_path)
+                except Exception:
+                    file_hash = ""
+
+            # 命中缓存直接返回
+            if not force and file_hash:
+                cached = db.get_quality(file_hash)
+                if cached:
+                    self._json({"ok": True, "hash": file_hash, "quality": cached, "cached": True})
+                    return
+
+            # 现场计算并入库
+            try:
+                res = evaluate_image(img_path)
+                if file_hash:
+                    db.save_quality(file_hash, res)
+                self._json({"ok": True, "hash": file_hash, "quality": res, "cached": False})
+            except Exception as e:
+                logger.error(f"[QUALITY] 质检计算异常 ({path_s}): {e}")
+                self._error(f"质检计算失败: {e}", status=500)
+
+    def _handle_get_quality_stats(self, qs: dict[str, list[str]]) -> None:
+        """获取当前工作目录的质检统计总览"""
+        dir_param = (qs.get("dir") or [""])[0].strip()
+        root = Path(dir_param).resolve() if dir_param else StudioRequestHandler.current_root_dir
+        if not root or not root.is_dir():
+            self._error("缺少有效目录 ?dir 参数")
+            return
+        with CacheDB(root) as db:
+            self._json({"ok": True, "stats": db.get_stats()})
+
+    def _handle_post_quality_batch(self, data: dict[str, Any]) -> None:
+        """批量对未评分图片执行 OpenCV 物理质检与裁剪建议计算"""
+        dir_param = (data.get("dir") or "").strip()
+        root = Path(dir_param).resolve() if dir_param else StudioRequestHandler.current_root_dir
+        if not root or not root.is_dir():
+            self._error("缺少有效目录 dir 参数", status=400)
+            return
+
+        paths = data.get("paths") or []
+        limit = max(1, min(int(data.get("limit") or 20), 200))
+
+        with CacheDB(root) as db:
+            targets: list[tuple[Path, str, str]] = []  # (full_path, rel_path, hash)
+            if paths:
+                for p_s in paths:
+                    p = self._resolve_image_path(p_s, {"dir": [str(root)]})
+                    if p and p.is_file():
+                        rel = p.relative_to(root).as_posix().replace("\\", "/")
+                        targets.append((p, rel, ""))
+            else:
+                unscored = db.get_unscored_items(limit=limit)
+                for rel, h in unscored:
+                    p = root / rel
+                    if p.is_file():
+                        targets.append((p, rel, h))
+
+            results: list[dict[str, Any]] = []
+            for p, rel, h in targets:
+                file_h = h or compute_file_sha256(p)
+                try:
+                    q_res = evaluate_image(p)
+                    db.save_quality(file_h, q_res)
+                    results.append({
+                        "path": rel,
+                        "hash": file_h,
+                        "quality": q_res,
+                    })
+                except Exception as e:
+                    logger.error(f"[QUALITY] 批量计算异常 ({rel}): {e}")
+
+            logger.info(f"[QUALITY] 批量质检完成: 成功评估 {len(results)}/{len(targets)} 张图片")
+            self._json({
+                "ok": True,
+                "count": len(results),
+                "items": results,
+                "stats": db.get_stats(),
+            })
 
     def _handle_thumb(self, qs: dict[str, list[str]]) -> None:
         """缩略图输出 (带 HTTP 强缓存与 304 协商缓存)"""
@@ -389,21 +704,31 @@ class StudioRequestHandler(BaseHTTPRequestHandler):
         src_p = Path(src)
         out_p = Path(out)
 
-        log_fn(f"开始导出任务: [{exp_type.upper()}]")
+        cat_id = data.get("catalog", "")
+        log_fn(f"开始导出任务: [{exp_type.upper()}] (分类: {cat_id})")
         log_fn(f"源路径: {src}")
         log_fn(f"目标路径: {out}")
+        logger.info(f"[EXPORT] 收到导出请求: 类型={exp_type}, 分类={cat_id}, 源路径={src}, 输出路径={out}")
 
         try:
             exporter = get_exporter(exp_type, data, src_p, out_p, http_base, log_fn)
             exporter.validate()
             result = exporter.execute()
             result.logs = logs
-            self._json(result.to_dict())
+            res_dict = result.to_dict()
+            if result.success:
+                ledger = load_exported_ledger(src_p)
+                res_dict["totalExported"] = ledger.get("total_exported", 0)
+                logger.info(f"[EXPORT] 导出成功: 输出文件={result.output_file}")
+            else:
+                logger.error(f"[EXPORT] 导出失败: {result.error}")
+            self._json(res_dict)
         except Exception as e:
             import traceback
 
             err_detail = traceback.format_exc().splitlines()[-1]
             log_fn(f"导出失败: {e} ({err_detail})", "err")
+            logger.error(f"[EXPORT] 导出异常: {e}\n{traceback.format_exc()}")
             self._json({
                 "ok": False,
                 "error": str(e),
@@ -423,16 +748,70 @@ class StudioRequestHandler(BaseHTTPRequestHandler):
         self.wfile.write(data)
 
 
-def run_server(host: str = "127.0.0.1", port: int = 5188, auto_open: bool = False) -> None:
-    """启动本地 HTTP 服务器"""
+class StudioServer(ThreadingHTTPServer):
+    """
+    Content Studio 专属 HTTP 多线程服务器实现。
+    修复标准库 ThreadingHTTPServer (TCPServer) 在 Windows 下默认开启 SO_REUSEADDR
+    导致两个甚至多个进程可以静默同时监听/绑定同一端口（端口劫持与请求混乱冲突）的缺陷。
+    在 Windows 下强制关闭 allow_reuse_address 并启用 SO_EXCLUSIVEADDRUSE 独占监听。
+    """
+
+    daemon_threads = True
+
+    def __init__(self, server_address: tuple[str, int], RequestHandlerClass: type) -> None:
+        if sys.platform == "win32":
+            self.allow_reuse_address = False
+        super().__init__(server_address, RequestHandlerClass)
+
+    def server_bind(self) -> None:
+        if sys.platform == "win32" and hasattr(socket, "SO_EXCLUSIVEADDRUSE"):
+            try:
+                self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_EXCLUSIVEADDRUSE, 1)
+            except Exception:
+                pass
+        super().server_bind()
+
+
+def run_server(
+    host: str = "127.0.0.1",
+    port: int = 5188,
+    auto_open: bool = False,
+    loglevel: str = "INFO",
+    logfile: Path | str | None = DEFAULT_LOG_FILE,
+) -> None:
+    """启动本地 HTTP 服务器 (多线程并发处理缩略图与 API)"""
+    setup_logger(level_name=loglevel, logfile=logfile)
     server_addr = (host, port)
-    httpd = HTTPServer(server_addr, StudioRequestHandler)
+
+    try:
+        httpd = StudioServer(server_addr, StudioRequestHandler)
+    except OSError as e:
+        winerr = getattr(e, "winerror", None)
+        if winerr == 10048 or getattr(e, "errno", None) in (98, 48, 10048):
+            err_msg = (
+                f"\n=======================================================\n"
+                f"  [错误] 端口 {port} 已被占用，服务无法启动！\n"
+                f"  原因：已有 Content Studio 实例在运行，或端口被其他程序占用。\n"
+                f"  建议：请关闭正在运行的实例，或通过 --port 指定其他端口：\n"
+                f"        python studio/server.py --port {port + 1}\n"
+                f"=======================================================\n"
+            )
+            logger.error(f"端口 {port} 已被占用，服务启动失败: {e}")
+            sys.stderr.write(err_msg)
+            sys.exit(1)
+        raise
+
     url = f"http://{host}:{port}"
     print(f"\n=======================================================")
     print(f"  Content Studio — 拼图打包控制台已启动")
     print(f"  访问地址: {url}")
     print(f"  Pillow 加速: {'已启用' if HAS_PIL else '未安装 (直出原图)'}")
+    print(f"  日志级别: {loglevel.upper()}")
+    if logfile and str(logfile).strip().lower() not in ("none", "off", "false", ""):
+        print(f"  日志文件: {Path(logfile).resolve()}")
     print(f"=======================================================\n")
+
+    logger.info(f"Content Studio 服务启动: {url} (日志级别: {loglevel.upper()})")
 
     if auto_open:
         threading.Timer(0.6, lambda: webbrowser.open(url)).start()
@@ -441,6 +820,7 @@ def run_server(host: str = "127.0.0.1", port: int = 5188, auto_open: bool = Fals
         httpd.serve_forever()
     except KeyboardInterrupt:
         print("\n服务已停止。")
+        logger.info("Content Studio 服务已正常停止。")
         httpd.server_close()
 
 
@@ -449,9 +829,32 @@ def main() -> None:
     parser.add_argument("--host", default="127.0.0.1", help="监听地址 (默认: 127.0.0.1)")
     parser.add_argument("--port", type=int, default=5188, help="监听端口 (默认: 5188)")
     parser.add_argument("--open", action="store_true", help="启动后自动在浏览器打开")
+    parser.add_argument(
+        "--loglevel",
+        default="INFO",
+        choices=["DEBUG", "INFO", "WARNING", "ERROR", "debug", "info", "warning", "error"],
+        help="控制台日志级别 (默认: INFO)",
+    )
+    parser.add_argument(
+        "--debug",
+        action="store_true",
+        help="启用详细调试日志模式 (等同于 --loglevel DEBUG)",
+    )
+    parser.add_argument(
+        "--logfile",
+        default=str(DEFAULT_LOG_FILE),
+        help=f"日志保存文件路径 (默认: {DEFAULT_LOG_FILE})",
+    )
     args = parser.parse_args()
 
-    run_server(host=args.host, port=args.port, auto_open=args.open)
+    level = "DEBUG" if args.debug else args.loglevel.upper()
+    run_server(
+        host=args.host,
+        port=args.port,
+        auto_open=args.open,
+        loglevel=level,
+        logfile=args.logfile,
+    )
 
 
 if __name__ == "__main__":

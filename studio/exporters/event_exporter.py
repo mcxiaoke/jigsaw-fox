@@ -6,14 +6,16 @@ studio.exporters.event_exporter — 主题活动关卡导出器 (events.json + z
 
 from __future__ import annotations
 
+import datetime as dt
 import json
 import tempfile
 import zipfile
 from pathlib import Path
 from typing import Any
 
+from studio.core.export_tracker import get_exported_hashes, record_exports
 from studio.core.image_proc import HAS_PIL, convert_image, make_rename
-from studio.core.scanner import scan_images
+from studio.core.scanner import compute_file_sha256, scan_images
 from studio.exporters.base import BaseExporter, ExportResult
 from studio.exporters.manifest_manager import ManifestManager
 
@@ -41,6 +43,24 @@ class EventExporter(BaseExporter):
         if not images:
             raise ValueError("源目录中没有找到可导出的图片文件")
 
+        # 防重复过滤 (如果开启了排除已导出)
+        if self.data.get("excludeExported"):
+            exported_hashes = get_exported_hashes(self.src_p)
+            if exported_hashes:
+                filtered_images = []
+                excluded_cnt = 0
+                for p in images:
+                    h = compute_file_sha256(p)
+                    if h in exported_hashes:
+                        excluded_cnt += 1
+                    else:
+                        filtered_images.append(p)
+                if excluded_cnt > 0:
+                    self.log(f"已自动排除 {excluded_cnt} 张已导出的历史图片，剩余 {len(filtered_images)} 张待处理", "info")
+                images = filtered_images
+                if not images:
+                    raise ValueError("所选范围内的图片均已在历史批次中导出，无新图片可供导出")
+
         events_dir = self.out_p / "events"
         events_dir.mkdir(parents=True, exist_ok=True)
         files: list[str] = []
@@ -48,12 +68,23 @@ class EventExporter(BaseExporter):
         cover_url = ""
         zip_url = ""
         level_urls: list[str] = []
+        exported_items: list[dict[str, Any]] = []
 
         if output_mode == "zip":
             zip_path = events_dir / f"{event_id}.zip"
             with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
                 for idx, p in enumerate(images, start=1):
                     arc_name = make_rename(p.name, idx, self.rename_rule, self.fmt)
+                    file_hash = compute_file_sha256(p)
+                    exported_items.append({
+                        "hash": file_hash,
+                        "path": p.relative_to(self.src_p).as_posix().replace("\\", "/"),
+                        "file_name": p.name,
+                        "file_size": p.stat().st_size if p.exists() else 0,
+                        "export_type": "event",
+                        "target": f"events/{event_id}.zip#{arc_name}",
+                        "event_id": event_id,
+                    })
                     if self.fmt != "original" and HAS_PIL:
                         tmp_f = Path(tempfile.gettempdir()) / f"_ev_{arc_name}"
                         ok, _ = convert_image(p, tmp_f, self.fmt)
@@ -81,6 +112,17 @@ class EventExporter(BaseExporter):
                 dst = item_dir / new_name
                 convert_image(p, dst, self.fmt)
                 level_urls.append(f"{self.http_base}/events/{event_id}/{new_name}")
+
+                file_hash = compute_file_sha256(p)
+                exported_items.append({
+                    "hash": file_hash,
+                    "path": p.relative_to(self.src_p).as_posix().replace("\\", "/"),
+                    "file_name": p.name,
+                    "file_size": p.stat().st_size if p.exists() else 0,
+                    "export_type": "event",
+                    "target": f"events/{event_id}/{new_name}",
+                    "event_id": event_id,
+                })
             if level_urls:
                 cover_url = level_urls[0]
             files.append(str(item_dir.resolve()))
@@ -97,6 +139,7 @@ class EventExporter(BaseExporter):
             except Exception:
                 existing_items = []
 
+        now_str = dt.datetime.now(dt.timezone.utc).isoformat().replace("+00:00", "Z")
         item_entry: dict[str, Any] = {
             "id": event_id,
             "title": title,
@@ -104,6 +147,8 @@ class EventExporter(BaseExporter):
             "status": status,
             "displayOrder": display_order,
             "type": output_mode,
+            "count": len(images),
+            "updatedAt": now_str,
         }
         if cover_url:
             item_entry["coverUrl"] = cover_url
@@ -130,7 +175,7 @@ class EventExporter(BaseExporter):
         tmp_ev = events_json.with_suffix(".tmp")
         tmp_ev.write_text(json.dumps(existing_items, ensure_ascii=False, indent=2), encoding="utf-8")
         tmp_ev.replace(events_json)
-        self.log(f"events.json 已更新: 共 {len(existing_items)} 个活动", "ok")
+        self.log(f"events.json 已更新: 共 {len(existing_items)} 个活动 (当前活动 count={len(images)})", "ok")
         files.append(str(events_json.resolve()))
 
         # 更新 manifest.json
@@ -141,9 +186,17 @@ class EventExporter(BaseExporter):
             new_version,
             f"{self.http_base}/events/events.json",
             self.log,
+            count=len(existing_items),
         )
         if m_file:
             files.append(str(m_file.resolve()))
+
+        # 记录导出账本
+        try:
+            record_exports(self.src_p, exported_items)
+            self.log(f"已成功将 {len(exported_items)} 张图片记入 exported.json 账本", "ok")
+        except Exception as e:
+            self.log(f"更新 exported.json 失败: {e}", "warn")
 
         return ExportResult(
             success=True,

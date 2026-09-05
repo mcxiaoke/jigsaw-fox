@@ -35,7 +35,8 @@ class SnapshotStore {
         'SnapshotStore init dir=${AppLogger.sanitizePath(_snapshotsDir!.path)}',
       );
       // 启动时清理残留临时文件
-      _cleanupTempFiles();
+      await _cleanupTempFiles();
+      _initialized = true;
     } catch (e, st) {
       AppLogger.repo.warning('SnapshotStore init failed', e, st);
       // 回退到临时目录（测试环境）
@@ -47,59 +48,57 @@ class SnapshotStore {
           await _snapshotsDir!.create(recursive: true);
         }
       } catch (_) {}
+      await _cleanupTempFiles();
       _initialized = true;
-      _cleanupTempFiles();
     }
   }
 
-  /// 异步清理残留的 .tmp / .bak 临时文件（P21 崩溃恢复）
+  /// 清理残留的 .tmp / .bak 临时文件（P21 崩溃恢复）
   /// 若 mid-save 崩溃导致 `.snapshot` 缺失而 `.tmp`(新)+`.bak`(旧) 同时存在，
   /// 优先恢复新快照而非无条件双删导致新旧全丢。
-  void _cleanupTempFiles() {
+  Future<void> _cleanupTempFiles() async {
     final dir = _snapshotsDir;
     if (dir == null) return;
-    () async {
-      try {
-        if (!await dir.exists()) return;
-        final files = <File>[];
-        await for (final f in dir.list()) {
-          if (f is File) files.add(f);
-        }
-        // 先按基名分组处理 tmp/bak
-        for (final f in files) {
-          final name = p.basename(f.path);
-          if (name.endsWith('.tmp')) {
-            final baseName = name.substring(0, name.length - 4); // 去掉 .tmp
-            final snapshotFile = File(p.join(dir.path, baseName));
-            final snapshotExists = await snapshotFile.exists();
-            if (!snapshotExists) {
-              // 尝试用 tmp 恢复为正式快照（新数据）
-              try {
-                await f.rename(snapshotFile.path);
-                AppLogger.repo.info(
-                  'Snapshot cleanup recovered tmp -> ${p.basename(snapshotFile.path)}',
-                );
-                // 保留 bak 作为旧备份，待下次备份轮转清理，不在此删除
-                continue;
-              } catch (_) {}
-            }
-            // snapshot 已存在或恢复失败，删除陈旧 tmp
+    try {
+      if (!await dir.exists()) return;
+      final files = <File>[];
+      await for (final f in dir.list()) {
+        if (f is File) files.add(f);
+      }
+      // 先按基名分组处理 tmp/bak
+      for (final f in files) {
+        final name = p.basename(f.path);
+        if (name.endsWith('.tmp')) {
+          final baseName = name.substring(0, name.length - 4); // 去掉 .tmp
+          final snapshotFile = File(p.join(dir.path, baseName));
+          final snapshotExists = await snapshotFile.exists();
+          if (!snapshotExists) {
+            // 尝试用 tmp 恢复为正式快照（新数据）
             try {
-              if (await f.exists()) await f.delete();
+              await f.rename(snapshotFile.path);
+              AppLogger.repo.info(
+                'Snapshot cleanup recovered tmp -> ${p.basename(snapshotFile.path)}',
+              );
+              // 保留 bak 作为旧备份，待下次备份轮转清理，不在此删除
+              continue;
             } catch (_) {}
-          } else if (name.endsWith('.bak')) {
-            final baseName = name.substring(0, name.length - 4); // 去掉 .bak
-            final snapshotFile = File(p.join(dir.path, baseName));
-            if (await snapshotFile.exists()) {
-              try {
-                await f.delete();
-              } catch (_) {}
-            }
-            // 若 snapshot 不存在则保留 bak，下次启动有机会经 tmp 恢复逻辑处理
           }
+          // snapshot 已存在或恢复失败，删除陈旧 tmp
+          try {
+            if (await f.exists()) await f.delete();
+          } catch (_) {}
+        } else if (name.endsWith('.bak')) {
+          final baseName = name.substring(0, name.length - 4); // 去掉 .bak
+          final snapshotFile = File(p.join(dir.path, baseName));
+          if (await snapshotFile.exists()) {
+            try {
+              await f.delete();
+            } catch (_) {}
+          }
+          // 若 snapshot 不存在则保留 bak，下次启动有机会经 tmp 恢复逻辑处理
         }
-      } catch (_) {}
-    }();
+      }
+    } catch (_) {}
   }
 
   static String _shortHash(String str) {
