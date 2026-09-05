@@ -27,12 +27,19 @@ from studio.core.export_tracker import (
 from studio.core.image_proc import HAS_PIL, convert_image, generate_thumbnail_bytes, make_rename
 from studio.core.scanner import (
     compute_file_sha256,
+    find_duplicate_groups,
     find_tags_file,
     get_image_info,
     scan_image_infos,
     scan_images,
 )
-from studio.core.tags_manager import merge_scanned_images, normalize_records, save_tags_file
+from studio.core.tags_manager import (
+    extract_real_tags,
+    is_real_tag,
+    merge_scanned_images,
+    normalize_records,
+    save_tags_file,
+)
 from studio.exporters import get_exporter
 from studio.server import DEFAULT_LOG_FILE, logger, setup_logger
 from studio.test_frontend import TestFrontendSmoke
@@ -793,6 +800,172 @@ class TestCacheDBAndQuality(unittest.TestCase):
             server.server_close()
 
 
+class TestDuplicateHandling(unittest.TestCase):
+    """测试重复文件检测、标签继承与导出器批次防重"""
+
+    def setUp(self):
+        self.test_dir = Path(tempfile.mkdtemp(prefix="studio_dup_test_"))
+        self.src_dir = self.test_dir / "src"
+        self.out_dir = self.test_dir / "out"
+        self.src_dir.mkdir(parents=True)
+        self.out_dir.mkdir(parents=True)
+
+        p_cat = self.src_dir / "Animals" / "cat.jpg"
+        p_cat.parent.mkdir(parents=True, exist_ok=True)
+        p_cat_copy = self.src_dir / "Temp" / "cat_copy.jpg"
+        p_cat_copy.parent.mkdir(parents=True, exist_ok=True)
+        p_tree = self.src_dir / "Nature" / "tree.jpg"
+        p_tree.parent.mkdir(parents=True, exist_ok=True)
+
+        if HAS_PIL:
+            from PIL import Image
+            im1 = Image.new("RGB", (100, 100), color=(255, 0, 0))
+            im1.save(p_cat, format="JPEG")
+            # 制作完全相同的副本文件
+            im1.save(p_cat_copy, format="JPEG")
+            im2 = Image.new("RGB", (100, 100), color=(0, 255, 0))
+            im2.save(p_tree, format="JPEG")
+        else:
+            p_cat.write_bytes(b"image_content_1")
+            p_cat_copy.write_bytes(b"image_content_1")
+            p_tree.write_bytes(b"image_content_2")
+
+    def tearDown(self):
+        shutil.rmtree(self.test_dir, ignore_errors=True)
+
+    def test_find_duplicate_groups(self):
+        images = scan_images(self.src_dir)
+        self.assertEqual(len(images), 3)
+        infos = scan_image_infos(images, self.src_dir)
+        dup_groups = find_duplicate_groups(infos)
+        self.assertEqual(len(dup_groups), 1)
+        dup_items = list(dup_groups.values())[0]
+        self.assertEqual(len(dup_items), 2)
+        paths = {it["path"] for it in dup_items}
+        self.assertIn("Animals/cat.jpg", paths)
+        self.assertIn("Temp/cat_copy.jpg", paths)
+
+    def test_duplicate_tag_inheritance(self):
+        images = scan_images(self.src_dir)
+        infos = scan_image_infos(images, self.src_dir)
+        cat_hash = infos["Animals/cat.jpg"]["hash"]
+        existing = [{
+            "path": "Animals/cat.jpg",
+            "file": "cat.jpg",
+            "tags": ["Pets"],
+            "catalogs": ["Pets"],
+            "confidence": 1.0,
+            "hash": cat_hash,
+            "review_required": False,
+        }]
+        records, stats = merge_scanned_images(images, self.src_dir, existing, image_infos=infos)
+        self.assertEqual(len(records), 3)
+
+        rec_map = {r["path"]: r for r in records}
+        copy_rec = rec_map["Temp/cat_copy.jpg"]
+        # Temp/cat_copy.jpg 必须自动继承 cat.jpg 的真实标签 Pets，而不是被推断为 Others！
+        self.assertEqual(copy_rec["tags"], ["Pets"])
+        self.assertEqual(copy_rec["catalogs"], ["Pets"])
+        self.assertIn("自动继承", copy_rec["reason"])
+
+    def test_exporter_rejects_duplicate_images(self):
+        # 待导出列表中存在重复图片时，严禁导出并报错拦截（避免每日挑战少天数或主线关卡重复）
+        logs = []
+        exporter = get_exporter(
+            exp_type="main",
+            data={
+                "startOrder": 101,
+                "version": 1,
+                "format": "original",
+                "rename": "sequence",
+                "excludeExported": False,
+            },
+            src_p=self.src_dir,
+            out_p=self.out_dir,
+            http_base="http://test.local/data",
+            log_fn=lambda msg, level: logs.append((msg, level)),
+        )
+        with self.assertRaises(ValueError) as ctx:
+            exporter.execute()
+        self.assertIn("存在 1 组内容完全相同的重复图片", str(ctx.exception))
+        # 日志中记录了中止错误
+        err_logs = [m for m, l in logs if "导出已被安全中止" in m]
+        self.assertEqual(len(err_logs), 1)
+
+    def test_daily_exporter_rejects_duplicate_images(self):
+        # Daily 导出包含重复图片时必须直接拦截，防止缺失日历天数
+        logs = []
+        exporter = get_exporter(
+            exp_type="daily",
+            data={
+                "month": "202609",
+                "format": "original",
+                "rename": "sequence",
+                "excludeExported": False,
+            },
+            src_p=self.src_dir,
+            out_p=self.out_dir,
+            http_base="http://test.local/data",
+            log_fn=lambda msg, level: logs.append((msg, level)),
+        )
+        with self.assertRaises(ValueError) as ctx:
+            exporter.execute()
+        self.assertIn("存在 1 组内容完全相同的重复图片", str(ctx.exception))
+
+    def test_exporter_selected_paths_without_duplicates(self):
+        # 当用户显式指定 selectedPaths 且无重复图片时，导出应正常成功
+        logs = []
+        exporter = get_exporter(
+            exp_type="main",
+            data={
+                "startOrder": 101,
+                "version": 1,
+                "format": "original",
+                "rename": "sequence",
+                "excludeExported": False,
+                "selectedPaths": ["Animals/cat.jpg", "Nature/tree.jpg"],
+            },
+            src_p=self.src_dir,
+            out_p=self.out_dir,
+            http_base="http://test.local/data",
+            log_fn=lambda msg, level: logs.append((msg, level)),
+        )
+        res = exporter.execute()
+        self.assertTrue(res.success)
+        main_json = self.out_dir / "main.json"
+        data = json.loads(main_json.read_text(encoding="utf-8"))
+        self.assertEqual(len(data["levels"]), 2)
+
+    def test_server_duplicate_scan_api(self):
+        from studio.server import StudioRequestHandler, StudioServer
+        import threading
+        import time
+        import urllib.parse
+        import urllib.request
+
+        server = StudioServer(("127.0.0.1", 0), StudioRequestHandler)
+        port = server.server_address[1]
+        t = threading.Thread(target=server.serve_forever, daemon=True)
+        t.start()
+        time.sleep(0.1)
+
+        try:
+            scan_url = f"http://127.0.0.1:{port}/api/scan?dir={urllib.parse.quote(str(self.src_dir))}"
+            with urllib.request.urlopen(scan_url) as resp:
+                data = json.loads(resp.read().decode("utf-8"))
+                self.assertTrue(data["ok"])
+                stats = data["stats"]
+                self.assertEqual(stats["duplicateGroups"], 1)
+                self.assertEqual(stats["duplicateCount"], 2)
+                records = data["records"]
+                dup_recs = [r for r in records if r.get("is_duplicate")]
+                self.assertEqual(len(dup_recs), 2)
+        finally:
+            server.shutdown()
+            server.server_close()
+
+
 if __name__ == "__main__":
     unittest.main()
+
 

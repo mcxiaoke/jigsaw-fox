@@ -423,6 +423,26 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .img-card.is-exported .img-thumb-wrap {
   opacity: 0.9;
 }
+.card-duplicate-badge {
+  position: absolute;
+  top: 8px;
+  left: 28px;
+  background: rgba(220, 38, 38, 0.92);
+  backdrop-filter: blur(4px);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 4px;
+  z-index: 2;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
+  white-space: nowrap;
+  pointer-events: auto;
+  line-height: 1.4;
+}
+.img-card:hover .card-duplicate-badge {
+  background: #dc2626;
+}
 .card-exported-badge {
   position: absolute;
   top: 8px;

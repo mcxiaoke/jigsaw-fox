@@ -38,8 +38,18 @@ class EventExporter(BaseExporter):
         display_order = int(self.data.get("displayOrder", 1))
         output_mode = self.data.get("outputMode", "zip")  # 'zip' 或 'array'
 
-        images = scan_images(self.src_p)
-        self.log(f"扫描到 {len(images)} 张图片，活动 ID: {event_id}，模式: {output_mode}", "info")
+        selected_paths = self.data.get("selectedPaths")
+        if selected_paths and isinstance(selected_paths, list) and len(selected_paths) > 0:
+            selected_set = {str(p).replace("\\", "/").strip().lower() for p in selected_paths}
+            images = [
+                p for p in scan_images(self.src_p)
+                if p.relative_to(self.src_p).as_posix().lower() in selected_set
+            ]
+            self.log(f"已按指定范围载入 {len(images)} 张待导出图片，活动 ID: {event_id}，模式: {output_mode}", "info")
+        else:
+            images = scan_images(self.src_p)
+            self.log(f"扫描源目录获得 {len(images)} 张图片，活动 ID: {event_id}，模式: {output_mode}", "info")
+
         if not images:
             raise ValueError("源目录中没有找到可导出的图片文件")
 
@@ -60,6 +70,28 @@ class EventExporter(BaseExporter):
                 images = filtered_images
                 if not images:
                     raise ValueError("所选范围内的图片均已在历史批次中导出，无新图片可供导出")
+
+        # 重复图片校验拦截：严禁同批次包含重复素材 (防止活动关卡重复)，检测到重复直接报错中止！
+        seen_hashes: dict[str, list[str]] = {}
+        for p in images:
+            rel = p.relative_to(self.src_p).as_posix().replace("\\", "/")
+            h = compute_file_sha256(p).strip().lower()
+            if h:
+                seen_hashes.setdefault(h, []).append(rel)
+
+        dup_groups = {h: paths for h, paths in seen_hashes.items() if len(paths) >= 2}
+        if dup_groups:
+            self.log(f"导出已被安全中止: 待导出图片列表中发现 {len(dup_groups)} 组内容完全相同的重复文件！", "err")
+            detail_lines = []
+            for h, paths in dup_groups.items():
+                self.log(f"  • 重复组 [Hash: {h[:12]}...]: {', '.join(paths)}", "err")
+                detail_lines.append(f"  • 重复组 [Hash: {h[:12]}...]: {', '.join(paths)}")
+            err_msg = (
+                f"待导出图片列表中存在 {len(dup_groups)} 组内容完全相同的重复图片，导出已被安全拦截！\n"
+                f"为避免活动关卡内容重复，请先在素材库中清理或替换重复文件后再执行导出。\n"
+                + "\n".join(detail_lines)
+            )
+            raise ValueError(err_msg)
 
         events_dir = self.out_p / "events"
         events_dir.mkdir(parents=True, exist_ok=True)

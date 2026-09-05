@@ -121,6 +121,20 @@ def normalize_records(raw_data: Any, root: Path) -> tuple[list[dict[str, Any]], 
     return records, format_name
 
 
+def is_real_tag(tag: str | None) -> bool:
+    """判断是否为真实有效业务标签 (排除 None, 空字符串及虚拟过滤器 'Others')"""
+    if not tag:
+        return False
+    return str(tag).strip().lower() != "others"
+
+
+def extract_real_tags(tags: list[str] | None) -> list[str]:
+    """提取标签列表中的真实标签（过滤掉虚拟 filter 'Others'）"""
+    if not tags:
+        return []
+    return [t for t in tags if is_real_tag(t)]
+
+
 def merge_scanned_images(
     images: list[Path],
     root: Path,
@@ -132,8 +146,11 @@ def merge_scanned_images(
     1. 路径完全匹配的已有图片：保留已有打标结果，补充缺失的元数据和 Hash；
     2. 孤儿记录（磁盘路径已不存在）：若其 Hash 与未认领的新文件 Hash 一致，
        自动判定为改名或移动，无缝更新路径并 100% 完整继承已有 tags 及人工复核成果；
-    3. 真正的新增图片：自动按目录规则推断初始标签并注入完整元数据；
-    4. 统计标签分布、复核数量及对齐指标。
+    3. 同 Hash 自动继承引擎：对于真正的新增图片，若素材库中已有同 Hash 且打过标签的图片，
+       自动继承其真实业务标签，防止因复制路径不同而分裂为未打标；
+    4. 独立全新图片：自动按目录规则推断初始标签；
+    5. 跨记录一致性对齐：若存在同 Hash 的多份副本，自动汇聚并对齐其真实标签；
+    6. 统计标签分布、复核数量及对齐指标 (Others 视为未打标集合/虚拟 filter)。
     """
     existing = list(existing_records) if existing_records else []
     r_root = Path(root).resolve()
@@ -194,46 +211,124 @@ def merge_scanned_images(
                     if k not in r or not r[k]:
                         r[k] = info.get(k)
 
-    # 4. 真正的新增图片：推断初始标签
+    # 建立已有记录中有效真实标签的 Hash 映射库 (用于自动继承)
+    hash_donor_map: dict[str, dict[str, Any]] = {}
+    for r in active_records:
+        h = (r.get("hash") or "").strip().lower()
+        if h and extract_real_tags(r.get("tags")):
+            if h not in hash_donor_map:
+                hash_donor_map[h] = r
+    for o in orphan_records:
+        h = (o.get("hash") or "").strip().lower()
+        if h and extract_real_tags(o.get("tags")):
+            if h not in hash_donor_map:
+                hash_donor_map[h] = o
+
+    # 4. 真正的新增图片：优先从同 Hash 已有图片自动继承真实标签，无法继承则推断初始标签
     for rel in remaining_unmapped:
         p = disk_paths[rel]
-        guessed = guess_tags_from_path(p, root=root)
-        cats = get_catalogs_for_tags(guessed)
-        is_others = any(t.lower() == "others" for t in guessed)
         info = image_infos.get(rel, {}) if image_infos else {}
-        active_records.append({
-            "path": rel,
-            "file": p.name,
-            "tags": guessed,
-            "catalogs": cats,
-            "confidence": 1.0 if not is_others else 0.0,
-            "review_required": is_others,
-            "subject": "",
-            "scene": "",
-            "reason": f"智能推断: {', '.join(guessed)}" if not is_others else "未打标",
-            "hash": info.get("hash", ""),
-            "sha1": "",
-            "model": "rule",
-            "width": info.get("width", 0),
-            "height": info.get("height", 0),
-            "format": info.get("format", ""),
-            "size": info.get("size", 0),
-            "mtime": info.get("mtime", 0),
-            "aspect_ratio": info.get("aspect_ratio", 1.0),
-            "orientation": info.get("orientation", "square"),
-        })
+        file_hash = (info.get("hash") or "").strip().lower()
+
+        if file_hash and file_hash in hash_donor_map:
+            # 命中相同 Hash 的已有图片：自动继承真实业务标签与属性
+            donor = hash_donor_map[file_hash]
+            donor_tags = list(donor.get("tags", []))
+            donor_cats = list(donor.get("catalogs", []))
+            donor_path = donor.get("path", "")
+            active_records.append({
+                "path": rel,
+                "file": p.name,
+                "tags": donor_tags,
+                "catalogs": donor_cats,
+                "confidence": float(donor.get("confidence", 1.0)),
+                "review_required": bool(donor.get("review_required", False)),
+                "subject": donor.get("subject", ""),
+                "scene": donor.get("scene", ""),
+                "reason": f"自动继承同内容图片标签 ({donor_path})",
+                "hash": file_hash,
+                "sha1": donor.get("sha1", ""),
+                "model": "inherited",
+                "width": info.get("width", 0),
+                "height": info.get("height", 0),
+                "format": info.get("format", ""),
+                "size": info.get("size", 0),
+                "mtime": info.get("mtime", 0),
+                "aspect_ratio": info.get("aspect_ratio", 1.0),
+                "orientation": info.get("orientation", "square"),
+            })
+        else:
+            guessed = guess_tags_from_path(p, root=root)
+            real_guessed = extract_real_tags(guessed)
+            cats = get_catalogs_for_tags(guessed)
+            has_real = len(real_guessed) > 0
+            new_rec = {
+                "path": rel,
+                "file": p.name,
+                "tags": guessed,
+                "catalogs": cats,
+                "confidence": 1.0 if has_real else 0.0,
+                "review_required": not has_real,
+                "subject": "",
+                "scene": "",
+                "reason": f"智能推断: {', '.join(guessed)}" if has_real else "未打标",
+                "hash": file_hash,
+                "sha1": "",
+                "model": "rule",
+                "width": info.get("width", 0),
+                "height": info.get("height", 0),
+                "format": info.get("format", ""),
+                "size": info.get("size", 0),
+                "mtime": info.get("mtime", 0),
+                "aspect_ratio": info.get("aspect_ratio", 1.0),
+                "orientation": info.get("orientation", "square"),
+            }
+            active_records.append(new_rec)
+            if file_hash and has_real and file_hash not in hash_donor_map:
+                hash_donor_map[file_hash] = new_rec
+
+    # 4.5 同内容跨记录标签对齐与合并 (保证相同 Hash 的所有文件具有完全一致的真实标签)
+    records_by_hash: dict[str, list[dict[str, Any]]] = {}
+    for r in active_records:
+        h = (r.get("hash") or "").strip().lower()
+        if h:
+            records_by_hash.setdefault(h, []).append(r)
+
+    for h, group in records_by_hash.items():
+        if len(group) >= 2:
+            all_real_tags: list[str] = []
+            for item in group:
+                for t in extract_real_tags(item.get("tags")):
+                    if t not in all_real_tags:
+                        all_real_tags.append(t)
+            if all_real_tags:
+                all_cats = get_catalogs_for_tags(all_real_tags)
+                for item in group:
+                    cur_real = extract_real_tags(item.get("tags"))
+                    if set(cur_real) != set(all_real_tags):
+                        item["tags"] = list(all_real_tags)
+                        item["catalogs"] = list(all_cats)
+                        item["confidence"] = max(float(item.get("confidence", 0.0)), 0.9)
+                        item["review_required"] = False
+                        item["reason"] = "自动对齐同内容图片标签"
 
     # 按相对路径小写排序保持稳定
     active_records.sort(key=lambda r: r["path"].lower())
 
-    # 5. 统计指标
+    # 5. 统计指标 (Others 作为未打标集合的虚拟 filter)
     by_tag: dict[str, int] = {}
     review_count = 0
+    others_count = 0
     for r in active_records:
-        for t in r.get("tags", []):
+        real_tags = extract_real_tags(r.get("tags", []))
+        for t in real_tags:
             by_tag[t] = by_tag.get(t, 0) + 1
-        if r.get("review_required") or any(t.lower() == "others" for t in r.get("tags", [])):
+        if not real_tags:
+            others_count += 1
+        if r.get("review_required") or not real_tags:
             review_count += 1
+
+    by_tag["Others"] = others_count
 
     stats = {
         "byTag": by_tag,
@@ -244,6 +339,7 @@ def merge_scanned_images(
     }
 
     return active_records, stats
+
 
 
 def save_tags_file(root: str | Path, records: list[dict[str, Any]], target_file: Path | None = None) -> tuple[bool, str, int]:

@@ -35,6 +35,7 @@ from studio.core.image_proc import HAS_PIL, generate_thumbnail_bytes
 from studio.core.quality_evaluator import evaluate_image, evaluate_images_batch
 from studio.core.scanner import (
     compute_file_sha256,
+    find_duplicate_groups,
     find_tags_file,
     get_image_info,
     scan_image_infos,
@@ -400,6 +401,41 @@ class StudioRequestHandler(BaseHTTPRequestHandler):
             stats["unscoredCount"] = len(records) - scored_count
             stats["qualitySummary"] = db_stats
 
+            # 检测并打印重复图片警告日志
+            dup_groups = find_duplicate_groups(records)
+            if dup_groups:
+                total_dup_files = sum(len(g) for g in dup_groups.values())
+                logger.warning(
+                    f"[DUP] ⚠️ 检测到 {len(dup_groups)} 组内容重复的图片文件 (共 {total_dup_files} 个文件):"
+                )
+                for idx, (h, group) in enumerate(dup_groups.items(), 1):
+                    logger.warning(f"[DUP] ── 组 {idx} [SHA-256: {h[:16]}...]:")
+                    for it in group:
+                        p_name = it.get("path") or it.get("file")
+                        real_tags = [t for t in (it.get("tags") or []) if t.lower() != "others"]
+                        tag_str = f"[{', '.join(real_tags)}]" if real_tags else "[未分类/无标签]"
+                        logger.warning(f"[DUP]    • {p_name} (标签: {tag_str})")
+            else:
+                logger.info("[SCAN] 重复性检查: 未发现内容重复的文件 (0 重复)")
+
+            # 标记每条记录的重复状态
+            for r in records:
+                h = (r.get("hash") or "").strip().lower()
+                if h and h in dup_groups:
+                    r["is_duplicate"] = True
+                    r["duplicate_with"] = [
+                        (o.get("path") or o.get("file"))
+                        for o in dup_groups[h]
+                        if (o.get("path") or o.get("file")) != r.get("path")
+                    ]
+                else:
+                    r["is_duplicate"] = False
+                    r["duplicate_with"] = []
+
+            stats["duplicateGroups"] = len(dup_groups)
+            stats["duplicateCount"] = sum(len(g) for g in dup_groups.values())
+            stats["duplicateHashes"] = list(dup_groups.keys())
+
         logger.info(
             f"[SCAN] 扫描完成: 共 {len(images):,} 张图片，耗时 {elapsed:.2f}s ({speed:.0f} 张/秒) | "
             f"缓存命中: {scan_stats.get('cache_hits', 0):,} | 新增哈希: {scan_stats.get('new_hashes', 0):,} | "
@@ -408,6 +444,10 @@ class StudioRequestHandler(BaseHTTPRequestHandler):
         logger.info(
             f"[SCAN] 状态统计: 总记录 {len(records):,} 条 | 已导出: {exported_count:,} 条 | 未导出: {len(records) - exported_count:,} 条"
         )
+        if stats.get("duplicateCount", 0) > 0:
+            logger.warning(
+                f"[SCAN] 重复统计: 存在 {stats['duplicateGroups']} 组重复素材，共计 {stats['duplicateCount']} 个文件"
+            )
 
         self._json({
             "ok": True,
@@ -483,11 +523,22 @@ class StudioRequestHandler(BaseHTTPRequestHandler):
         exp_hashes = exp_ledger.get("hashes", {})
         exp_map = get_exported_map(root)
 
+        dup_groups = find_duplicate_groups(records)
         for r in records:
             h = (r.get("hash") or "").strip().lower()
             rel = r.get("path", "").replace("\\", "/")
             exp_info = exp_hashes.get(h) or exp_map.get(rel)
             r["exported"] = exp_info if exp_info else None
+            if h and h in dup_groups:
+                r["is_duplicate"] = True
+                r["duplicate_with"] = [
+                    (o.get("path") or o.get("file"))
+                    for o in dup_groups[h]
+                    if (o.get("path") or o.get("file")) != r.get("path")
+                ]
+            else:
+                r["is_duplicate"] = False
+                r["duplicate_with"] = []
 
         self._json({"ok": True, "file": str(tag_file.resolve()), "records": records})
 

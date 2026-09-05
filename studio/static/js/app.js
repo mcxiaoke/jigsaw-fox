@@ -75,6 +75,7 @@ const app = createApp({
     const activeTag = ref("");
     const onlyUnreviewed = ref(false);
     const hideExported = ref(false);
+    const onlyDuplicates = ref(false);
     const filterGrade = ref(""); // '' | 'S' | 'A' | 'B' | 'C' | 'F' | 'unscored'
     const searchQuery = ref("");
     const sortBy = ref("name"); // 'name' | 'quality' | 'mtime' | 'confidence' | 'size' | 'dimension'
@@ -140,10 +141,30 @@ const app = createApp({
       status: "active",
       outputMode: "zip",
       excludeExported: true,
+      exportScope: "all", // 'all' | 'selected'
     });
     const isExporting = ref(false);
     const exportLogs = ref([]);
     const exportSummary = ref("");
+
+    // 待导出范围内是否包含内容重复的图片 (用于弹窗提前预警)
+    const hasDuplicateInExportScope = computed(() => {
+      let targetRecords = records.value;
+      if (exportConfig.value.exportScope === "selected" && selectedSet.value.size > 0) {
+        targetRecords = records.value.filter((r) => selectedSet.value.has(r.path));
+      }
+      if (exportConfig.value.excludeExported) {
+        targetRecords = targetRecords.filter((r) => !r.exported);
+      }
+      const seen = new Set();
+      for (const r of targetRecords) {
+        const h = (r.hash || "").trim().toLowerCase();
+        if (!h) continue;
+        if (seen.has(h)) return true;
+        seen.add(h);
+      }
+      return false;
+    });
 
     // 大图预览
     const viewerModalOpen = ref(false);
@@ -164,22 +185,29 @@ const app = createApp({
     // 计算属性 (Computed)
     // -----------------------------------------------------------------------
 
-    // 标签统计计数
+    // 标签统计计数 (Others 是未分类/无标签素材的虚拟 filter 集合)
     const tagCounts = computed(() => {
       const map = {};
+      let othersCount = 0;
       for (const r of records.value) {
-        for (const t of r.tags || []) {
+        const realTags = (r.tags || []).filter((t) => t.toLowerCase() !== "others");
+        if (realTags.length === 0) {
+          othersCount++;
+        }
+        for (const t of realTags) {
           map[t] = (map[t] || 0) + 1;
         }
       }
+      map["Others"] = othersCount;
       return map;
     });
 
-    // 待复核总数 (含 Others 兜底)
+    // 待复核总数 (含无真实标签与标记待复核的素材)
     const unreviewedCount = computed(() => {
       let cnt = 0;
       for (const r of records.value) {
-        if (r.review_required || (r.tags && r.tags.some((t) => t.toLowerCase() === "others"))) {
+        const isUntagged = !r.tags || r.tags.length === 0 || r.tags.every((t) => t.toLowerCase() === "others");
+        if (r.review_required || isUntagged) {
           cnt++;
         }
       }
@@ -200,20 +228,40 @@ const app = createApp({
       return Math.max(0, records.value.length - exportedCount.value);
     });
 
+    // 重复图片统计
+    const duplicateRecords = computed(() => records.value.filter((r) => r.is_duplicate));
+    const duplicateCount = computed(() => duplicateRecords.value.length);
+    const duplicateGroupsCount = computed(() => {
+      const hashes = new Set();
+      for (const r of duplicateRecords.value) {
+        if (r.hash) hashes.add(r.hash);
+      }
+      return hashes.size;
+    });
+
     // 过滤后的卡片列表
     const filteredRecords = computed(() => {
       let list = records.value;
 
-      // 1. Tag 过滤
+      // 1. Tag 过滤 (Others 对应无真实标签的集合)
       if (activeTag.value) {
-        list = list.filter((r) => r.tags && r.tags.includes(activeTag.value));
+        if (activeTag.value.toLowerCase() === "others") {
+          list = list.filter((r) => !r.tags || r.tags.length === 0 || r.tags.every((t) => t.toLowerCase() === "others"));
+        } else {
+          list = list.filter((r) => r.tags && r.tags.includes(activeTag.value));
+        }
       }
 
       // 2. 待复核过滤
       if (onlyUnreviewed.value) {
         list = list.filter(
-          (r) => r.review_required || (r.tags && r.tags.some((t) => t.toLowerCase() === "others"))
+          (r) => r.review_required || !r.tags || r.tags.length === 0 || r.tags.every((t) => t.toLowerCase() === "others")
         );
+      }
+
+      // 2.5 仅看重复素材过滤
+      if (onlyDuplicates.value) {
+        list = list.filter((r) => r.is_duplicate);
       }
 
       // 3. 隐藏已导出 (筛选纯新图)
@@ -712,6 +760,10 @@ const app = createApp({
         status: exportConfig.value.status,
         outputMode: exportConfig.value.outputMode,
         excludeExported: Boolean(exportConfig.value.excludeExported),
+        selectedPaths:
+          exportConfig.value.exportScope === "selected" && selectedSet.value.size > 0
+            ? Array.from(selectedSet.value)
+            : undefined,
         tagsRecords: records.value,
       };
 
@@ -890,6 +942,9 @@ const app = createApp({
       activeTag,
       onlyUnreviewed,
       hideExported,
+      onlyDuplicates,
+      duplicateCount,
+      duplicateGroupsCount,
       searchQuery,
       sortBy,
       sortOrder,
@@ -905,6 +960,7 @@ const app = createApp({
       exportModalOpen,
       exportType,
       exportConfig,
+      hasDuplicateInExportScope,
       isExporting,
       exportLogs,
       exportSummary,

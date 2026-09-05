@@ -235,3 +235,40 @@ def find_tags_file(root: str | Path) -> Path | None:
         if target.exists() and target.is_file():
             return target
     return None
+
+
+def find_duplicate_groups(
+    records_or_infos: list[dict[str, Any]] | dict[str, dict[str, Any]],
+) -> dict[str, list[dict[str, Any]]]:
+    """
+    按 SHA-256 Hash 聚合并提取所有内容重复的图片组。
+    返回: { hash: [record_or_info, ...] }，仅包含 >= 2 个不同路径文件的重复组。
+    """
+    if isinstance(records_or_infos, dict):
+        items = list(records_or_infos.values())
+    elif isinstance(records_or_infos, list):
+        items = records_or_infos
+    else:
+        return {}
+
+    by_hash: dict[str, list[dict[str, Any]]] = {}
+    for it in items:
+        h = (it.get("hash") or it.get("sha256") or "").strip().lower()
+        if not h:
+            continue
+        by_hash.setdefault(h, []).append(it)
+
+    dup_groups: dict[str, list[dict[str, Any]]] = {}
+    for h, group in by_hash.items():
+        seen_paths: set[str] = set()
+        unique_group: list[dict[str, Any]] = []
+        for it in group:
+            p = (it.get("path") or it.get("file") or "").replace("\\", "/")
+            if p not in seen_paths:
+                seen_paths.add(p)
+                unique_group.append(it)
+        if len(unique_group) >= 2:
+            dup_groups[h] = unique_group
+
+    return dup_groups
+
