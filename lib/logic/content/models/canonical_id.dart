@@ -9,6 +9,7 @@ class CanonicalId {
   static const String prefixEvent = 'event';
   static const String prefixPack = 'pack';
   static const String prefixUgc = 'ugc';
+  static const String prefixCollection = 'collection';
 
   /// 生成首页关卡 ID (如 "main:101")
   static String forMain(dynamic seqOrName) {
@@ -27,6 +28,13 @@ class CanonicalId {
     final cleanEvent = _cleanFilename(eventId);
     final cleanFile = _cleanFilename(filename);
     return '$prefixEvent:$cleanEvent:$cleanFile';
+  }
+
+  /// 生成图集关卡 ID (如 "collection:classic_art:01")
+  static String forCollection(String collectionId, String filename) {
+    final cleanCol = _cleanFilename(collectionId);
+    final cleanFile = _cleanFilename(filename);
+    return '$prefixCollection:$cleanCol:$cleanFile';
   }
 
   /// 生成扩展包关卡 ID (如 "pack:world_art:mona_lisa")
@@ -56,6 +64,8 @@ class CanonicalId {
         return forDaily(filename);
       case prefixEvent:
         return forEvent(contextId ?? 'unknown', filename);
+      case prefixCollection:
+        return forCollection(contextId ?? 'unknown', filename);
       case prefixPack:
         return forPack(contextId ?? 'custom', filename);
       case prefixUgc:

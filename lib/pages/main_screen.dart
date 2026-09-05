@@ -6,13 +6,12 @@ import '../theme/app_palette.dart';
 import '../theme/app_text_styles.dart';
 import 'achievements_page.dart';
 import 'settings_page.dart';
+import 'tabs/collections_tab_view.dart';
 import 'tabs/daily_tab_view.dart';
-import 'tabs/events_tab_view.dart';
 import 'tabs/home_tab_view.dart';
 import 'tabs/my_center_tab_view.dart';
-import 'tabs/my_puzzles_tab_view.dart';
 
-/// Main screen featuring the 5-tab bottom navigation (Home / Daily / Events / Custom / My)
+/// Main screen featuring the 4-tab bottom navigation (Home / Daily / Collections / My)
 /// with game-styled bottom nav: filled icons + amber gold active state glow.
 class MainScreen extends StatefulWidget {
   const MainScreen({super.key});
@@ -31,10 +30,8 @@ class _MainScreenState extends State<MainScreen> {
       case 1:
         return '每日挑战';
       case 2:
-        return '活动专题';
+        return '图集画册';
       case 3:
-        return '自制拼图';
-      case 4:
         return '我的拼图';
       default:
         return '异形拼图';
@@ -57,7 +54,7 @@ class _MainScreenState extends State<MainScreen> {
         title: Text(_appBarTitle, style: styles.h3.copyWith(fontSize: 19)),
         actions: [
           _TrophyButton(palette: palette),
-          if (_currentIndex == 4) ...[
+          if (_currentIndex == 3) ...[
             const SizedBox(width: 2),
             _SettingsButton(palette: palette),
           ],
@@ -74,10 +71,9 @@ class _MainScreenState extends State<MainScreen> {
             },
           ),
           const DailyTabView(),
-          const EventsTabView(),
-          const MyPuzzlesTabView(),
+          const CollectionsTabView(),
           MyCenterTabView(
-            isActive: _currentIndex == 4,
+            isActive: _currentIndex == 3,
             onGoExplore: () {
               SoundService.I.play(Sfx.tap);
               setState(() => _currentIndex = 0);
@@ -185,8 +181,7 @@ class _GameBottomNav extends StatelessWidget {
     final items = [
       _NavItemData(icon: PhosphorIconsFill.house, label: '主页'),
       _NavItemData(icon: PhosphorIconsFill.calendarCheck, label: '每日'),
-      _NavItemData(icon: PhosphorIconsFill.sparkle, label: '活动'),
-      _NavItemData(icon: PhosphorIconsFill.images, label: '自制'),
+      _NavItemData(icon: PhosphorIconsFill.squaresFour, label: '图集'),
       _NavItemData(icon: PhosphorIconsFill.user, label: '我的'),
     ];
 

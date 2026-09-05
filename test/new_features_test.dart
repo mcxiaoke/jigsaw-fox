@@ -195,8 +195,7 @@ void main() {
 
         expect(find.text('主页'), findsWidgets);
         expect(find.text('每日'), findsOneWidget);
-        expect(find.text('活动'), findsOneWidget);
-        expect(find.text('自制'), findsOneWidget);
+        expect(find.text('图集'), findsOneWidget);
         expect(find.text('我的'), findsOneWidget);
         // Verify help icon is no longer directly in AppBar
         expect(find.byTooltip('玩法指引'), findsNothing);
@@ -205,10 +204,11 @@ void main() {
         // Verify achievements action exists in AppBar
         expect(find.byTooltip('成就与统计'), findsOneWidget);
 
-        // Switch to '我的' tab where Settings is present
+        // Switch to '我的' tab where Settings and 自制 workshop entry are present
         await tester.tap(find.text('我的'));
         await tester.pump(const Duration(milliseconds: 300));
         expect(find.byTooltip('设置'), findsOneWidget);
+        expect(find.textContaining('自制'), findsWidgets);
       },
     );
 

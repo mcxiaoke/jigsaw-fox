@@ -1,9 +1,11 @@
 import 'package:path/path.dart' as p;
 import '../../services/app_logger.dart';
+import 'models/puzzle_collection_item.dart';
 import 'models/puzzle_event_item.dart';
 import 'models/puzzle_level_item.dart';
 import 'models/root_manifest.dart';
 import 'network/content_http_client.dart';
+import 'pipelines/collections_content_pipeline.dart';
 import 'pipelines/daily_content_pipeline.dart';
 import 'pipelines/events_content_pipeline.dart';
 import 'pipelines/main_content_pipeline.dart';
@@ -36,6 +38,11 @@ class ContentManager {
          eventsStorageBaseDir: p.join(appDocumentsDir, 'events'),
          httpClient: httpClient,
        ),
+       collectionsPipeline = CollectionsContentPipeline(
+         cacheFilePath: p.join(appSupportDir, 'collections_cache.json'),
+         collectionsStorageBaseDir: p.join(appDocumentsDir, 'collections'),
+         httpClient: httpClient,
+       ),
        packPipeline = PackContentPipeline(
          packsBaseDir: p.join(appDocumentsDir, 'packs'),
          httpClient: httpClient,
@@ -45,6 +52,7 @@ class ContentManager {
   final MainContentPipeline mainPipeline;
   final DailyContentPipeline dailyPipeline;
   final EventsContentPipeline eventsPipeline;
+  final CollectionsContentPipeline collectionsPipeline;
   final PackContentPipeline packPipeline;
 
   RootManifest? get currentManifest => manifestRouter.currentManifest;
@@ -64,10 +72,11 @@ class ContentManager {
         manifestFuture,
         mainPipeline.initializeFromCache(),
         eventsPipeline.initializeFromCache(),
+        collectionsPipeline.initializeFromCache(),
         packPipeline.loadAllPacks(),
       ]);
       AppLogger.content.info(
-        'ContentManager initialize done ${sw.elapsedMilliseconds}ms main=${mainPipeline.levels.length} events=${eventsPipeline.visibleEvents.length} packs=${packPipeline.packsNotifier.value.length}',
+        'ContentManager initialize done ${sw.elapsedMilliseconds}ms main=${mainPipeline.levels.length} events=${eventsPipeline.visibleEvents.length} collections=${collectionsPipeline.visibleCollections.length} packs=${packPipeline.packsNotifier.value.length}',
       );
     } catch (e, st) {
       AppLogger.content.severe('ContentManager initialize failed', e, st);
@@ -114,6 +123,14 @@ class ContentManager {
               .then(
                 (v) => AppLogger.content.info(
                   'events sync done $v events=${eventsPipeline.visibleEvents.length}',
+                ),
+              ),
+          // 同步官方图集列表
+          collectionsPipeline
+              .syncWithRemote(remoteUrl: manifest.collectionsModule.url)
+              .then(
+                (v) => AppLogger.content.info(
+                  'collections sync done $v collections=${collectionsPipeline.visibleCollections.length}',
                 ),
               ),
           // 预备当月每日挑战
@@ -208,6 +225,29 @@ class ContentManager {
   /// 获取指定活动的所有关卡
   List<PuzzleLevelItem> getEventLevels(PuzzleEventItem event) =>
       eventsPipeline.getLevelsForEvent(event);
+
+  // --- 图集中心 Collections 模块便捷代理 ---
+
+  /// 获取所有可见图集 (过滤掉 disabled，按 displayOrder 排序)
+  List<PuzzleCollectionItem> getVisibleCollections() =>
+      collectionsPipeline.visibleCollections;
+
+  /// 确保图集资源就绪 (Zip 模式自动下载解压)
+  Future<bool> ensureCollectionDownloaded(
+    PuzzleCollectionItem collection, {
+    void Function(double progress)? onProgress,
+  }) => collectionsPipeline.ensureCollectionDownloaded(
+    collection,
+    onProgress: onProgress,
+  );
+
+  /// 获取指定图集的所有关卡
+  List<PuzzleLevelItem> getCollectionLevels(PuzzleCollectionItem collection) =>
+      collectionsPipeline.getLevelsForCollection(collection);
+
+  /// 删除已下载的本地图集解压目录
+  Future<bool> deleteDownloadedCollection(String collectionId) =>
+      collectionsPipeline.deleteDownloadedCollection(collectionId);
 
   static String _formatCurrentMonth(DateTime dt) {
     return '${dt.year.toString().padLeft(4, '0')}${dt.month.toString().padLeft(2, '0')}';

@@ -4,24 +4,34 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:phosphoricons_flutter/phosphoricons_flutter.dart';
 
 import '../../data/favorite_store.dart';
 import '../../data/game_repository.dart';
+import '../../data/models/downloaded_image_item.dart';
 import '../../data/progress_store.dart';
 import '../../data/resume_helper.dart';
 import '../../data/snapshot_store.dart';
 import '../../logic/catalog_index.dart';
 import '../../logic/content/app_content.dart';
+import '../../logic/download_manager.dart';
 import '../../logic/puzzle_model.dart';
 import '../../logic/unified_puzzle_resolver.dart';
+import '../../services/sound_service.dart';
+import '../../services/webview_service.dart';
 import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
 import '../../widgets/app_cached_image.dart';
 import '../../widgets/choose_difficulty_sheet.dart';
+import '../../widgets/downloaded_drawer_sheet.dart';
+import '../../widgets/game_toast.dart';
+import '../crop_puzzle_page.dart';
 import '../game_page.dart';
+import '../import_pack_page.dart';
+import '../online_image_picker_page.dart';
 
-/// 全新“我的”中心 Tab 视图（聚合进行中、收藏与已完成拼图）
+/// 全新“我的”中心 Tab 视图（聚合进行中、收藏、已完成与自制拼图）
 class MyCenterTabView extends StatefulWidget {
   const MyCenterTabView({super.key, this.onGoExplore, this.isActive = true});
 
@@ -40,11 +50,13 @@ class _MyCenterTabViewState extends State<MyCenterTabView> {
   List<UnifiedPuzzleCardData> _inProgressList = [];
   List<UnifiedPuzzleCardData> _favoritesList = [];
   List<UnifiedPuzzleCardData> _completedList = [];
+  List<UnifiedPuzzleCardData> _customList = [];
   Timer? _debounceTimer;
 
   @override
   void initState() {
     super.initState();
+    DownloadManager.instance.init();
     _loadAllData();
     ProgressStore.instance.progressNotifier.addListener(_onExternalChanged);
     FavoriteStore.instance.idsNotifier.addListener(_onExternalChanged);
@@ -143,11 +155,33 @@ class _MyCenterTabViewState extends State<MyCenterTabView> {
       favorites.add(card);
     }
 
+    // 4. 自制关卡列表 (从 GameRepository.instance.customPuzzles 装配)
+    final custom = <UnifiedPuzzleCardData>[];
+    for (final cp in GameRepository.instance.customPuzzles) {
+      final cid = GameRepository.canonicalForCustom(cp.id);
+      final p = progressMap[cid];
+      final card = resolver.resolve(canonicalId: cid, progress: p);
+      custom.add(card);
+    }
+    // 排序：按最近游玩/最后保存时间倒序
+    custom.sort((a, b) {
+      final ta =
+          a.lastPlayedAt ??
+          a.lastSavedAt ??
+          DateTime.fromMillisecondsSinceEpoch(0);
+      final tb =
+          b.lastPlayedAt ??
+          b.lastSavedAt ??
+          DateTime.fromMillisecondsSinceEpoch(0);
+      return tb.compareTo(ta);
+    });
+
     if (mounted) {
       setState(() {
         _inProgressList = inProgress;
         _completedList = completed;
         _favoritesList = favorites;
+        _customList = custom;
         _isLoading = false;
       });
     }
@@ -315,78 +349,315 @@ class _MyCenterTabViewState extends State<MyCenterTabView> {
     }
   }
 
+  Future<void> _createFromGallery() async {
+    setState(() => _isLoading = true);
+    try {
+      final picker = ImagePicker();
+      final files = await picker.pickMultiImage(imageQuality: 90);
+      if (files.isEmpty) return;
+      final imported = await DownloadManager.instance.importFromLocalFiles(
+        files,
+      );
+      if (!mounted || imported.isEmpty) return;
+      if (files.length == 1) {
+        final item = imported.first;
+        final file = File(item.localPath);
+        final bytes = await file.readAsBytes();
+        if (!mounted) return;
+        final result = await CropPuzzlePage.push(
+          context,
+          bytes,
+          sourceType: 'gallery',
+          sourcePlatform: '本地相册',
+          sourceUrl: item.sourceUrl,
+        );
+        if (result != null && mounted) {
+          _loadAllData();
+        }
+      } else {
+        if (mounted) {
+          GameToast.show(
+            context,
+            icon: PhosphorIconsFill.archive,
+            message: '已成功导入 ${imported.length} 张图片到素材库',
+            type: GameToastType.success,
+          );
+          _loadAllData();
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        GameToast.show(
+          context,
+          icon: PhosphorIconsRegular.warning,
+          message: '选择图片失败: $e',
+          type: GameToastType.error,
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final palette = AppPalette.of(context);
     final styles = AppTextStyles.of(context);
 
     return DefaultTabController(
-      length: 3,
-      child: Column(
-        children: [
-          // 顶层子 Tab 切换栏
-          Container(
-            color: palette.surface,
-            child: TabBar(
-              labelColor: palette.brand,
-              unselectedLabelColor: palette.secondaryText,
-              indicatorColor: palette.brand,
-              indicatorWeight: 2.5,
-              labelStyle: styles.bodyBold.copyWith(
-                fontSize: 14.5,
-                fontWeight: FontWeight.bold,
+      length: 4,
+      child: NestedScrollView(
+        headerSliverBuilder: (context, innerBoxIsScrolled) {
+          return [
+            // 顶部 4 大创作入口 (随列表滚动向上收起)
+            SliverToBoxAdapter(child: _buildTopActionsRow(palette, styles)),
+            // 顶层子 Tab 切换栏 (吸顶常驻)
+            SliverPersistentHeader(
+              pinned: true,
+              delegate: _PinnedTabBarDelegate(
+                tabBar: TabBar(
+                  labelColor: palette.brand,
+                  unselectedLabelColor: palette.secondaryText,
+                  indicatorColor: palette.brand,
+                  indicatorWeight: 2.5,
+                  labelStyle: styles.bodyBold.copyWith(
+                    fontSize: 14,
+                    fontWeight: FontWeight.bold,
+                  ),
+                  unselectedLabelStyle: styles.body.copyWith(fontSize: 14),
+                  tabs: [
+                    Tab(text: '进行中 (${_inProgressList.length})'),
+                    Tab(text: '收藏 (${_favoritesList.length})'),
+                    Tab(text: '已完成 (${_completedList.length})'),
+                    Tab(text: '自制 (${_customList.length})'),
+                  ],
+                ),
+                backgroundColor: palette.surface,
               ),
-              unselectedLabelStyle: styles.body.copyWith(fontSize: 14.5),
-              tabs: [
-                Tab(text: '进行中 (${_inProgressList.length})'),
-                Tab(text: '收藏 (${_favoritesList.length})'),
-                Tab(text: '已完成 (${_completedList.length})'),
+            ),
+          ];
+        },
+        // Tab 视图内容区
+        body: _isLoading
+            ? const Center(child: CircularProgressIndicator())
+            : TabBarView(
+                children: [
+                  // 1. 进行中子 Tab
+                  _buildGridTab(
+                    items: _inProgressList,
+                    emptyEmoji: '🧩',
+                    emptyTitle: '暂无进行中的拼图',
+                    emptySub: '挑一张喜欢的拼图，开启拼图时光吧！',
+                    actionButtonText: '去挑选拼图',
+                    onAction: widget.onGoExplore,
+                    palette: palette,
+                    styles: styles,
+                    tabType: _MyTabType.inProgress,
+                  ),
+                  // 2. 收藏子 Tab
+                  _buildGridTab(
+                    items: _favoritesList,
+                    emptyEmoji: '❤️',
+                    emptyTitle: '还没有收藏的拼图',
+                    emptySub: '在选择难度面板中点击红心，可快捷收藏',
+                    palette: palette,
+                    styles: styles,
+                    tabType: _MyTabType.favorites,
+                  ),
+                  // 3. 已完成子 Tab
+                  _buildGridTab(
+                    items: _completedList,
+                    emptyEmoji: '🏆',
+                    emptyTitle: '还没有完成过拼图',
+                    emptySub: '通关任意一张拼图，即可在此记录辉煌战绩！',
+                    palette: palette,
+                    styles: styles,
+                    tabType: _MyTabType.completed,
+                  ),
+                  // 4. 自制子 Tab
+                  _buildGridTab(
+                    items: _customList,
+                    emptyEmoji: '🎨',
+                    emptyTitle: '暂无自制拼图',
+                    emptySub: '点击上方「相册选图」等工具，打造专属自制拼图！',
+                    actionButtonText: '相册选图制作',
+                    onAction: _createFromGallery,
+                    palette: palette,
+                    styles: styles,
+                    tabType: _MyTabType.custom,
+                  ),
+                ],
+              ),
+      ),
+    );
+  }
+
+  Widget _buildTopActionsRow(AppPalette palette, AppTextStyles styles) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(14, 10, 14, 10),
+      child: Row(
+        children: [
+          // 1. 相册选图 (主要高频入口，微高亮)
+          Expanded(
+            child: _buildTopActionCard(
+              title: '相册选图',
+              subtitle: '本地自制',
+              icon: PhosphorIconsFill.image,
+              iconColor: palette.brand,
+              isPrimary: true,
+              palette: palette,
+              styles: styles,
+              onTap: _createFromGallery,
+            ),
+          ),
+          const SizedBox(width: 8),
+
+          // 2. 在线搜图 (必应/网络图片)
+          Expanded(
+            child: _buildTopActionCard(
+              title: '在线搜图',
+              subtitle: '海量图库',
+              icon: PhosphorIconsFill.globeHemisphereWest,
+              iconColor: palette.success,
+              isPrimary: false,
+              palette: palette,
+              styles: styles,
+              onTap: () async {
+                if (!WebViewService.isOnlineSearchAvailable) {
+                  GameToast.show(
+                    context,
+                    icon: PhosphorIconsRegular.warningCircle,
+                    message: '当前系统未安装 WebView2 运行时，无法使用在线搜图',
+                    type: GameToastType.warning,
+                  );
+                  return;
+                }
+                await OnlineImagePickerPage.push(context);
+                _loadAllData();
+              },
+            ),
+          ),
+          const SizedBox(width: 8),
+
+          // 3. 素材库
+          Expanded(
+            child: ValueListenableBuilder<List<DownloadedImageItem>>(
+              valueListenable: DownloadManager.instance.itemsNotifier,
+              builder: (context, items, _) {
+                final count = items.length;
+                return _buildTopActionCard(
+                  title: '素材库',
+                  subtitle: count > 0 ? '$count 张' : '历史图片',
+                  icon: PhosphorIconsFill.archive,
+                  iconColor: const Color(0xFF6366F1),
+                  isPrimary: false,
+                  palette: palette,
+                  styles: styles,
+                  onTap: () async {
+                    await DownloadedDrawerSheet.show(context);
+                    _loadAllData();
+                  },
+                );
+              },
+            ),
+          ),
+          const SizedBox(width: 8),
+
+          // 4. 导入图包 (ZIP)
+          Expanded(
+            child: _buildTopActionCard(
+              title: '导入图包',
+              subtitle: 'ZIP扩展',
+              icon: PhosphorIconsFill.folderSimplePlus,
+              iconColor: const Color(0xFFEC4899),
+              isPrimary: false,
+              palette: palette,
+              styles: styles,
+              onTap: () async {
+                await Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) => const ImportPackPage(),
+                  ),
+                );
+                _loadAllData();
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTopActionCard({
+    required String title,
+    required String subtitle,
+    required IconData icon,
+    required Color iconColor,
+    required bool isPrimary,
+    required AppPalette palette,
+    required AppTextStyles styles,
+    required VoidCallback onTap,
+  }) {
+    return Container(
+      height: 80,
+      decoration: BoxDecoration(
+        color: isPrimary
+            ? palette.brand.withValues(alpha: 0.08)
+            : palette.surfaceContainer,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: isPrimary
+              ? palette.brand.withValues(alpha: 0.3)
+              : palette.divider,
+          width: isPrimary ? 1.2 : 0.8,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.03),
+            blurRadius: 4,
+            offset: const Offset(0, 1.5),
+          ),
+        ],
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: () {
+            SoundService.I.play(Sfx.tap);
+            onTap();
+          },
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(icon, size: 20, color: iconColor),
+                const SizedBox(height: 3),
+                Text(
+                  title,
+                  style: styles.bodyBold.copyWith(
+                    fontSize: 12,
+                    color: isPrimary ? palette.brand : palette.primaryText,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 1),
+                Text(
+                  subtitle,
+                  style: styles.caption.copyWith(
+                    fontSize: 10,
+                    color: palette.secondaryText,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
               ],
             ),
           ),
-          const Divider(height: 1, thickness: 0.8),
-          // Tab 视图内容区
-          Expanded(
-            child: _isLoading
-                ? const Center(child: CircularProgressIndicator())
-                : TabBarView(
-                    children: [
-                      // 1. 进行中子 Tab
-                      _buildGridTab(
-                        items: _inProgressList,
-                        emptyEmoji: '🧩',
-                        emptyTitle: '暂无进行中的拼图',
-                        emptySub: '挑一张喜欢的拼图，开启拼图时光吧！',
-                        actionButtonText: '去挑选拼图',
-                        onAction: widget.onGoExplore,
-                        palette: palette,
-                        styles: styles,
-                        tabType: _MyTabType.inProgress,
-                      ),
-                      // 2. 收藏子 Tab
-                      _buildGridTab(
-                        items: _favoritesList,
-                        emptyEmoji: '❤️',
-                        emptyTitle: '还没有收藏的拼图',
-                        emptySub: '在选择难度面板中点击红心，可快捷收藏',
-                        palette: palette,
-                        styles: styles,
-                        tabType: _MyTabType.favorites,
-                      ),
-                      // 3. 已完成子 Tab
-                      _buildGridTab(
-                        items: _completedList,
-                        emptyEmoji: '🏆',
-                        emptyTitle: '还没有完成过拼图',
-                        emptySub: '通关任意一张拼图，即可在此记录辉煌战绩！',
-                        palette: palette,
-                        styles: styles,
-                        tabType: _MyTabType.completed,
-                      ),
-                    ],
-                  ),
-          ),
-        ],
+        ),
       ),
     );
   }
@@ -407,6 +678,7 @@ class _MyCenterTabViewState extends State<MyCenterTabView> {
         onRefresh: _loadAllData,
         color: palette.brand,
         child: ListView(
+          key: PageStorageKey<String>('my_empty_${tabType.name}'),
           children: [
             Padding(
               padding: const EdgeInsets.symmetric(vertical: 80, horizontal: 24),
@@ -430,8 +702,10 @@ class _MyCenterTabViewState extends State<MyCenterTabView> {
                       const SizedBox(height: 20),
                       FilledButton.icon(
                         onPressed: onAction,
-                        icon: const Icon(
-                          PhosphorIconsRegular.compass,
+                        icon: Icon(
+                          tabType == _MyTabType.custom
+                              ? PhosphorIconsRegular.image
+                              : PhosphorIconsRegular.compass,
                           size: 16,
                         ),
                         label: Text(actionButtonText),
@@ -457,6 +731,7 @@ class _MyCenterTabViewState extends State<MyCenterTabView> {
       onRefresh: _loadAllData,
       color: palette.brand,
       child: CustomScrollView(
+        key: PageStorageKey<String>('my_grid_${tabType.name}'),
         slivers: [
           SliverPadding(
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 28),
@@ -760,6 +1035,39 @@ class _MyCenterTabViewState extends State<MyCenterTabView> {
             ),
           ),
         );
+
+      case _MyTabType.custom:
+        if (card.isCompleted) {
+          return Container(
+            padding: const EdgeInsets.all(4),
+            decoration: const BoxDecoration(
+              color: Colors.green,
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(
+              PhosphorIconsBold.check,
+              color: Colors.white,
+              size: 12,
+            ),
+          );
+        } else if (card.progressPercent > 0) {
+          return Container(
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+            decoration: BoxDecoration(
+              color: Colors.black54,
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Text(
+              '${card.progressPercent}%',
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 10,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          );
+        }
+        return const SizedBox.shrink();
     }
   }
 
@@ -774,4 +1082,38 @@ class _MyCenterTabViewState extends State<MyCenterTabView> {
   }
 }
 
-enum _MyTabType { inProgress, favorites, completed }
+enum _MyTabType { inProgress, favorites, completed, custom }
+
+class _PinnedTabBarDelegate extends SliverPersistentHeaderDelegate {
+  _PinnedTabBarDelegate({required this.tabBar, required this.backgroundColor});
+
+  final TabBar tabBar;
+  final Color backgroundColor;
+
+  @override
+  double get minExtent => tabBar.preferredSize.height + 1.0;
+
+  @override
+  double get maxExtent => tabBar.preferredSize.height + 1.0;
+
+  @override
+  Widget build(
+    BuildContext context,
+    double shrinkOffset,
+    bool overlapsContent,
+  ) {
+    return Container(
+      color: backgroundColor,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [tabBar, const Divider(height: 1, thickness: 0.8)],
+      ),
+    );
+  }
+
+  @override
+  bool shouldRebuild(covariant _PinnedTabBarDelegate oldDelegate) {
+    return oldDelegate.tabBar != tabBar ||
+        oldDelegate.backgroundColor != backgroundColor;
+  }
+}

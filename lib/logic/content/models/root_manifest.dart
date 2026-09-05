@@ -6,6 +6,7 @@ class RootManifest {
     required this.mainModule,
     required this.dailyModule,
     required this.eventsModule,
+    this.collectionsModule = const CollectionsModuleConfig(url: '', version: 0),
     this.notice = '',
     this.minAppVersion = '1.0.0',
   });
@@ -18,6 +19,7 @@ class RootManifest {
   final MainModuleConfig mainModule;
   final DailyModuleConfig dailyModule;
   final EventsModuleConfig eventsModule;
+  final CollectionsModuleConfig collectionsModule;
 
   factory RootManifest.fromJson(Map<String, dynamic> json) {
     final modules = json['modules'] as Map<String, dynamic>? ?? {};
@@ -46,6 +48,9 @@ class RootManifest {
       eventsModule: EventsModuleConfig.fromJson(
         modules['events'] as Map<String, dynamic>? ?? {},
       ),
+      collectionsModule: CollectionsModuleConfig.fromJson(
+        modules['collections'] as Map<String, dynamic>? ?? {},
+      ),
     );
   }
 
@@ -58,6 +63,7 @@ class RootManifest {
         'main': mainModule.toJson(),
         'daily': dailyModule.toJson(),
         'events': eventsModule.toJson(),
+        'collections': collectionsModule.toJson(),
       },
     };
   }
@@ -117,6 +123,22 @@ class EventsModuleConfig {
 
   factory EventsModuleConfig.fromJson(Map<String, dynamic> json) {
     return EventsModuleConfig(
+      url: json['url']?.toString() ?? '',
+      version: (json['version'] as num?)?.toInt() ?? 0,
+    );
+  }
+
+  Map<String, dynamic> toJson() => {'url': url, 'version': version};
+}
+
+class CollectionsModuleConfig {
+  const CollectionsModuleConfig({required this.url, required this.version});
+
+  final String url;
+  final int version;
+
+  factory CollectionsModuleConfig.fromJson(Map<String, dynamic> json) {
+    return CollectionsModuleConfig(
       url: json['url']?.toString() ?? '',
       version: (json['version'] as num?)?.toInt() ?? 0,
     );

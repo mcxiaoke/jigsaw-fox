@@ -9,10 +9,13 @@ import '../../data/snapshot_store.dart';
 import '../../logic/cache/image_cache_manager.dart';
 import '../../logic/content/app_content.dart';
 import '../../logic/image_source.dart';
+import '../../services/sound_service.dart';
 import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
+import '../../widgets/adaptive_hero_banner.dart';
 import '../../widgets/app_cached_image.dart';
 import '../../widgets/choose_difficulty_sheet.dart';
+import '../event_levels_page.dart';
 import '../game_page.dart';
 
 // 21 Primary Tags（对齐 jigsaw-image-tagging-specification.md v1.1）
@@ -358,12 +361,9 @@ class _HeaderCarousel extends StatefulWidget {
 }
 
 class _HeaderCarouselState extends State<_HeaderCarousel> {
-  late final PageController _pc;
-
   @override
   void initState() {
     super.initState();
-    _pc = PageController(viewportFraction: 0.96);
     AppContent.instance.contentUpdateNotifier.addListener(_onContentUpdate);
   }
 
@@ -371,247 +371,58 @@ class _HeaderCarouselState extends State<_HeaderCarousel> {
     if (mounted) setState(() {});
   }
 
-  int _idx = 0;
-
   @override
   void dispose() {
     AppContent.instance.contentUpdateNotifier.removeListener(_onContentUpdate);
-    _pc.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     final events = AppContent.instance.isInitialized
-        ? AppContent.instance.manager.getVisibleEvents().take(3).toList()
+        ? AppContent.instance.manager.getVisibleEvents().take(4).toList()
         : [];
-    final pageCount = 1 + events.length;
+
+    final bannerItems = <HeroBannerItem>[
+      // 1. 每日挑战焦点卡片
+      HeroBannerItem(
+        id: 'daily_${widget.now.toIso8601String()}',
+        title: '${widget.now.month}月${widget.now.day}日 · 今日专属',
+        subtitle: '每日专属拼图 · 激活大脑',
+        imagePathOrUrl: widget.todayDaily?.imagePathOrUrl ?? assetSamples[0],
+        badgeText: '每日挑战',
+        badgeEmoji: '🔥',
+        badgeColor: widget.palette.brand,
+        onTap: () {
+          SoundService.I.play(Sfx.tap);
+          widget.onTapDaily();
+        },
+      ),
+      // 2. 活跃活动卡片
+      for (final ev in events)
+        HeroBannerItem(
+          id: ev.id,
+          title: ev.title,
+          subtitle: ev.desc.isNotEmpty ? ev.desc : '限时活动挑战',
+          imagePathOrUrl:
+              ev.coverUrl ?? (ev.levels.isNotEmpty ? ev.levels.first : ''),
+          badgeText: '限时活动',
+          badgeEmoji: '⭐',
+          badgeColor: const Color(0xFFD97706),
+          onTap: () {
+            SoundService.I.play(Sfx.tap);
+            EventLevelsPage.open(context, ev);
+          },
+        ),
+    ];
+
     return Padding(
       padding: const EdgeInsets.only(top: 12, bottom: 8),
-      child: Column(
-        children: [
-          SizedBox(
-            height: 160,
-            child: PageView.builder(
-              controller: _pc,
-              onPageChanged: (i) => setState(() => _idx = i),
-              physics: const BouncingScrollPhysics(),
-              clipBehavior: Clip.none,
-              itemCount: pageCount,
-              itemBuilder: (_, i) {
-                final card = i == 0
-                    ? _DailyBanner(
-                        todayDaily: widget.todayDaily,
-                        now: widget.now,
-                        palette: widget.palette,
-                        styles: widget.styles,
-                        onTap: widget.onTapDaily,
-                      )
-                    : _EventBannerCard(event: events[i - 1]);
-                // 水平 4dp 间距，viewportFraction 0.96 => 侧边距12dp，卡间距8dp，居中等宽
-                return Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 4),
-                  child: card,
-                );
-              },
-            ),
-          ),
-          if (pageCount > 1) ...[
-            const SizedBox(height: 8),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: List.generate(pageCount, (i) {
-                final sel = i == _idx;
-                return AnimatedContainer(
-                  duration: const Duration(milliseconds: 200),
-                  margin: const EdgeInsets.symmetric(horizontal: 3),
-                  width: sel ? 18 : 8,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: sel ? Colors.black87 : Colors.black26,
-                    borderRadius: BorderRadius.circular(4),
-                  ),
-                );
-              }),
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-}
-
-class _EventBannerCard extends StatelessWidget {
-  const _EventBannerCard({required this.event});
-  final dynamic event;
-
-  @override
-  Widget build(BuildContext context) {
-    final palette = AppPalette.of(context);
-    final styles = AppTextStyles.of(context);
-    return Container(
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.12),
-            blurRadius: 8,
-            offset: const Offset(0, 3),
-          ),
-        ],
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: Stack(
-        fit: StackFit.expand,
-        children: [
-          AppCachedImage(
-            imagePathOrUrl:
-                event.coverUrl ??
-                (event.levels.isNotEmpty ? event.levels.first : ''),
-            fit: BoxFit.cover,
-            targetDimension: ThumbnailDimension.eventCover,
-          ),
-          Container(
-            decoration: const BoxDecoration(
-              gradient: LinearGradient(
-                colors: [Colors.black54, Colors.transparent],
-                begin: Alignment.bottomCenter,
-                end: Alignment.topCenter,
-              ),
-            ),
-          ),
-          Positioned(
-            left: 14,
-            right: 14,
-            bottom: 12,
-            child: Text(
-              event.title ?? '精选活动',
-              style: styles.h3.copyWith(color: Colors.white, fontSize: 16),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-          ),
-          Positioned(
-            left: 12,
-            top: 12,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-              decoration: BoxDecoration(
-                color: palette.brand,
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: const Text(
-                '活动',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 10,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// ═══════════════════════════════════════════════════
-// Daily Banner (保持现有简洁样式)
-// ═══════════════════════════════════════════════════
-class _DailyBanner extends StatelessWidget {
-  const _DailyBanner({
-    required this.todayDaily,
-    required this.now,
-    required this.palette,
-    required this.styles,
-    required this.onTap,
-  });
-
-  final dynamic todayDaily;
-  final DateTime now;
-  final AppPalette palette;
-  final AppTextStyles styles;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(16),
-      child: Container(
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(16),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.15),
-              blurRadius: 10,
-              offset: const Offset(0, 3),
-            ),
-          ],
-        ),
-        clipBehavior: Clip.antiAlias,
-        child: Stack(
-          fit: StackFit.expand,
-          children: [
-            AppCachedImage(
-              imagePathOrUrl: todayDaily?.imagePathOrUrl ?? assetSamples[0],
-              fit: BoxFit.cover,
-              targetDimension: ThumbnailDimension.eventCover,
-            ),
-            Container(
-              decoration: const BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [Colors.black54, Colors.transparent],
-                  begin: Alignment.bottomCenter,
-                  end: Alignment.topCenter,
-                ),
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.all(14),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 3,
-                    ),
-                    decoration: BoxDecoration(
-                      color: palette.brand,
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Text('🔥', style: TextStyle(fontSize: 10)),
-                        const SizedBox(width: 4),
-                        Text(
-                          '每日挑战',
-                          style: TextStyle(
-                            color: palette.surface,
-                            fontSize: 11,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    '${now.month}月${now.day}日 · 今日专属',
-                    style: styles.h3.copyWith(
-                      color: Colors.white,
-                      fontSize: 16,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
+      child: AdaptiveHeroBanner(
+        items: bannerItems,
+        cardWidth: 290,
+        cardHeight: 156,
+        padding: const EdgeInsets.symmetric(horizontal: 16),
       ),
     );
   }

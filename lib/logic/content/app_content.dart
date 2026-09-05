@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
 import '../../services/app_logger.dart';
 import 'content_manager.dart';
+import 'pipelines/collections_content_pipeline.dart';
 import 'pipelines/pack_content_pipeline.dart';
 
 /// 全局内容与扩展系统门面单例
@@ -23,8 +24,18 @@ class AppContent {
     packsBaseDir: '',
   );
 
+  static final CollectionsContentPipeline _fallbackCollections =
+      CollectionsContentPipeline(
+        cacheFilePath: '',
+        collectionsStorageBaseDir: '',
+      );
+
   /// 扩展图包管线快捷访问 (带安全 Fallback)
   PackContentPipeline get packs => _manager?.packPipeline ?? _fallbackPacks;
+
+  /// 图集管线快捷访问 (带安全 Fallback)
+  CollectionsContentPipeline get collections =>
+      _manager?.collectionsPipeline ?? _fallbackCollections;
 
   bool _isInitialized = false;
   bool get isInitialized => _isInitialized;

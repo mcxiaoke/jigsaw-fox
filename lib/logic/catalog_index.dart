@@ -226,6 +226,40 @@ class UnifiedCatalogIndex {
       AppLogger.content.warning('UnifiedCatalogIndex event scan fail', e, st);
     }
 
+    // 6. 图集关卡 (collection:collectionId:file)
+    try {
+      if (AppContent.instance.isInitialized) {
+        final collections =
+            AppContent.instance.manager.collectionsPipeline.visibleCollections;
+        for (final col in collections) {
+          final levels = AppContent.instance.manager.getCollectionLevels(col);
+          for (final lvl in levels) {
+            map[lvl.id] = CatalogEntry(
+              canonicalId: lvl.id,
+              title: lvl.displayTitle,
+              imagePathOrUrl: lvl.imagePathOrUrl,
+              isLocalFile: lvl.isLocalFile,
+              sourceLabel: col.displayTypeLabel,
+              sourceModule: CanonicalId.prefixCollection,
+              aspectRatio: PuzzleAspectRatio.square1x1,
+              author: col.title,
+              tags: [col.displayTypeLabel, col.title],
+              addedAt: col.startTime,
+              recommendedDifficulty: '6x6',
+              contextId: col.id,
+              displaySubtitle: col.title,
+            );
+          }
+        }
+      }
+    } catch (e, st) {
+      AppLogger.content.warning(
+        'UnifiedCatalogIndex collection scan fail',
+        e,
+        st,
+      );
+    }
+
     AppLogger.content.info(
       'UnifiedCatalogIndex.build done ${sw.elapsedMilliseconds}ms total=${map.length}',
     );
