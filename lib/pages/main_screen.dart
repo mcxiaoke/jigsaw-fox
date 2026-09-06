@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:phosphoricons_flutter/phosphoricons_flutter.dart';
 
+import '../l10n/gen/strings.g.dart';
 import '../services/app_logger.dart';
 import '../services/sound_service.dart';
 import '../theme/app_palette.dart';
@@ -24,18 +25,19 @@ class MainScreen extends StatefulWidget {
 class _MainScreenState extends State<MainScreen> {
   int _currentIndex = 0;
 
-  String get _appBarTitle {
+  String _appBarTitle(BuildContext context) {
+    final tr = LocaleSettings.instance.currentTranslations;
     switch (_currentIndex) {
       case 0:
-        return '异形拼图';
+        return tr.nav.titleHome;
       case 1:
-        return '每日挑战';
+        return tr.nav.titleDaily;
       case 2:
-        return '图集画册';
+        return tr.nav.titleCollections;
       case 3:
-        return '我的拼图';
+        return tr.nav.titleMy;
       default:
-        return '异形拼图';
+        return tr.nav.titleHome;
     }
   }
 
@@ -52,7 +54,10 @@ class _MainScreenState extends State<MainScreen> {
         elevation: 0.5,
         scrolledUnderElevation: 0.5,
         centerTitle: false,
-        title: Text(_appBarTitle, style: styles.h3.copyWith(fontSize: 19)),
+        title: Text(
+          _appBarTitle(context),
+          style: styles.h3.copyWith(fontSize: 19),
+        ),
         actions: [
           _TrophyButton(palette: palette),
           if (_currentIndex == 3) ...[
@@ -150,9 +155,10 @@ class _TrophyButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final tr = LocaleSettings.instance.currentTranslations;
     return IconButton(
       icon: Icon(PhosphorIconsBold.trophy, color: palette.brand, size: 22),
-      tooltip: '成就与统计',
+      tooltip: tr.nav.tooltipAchievements,
       onPressed: () async {
         await AchievementsPage.open(context);
       },
@@ -167,9 +173,10 @@ class _SettingsButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final tr = LocaleSettings.instance.currentTranslations;
     return IconButton(
       icon: Icon(PhosphorIconsBold.gear, color: palette.brand, size: 22),
-      tooltip: '设置',
+      tooltip: tr.nav.tooltipSettings,
       onPressed: () async {
         await SettingsPage.open(context);
       },
@@ -191,11 +198,15 @@ class _GameBottomNav extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final tr = LocaleSettings.instance.currentTranslations;
     final items = [
-      _NavItemData(icon: PhosphorIconsFill.house, label: '主页'),
-      _NavItemData(icon: PhosphorIconsFill.calendarCheck, label: '每日'),
-      _NavItemData(icon: PhosphorIconsFill.squaresFour, label: '图集'),
-      _NavItemData(icon: PhosphorIconsFill.user, label: '我的'),
+      _NavItemData(icon: PhosphorIconsFill.house, label: tr.nav.home),
+      _NavItemData(icon: PhosphorIconsFill.calendarCheck, label: tr.nav.daily),
+      _NavItemData(
+        icon: PhosphorIconsFill.squaresFour,
+        label: tr.nav.collections,
+      ),
+      _NavItemData(icon: PhosphorIconsFill.user, label: tr.nav.my),
     ];
 
     return Container(

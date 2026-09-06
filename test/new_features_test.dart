@@ -18,6 +18,7 @@ import 'package:jigsawpuzzle/pages/tabs/home_tab_view.dart';
 import 'package:jigsawpuzzle/pages/tabs/my_puzzles_tab_view.dart';
 import 'package:jigsawpuzzle/services/achievement_store.dart';
 import 'package:jigsawpuzzle/services/economy_service.dart';
+import 'package:jigsawpuzzle/services/locale_service.dart';
 import 'package:jigsawpuzzle/widgets/choose_difficulty_sheet.dart';
 import 'package:jigsawpuzzle/widgets/downloaded_drawer_sheet.dart';
 import 'package:phosphoricons_flutter/phosphoricons_flutter.dart';
@@ -54,9 +55,12 @@ void main() {
     // 会等待磁盘写帧；提前在真实异步区完成，页面内 init 即可同步早退）
     await AchievementStore.instance.init();
     await EconomyService.instance.init();
+    // 强制中文为默认，避免系统 en 导致中文断言失败
+    LocaleService.instance.setOverrideForTest('zh');
   });
 
   tearDownAll(() async {
+    LocaleService.instance.setOverrideForTest(null);
     await tearDownTestStorage(sm);
   });
 
@@ -170,6 +174,7 @@ void main() {
     ) async {
       tester.view.physicalSize = const Size(1000, 1600);
       addTearDown(tester.view.resetPhysicalSize);
+      LocaleService.instance.setOverrideForTest('zh');
 
       await tester.pumpWidget(const MaterialApp(home: SettingsPage()));
 
@@ -191,6 +196,7 @@ void main() {
     testWidgets(
       'MainScreen renders streamlined AppBar with Achievements and Settings actions only',
       (tester) async {
+        LocaleService.instance.setOverrideForTest('zh');
         await tester.pumpWidget(const MaterialApp(home: MainScreen()));
 
         expect(find.text('主页'), findsWidgets);
@@ -244,11 +250,13 @@ void main() {
     testWidgets(
       'HomeTabView renders English category filters in English locale',
       (tester) async {
+        LocaleService.instance.setOverrideForTest('en');
         tester.platformDispatcher.localesTestValue = const [Locale('en', 'US')];
         tester.platformDispatcher.localeTestValue = const Locale('en', 'US');
         addTearDown(() {
           tester.platformDispatcher.clearLocalesTestValue();
           tester.platformDispatcher.clearLocaleTestValue();
+          LocaleService.instance.setOverrideForTest('zh');
         });
 
         await tester.pumpWidget(

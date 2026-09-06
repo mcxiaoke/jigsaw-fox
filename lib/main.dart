@@ -1,9 +1,11 @@
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'data/favorite_store.dart';
 import 'data/game_repository.dart';
 import 'data/storage_manager.dart';
+import 'l10n/gen/strings.g.dart';
 import 'logic/cache/image_cache_manager.dart';
 import 'logic/content/app_content.dart';
 import 'logic/download_manager.dart';
@@ -11,6 +13,7 @@ import 'pages/main_screen.dart';
 import 'services/achievement_store.dart';
 import 'services/app_logger.dart';
 import 'services/economy_service.dart';
+import 'services/locale_service.dart';
 import 'services/sound_service.dart';
 import 'services/webview_service.dart';
 
@@ -101,6 +104,13 @@ void main() async {
     'StorageManager openAll done ${sw0.elapsedMilliseconds}ms',
   );
 
+  // 语言服务需在 runApp 前完成（避免首帧闪烁，且 LocaleHelper 真源就绪）
+  try {
+    await LocaleService.instance.init();
+  } catch (e, st) {
+    AppLogger.system.warning('LocaleService init failed', e, st);
+  }
+
   // §7.8 备份点 A：启动备份——此刻进程内尚无任何业务写入，
   // openBox 期间的 crashRecovery 截断 / compaction 均已完成，.hive 处于一致态。
   // 守卫：openAll 期间有 box 走过兜底重建则跳过本轮，否则重建出的空 box
@@ -145,8 +155,18 @@ void main() async {
   Future.wait(bgFutures).then((_) {
     AppLogger.system.info('Background init group done');
   });
+  AppLogger.system.info(
+    'App launch Locale=${LocaleService.instance.effectiveLocale.name} lang=${LocaleService.instance.language.name}',
+  );
   AppLogger.system.info('App launch completed runApp');
-  runApp(const JigsawPuzzleApp());
+  runApp(
+    TranslationProvider(
+      child: AnimatedBuilder(
+        animation: LocaleService.instance,
+        builder: (context, _) => const JigsawPuzzleApp(),
+      ),
+    ),
+  );
 }
 
 /// Custom scroll behavior enabling smooth mouse dragging and trackpad gestures across all platforms.
@@ -162,8 +182,32 @@ class AppScrollBehavior extends MaterialScrollBehavior {
   };
 }
 
-class JigsawPuzzleApp extends StatelessWidget {
+class JigsawPuzzleApp extends StatefulWidget {
   const JigsawPuzzleApp({super.key});
+
+  @override
+  State<JigsawPuzzleApp> createState() => _JigsawPuzzleAppState();
+}
+
+class _JigsawPuzzleAppState extends State<JigsawPuzzleApp>
+    with WidgetsBindingObserver {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeLocales(List<Locale>? locales) {
+    super.didChangeLocales(locales);
+    LocaleService.instance.onSystemLocaleChanged();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -177,8 +221,17 @@ class JigsawPuzzleApp extends StatelessWidget {
       brightness: Brightness.dark,
     );
 
+    // slang 翻译（使用全局 t，兼容测试无 TranslationProvider）
+    final tr = LocaleSettings.instance.currentTranslations;
     return MaterialApp(
-      title: '异形拼图 Jigsaw Puzzle',
+      title: tr.app.titleFull,
+      locale: LocaleService.instance.flutterLocale,
+      supportedLocales: AppLocaleUtils.supportedLocales,
+      localizationsDelegates: const [
+        GlobalMaterialLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
+      ],
       debugShowCheckedModeBanner: false,
       scrollBehavior: const AppScrollBehavior(),
       themeMode: ThemeMode.light, // 默认亮色 — 休闲明亮

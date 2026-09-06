@@ -3,9 +3,11 @@ import 'package:phosphoricons_flutter/phosphoricons_flutter.dart';
 
 import '../data/game_repository.dart';
 import '../data/progress_store.dart';
+import '../l10n/gen/strings.g.dart';
 import '../logic/cache/image_cache_manager.dart';
 import '../services/app_logger.dart';
 import '../services/economy_service.dart';
+import '../services/locale_service.dart';
 import '../services/sound_service.dart';
 import '../theme/app_palette.dart';
 import '../theme/app_text_styles.dart';
@@ -33,15 +35,27 @@ class _SettingsPageState extends State<SettingsPage> {
   int _totalSolved = 0;
   int _totalStars = 0;
   int _coins = 0;
-  String _cacheSize = '计算中…';
+  String _cacheSize = '';
   bool _clearingCache = false;
 
   @override
   void initState() {
     super.initState();
+    // 初始化缓存大小占位文案需 context，延后到 didChangeDependencies
     _loadStats();
     _loadCacheSize();
   }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_cacheSize.isEmpty) {
+      // 使用全局 t，避免测试环境缺少 TranslationProvider 时崩溃
+      _cacheSize = t.common.calculating;
+    }
+  }
+
+  Translations get t => LocaleSettings.instance.currentTranslations;
 
   Future<void> _loadStats() async {
     final solved = await ProgressStore.instance.getTotalSolved();
@@ -75,7 +89,7 @@ class _SettingsPageState extends State<SettingsPage> {
         GameToast.show(
           context,
           icon: PhosphorIconsFill.broom,
-          message: '缩略图缓存已清空，下次浏览时会自动重新生成',
+          message: t.settings.toastCacheCleared,
           type: GameToastType.success,
         );
       }
@@ -85,7 +99,7 @@ class _SettingsPageState extends State<SettingsPage> {
         GameToast.show(
           context,
           icon: PhosphorIconsRegular.warning,
-          message: '清理缓存失败: $e',
+          message: t.settings.toastCacheClearFailed(error: '$e'),
           type: GameToastType.error,
         );
       }
@@ -95,11 +109,15 @@ class _SettingsPageState extends State<SettingsPage> {
   }
 
   String _formatPlayTime(int seconds) {
-    if (seconds < 60) return '$seconds 秒';
+    if (seconds < 60) {
+      return t.settings.timeSeconds(count: seconds);
+    }
     final hours = seconds ~/ 3600;
     final mins = (seconds % 3600) ~/ 60;
-    if (hours > 0) return '$hours 小时 $mins 分';
-    return '$mins 分';
+    if (hours > 0) {
+      return t.settings.timeHoursMinutes(hours: hours, minutes: mins);
+    }
+    return t.settings.timeMinutes(count: mins);
   }
 
   @override
@@ -115,7 +133,7 @@ class _SettingsPageState extends State<SettingsPage> {
         elevation: 0.5,
         scrolledUnderElevation: 0.5,
         centerTitle: false,
-        title: Text('游戏设置', style: styles.h3.copyWith(fontSize: 19)),
+        title: Text(t.settings.title, style: styles.h3.copyWith(fontSize: 19)),
       ),
       body: Center(
         child: ConstrainedBox(
@@ -129,11 +147,17 @@ class _SettingsPageState extends State<SettingsPage> {
               const SizedBox(height: 18),
 
               // Group 1: Audio & Haptics
-              _buildSectionHeader('音效与交互', palette, styles),
+              _buildSectionHeader(t.settings.sectionsAudio, palette, styles),
               _buildCardContainer([
                 SwitchListTile(
-                  title: Text('拼图吸附音效', style: styles.bodyBold),
-                  subtitle: Text('碎片对齐磁吸时播放清脆音效', style: styles.caption),
+                  title: Text(
+                    t.settings.snapSoundTitle,
+                    style: styles.bodyBold,
+                  ),
+                  subtitle: Text(
+                    t.settings.snapSoundDesc,
+                    style: styles.caption,
+                  ),
                   secondary: Icon(
                     PhosphorIconsBold.speakerHigh,
                     color: palette.brand,
@@ -154,8 +178,8 @@ class _SettingsPageState extends State<SettingsPage> {
                 ),
                 Divider(height: 1, indent: 56, color: palette.divider),
                 SwitchListTile(
-                  title: Text('触感震动反馈', style: styles.bodyBold),
-                  subtitle: Text('拼图吸附与操作时的触觉微震', style: styles.caption),
+                  title: Text(t.settings.hapticTitle, style: styles.bodyBold),
+                  subtitle: Text(t.settings.hapticDesc, style: styles.caption),
                   secondary: Icon(
                     PhosphorIconsBold.vibrate,
                     color: palette.brand,
@@ -166,8 +190,14 @@ class _SettingsPageState extends State<SettingsPage> {
                 ),
                 Divider(height: 1, indent: 56, color: palette.divider),
                 SwitchListTile(
-                  title: Text('选关切图网格预览', style: styles.bodyBold),
-                  subtitle: Text('在难度选择预览图上叠加异形切线', style: styles.caption),
+                  title: Text(
+                    t.settings.gridPreviewTitle,
+                    style: styles.bodyBold,
+                  ),
+                  subtitle: Text(
+                    t.settings.gridPreviewDesc,
+                    style: styles.caption,
+                  ),
                   secondary: Icon(
                     PhosphorIconsBold.gridFour,
                     color: palette.brand,
@@ -183,23 +213,44 @@ class _SettingsPageState extends State<SettingsPage> {
                     PhosphorIconsBold.squaresFour,
                     color: palette.brand,
                   ),
-                  title: Text('碎片初始排布模式', style: styles.bodyBold),
+                  title: Text(
+                    t.settings.scatterModeTitle,
+                    style: styles.bodyBold,
+                  ),
                   subtitle: Text(
                     _repo.pieceScatterMode == 'tabletop'
-                        ? '桌面环形散落（推荐宽屏/平板）'
-                        : '底部托盘收纳（默认/推荐手机）',
+                        ? t.settings.scatterModeDescTabletop
+                        : t.settings.scatterModeDescTray,
                     style: styles.caption,
                   ),
-                  trailing: SegmentedButton<String>(
-                    showSelectedIcon: false,
-                    segments: const [
-                      ButtonSegment(value: 'tray', label: Text('托盘')),
-                      ButtonSegment(value: 'tabletop', label: Text('桌面')),
-                    ],
-                    selected: {_repo.pieceScatterMode},
-                    onSelectionChanged: (set) {
-                      setState(() => _repo.pieceScatterMode = set.first);
-                    },
+                ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: SegmentedButton<String>(
+                      showSelectedIcon: false,
+                      segments: [
+                        ButtonSegment(
+                          value: 'tray',
+                          label: Text(
+                            t.settings.scatterTray,
+                            style: const TextStyle(fontSize: 12),
+                          ),
+                        ),
+                        ButtonSegment(
+                          value: 'tabletop',
+                          label: Text(
+                            t.settings.scatterTabletop,
+                            style: const TextStyle(fontSize: 12),
+                          ),
+                        ),
+                      ],
+                      selected: {_repo.pieceScatterMode},
+                      onSelectionChanged: (set) {
+                        setState(() => _repo.pieceScatterMode = set.first);
+                      },
+                    ),
                   ),
                 ),
               ], palette),
@@ -207,12 +258,22 @@ class _SettingsPageState extends State<SettingsPage> {
               const SizedBox(height: 18),
 
               // Group 2: Appearance & Background
-              _buildSectionHeader('外观与背景', palette, styles),
+              _buildSectionHeader(
+                t.settings.sectionsAppearance,
+                palette,
+                styles,
+              ),
               _buildCardContainer([
                 ListTile(
                   leading: Icon(PhosphorIconsBold.image, color: palette.info),
-                  title: Text('默认壁纸背景', style: styles.bodyBold),
-                  subtitle: Text('选择拼图对局时的全屏桌面背景', style: styles.caption),
+                  title: Text(
+                    t.settings.appearanceBgTitle,
+                    style: styles.bodyBold,
+                  ),
+                  subtitle: Text(
+                    t.settings.appearanceBgDesc,
+                    style: styles.caption,
+                  ),
                   trailing: Icon(
                     PhosphorIconsBold.caretRight,
                     size: 18,
@@ -232,19 +293,79 @@ class _SettingsPageState extends State<SettingsPage> {
 
               const SizedBox(height: 18),
 
+              // Group: Language
+              _buildSectionHeader(t.settings.sectionsLanguage, palette, styles),
+              _buildCardContainer([
+                ListTile(
+                  leading: Icon(
+                    PhosphorIconsBold.translate,
+                    color: palette.brand,
+                  ),
+                  title: Text(t.settings.languageTitle, style: styles.bodyBold),
+                  subtitle: Text(
+                    t.settings.languageDesc,
+                    style: styles.caption,
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                  child: AnimatedBuilder(
+                    animation: LocaleService.instance,
+                    builder: (context, _) {
+                      final lang = LocaleService.instance.language;
+                      return FittedBox(
+                        fit: BoxFit.scaleDown,
+                        alignment: Alignment.centerLeft,
+                        child: SegmentedButton<AppLanguage>(
+                          showSelectedIcon: false,
+                          segments: [
+                            ButtonSegment(
+                              value: AppLanguage.system,
+                              label: Text(
+                                t.settings.languageSystem,
+                                style: const TextStyle(fontSize: 12),
+                              ),
+                            ),
+                            ButtonSegment(
+                              value: AppLanguage.zh,
+                              label: Text(
+                                t.settings.languageZh,
+                                style: const TextStyle(fontSize: 12),
+                              ),
+                            ),
+                            ButtonSegment(
+                              value: AppLanguage.en,
+                              label: Text(
+                                t.settings.languageEn,
+                                style: const TextStyle(fontSize: 12),
+                              ),
+                            ),
+                          ],
+                          selected: {lang},
+                          onSelectionChanged: (set) async {
+                            final selected = set.first;
+                            await LocaleService.instance.setLanguage(selected);
+                            if (context.mounted) setState(() {});
+                          },
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              ], palette),
+
+              const SizedBox(height: 18),
+
               // Group 3: Help & Guide
-              _buildSectionHeader('玩法与帮助', palette, styles),
+              _buildSectionHeader(t.settings.sectionsHelp, palette, styles),
               _buildCardContainer([
                 ListTile(
                   leading: Icon(
                     PhosphorIconsBold.question,
                     color: palette.success,
                   ),
-                  title: Text('玩法技巧与操作指引', style: styles.bodyBold),
-                  subtitle: Text(
-                    '手势操作、组队拖拽、底图透视、整理工具说明',
-                    style: styles.caption,
-                  ),
+                  title: Text(t.settings.helpTitle, style: styles.bodyBold),
+                  subtitle: Text(t.settings.helpDesc, style: styles.caption),
                   trailing: Icon(
                     PhosphorIconsBold.caretRight,
                     size: 18,
@@ -257,16 +378,19 @@ class _SettingsPageState extends State<SettingsPage> {
               const SizedBox(height: 18),
 
               // Group 4: Data Management
-              _buildSectionHeader('数据管理', palette, styles),
+              _buildSectionHeader(t.settings.sectionsData, palette, styles),
               _buildCardContainer([
                 ListTile(
                   leading: Icon(
                     PhosphorIconsBold.database,
                     color: palette.info,
                   ),
-                  title: Text('缩略图缓存', style: styles.bodyBold),
+                  title: Text(
+                    t.settings.dataCacheTitle,
+                    style: styles.bodyBold,
+                  ),
                   subtitle: Text(
-                    '卡片预览图的本地缓存，当前占用 $_cacheSize',
+                    t.settings.dataCacheDesc(size: _cacheSize),
                     style: styles.caption,
                   ),
                   trailing: _clearingCache
@@ -278,7 +402,7 @@ class _SettingsPageState extends State<SettingsPage> {
                       : TextButton.icon(
                           onPressed: _clearThumbnailCache,
                           icon: Icon(PhosphorIconsBold.broom, size: 16),
-                          label: const Text('清理'),
+                          label: Text(t.settings.dataClear),
                         ),
                 ),
                 Divider(height: 1, indent: 56, color: palette.divider),
@@ -287,9 +411,12 @@ class _SettingsPageState extends State<SettingsPage> {
                     PhosphorIconsBold.fileText,
                     color: palette.info,
                   ),
-                  title: Text('查看运行日志', style: styles.bodyBold),
+                  title: Text(
+                    t.settings.dataViewLogsTitle,
+                    style: styles.bodyBold,
+                  ),
                   subtitle: Text(
-                    '查看、过滤并复制 App 运行日志（诊断用）',
+                    t.settings.dataViewLogsDesc,
                     style: styles.caption,
                   ),
                   trailing: Icon(
@@ -306,10 +433,13 @@ class _SettingsPageState extends State<SettingsPage> {
                     color: palette.error,
                   ),
                   title: Text(
-                    '重置所有游戏数据',
+                    t.settings.dataResetTitle,
                     style: styles.bodyBold.copyWith(color: palette.error),
                   ),
-                  subtitle: Text('清除所有关卡记录、每日挑战与自制拼图', style: styles.caption),
+                  subtitle: Text(
+                    t.settings.dataResetDesc,
+                    style: styles.caption,
+                  ),
                   trailing: Icon(
                     PhosphorIconsBold.caretRight,
                     size: 18,
@@ -318,26 +448,29 @@ class _SettingsPageState extends State<SettingsPage> {
                   onTap: () async {
                     final ok = await showDialog<bool>(
                       context: context,
-                      builder: (ctx) => AlertDialog(
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                        title: const Text('确认重置全部数据？'),
-                        content: const Text('该操作不可逆，将清除所有主线关卡进度、每日挑战与自制拼图记录。'),
-                        actions: [
-                          TextButton(
-                            onPressed: () => Navigator.pop(ctx, false),
-                            child: const Text('取消'),
+                      builder: (ctx) {
+                        final tt = LocaleSettings.instance.currentTranslations;
+                        return AlertDialog(
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(16),
                           ),
-                          FilledButton(
-                            onPressed: () => Navigator.pop(ctx, true),
-                            style: FilledButton.styleFrom(
-                              backgroundColor: palette.error,
+                          title: Text(tt.settings.dataResetConfirmTitle),
+                          content: Text(tt.settings.dataResetConfirmDesc),
+                          actions: [
+                            TextButton(
+                              onPressed: () => Navigator.pop(ctx, false),
+                              child: Text(tt.settings.dataCancel),
                             ),
-                            child: const Text('确定重置'),
-                          ),
-                        ],
-                      ),
+                            FilledButton(
+                              onPressed: () => Navigator.pop(ctx, true),
+                              style: FilledButton.styleFrom(
+                                backgroundColor: palette.error,
+                              ),
+                              child: Text(tt.settings.dataConfirmReset),
+                            ),
+                          ],
+                        );
+                      },
                     );
                     if (ok == true) {
                       AppLogger.ui.warning(
@@ -349,7 +482,7 @@ class _SettingsPageState extends State<SettingsPage> {
                         GameToast.show(
                           context,
                           icon: PhosphorIconsFill.trashSimple,
-                          message: '所有游戏数据已重置为初始状态',
+                          message: t.settings.toastDataReset,
                           type: GameToastType.warning,
                         );
                       }
@@ -363,7 +496,7 @@ class _SettingsPageState extends State<SettingsPage> {
               // App Footer
               Center(
                 child: Text(
-                  '版本 1.0.0',
+                  t.settings.footerVersion(version: '1.0.0'),
                   style: styles.caption.copyWith(color: palette.disabledText),
                 ),
               ),
@@ -450,10 +583,15 @@ class _SettingsPageState extends State<SettingsPage> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('拼图玩家', style: styles.h3.copyWith(fontSize: 18)),
+                Text(
+                  t.settings.playerTitle,
+                  style: styles.h3.copyWith(fontSize: 18),
+                ),
                 const SizedBox(height: 4),
                 Text(
-                  '已游玩 ${_formatPlayTime(_repo.totalPlayTimeSeconds)}',
+                  t.settings.playerPlayed(
+                    time: _formatPlayTime(_repo.totalPlayTimeSeconds),
+                  ),
                   style: styles.caption,
                 ),
                 const SizedBox(height: 10),
