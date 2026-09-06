@@ -18,38 +18,14 @@ import '../../widgets/choose_difficulty_sheet.dart';
 import '../event_levels_page.dart';
 import '../game_page.dart';
 
-// 21 Primary Tags（对齐 jigsaw-image-tagging-specification.md v1.1）
-const List<Map<String, String>> kHomeTags = [
-  {'id': 'all', 'label': '全部'},
-  {'id': 'Pets', 'label': '宠物'},
-  {'id': 'Animals', 'label': '动物'},
-  {'id': 'Birds', 'label': '鸟类'},
-  {'id': 'Nature', 'label': '自然'},
-  {'id': 'Landscapes', 'label': '风景'},
-  {'id': 'Flowers', 'label': '花卉'},
-  {'id': 'Ocean', 'label': '海洋'},
-  {'id': 'Cities', 'label': '城市'},
-  {'id': 'Architecture', 'label': '建筑'},
-  {'id': 'Food', 'label': '美食'},
-  {'id': 'Art', 'label': '艺术'},
-  {'id': 'Fantasy', 'label': '奇幻'},
-  {'id': 'Space', 'label': '太空'},
-  {'id': 'Transportation', 'label': '交通'},
-  {'id': 'People', 'label': '人物'},
-  {'id': 'Sports', 'label': '运动'},
-  {'id': 'Seasons', 'label': '四季'},
-  {'id': 'Holidays', 'label': '节日'},
-  {'id': 'Abstract', 'label': '抽象'},
-  {'id': 'Cartoon', 'label': '卡通'},
-  {'id': 'Others', 'label': '其他'},
-];
+import '../../data/constants/puzzle_tags.dart';
 
-// 热门N个（横滑常驻，末位固定入口之后展开全部21）
+// 热门N个（横滑常驻，末位固定入口之后展开全部 18 个黄金矩阵标签）
 const List<String> kHotTagIds = [
   'Pets',
   'Landscapes',
   'Flowers',
-  'Architecture',
+  'Structures',
   'Food',
   'Art',
 ];
@@ -72,11 +48,10 @@ class _HomeTabViewState extends State<HomeTabView> {
     for (final t in kHomeTags) t['id']!: GlobalKey(),
   };
 
-  // 伪Tag映射（数据未接入前兜底，按index%21分配，便于过滤演示）
+  // 标签解析：优先使用素材自身 tags，若为空则按 index 轮转兜底
   String _resolveTag(LevelItem l) {
     if (l.tags.isNotEmpty) return l.tags.first;
-    // 映射到 21 中的一个（跳过 'all'）
-    final idx = (l.index - 1) % 20;
+    final idx = (l.index - 1) % (kHomeTags.length - 1);
     return kHomeTags[idx + 1]['id']!;
   }
 
@@ -84,7 +59,9 @@ class _HomeTabViewState extends State<HomeTabView> {
     if (_selectedTag == 'all') return all;
     return all
         .where(
-          (l) => _resolveTag(l).toLowerCase() == _selectedTag.toLowerCase(),
+          (l) => l.tags.isNotEmpty
+              ? l.tags.any((t) => t.toLowerCase() == _selectedTag.toLowerCase())
+              : _resolveTag(l).toLowerCase() == _selectedTag.toLowerCase(),
         )
         .toList();
   }

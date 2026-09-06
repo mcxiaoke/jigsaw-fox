@@ -224,7 +224,7 @@ void main() {
       expect(find.text('全部'), findsOneWidget);
       expect(find.text('宠物'), findsOneWidget);
       expect(find.text('动物'), findsOneWidget);
-      expect(find.text('鸟类'), findsOneWidget);
+      expect(find.text('自然'), findsOneWidget);
 
       // Tap on '宠物' filter
       await tester.tap(find.text('宠物'));
