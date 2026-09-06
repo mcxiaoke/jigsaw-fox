@@ -5,12 +5,21 @@ import 'package:jigsawpuzzle/data/game_repository.dart';
 import 'package:jigsawpuzzle/data/progress_store.dart';
 import 'package:jigsawpuzzle/data/storage_manager.dart';
 import 'package:jigsawpuzzle/pages/tabs/my_center_tab_view.dart';
+import 'package:jigsawpuzzle/services/locale_service.dart';
 
 import 'test_helper.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   late StorageManager sm;
+
+  setUpAll(() {
+    // 强制中文：既有断言均为中文文案（迁移后页面默认 en）
+    LocaleService.instance.setOverrideForTest('zh');
+  });
+  tearDownAll(() {
+    LocaleService.instance.setOverrideForTest(null);
+  });
 
   setUp(() async {
     sm = await initTestAppStorage();

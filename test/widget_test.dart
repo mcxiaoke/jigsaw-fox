@@ -8,12 +8,20 @@ import 'package:jigsawpuzzle/data/models/level_item.dart';
 import 'package:jigsawpuzzle/game/jigsaw_puzzle_game.dart';
 import 'package:jigsawpuzzle/logic/puzzle_model.dart';
 import 'package:jigsawpuzzle/pages/game_page.dart';
+import 'package:jigsawpuzzle/services/locale_service.dart';
 import 'package:jigsawpuzzle/widgets/choose_background_sheet.dart';
 import 'package:jigsawpuzzle/widgets/choose_difficulty_sheet.dart';
 import 'package:jigsawpuzzle/widgets/victory_dialog.dart';
 import 'package:phosphoricons_flutter/phosphoricons_flutter.dart';
 
 void main() {
+  setUpAll(() {
+    // 强制中文：本文件既有断言均为中文文案（迁移后页面默认 en）
+    LocaleService.instance.setOverrideForTest('zh');
+  });
+  tearDownAll(() {
+    LocaleService.instance.setOverrideForTest(null);
+  });
   testWidgets('GamePage builds properly with top bar actions and canvas', (
     tester,
   ) async {
