@@ -60,6 +60,7 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
   JigsawPuzzleGame? _game;
   ui.Image? _gameImage;
   bool _gameFadeIn = false;
+  bool _showFadeMask = true;
 
   bool _isSolved = false;
   bool _isPaused = false;
@@ -319,6 +320,7 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
       setState(() {
         _game = game;
         _gameFadeIn = false;
+        _showFadeMask = true;
       });
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) {
@@ -1168,15 +1170,39 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
                               onPointerCancel: _onPointerCancel,
                               onPointerSignal: _onPointerSignal,
                               behavior: HitTestBehavior.translucent,
-                              child: AnimatedOpacity(
-                                opacity: _gameFadeIn ? 1.0 : 0.0,
-                                duration: const Duration(milliseconds: 300),
-                                curve: Curves.easeOutCubic,
-                                child: ClipRect(
-                                  child: GameWidget<JigsawPuzzleGame>(
-                                    game: _game!,
+                              child: Stack(
+                                fit: StackFit.expand,
+                                children: [
+                                  RepaintBoundary(
+                                    child: ClipRect(
+                                      child: GameWidget<JigsawPuzzleGame>(
+                                        game: _game!,
+                                      ),
+                                    ),
                                   ),
-                                ),
+                                  if (_showFadeMask)
+                                    Positioned.fill(
+                                      child: IgnorePointer(
+                                        child: AnimatedOpacity(
+                                          opacity: _gameFadeIn ? 0.0 : 1.0,
+                                          duration: const Duration(
+                                            milliseconds: 300,
+                                          ),
+                                          curve: Curves.easeOutCubic,
+                                          onEnd: () {
+                                            if (mounted) {
+                                              setState(() {
+                                                _showFadeMask = false;
+                                              });
+                                            }
+                                          },
+                                          child: const ColoredBox(
+                                            color: Color(0xFFE2E6EA),
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                ],
                               ),
                             ),
                           )

@@ -69,7 +69,7 @@ class LinenTextureManager {
 
       _linenPaint = Paint()
         ..shader = shader
-        ..blendMode = BlendMode.softLight
+        ..blendMode = BlendMode.srcOver
         ..isAntiAlias = true;
     } catch (_) {
       // 容错降级：若生成异常不阻断游戏正常渲染
