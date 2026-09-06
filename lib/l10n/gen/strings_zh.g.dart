@@ -43,6 +43,14 @@ class TranslationsZh extends Translations with BaseTranslations<AppLocale, Trans
 	@override late final _Translations$common$zh common = _Translations$common$zh._(_root);
 	@override late final _Translations$nav$zh nav = _Translations$nav$zh._(_root);
 	@override late final _Translations$settings$zh settings = _Translations$settings$zh._(_root);
+	@override late final _Translations$achievements$zh achievements = _Translations$achievements$zh._(_root);
+	@override late final _Translations$difficulty$zh difficulty = _Translations$difficulty$zh._(_root);
+	@override late final _Translations$game$zh game = _Translations$game$zh._(_root);
+	@override late final _Translations$victory$zh victory = _Translations$victory$zh._(_root);
+	@override late final _Translations$continueDialog$zh continueDialog = _Translations$continueDialog$zh._(_root);
+	@override late final _Translations$chooseDifficulty$zh chooseDifficulty = _Translations$chooseDifficulty$zh._(_root);
+	@override late final _Translations$achievementsPage$zh achievementsPage = _Translations$achievementsPage$zh._(_root);
+	@override late final _Translations$myCenter$zh myCenter = _Translations$myCenter$zh._(_root);
 }
 
 // Path: app
@@ -148,6 +156,606 @@ class _Translations$settings$zh extends Translations$settings$en {
 	@override String timeHoursMinutes({required Object hours, required Object minutes}) => '${hours} 小时 ${minutes} 分';
 }
 
+// Path: achievements
+class _Translations$achievements$zh extends Translations$achievements$en {
+	_Translations$achievements$zh._(TranslationsZh root) : this._root = root, super.internal(root);
+
+	final TranslationsZh _root; // ignore: unused_field
+
+	// Translations
+	@override late final _Translations$achievements$first_win$zh first_win = _Translations$achievements$first_win$zh._(_root);
+	@override late final _Translations$achievements$win_10$zh win_10 = _Translations$achievements$win_10$zh._(_root);
+	@override late final _Translations$achievements$win_50$zh win_50 = _Translations$achievements$win_50$zh._(_root);
+	@override late final _Translations$achievements$win_100$zh win_100 = _Translations$achievements$win_100$zh._(_root);
+	@override late final _Translations$achievements$star_1$zh star_1 = _Translations$achievements$star_1$zh._(_root);
+	@override late final _Translations$achievements$star_10$zh star_10 = _Translations$achievements$star_10$zh._(_root);
+	@override late final _Translations$achievements$star_30$zh star_30 = _Translations$achievements$star_30$zh._(_root);
+	@override late final _Translations$achievements$star_50$zh star_50 = _Translations$achievements$star_50$zh._(_root);
+	@override late final _Translations$achievements$tier_l3$zh tier_l3 = _Translations$achievements$tier_l3$zh._(_root);
+	@override late final _Translations$achievements$tier_l4$zh tier_l4 = _Translations$achievements$tier_l4$zh._(_root);
+	@override late final _Translations$achievements$tier_l5$zh tier_l5 = _Translations$achievements$tier_l5$zh._(_root);
+	@override late final _Translations$achievements$tier_l6$zh tier_l6 = _Translations$achievements$tier_l6$zh._(_root);
+	@override late final _Translations$achievements$custom_1$zh custom_1 = _Translations$achievements$custom_1$zh._(_root);
+	@override late final _Translations$achievements$custom_5$zh custom_5 = _Translations$achievements$custom_5$zh._(_root);
+	@override late final _Translations$achievements$no_hint_win$zh no_hint_win = _Translations$achievements$no_hint_win$zh._(_root);
+	@override late final _Translations$achievements$speed_10min$zh speed_10min = _Translations$achievements$speed_10min$zh._(_root);
+	@override late final _Translations$achievements$night_owl$zh night_owl = _Translations$achievements$night_owl$zh._(_root);
+	@override late final _Translations$achievements$snap_100$zh snap_100 = _Translations$achievements$snap_100$zh._(_root);
+	@override late final _Translations$achievements$snap_500$zh snap_500 = _Translations$achievements$snap_500$zh._(_root);
+	@override late final _Translations$achievements$snap_2000$zh snap_2000 = _Translations$achievements$snap_2000$zh._(_root);
+	@override late final _Translations$achievements$time_30m$zh time_30m = _Translations$achievements$time_30m$zh._(_root);
+	@override late final _Translations$achievements$time_2h$zh time_2h = _Translations$achievements$time_2h$zh._(_root);
+	@override late final _Translations$achievements$time_10h$zh time_10h = _Translations$achievements$time_10h$zh._(_root);
+	@override late final _Translations$achievements$daily_7$zh daily_7 = _Translations$achievements$daily_7$zh._(_root);
+	@override late final _Translations$achievements$master_all$zh master_all = _Translations$achievements$master_all$zh._(_root);
+}
+
+// Path: difficulty
+class _Translations$difficulty$zh extends Translations$difficulty$en {
+	_Translations$difficulty$zh._(TranslationsZh root) : this._root = root, super.internal(root);
+
+	final TranslationsZh _root; // ignore: unused_field
+
+	// Translations
+	@override late final _Translations$difficulty$tier$zh tier = _Translations$difficulty$tier$zh._(_root);
+	@override late final _Translations$difficulty$estimated$zh estimated = _Translations$difficulty$estimated$zh._(_root);
+	@override late final _Translations$difficulty$aspect$zh aspect = _Translations$difficulty$aspect$zh._(_root);
+	@override String pieceCount({required Object cols, required Object rows, required Object count}) => '${cols} x ${rows} (${count} 块)';
+	@override String get recommended => '推荐';
+}
+
+// Path: game
+class _Translations$game$zh extends Translations$game$en {
+	_Translations$game$zh._(TranslationsZh root) : this._root = root, super.internal(root);
+
+	final TranslationsZh _root; // ignore: unused_field
+
+	// Translations
+	@override String titleLevel({required Object index}) => '第 ${index} 关';
+	@override String titleDaily({required Object date}) => '${date} 每日挑战';
+	@override String get titleCustom => '自制拼图';
+	@override String titlePack({required Object title}) => '${title}';
+	@override String get tooltipBack => '返回';
+	@override String get tooltipEdges => '仅显示边缘碎片';
+	@override String get tooltipEdgesAll => '显示全部碎片';
+	@override String get tooltipHint => '智能提示';
+	@override String tooltipGhost({required Object opacity}) => '底图透视 ${opacity}%';
+	@override String get tooltipGhostOff => '底图透视关闭';
+	@override String get tooltipPreview => '查看原图';
+	@override String get tooltipOrganize => '一键整理托盘';
+	@override String get tooltipChangeBg => '更换壁纸背景';
+	@override String hintNotEnoughCoins({required Object price, required Object coins}) => '金币不足（当前难度提示需 ${price} 金币，当前拥有 ${coins}）';
+	@override String get imageDecodeFailed => '图片解码失败，请重试';
+	@override String get tapToReturn => '点击任意处返回拼图';
+	@override String get zoomReset => '重置';
+	@override String progress({required Object percent}) => '${percent}%';
+}
+
+// Path: victory
+class _Translations$victory$zh extends Translations$victory$en {
+	_Translations$victory$zh._(TranslationsZh root) : this._root = root, super.internal(root);
+
+	final TranslationsZh _root; // ignore: unused_field
+
+	// Translations
+	@override String get title => '拼图完成！';
+	@override String stars({required Object count}) => '${count} 星';
+	@override String time({required Object time}) => '用时：${time}';
+	@override String pieces({required Object count}) => '${count} 块';
+	@override String coinsReward({required Object coins}) => '+${coins} 金币';
+	@override String newAchievements({required Object count}) => '${count} 项新成就';
+	@override String get btnNext => '下一关';
+	@override String get btnShare => '分享成绩';
+	@override String get btnView => '欣赏拼图';
+	@override String get btnExit => '退出';
+	@override String get btnSaveWallpaper => '保存壁纸';
+	@override String get perfect => '完美！';
+	@override String get great => '精彩！';
+	@override String get btnClose => '关闭弹窗 (Esc)';
+	@override String get toastWallpaperSaved => '壁纸已保存到本地';
+	@override String toastSaveWallpaperFailed({required Object error}) => '壁纸保存失败：${error}';
+}
+
+// Path: continueDialog
+class _Translations$continueDialog$zh extends Translations$continueDialog$en {
+	_Translations$continueDialog$zh._(TranslationsZh root) : this._root = root, super.internal(root);
+
+	final TranslationsZh _root; // ignore: unused_field
+
+	// Translations
+	@override String get progressLabel => '已拼进度';
+	@override String get timeLabel => '已用时间';
+	@override String spec({required Object key}) => '规格 ${key}';
+	@override String specPieces({required Object key, required Object count}) => '规格 ${key}（${count} 块）';
+	@override String piecesCount({required Object count}) => '碎片 ${count}';
+	@override String get foxHint => '小狐狸在等你完成这幅拼图呢';
+	@override String get restartTitle => '重新开始？';
+	@override String get restartDesc => '将清除该难度的存档进度，不可恢复，确定重新开始吗？';
+	@override String get btnRestart => '重新开始';
+	@override String get restartConfirm => '确定重开';
+	@override String get btnResume => '继续挑战';
+}
+
+// Path: chooseDifficulty
+class _Translations$chooseDifficulty$zh extends Translations$chooseDifficulty$en {
+	_Translations$chooseDifficulty$zh._(TranslationsZh root) : this._root = root, super.internal(root);
+
+	final TranslationsZh _root; // ignore: unused_field
+
+	// Translations
+	@override String get title => '选择难度';
+	@override String pieces({required Object count}) => '${count} 块';
+	@override String get recommended => '推荐';
+	@override String get locked => '未解锁';
+	@override String get lockedByLevel => '关卡未解锁';
+	@override String get lockedDesc => '请先通关前一关解锁';
+	@override String get btnStart => '开始';
+	@override String get btnReplay => '重玩此难度';
+	@override String btnContinue({required Object percent}) => '继续游玩 (进度 ${percent}%)';
+	@override String get btnReset => '放弃进度并重新开始';
+	@override String savedProgress({required Object percent}) => '⚡ 检测到未完成存档 (已拼 ${percent}%)';
+	@override String get previewHint => '预览切线';
+	@override String get badgeCleared => '已通关';
+	@override String get deleteTitle => '删除自制拼图';
+	@override String deleteDesc({required Object title}) => '确定要永久删除「${title}」吗？删除后不可恢复。';
+	@override String get deleteConfirm => '确定删除';
+	@override String get deleteTooltip => '删除此自制拼图';
+	@override String get favAdd => '加入收藏';
+	@override String get favRemove => '取消收藏';
+	@override String lockedProgress({required Object gap, required Object tier}) => '再获得 ${gap} 张 3 星图即可解锁 ${tier}';
+}
+
+// Path: achievementsPage
+class _Translations$achievementsPage$zh extends Translations$achievementsPage$en {
+	_Translations$achievementsPage$zh._(TranslationsZh root) : this._root = root, super.internal(root);
+
+	final TranslationsZh _root; // ignore: unused_field
+
+	// Translations
+	@override String get title => '成就与统计';
+	@override String get stats => '数据统计看板';
+	@override String get groupClears => '通关与星级表现';
+	@override String get groupAssets => '游玩历程与资产';
+	@override String get totalStars => '关卡累积星星';
+	@override String get totalSolved => '已通关图数';
+	@override String get totalSnaps => '已拼碎片';
+	@override String get totalTime => '总游玩时长';
+	@override String get threeStarCount => '3星拼图数';
+	@override String get coinsOwned => '拥有金币';
+	@override String get wall => '成就勋章墙';
+	@override String wallCount({required Object count}) => '共 ${count} 项成就';
+	@override String get unlocked => '已解锁';
+	@override String get locked => '未解锁';
+	@override String get claim => '领取';
+	@override String get claimed => '已领取';
+	@override String coins({required Object count}) => '${count} 金币';
+}
+
+// Path: myCenter
+class _Translations$myCenter$zh extends Translations$myCenter$en {
+	_Translations$myCenter$zh._(TranslationsZh root) : this._root = root, super.internal(root);
+
+	final TranslationsZh _root; // ignore: unused_field
+
+	// Translations
+	@override late final _Translations$myCenter$tabs$zh tabs = _Translations$myCenter$tabs$zh._(_root);
+	@override late final _Translations$myCenter$topActions$zh topActions = _Translations$myCenter$topActions$zh._(_root);
+	@override late final _Translations$myCenter$empty$zh empty = _Translations$myCenter$empty$zh._(_root);
+	@override late final _Translations$myCenter$card$zh card = _Translations$myCenter$card$zh._(_root);
+	@override late final _Translations$myCenter$orphanDialog$zh orphanDialog = _Translations$myCenter$orphanDialog$zh._(_root);
+	@override late final _Translations$myCenter$toast$zh toast = _Translations$myCenter$toast$zh._(_root);
+}
+
+// Path: achievements.first_win
+class _Translations$achievements$first_win$zh extends Translations$achievements$first_win$en {
+	_Translations$achievements$first_win$zh._(TranslationsZh root) : this._root = root, super.internal(root);
+
+	final TranslationsZh _root; // ignore: unused_field
+
+	// Translations
+	@override String get title => '初露锋芒';
+	@override String get desc => '通关首张拼图';
+}
+
+// Path: achievements.win_10
+class _Translations$achievements$win_10$zh extends Translations$achievements$win_10$en {
+	_Translations$achievements$win_10$zh._(TranslationsZh root) : this._root = root, super.internal(root);
+
+	final TranslationsZh _root; // ignore: unused_field
+
+	// Translations
+	@override String get title => '熟能生巧';
+	@override String get desc => '累计通关 10 张拼图';
+}
+
+// Path: achievements.win_50
+class _Translations$achievements$win_50$zh extends Translations$achievements$win_50$en {
+	_Translations$achievements$win_50$zh._(TranslationsZh root) : this._root = root, super.internal(root);
+
+	final TranslationsZh _root; // ignore: unused_field
+
+	// Translations
+	@override String get title => '拼图达人';
+	@override String get desc => '累计通关 50 张拼图';
+}
+
+// Path: achievements.win_100
+class _Translations$achievements$win_100$zh extends Translations$achievements$win_100$en {
+	_Translations$achievements$win_100$zh._(TranslationsZh root) : this._root = root, super.internal(root);
+
+	final TranslationsZh _root; // ignore: unused_field
+
+	// Translations
+	@override String get title => '拼图大师';
+	@override String get desc => '累计通关 100 张拼图';
+}
+
+// Path: achievements.star_1
+class _Translations$achievements$star_1$zh extends Translations$achievements$star_1$en {
+	_Translations$achievements$star_1$zh._(TranslationsZh root) : this._root = root, super.internal(root);
+
+	final TranslationsZh _root; // ignore: unused_field
+
+	// Translations
+	@override String get title => '三星启航';
+	@override String get desc => '首次以 3 星评价完成拼图';
+}
+
+// Path: achievements.star_10
+class _Translations$achievements$star_10$zh extends Translations$achievements$star_10$en {
+	_Translations$achievements$star_10$zh._(TranslationsZh root) : this._root = root, super.internal(root);
+
+	final TranslationsZh _root; // ignore: unused_field
+
+	// Translations
+	@override String get title => '闪耀之星';
+	@override String get desc => '累计获得 10 个 3 星评价';
+}
+
+// Path: achievements.star_30
+class _Translations$achievements$star_30$zh extends Translations$achievements$star_30$en {
+	_Translations$achievements$star_30$zh._(TranslationsZh root) : this._root = root, super.internal(root);
+
+	final TranslationsZh _root; // ignore: unused_field
+
+	// Translations
+	@override String get title => '群星璀璨';
+	@override String get desc => '累计获得 30 个 3 星评价';
+}
+
+// Path: achievements.star_50
+class _Translations$achievements$star_50$zh extends Translations$achievements$star_50$en {
+	_Translations$achievements$star_50$zh._(TranslationsZh root) : this._root = root, super.internal(root);
+
+	final TranslationsZh _root; // ignore: unused_field
+
+	// Translations
+	@override String get title => '星光领主';
+	@override String get desc => '累计获得 50 个 3 星评价';
+}
+
+// Path: achievements.tier_l3
+class _Translations$achievements$tier_l3$zh extends Translations$achievements$tier_l3$en {
+	_Translations$achievements$tier_l3$zh._(TranslationsZh root) : this._root = root, super.internal(root);
+
+	final TranslationsZh _root; // ignore: unused_field
+
+	// Translations
+	@override String get title => '中阶挑战';
+	@override String get desc => '完成一次中等（L3）及以上难度拼图';
+}
+
+// Path: achievements.tier_l4
+class _Translations$achievements$tier_l4$zh extends Translations$achievements$tier_l4$en {
+	_Translations$achievements$tier_l4$zh._(TranslationsZh root) : this._root = root, super.internal(root);
+
+	final TranslationsZh _root; // ignore: unused_field
+
+	// Translations
+	@override String get title => '进阶高手';
+	@override String get desc => '完成一次进阶（L4）及以上难度拼图';
+}
+
+// Path: achievements.tier_l5
+class _Translations$achievements$tier_l5$zh extends Translations$achievements$tier_l5$en {
+	_Translations$achievements$tier_l5$zh._(TranslationsZh root) : this._root = root, super.internal(root);
+
+	final TranslationsZh _root; // ignore: unused_field
+
+	// Translations
+	@override String get title => '困难征服';
+	@override String get desc => '完成一次困难（L5）及以上难度拼图';
+}
+
+// Path: achievements.tier_l6
+class _Translations$achievements$tier_l6$zh extends Translations$achievements$tier_l6$en {
+	_Translations$achievements$tier_l6$zh._(TranslationsZh root) : this._root = root, super.internal(root);
+
+	final TranslationsZh _root; // ignore: unused_field
+
+	// Translations
+	@override String get title => '极限登顶';
+	@override String get desc => '完成一次极限（L6）难度拼图';
+}
+
+// Path: achievements.custom_1
+class _Translations$achievements$custom_1$zh extends Translations$achievements$custom_1$en {
+	_Translations$achievements$custom_1$zh._(TranslationsZh root) : this._root = root, super.internal(root);
+
+	final TranslationsZh _root; // ignore: unused_field
+
+	// Translations
+	@override String get title => '创作者';
+	@override String get desc => '完成 1 次自制拼图';
+}
+
+// Path: achievements.custom_5
+class _Translations$achievements$custom_5$zh extends Translations$achievements$custom_5$en {
+	_Translations$achievements$custom_5$zh._(TranslationsZh root) : this._root = root, super.internal(root);
+
+	final TranslationsZh _root; // ignore: unused_field
+
+	// Translations
+	@override String get title => '创意无限';
+	@override String get desc => '完成 5 次自制拼图';
+}
+
+// Path: achievements.no_hint_win
+class _Translations$achievements$no_hint_win$zh extends Translations$achievements$no_hint_win$en {
+	_Translations$achievements$no_hint_win$zh._(TranslationsZh root) : this._root = root, super.internal(root);
+
+	final TranslationsZh _root; // ignore: unused_field
+
+	// Translations
+	@override String get title => '心灵手巧';
+	@override String get desc => '不使用任何提示完成一局拼图';
+}
+
+// Path: achievements.speed_10min
+class _Translations$achievements$speed_10min$zh extends Translations$achievements$speed_10min$en {
+	_Translations$achievements$speed_10min$zh._(TranslationsZh root) : this._root = root, super.internal(root);
+
+	final TranslationsZh _root; // ignore: unused_field
+
+	// Translations
+	@override String get title => '疾风拼手';
+	@override String get desc => '10 分钟内完成 ≥100 片的拼图';
+}
+
+// Path: achievements.night_owl
+class _Translations$achievements$night_owl$zh extends Translations$achievements$night_owl$en {
+	_Translations$achievements$night_owl$zh._(TranslationsZh root) : this._root = root, super.internal(root);
+
+	final TranslationsZh _root; // ignore: unused_field
+
+	// Translations
+	@override String get title => '夜猫子';
+	@override String get desc => '在夜间 22:00 ~ 05:00 间完成一局拼图';
+}
+
+// Path: achievements.snap_100
+class _Translations$achievements$snap_100$zh extends Translations$achievements$snap_100$en {
+	_Translations$achievements$snap_100$zh._(TranslationsZh root) : this._root = root, super.internal(root);
+
+	final TranslationsZh _root; // ignore: unused_field
+
+	// Translations
+	@override String get title => '初试身手';
+	@override String get desc => '累计吸附 100 片碎片';
+}
+
+// Path: achievements.snap_500
+class _Translations$achievements$snap_500$zh extends Translations$achievements$snap_500$en {
+	_Translations$achievements$snap_500$zh._(TranslationsZh root) : this._root = root, super.internal(root);
+
+	final TranslationsZh _root; // ignore: unused_field
+
+	// Translations
+	@override String get title => '渐入佳境';
+	@override String get desc => '累计吸附 500 片碎片';
+}
+
+// Path: achievements.snap_2000
+class _Translations$achievements$snap_2000$zh extends Translations$achievements$snap_2000$en {
+	_Translations$achievements$snap_2000$zh._(TranslationsZh root) : this._root = root, super.internal(root);
+
+	final TranslationsZh _root; // ignore: unused_field
+
+	// Translations
+	@override String get title => '千锤百炼';
+	@override String get desc => '累计吸附 2000 片碎片';
+}
+
+// Path: achievements.time_30m
+class _Translations$achievements$time_30m$zh extends Translations$achievements$time_30m$en {
+	_Translations$achievements$time_30m$zh._(TranslationsZh root) : this._root = root, super.internal(root);
+
+	final TranslationsZh _root; // ignore: unused_field
+
+	// Translations
+	@override String get title => '沉浸其中';
+	@override String get desc => '累计游玩时间达到 30 分钟';
+}
+
+// Path: achievements.time_2h
+class _Translations$achievements$time_2h$zh extends Translations$achievements$time_2h$en {
+	_Translations$achievements$time_2h$zh._(TranslationsZh root) : this._root = root, super.internal(root);
+
+	final TranslationsZh _root; // ignore: unused_field
+
+	// Translations
+	@override String get title => '拼图发烧友';
+	@override String get desc => '累计游玩时间达到 2 小时';
+}
+
+// Path: achievements.time_10h
+class _Translations$achievements$time_10h$zh extends Translations$achievements$time_10h$en {
+	_Translations$achievements$time_10h$zh._(TranslationsZh root) : this._root = root, super.internal(root);
+
+	final TranslationsZh _root; // ignore: unused_field
+
+	// Translations
+	@override String get title => '岁月如歌';
+	@override String get desc => '累计游玩时间达到 10 小时';
+}
+
+// Path: achievements.daily_7
+class _Translations$achievements$daily_7$zh extends Translations$achievements$daily_7$en {
+	_Translations$achievements$daily_7$zh._(TranslationsZh root) : this._root = root, super.internal(root);
+
+	final TranslationsZh _root; // ignore: unused_field
+
+	// Translations
+	@override String get title => '日积月累';
+	@override String get desc => '累计完成 7 次每日挑战';
+}
+
+// Path: achievements.master_all
+class _Translations$achievements$master_all$zh extends Translations$achievements$master_all$en {
+	_Translations$achievements$master_all$zh._(TranslationsZh root) : this._root = root, super.internal(root);
+
+	final TranslationsZh _root; // ignore: unused_field
+
+	// Translations
+	@override String get title => '拼图宗师';
+	@override String get desc => '达成以上全部 24 项成就';
+}
+
+// Path: difficulty.tier
+class _Translations$difficulty$tier$zh extends Translations$difficulty$tier$en {
+	_Translations$difficulty$tier$zh._(TranslationsZh root) : this._root = root, super.internal(root);
+
+	final TranslationsZh _root; // ignore: unused_field
+
+	// Translations
+	@override String get l1 => '新手 Easy';
+	@override String get l1_5 => '入门+';
+	@override String get l2 => '简单 Beginner';
+	@override String get l3 => '普通 Medium';
+	@override String get l4 => '进阶 Hard';
+	@override String get l5 => '困难 Expert';
+	@override String get l6 => '大师 Master';
+	@override String get l7 => '宗师 Grandmaster';
+}
+
+// Path: difficulty.estimated
+class _Translations$difficulty$estimated$zh extends Translations$difficulty$estimated$en {
+	_Translations$difficulty$estimated$zh._(TranslationsZh root) : this._root = root, super.internal(root);
+
+	final TranslationsZh _root; // ignore: unused_field
+
+	// Translations
+	@override String get l1 => '1~3分钟';
+	@override String get l1_5 => '2~4分钟';
+	@override String get l2 => '5~8分钟';
+	@override String get l3 => '12~18分钟';
+	@override String get l4 => '25~35分钟';
+	@override String get l5 => '50~75分钟';
+	@override String get l6 => '1.5~3小时';
+	@override String get l7 => '3~5小时';
+}
+
+// Path: difficulty.aspect
+class _Translations$difficulty$aspect$zh extends Translations$difficulty$aspect$en {
+	_Translations$difficulty$aspect$zh._(TranslationsZh root) : this._root = root, super.internal(root);
+
+	final TranslationsZh _root; // ignore: unused_field
+
+	// Translations
+	@override String get square => '1:1 正方形';
+	@override String get portrait2x3 => '2:3 竖屏';
+	@override String get landscape3x2 => '3:2 横屏';
+	@override String get portrait3x4 => '3:4 竖屏';
+	@override String get landscape4x3 => '4:3 横屏';
+}
+
+// Path: myCenter.tabs
+class _Translations$myCenter$tabs$zh extends Translations$myCenter$tabs$en {
+	_Translations$myCenter$tabs$zh._(TranslationsZh root) : this._root = root, super.internal(root);
+
+	final TranslationsZh _root; // ignore: unused_field
+
+	// Translations
+	@override String inProgress({required Object count}) => '进行中 (${count})';
+	@override String favorites({required Object count}) => '收藏 (${count})';
+	@override String completed({required Object count}) => '已完成 (${count})';
+	@override String custom({required Object count}) => '自制 (${count})';
+}
+
+// Path: myCenter.topActions
+class _Translations$myCenter$topActions$zh extends Translations$myCenter$topActions$en {
+	_Translations$myCenter$topActions$zh._(TranslationsZh root) : this._root = root, super.internal(root);
+
+	final TranslationsZh _root; // ignore: unused_field
+
+	// Translations
+	@override String get gallery => '相册选图';
+	@override String get gallerySub => '本地自制';
+	@override String get online => '在线搜图';
+	@override String get onlineSub => '海量图库';
+	@override String get archive => '素材库';
+	@override String archiveSub({required Object count}) => '${count} 张';
+	@override String get import => '导入图包';
+	@override String get importSub => 'ZIP扩展';
+}
+
+// Path: myCenter.empty
+class _Translations$myCenter$empty$zh extends Translations$myCenter$empty$en {
+	_Translations$myCenter$empty$zh._(TranslationsZh root) : this._root = root, super.internal(root);
+
+	final TranslationsZh _root; // ignore: unused_field
+
+	// Translations
+	@override String get inProgressTitle => '暂无进行中的拼图';
+	@override String get inProgressSub => '挑一张喜欢的拼图，开启拼图时光吧！';
+	@override String get favoritesTitle => '还没有收藏的拼图';
+	@override String get favoritesSub => '在选择难度面板中点击红心，可快捷收藏';
+	@override String get completedTitle => '还没有完成过拼图';
+	@override String get completedSub => '通关任意一张拼图，即可在此记录辉煌战绩！';
+	@override String get customTitle => '暂无自制拼图';
+	@override String get customSub => '点击上方“相册选图”等工具，打造专属自制拼图！';
+	@override String get goExplore => '去挑选拼图';
+	@override String get create => '相册选图制作';
+}
+
+// Path: myCenter.card
+class _Translations$myCenter$card$zh extends Translations$myCenter$card$en {
+	_Translations$myCenter$card$zh._(TranslationsZh root) : this._root = root, super.internal(root);
+
+	final TranslationsZh _root; // ignore: unused_field
+
+	// Translations
+	@override String get orphan => '失效';
+	@override String get orphanDesc => '已失效 · 点击清理';
+	@override String progress({required Object percent}) => '${percent}%';
+	@override String get retry => '再挑战';
+}
+
+// Path: myCenter.orphanDialog
+class _Translations$myCenter$orphanDialog$zh extends Translations$myCenter$orphanDialog$en {
+	_Translations$myCenter$orphanDialog$zh._(TranslationsZh root) : this._root = root, super.internal(root);
+
+	final TranslationsZh _root; // ignore: unused_field
+
+	// Translations
+	@override String get title => '拼图资源已失效';
+	@override String desc({required Object title}) => '该拼图资源已从本地或列表中移除，无法继续游玩。\n是否从记录与收藏中清理移除「${title}」？';
+	@override String get keep => '暂保留';
+	@override String get remove => '清理移除';
+}
+
+// Path: myCenter.toast
+class _Translations$myCenter$toast$zh extends Translations$myCenter$toast$en {
+	_Translations$myCenter$toast$zh._(TranslationsZh root) : this._root = root, super.internal(root);
+
+	final TranslationsZh _root; // ignore: unused_field
+
+	// Translations
+	@override String importSuccess({required Object count}) => '已成功导入 ${count} 张图片到素材库';
+	@override String importFailed({required Object error}) => '选择图片失败：${error}';
+	@override String get webviewMissing => '当前系统未安装 WebView2 运行时，无法使用在线搜图';
+}
+
 /// The flat map containing all translations for locale <zh>.
 /// Only for edge cases! For simple maps, use the map function of this library.
 ///
@@ -223,6 +831,194 @@ extension on TranslationsZh {
 			'settings.timeSeconds' => ({required Object count}) => '${count} 秒',
 			'settings.timeMinutes' => ({required Object count}) => '${count} 分',
 			'settings.timeHoursMinutes' => ({required Object hours, required Object minutes}) => '${hours} 小时 ${minutes} 分',
+			'achievements.first_win.title' => '初露锋芒',
+			'achievements.first_win.desc' => '通关首张拼图',
+			'achievements.win_10.title' => '熟能生巧',
+			'achievements.win_10.desc' => '累计通关 10 张拼图',
+			'achievements.win_50.title' => '拼图达人',
+			'achievements.win_50.desc' => '累计通关 50 张拼图',
+			'achievements.win_100.title' => '拼图大师',
+			'achievements.win_100.desc' => '累计通关 100 张拼图',
+			'achievements.star_1.title' => '三星启航',
+			'achievements.star_1.desc' => '首次以 3 星评价完成拼图',
+			'achievements.star_10.title' => '闪耀之星',
+			'achievements.star_10.desc' => '累计获得 10 个 3 星评价',
+			'achievements.star_30.title' => '群星璀璨',
+			'achievements.star_30.desc' => '累计获得 30 个 3 星评价',
+			'achievements.star_50.title' => '星光领主',
+			'achievements.star_50.desc' => '累计获得 50 个 3 星评价',
+			'achievements.tier_l3.title' => '中阶挑战',
+			'achievements.tier_l3.desc' => '完成一次中等（L3）及以上难度拼图',
+			'achievements.tier_l4.title' => '进阶高手',
+			'achievements.tier_l4.desc' => '完成一次进阶（L4）及以上难度拼图',
+			'achievements.tier_l5.title' => '困难征服',
+			'achievements.tier_l5.desc' => '完成一次困难（L5）及以上难度拼图',
+			'achievements.tier_l6.title' => '极限登顶',
+			'achievements.tier_l6.desc' => '完成一次极限（L6）难度拼图',
+			'achievements.custom_1.title' => '创作者',
+			'achievements.custom_1.desc' => '完成 1 次自制拼图',
+			'achievements.custom_5.title' => '创意无限',
+			'achievements.custom_5.desc' => '完成 5 次自制拼图',
+			'achievements.no_hint_win.title' => '心灵手巧',
+			'achievements.no_hint_win.desc' => '不使用任何提示完成一局拼图',
+			'achievements.speed_10min.title' => '疾风拼手',
+			'achievements.speed_10min.desc' => '10 分钟内完成 ≥100 片的拼图',
+			'achievements.night_owl.title' => '夜猫子',
+			'achievements.night_owl.desc' => '在夜间 22:00 ~ 05:00 间完成一局拼图',
+			'achievements.snap_100.title' => '初试身手',
+			'achievements.snap_100.desc' => '累计吸附 100 片碎片',
+			'achievements.snap_500.title' => '渐入佳境',
+			'achievements.snap_500.desc' => '累计吸附 500 片碎片',
+			'achievements.snap_2000.title' => '千锤百炼',
+			'achievements.snap_2000.desc' => '累计吸附 2000 片碎片',
+			'achievements.time_30m.title' => '沉浸其中',
+			'achievements.time_30m.desc' => '累计游玩时间达到 30 分钟',
+			'achievements.time_2h.title' => '拼图发烧友',
+			'achievements.time_2h.desc' => '累计游玩时间达到 2 小时',
+			'achievements.time_10h.title' => '岁月如歌',
+			'achievements.time_10h.desc' => '累计游玩时间达到 10 小时',
+			'achievements.daily_7.title' => '日积月累',
+			'achievements.daily_7.desc' => '累计完成 7 次每日挑战',
+			'achievements.master_all.title' => '拼图宗师',
+			'achievements.master_all.desc' => '达成以上全部 24 项成就',
+			'difficulty.tier.l1' => '新手 Easy',
+			'difficulty.tier.l1_5' => '入门+',
+			'difficulty.tier.l2' => '简单 Beginner',
+			'difficulty.tier.l3' => '普通 Medium',
+			'difficulty.tier.l4' => '进阶 Hard',
+			'difficulty.tier.l5' => '困难 Expert',
+			'difficulty.tier.l6' => '大师 Master',
+			'difficulty.tier.l7' => '宗师 Grandmaster',
+			'difficulty.estimated.l1' => '1~3分钟',
+			'difficulty.estimated.l1_5' => '2~4分钟',
+			'difficulty.estimated.l2' => '5~8分钟',
+			'difficulty.estimated.l3' => '12~18分钟',
+			'difficulty.estimated.l4' => '25~35分钟',
+			'difficulty.estimated.l5' => '50~75分钟',
+			'difficulty.estimated.l6' => '1.5~3小时',
+			'difficulty.estimated.l7' => '3~5小时',
+			'difficulty.aspect.square' => '1:1 正方形',
+			'difficulty.aspect.portrait2x3' => '2:3 竖屏',
+			'difficulty.aspect.landscape3x2' => '3:2 横屏',
+			'difficulty.aspect.portrait3x4' => '3:4 竖屏',
+			'difficulty.aspect.landscape4x3' => '4:3 横屏',
+			'difficulty.pieceCount' => ({required Object cols, required Object rows, required Object count}) => '${cols} x ${rows} (${count} 块)',
+			'difficulty.recommended' => '推荐',
+			'game.titleLevel' => ({required Object index}) => '第 ${index} 关',
+			'game.titleDaily' => ({required Object date}) => '${date} 每日挑战',
+			'game.titleCustom' => '自制拼图',
+			'game.titlePack' => ({required Object title}) => '${title}',
+			'game.tooltipBack' => '返回',
+			'game.tooltipEdges' => '仅显示边缘碎片',
+			'game.tooltipEdgesAll' => '显示全部碎片',
+			'game.tooltipHint' => '智能提示',
+			'game.tooltipGhost' => ({required Object opacity}) => '底图透视 ${opacity}%',
+			'game.tooltipGhostOff' => '底图透视关闭',
+			'game.tooltipPreview' => '查看原图',
+			'game.tooltipOrganize' => '一键整理托盘',
+			'game.tooltipChangeBg' => '更换壁纸背景',
+			'game.hintNotEnoughCoins' => ({required Object price, required Object coins}) => '金币不足（当前难度提示需 ${price} 金币，当前拥有 ${coins}）',
+			'game.imageDecodeFailed' => '图片解码失败，请重试',
+			'game.tapToReturn' => '点击任意处返回拼图',
+			'game.zoomReset' => '重置',
+			'game.progress' => ({required Object percent}) => '${percent}%',
+			'victory.title' => '拼图完成！',
+			'victory.stars' => ({required Object count}) => '${count} 星',
+			'victory.time' => ({required Object time}) => '用时：${time}',
+			'victory.pieces' => ({required Object count}) => '${count} 块',
+			'victory.coinsReward' => ({required Object coins}) => '+${coins} 金币',
+			'victory.newAchievements' => ({required Object count}) => '${count} 项新成就',
+			'victory.btnNext' => '下一关',
+			'victory.btnShare' => '分享成绩',
+			'victory.btnView' => '欣赏拼图',
+			'victory.btnExit' => '退出',
+			'victory.btnSaveWallpaper' => '保存壁纸',
+			'victory.perfect' => '完美！',
+			'victory.great' => '精彩！',
+			'victory.btnClose' => '关闭弹窗 (Esc)',
+			'victory.toastWallpaperSaved' => '壁纸已保存到本地',
+			'victory.toastSaveWallpaperFailed' => ({required Object error}) => '壁纸保存失败：${error}',
+			'continueDialog.progressLabel' => '已拼进度',
+			'continueDialog.timeLabel' => '已用时间',
+			'continueDialog.spec' => ({required Object key}) => '规格 ${key}',
+			'continueDialog.specPieces' => ({required Object key, required Object count}) => '规格 ${key}（${count} 块）',
+			'continueDialog.piecesCount' => ({required Object count}) => '碎片 ${count}',
+			'continueDialog.foxHint' => '小狐狸在等你完成这幅拼图呢',
+			'continueDialog.restartTitle' => '重新开始？',
+			'continueDialog.restartDesc' => '将清除该难度的存档进度，不可恢复，确定重新开始吗？',
+			'continueDialog.btnRestart' => '重新开始',
+			'continueDialog.restartConfirm' => '确定重开',
+			'continueDialog.btnResume' => '继续挑战',
+			'chooseDifficulty.title' => '选择难度',
+			'chooseDifficulty.pieces' => ({required Object count}) => '${count} 块',
+			'chooseDifficulty.recommended' => '推荐',
+			'chooseDifficulty.locked' => '未解锁',
+			'chooseDifficulty.lockedByLevel' => '关卡未解锁',
+			'chooseDifficulty.lockedDesc' => '请先通关前一关解锁',
+			'chooseDifficulty.btnStart' => '开始',
+			'chooseDifficulty.btnReplay' => '重玩此难度',
+			'chooseDifficulty.btnContinue' => ({required Object percent}) => '继续游玩 (进度 ${percent}%)',
+			'chooseDifficulty.btnReset' => '放弃进度并重新开始',
+			'chooseDifficulty.savedProgress' => ({required Object percent}) => '⚡ 检测到未完成存档 (已拼 ${percent}%)',
+			'chooseDifficulty.previewHint' => '预览切线',
+			'chooseDifficulty.badgeCleared' => '已通关',
+			'chooseDifficulty.deleteTitle' => '删除自制拼图',
+			'chooseDifficulty.deleteDesc' => ({required Object title}) => '确定要永久删除「${title}」吗？删除后不可恢复。',
+			'chooseDifficulty.deleteConfirm' => '确定删除',
+			'chooseDifficulty.deleteTooltip' => '删除此自制拼图',
+			'chooseDifficulty.favAdd' => '加入收藏',
+			'chooseDifficulty.favRemove' => '取消收藏',
+			'chooseDifficulty.lockedProgress' => ({required Object gap, required Object tier}) => '再获得 ${gap} 张 3 星图即可解锁 ${tier}',
+			'achievementsPage.title' => '成就与统计',
+			'achievementsPage.stats' => '数据统计看板',
+			'achievementsPage.groupClears' => '通关与星级表现',
+			'achievementsPage.groupAssets' => '游玩历程与资产',
+			'achievementsPage.totalStars' => '关卡累积星星',
+			'achievementsPage.totalSolved' => '已通关图数',
+			'achievementsPage.totalSnaps' => '已拼碎片',
+			'achievementsPage.totalTime' => '总游玩时长',
+			'achievementsPage.threeStarCount' => '3星拼图数',
+			'achievementsPage.coinsOwned' => '拥有金币',
+			'achievementsPage.wall' => '成就勋章墙',
+			'achievementsPage.wallCount' => ({required Object count}) => '共 ${count} 项成就',
+			'achievementsPage.unlocked' => '已解锁',
+			'achievementsPage.locked' => '未解锁',
+			'achievementsPage.claim' => '领取',
+			'achievementsPage.claimed' => '已领取',
+			'achievementsPage.coins' => ({required Object count}) => '${count} 金币',
+			'myCenter.tabs.inProgress' => ({required Object count}) => '进行中 (${count})',
+			'myCenter.tabs.favorites' => ({required Object count}) => '收藏 (${count})',
+			'myCenter.tabs.completed' => ({required Object count}) => '已完成 (${count})',
+			'myCenter.tabs.custom' => ({required Object count}) => '自制 (${count})',
+			'myCenter.topActions.gallery' => '相册选图',
+			'myCenter.topActions.gallerySub' => '本地自制',
+			'myCenter.topActions.online' => '在线搜图',
+			'myCenter.topActions.onlineSub' => '海量图库',
+			'myCenter.topActions.archive' => '素材库',
+			'myCenter.topActions.archiveSub' => ({required Object count}) => '${count} 张',
+			'myCenter.topActions.import' => '导入图包',
+			'myCenter.topActions.importSub' => 'ZIP扩展',
+			'myCenter.empty.inProgressTitle' => '暂无进行中的拼图',
+			'myCenter.empty.inProgressSub' => '挑一张喜欢的拼图，开启拼图时光吧！',
+			'myCenter.empty.favoritesTitle' => '还没有收藏的拼图',
+			'myCenter.empty.favoritesSub' => '在选择难度面板中点击红心，可快捷收藏',
+			'myCenter.empty.completedTitle' => '还没有完成过拼图',
+			'myCenter.empty.completedSub' => '通关任意一张拼图，即可在此记录辉煌战绩！',
+			'myCenter.empty.customTitle' => '暂无自制拼图',
+			'myCenter.empty.customSub' => '点击上方“相册选图”等工具，打造专属自制拼图！',
+			'myCenter.empty.goExplore' => '去挑选拼图',
+			'myCenter.empty.create' => '相册选图制作',
+			'myCenter.card.orphan' => '失效',
+			'myCenter.card.orphanDesc' => '已失效 · 点击清理',
+			'myCenter.card.progress' => ({required Object percent}) => '${percent}%',
+			'myCenter.card.retry' => '再挑战',
+			'myCenter.orphanDialog.title' => '拼图资源已失效',
+			'myCenter.orphanDialog.desc' => ({required Object title}) => '该拼图资源已从本地或列表中移除，无法继续游玩。\n是否从记录与收藏中清理移除「${title}」？',
+			'myCenter.orphanDialog.keep' => '暂保留',
+			'myCenter.orphanDialog.remove' => '清理移除',
+			'myCenter.toast.importSuccess' => ({required Object count}) => '已成功导入 ${count} 张图片到素材库',
+			'myCenter.toast.importFailed' => ({required Object error}) => '选择图片失败：${error}',
+			'myCenter.toast.webviewMissing' => '当前系统未安装 WebView2 运行时，无法使用在线搜图',
 			_ => null,
 		};
 	}

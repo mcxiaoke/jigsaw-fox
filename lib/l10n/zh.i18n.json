@@ -73,5 +73,277 @@
     "timeSeconds": "{count} 秒",
     "timeMinutes": "{count} 分",
     "timeHoursMinutes": "{hours} 小时 {minutes} 分"
+  },
+  "achievements": {
+    "first_win": {
+      "title": "初露锋芒",
+      "desc": "通关首张拼图"
+    },
+    "win_10": {
+      "title": "熟能生巧",
+      "desc": "累计通关 10 张拼图"
+    },
+    "win_50": {
+      "title": "拼图达人",
+      "desc": "累计通关 50 张拼图"
+    },
+    "win_100": {
+      "title": "拼图大师",
+      "desc": "累计通关 100 张拼图"
+    },
+    "star_1": {
+      "title": "三星启航",
+      "desc": "首次以 3 星评价完成拼图"
+    },
+    "star_10": {
+      "title": "闪耀之星",
+      "desc": "累计获得 10 个 3 星评价"
+    },
+    "star_30": {
+      "title": "群星璀璨",
+      "desc": "累计获得 30 个 3 星评价"
+    },
+    "star_50": {
+      "title": "星光领主",
+      "desc": "累计获得 50 个 3 星评价"
+    },
+    "tier_l3": {
+      "title": "中阶挑战",
+      "desc": "完成一次中等（L3）及以上难度拼图"
+    },
+    "tier_l4": {
+      "title": "进阶高手",
+      "desc": "完成一次进阶（L4）及以上难度拼图"
+    },
+    "tier_l5": {
+      "title": "困难征服",
+      "desc": "完成一次困难（L5）及以上难度拼图"
+    },
+    "tier_l6": {
+      "title": "极限登顶",
+      "desc": "完成一次极限（L6）难度拼图"
+    },
+    "custom_1": {
+      "title": "创作者",
+      "desc": "完成 1 次自制拼图"
+    },
+    "custom_5": {
+      "title": "创意无限",
+      "desc": "完成 5 次自制拼图"
+    },
+    "no_hint_win": {
+      "title": "心灵手巧",
+      "desc": "不使用任何提示完成一局拼图"
+    },
+    "speed_10min": {
+      "title": "疾风拼手",
+      "desc": "10 分钟内完成 ≥100 片的拼图"
+    },
+    "night_owl": {
+      "title": "夜猫子",
+      "desc": "在夜间 22:00 ~ 05:00 间完成一局拼图"
+    },
+    "snap_100": {
+      "title": "初试身手",
+      "desc": "累计吸附 100 片碎片"
+    },
+    "snap_500": {
+      "title": "渐入佳境",
+      "desc": "累计吸附 500 片碎片"
+    },
+    "snap_2000": {
+      "title": "千锤百炼",
+      "desc": "累计吸附 2000 片碎片"
+    },
+    "time_30m": {
+      "title": "沉浸其中",
+      "desc": "累计游玩时间达到 30 分钟"
+    },
+    "time_2h": {
+      "title": "拼图发烧友",
+      "desc": "累计游玩时间达到 2 小时"
+    },
+    "time_10h": {
+      "title": "岁月如歌",
+      "desc": "累计游玩时间达到 10 小时"
+    },
+    "daily_7": {
+      "title": "日积月累",
+      "desc": "累计完成 7 次每日挑战"
+    },
+    "master_all": {
+      "title": "拼图宗师",
+      "desc": "达成以上全部 24 项成就"
+    }
+  },
+  "difficulty": {
+    "tier": {
+      "l1": "新手 Easy",
+      "l1_5": "入门+",
+      "l2": "简单 Beginner",
+      "l3": "普通 Medium",
+      "l4": "进阶 Hard",
+      "l5": "困难 Expert",
+      "l6": "大师 Master",
+      "l7": "宗师 Grandmaster"
+    },
+    "estimated": {
+      "l1": "1~3分钟",
+      "l1_5": "2~4分钟",
+      "l2": "5~8分钟",
+      "l3": "12~18分钟",
+      "l4": "25~35分钟",
+      "l5": "50~75分钟",
+      "l6": "1.5~3小时",
+      "l7": "3~5小时"
+    },
+    "aspect": {
+      "square": "1:1 正方形",
+      "portrait2x3": "2:3 竖屏",
+      "landscape3x2": "3:2 横屏",
+      "portrait3x4": "3:4 竖屏",
+      "landscape4x3": "4:3 横屏"
+    },
+    "pieceCount": "{cols} x {rows} ({count} 块)",
+    "recommended": "推荐"
+  },
+  "game": {
+    "titleLevel": "第 {index} 关",
+    "titleDaily": "{date} 每日挑战",
+    "titleCustom": "自制拼图",
+    "titlePack": "{title}",
+    "tooltipBack": "返回",
+    "tooltipEdges": "仅显示边缘碎片",
+    "tooltipEdgesAll": "显示全部碎片",
+    "tooltipHint": "智能提示",
+    "tooltipGhost": "底图透视 {opacity}%",
+    "tooltipGhostOff": "底图透视关闭",
+    "tooltipPreview": "查看原图",
+    "tooltipOrganize": "一键整理托盘",
+    "tooltipChangeBg": "更换壁纸背景",
+    "hintNotEnoughCoins": "金币不足（当前难度提示需 {price} 金币，当前拥有 {coins}）",
+    "imageDecodeFailed": "图片解码失败，请重试",
+    "tapToReturn": "点击任意处返回拼图",
+    "zoomReset": "重置",
+    "progress": "{percent}%"
+  },
+  "victory": {
+    "title": "拼图完成！",
+    "stars": "{count} 星",
+    "time": "用时：{time}",
+    "pieces": "{count} 块",
+    "coinsReward": "+{coins} 金币",
+    "newAchievements": "{count} 项新成就",
+    "btnNext": "下一关",
+    "btnShare": "分享成绩",
+    "btnView": "欣赏拼图",
+    "btnExit": "退出",
+    "btnSaveWallpaper": "保存壁纸",
+    "perfect": "完美！",
+    "great": "精彩！",
+    "btnClose": "关闭弹窗 (Esc)",
+    "toastWallpaperSaved": "壁纸已保存到本地",
+    "toastSaveWallpaperFailed": "壁纸保存失败：{error}"
+  },
+  "continueDialog": {
+    "progressLabel": "已拼进度",
+    "timeLabel": "已用时间",
+    "spec": "规格 {key}",
+    "specPieces": "规格 {key}（{count} 块）",
+    "piecesCount": "碎片 {count}",
+    "foxHint": "小狐狸在等你完成这幅拼图呢",
+    "restartTitle": "重新开始？",
+    "restartDesc": "将清除该难度的存档进度，不可恢复，确定重新开始吗？",
+    "btnRestart": "重新开始",
+    "restartConfirm": "确定重开",
+    "btnResume": "继续挑战"
+  },
+  "chooseDifficulty": {
+    "title": "选择难度",
+    "pieces": "{count} 块",
+    "recommended": "推荐",
+    "locked": "未解锁",
+    "lockedByLevel": "关卡未解锁",
+    "lockedDesc": "请先通关前一关解锁",
+    "btnStart": "开始",
+    "btnReplay": "重玩此难度",
+    "btnContinue": "继续游玩 (进度 {percent}%)",
+    "btnReset": "放弃进度并重新开始",
+    "savedProgress": "⚡ 检测到未完成存档 (已拼 {percent}%)",
+    "previewHint": "预览切线",
+    "badgeCleared": "已通关",
+    "deleteTitle": "删除自制拼图",
+    "deleteDesc": "确定要永久删除「{title}」吗？删除后不可恢复。",
+    "deleteConfirm": "确定删除",
+    "deleteTooltip": "删除此自制拼图",
+    "favAdd": "加入收藏",
+    "favRemove": "取消收藏",
+    "lockedProgress": "再获得 {gap} 张 3 星图即可解锁 {tier}"
+  },
+  "achievementsPage": {
+    "title": "成就与统计",
+    "stats": "数据统计看板",
+    "groupClears": "通关与星级表现",
+    "groupAssets": "游玩历程与资产",
+    "totalStars": "关卡累积星星",
+    "totalSolved": "已通关图数",
+    "totalSnaps": "已拼碎片",
+    "totalTime": "总游玩时长",
+    "threeStarCount": "3星拼图数",
+    "coinsOwned": "拥有金币",
+    "wall": "成就勋章墙",
+    "wallCount": "共 {count} 项成就",
+    "unlocked": "已解锁",
+    "locked": "未解锁",
+    "claim": "领取",
+    "claimed": "已领取",
+    "coins": "{count} 金币"
+  },
+  "myCenter": {
+    "tabs": {
+      "inProgress": "进行中 ({count})",
+      "favorites": "收藏 ({count})",
+      "completed": "已完成 ({count})",
+      "custom": "自制 ({count})"
+    },
+    "topActions": {
+      "gallery": "相册选图",
+      "gallerySub": "本地自制",
+      "online": "在线搜图",
+      "onlineSub": "海量图库",
+      "archive": "素材库",
+      "archiveSub": "{count} 张",
+      "import": "导入图包",
+      "importSub": "ZIP扩展"
+    },
+    "empty": {
+      "inProgressTitle": "暂无进行中的拼图",
+      "inProgressSub": "挑一张喜欢的拼图，开启拼图时光吧！",
+      "favoritesTitle": "还没有收藏的拼图",
+      "favoritesSub": "在选择难度面板中点击红心，可快捷收藏",
+      "completedTitle": "还没有完成过拼图",
+      "completedSub": "通关任意一张拼图，即可在此记录辉煌战绩！",
+      "customTitle": "暂无自制拼图",
+      "customSub": "点击上方“相册选图”等工具，打造专属自制拼图！",
+      "goExplore": "去挑选拼图",
+      "create": "相册选图制作"
+    },
+    "card": {
+      "orphan": "失效",
+      "orphanDesc": "已失效 · 点击清理",
+      "progress": "{percent}%",
+      "retry": "再挑战"
+    },
+    "orphanDialog": {
+      "title": "拼图资源已失效",
+      "desc": "该拼图资源已从本地或列表中移除，无法继续游玩。\n是否从记录与收藏中清理移除「{title}」？",
+      "keep": "暂保留",
+      "remove": "清理移除"
+    },
+    "toast": {
+      "importSuccess": "已成功导入 {count} 张图片到素材库",
+      "importFailed": "选择图片失败：{error}",
+      "webviewMissing": "当前系统未安装 WebView2 运行时，无法使用在线搜图"
+    }
   }
 }

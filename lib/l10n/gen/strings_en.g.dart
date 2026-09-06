@@ -45,6 +45,14 @@ class Translations with BaseTranslations<AppLocale, Translations> {
 	late final Translations$common$en common = Translations$common$en.internal(_root);
 	late final Translations$nav$en nav = Translations$nav$en.internal(_root);
 	late final Translations$settings$en settings = Translations$settings$en.internal(_root);
+	late final Translations$achievements$en achievements = Translations$achievements$en.internal(_root);
+	late final Translations$difficulty$en difficulty = Translations$difficulty$en.internal(_root);
+	late final Translations$game$en game = Translations$game$en.internal(_root);
+	late final Translations$victory$en victory = Translations$victory$en.internal(_root);
+	late final Translations$continueDialog$en continueDialog = Translations$continueDialog$en.internal(_root);
+	late final Translations$chooseDifficulty$en chooseDifficulty = Translations$chooseDifficulty$en.internal(_root);
+	late final Translations$achievementsPage$en achievementsPage = Translations$achievementsPage$en.internal(_root);
+	late final Translations$myCenter$en myCenter = Translations$myCenter$en.internal(_root);
 }
 
 // Path: app
@@ -284,6 +292,982 @@ class Translations$settings$en {
 	String timeHoursMinutes({required Object hours, required Object minutes}) => '${hours}h ${minutes}m';
 }
 
+// Path: achievements
+class Translations$achievements$en {
+	Translations$achievements$en.internal(this._root);
+
+	final Translations _root; // ignore: unused_field
+
+	// Translations
+	late final Translations$achievements$first_win$en first_win = Translations$achievements$first_win$en.internal(_root);
+	late final Translations$achievements$win_10$en win_10 = Translations$achievements$win_10$en.internal(_root);
+	late final Translations$achievements$win_50$en win_50 = Translations$achievements$win_50$en.internal(_root);
+	late final Translations$achievements$win_100$en win_100 = Translations$achievements$win_100$en.internal(_root);
+	late final Translations$achievements$star_1$en star_1 = Translations$achievements$star_1$en.internal(_root);
+	late final Translations$achievements$star_10$en star_10 = Translations$achievements$star_10$en.internal(_root);
+	late final Translations$achievements$star_30$en star_30 = Translations$achievements$star_30$en.internal(_root);
+	late final Translations$achievements$star_50$en star_50 = Translations$achievements$star_50$en.internal(_root);
+	late final Translations$achievements$tier_l3$en tier_l3 = Translations$achievements$tier_l3$en.internal(_root);
+	late final Translations$achievements$tier_l4$en tier_l4 = Translations$achievements$tier_l4$en.internal(_root);
+	late final Translations$achievements$tier_l5$en tier_l5 = Translations$achievements$tier_l5$en.internal(_root);
+	late final Translations$achievements$tier_l6$en tier_l6 = Translations$achievements$tier_l6$en.internal(_root);
+	late final Translations$achievements$custom_1$en custom_1 = Translations$achievements$custom_1$en.internal(_root);
+	late final Translations$achievements$custom_5$en custom_5 = Translations$achievements$custom_5$en.internal(_root);
+	late final Translations$achievements$no_hint_win$en no_hint_win = Translations$achievements$no_hint_win$en.internal(_root);
+	late final Translations$achievements$speed_10min$en speed_10min = Translations$achievements$speed_10min$en.internal(_root);
+	late final Translations$achievements$night_owl$en night_owl = Translations$achievements$night_owl$en.internal(_root);
+	late final Translations$achievements$snap_100$en snap_100 = Translations$achievements$snap_100$en.internal(_root);
+	late final Translations$achievements$snap_500$en snap_500 = Translations$achievements$snap_500$en.internal(_root);
+	late final Translations$achievements$snap_2000$en snap_2000 = Translations$achievements$snap_2000$en.internal(_root);
+	late final Translations$achievements$time_30m$en time_30m = Translations$achievements$time_30m$en.internal(_root);
+	late final Translations$achievements$time_2h$en time_2h = Translations$achievements$time_2h$en.internal(_root);
+	late final Translations$achievements$time_10h$en time_10h = Translations$achievements$time_10h$en.internal(_root);
+	late final Translations$achievements$daily_7$en daily_7 = Translations$achievements$daily_7$en.internal(_root);
+	late final Translations$achievements$master_all$en master_all = Translations$achievements$master_all$en.internal(_root);
+}
+
+// Path: difficulty
+class Translations$difficulty$en {
+	Translations$difficulty$en.internal(this._root);
+
+	final Translations _root; // ignore: unused_field
+
+	// Translations
+	late final Translations$difficulty$tier$en tier = Translations$difficulty$tier$en.internal(_root);
+	late final Translations$difficulty$estimated$en estimated = Translations$difficulty$estimated$en.internal(_root);
+	late final Translations$difficulty$aspect$en aspect = Translations$difficulty$aspect$en.internal(_root);
+
+	/// en: '{cols} x {rows} ({count} pieces)'
+	String pieceCount({required Object cols, required Object rows, required Object count}) => '${cols} x ${rows} (${count} pieces)';
+
+	/// en: 'Recommended'
+	String get recommended => 'Recommended';
+}
+
+// Path: game
+class Translations$game$en {
+	Translations$game$en.internal(this._root);
+
+	final Translations _root; // ignore: unused_field
+
+	// Translations
+
+	/// en: 'Level {index}'
+	String titleLevel({required Object index}) => 'Level ${index}';
+
+	/// en: '{date} Daily'
+	String titleDaily({required Object date}) => '${date} Daily';
+
+	/// en: 'Custom Puzzle'
+	String get titleCustom => 'Custom Puzzle';
+
+	/// en: '{title}'
+	String titlePack({required Object title}) => '${title}';
+
+	/// en: 'Back'
+	String get tooltipBack => 'Back';
+
+	/// en: 'Edge pieces only'
+	String get tooltipEdges => 'Edge pieces only';
+
+	/// en: 'Show all pieces'
+	String get tooltipEdgesAll => 'Show all pieces';
+
+	/// en: 'Hint'
+	String get tooltipHint => 'Hint';
+
+	/// en: 'Ghost {opacity}%'
+	String tooltipGhost({required Object opacity}) => 'Ghost ${opacity}%';
+
+	/// en: 'Ghost off'
+	String get tooltipGhostOff => 'Ghost off';
+
+	/// en: 'Preview'
+	String get tooltipPreview => 'Preview';
+
+	/// en: 'Organize tray'
+	String get tooltipOrganize => 'Organize tray';
+
+	/// en: 'Change background'
+	String get tooltipChangeBg => 'Change background';
+
+	/// en: 'Not enough coins (need {price}, you have {coins})'
+	String hintNotEnoughCoins({required Object price, required Object coins}) => 'Not enough coins (need ${price}, you have ${coins})';
+
+	/// en: 'Image decode failed, please retry'
+	String get imageDecodeFailed => 'Image decode failed, please retry';
+
+	/// en: 'Tap anywhere to return'
+	String get tapToReturn => 'Tap anywhere to return';
+
+	/// en: 'Reset'
+	String get zoomReset => 'Reset';
+
+	/// en: '{percent}%'
+	String progress({required Object percent}) => '${percent}%';
+}
+
+// Path: victory
+class Translations$victory$en {
+	Translations$victory$en.internal(this._root);
+
+	final Translations _root; // ignore: unused_field
+
+	// Translations
+
+	/// en: 'Puzzle Complete!'
+	String get title => 'Puzzle Complete!';
+
+	/// en: '{count} Stars'
+	String stars({required Object count}) => '${count} Stars';
+
+	/// en: 'Time: {time}'
+	String time({required Object time}) => 'Time: ${time}';
+
+	/// en: '{count} pieces'
+	String pieces({required Object count}) => '${count} pieces';
+
+	/// en: '+{coins} coins'
+	String coinsReward({required Object coins}) => '+${coins} coins';
+
+	/// en: '{count} new achievements'
+	String newAchievements({required Object count}) => '${count} new achievements';
+
+	/// en: 'Next Level'
+	String get btnNext => 'Next Level';
+
+	/// en: 'Share'
+	String get btnShare => 'Share';
+
+	/// en: 'View Puzzle'
+	String get btnView => 'View Puzzle';
+
+	/// en: 'Exit'
+	String get btnExit => 'Exit';
+
+	/// en: 'Save Wallpaper'
+	String get btnSaveWallpaper => 'Save Wallpaper';
+
+	/// en: 'Perfect!'
+	String get perfect => 'Perfect!';
+
+	/// en: 'Great!'
+	String get great => 'Great!';
+
+	/// en: 'Close (Esc)'
+	String get btnClose => 'Close (Esc)';
+
+	/// en: 'Wallpaper saved to local folder'
+	String get toastWallpaperSaved => 'Wallpaper saved to local folder';
+
+	/// en: 'Failed to save wallpaper: {error}'
+	String toastSaveWallpaperFailed({required Object error}) => 'Failed to save wallpaper: ${error}';
+}
+
+// Path: continueDialog
+class Translations$continueDialog$en {
+	Translations$continueDialog$en.internal(this._root);
+
+	final Translations _root; // ignore: unused_field
+
+	// Translations
+
+	/// en: 'Progress'
+	String get progressLabel => 'Progress';
+
+	/// en: 'Time Spent'
+	String get timeLabel => 'Time Spent';
+
+	/// en: 'Spec: {key}'
+	String spec({required Object key}) => 'Spec: ${key}';
+
+	/// en: 'Spec: {key} ({count} pieces)'
+	String specPieces({required Object key, required Object count}) => 'Spec: ${key} (${count} pieces)';
+
+	/// en: 'Pieces {count}'
+	String piecesCount({required Object count}) => 'Pieces ${count}';
+
+	/// en: 'The little fox is waiting for you to finish this puzzle!'
+	String get foxHint => 'The little fox is waiting for you to finish this puzzle!';
+
+	/// en: 'Restart this puzzle?'
+	String get restartTitle => 'Restart this puzzle?';
+
+	/// en: 'This will clear the saved progress for this difficulty. It cannot be undone. Restart now?'
+	String get restartDesc => 'This will clear the saved progress for this difficulty. It cannot be undone. Restart now?';
+
+	/// en: 'Restart'
+	String get btnRestart => 'Restart';
+
+	/// en: 'Yes, Restart'
+	String get restartConfirm => 'Yes, Restart';
+
+	/// en: 'Keep Going'
+	String get btnResume => 'Keep Going';
+}
+
+// Path: chooseDifficulty
+class Translations$chooseDifficulty$en {
+	Translations$chooseDifficulty$en.internal(this._root);
+
+	final Translations _root; // ignore: unused_field
+
+	// Translations
+
+	/// en: 'Choose Difficulty'
+	String get title => 'Choose Difficulty';
+
+	/// en: '{count} pieces'
+	String pieces({required Object count}) => '${count} pieces';
+
+	/// en: 'Recommended'
+	String get recommended => 'Recommended';
+
+	/// en: 'Locked'
+	String get locked => 'Locked';
+
+	/// en: 'Level locked'
+	String get lockedByLevel => 'Level locked';
+
+	/// en: 'Complete previous level to unlock'
+	String get lockedDesc => 'Complete previous level to unlock';
+
+	/// en: 'Start'
+	String get btnStart => 'Start';
+
+	/// en: 'Replay'
+	String get btnReplay => 'Replay';
+
+	/// en: 'Continue ({percent}%)'
+	String btnContinue({required Object percent}) => 'Continue (${percent}%)';
+
+	/// en: 'Reset progress'
+	String get btnReset => 'Reset progress';
+
+	/// en: 'Saved progress {percent}% detected'
+	String savedProgress({required Object percent}) => 'Saved progress ${percent}% detected';
+
+	/// en: 'Preview with cut lines'
+	String get previewHint => 'Preview with cut lines';
+
+	/// en: 'Cleared'
+	String get badgeCleared => 'Cleared';
+
+	/// en: 'Delete Custom Puzzle'
+	String get deleteTitle => 'Delete Custom Puzzle';
+
+	/// en: 'Delete "{title}" permanently? This cannot be undone.'
+	String deleteDesc({required Object title}) => 'Delete "${title}" permanently? This cannot be undone.';
+
+	/// en: 'Delete'
+	String get deleteConfirm => 'Delete';
+
+	/// en: 'Delete this custom puzzle'
+	String get deleteTooltip => 'Delete this custom puzzle';
+
+	/// en: 'Add to favorites'
+	String get favAdd => 'Add to favorites';
+
+	/// en: 'Remove from favorites'
+	String get favRemove => 'Remove from favorites';
+
+	/// en: 'Earn {gap} more 3-star puzzles to unlock {tier}'
+	String lockedProgress({required Object gap, required Object tier}) => 'Earn ${gap} more 3-star puzzles to unlock ${tier}';
+}
+
+// Path: achievementsPage
+class Translations$achievementsPage$en {
+	Translations$achievementsPage$en.internal(this._root);
+
+	final Translations _root; // ignore: unused_field
+
+	// Translations
+
+	/// en: 'Achievements'
+	String get title => 'Achievements';
+
+	/// en: 'Stats'
+	String get stats => 'Stats';
+
+	/// en: 'Clears & Stars'
+	String get groupClears => 'Clears & Stars';
+
+	/// en: 'Journey & Assets'
+	String get groupAssets => 'Journey & Assets';
+
+	/// en: 'Total Stars'
+	String get totalStars => 'Total Stars';
+
+	/// en: 'Puzzles Solved'
+	String get totalSolved => 'Puzzles Solved';
+
+	/// en: 'Pieces Snapped'
+	String get totalSnaps => 'Pieces Snapped';
+
+	/// en: 'Total Play Time'
+	String get totalTime => 'Total Play Time';
+
+	/// en: '3-Star Puzzles'
+	String get threeStarCount => '3-Star Puzzles';
+
+	/// en: 'Coins'
+	String get coinsOwned => 'Coins';
+
+	/// en: 'Achievement Wall'
+	String get wall => 'Achievement Wall';
+
+	/// en: '{count} achievements total'
+	String wallCount({required Object count}) => '${count} achievements total';
+
+	/// en: 'Unlocked'
+	String get unlocked => 'Unlocked';
+
+	/// en: 'Locked'
+	String get locked => 'Locked';
+
+	/// en: 'Claim'
+	String get claim => 'Claim';
+
+	/// en: 'Claimed'
+	String get claimed => 'Claimed';
+
+	/// en: '{count} coins'
+	String coins({required Object count}) => '${count} coins';
+}
+
+// Path: myCenter
+class Translations$myCenter$en {
+	Translations$myCenter$en.internal(this._root);
+
+	final Translations _root; // ignore: unused_field
+
+	// Translations
+	late final Translations$myCenter$tabs$en tabs = Translations$myCenter$tabs$en.internal(_root);
+	late final Translations$myCenter$topActions$en topActions = Translations$myCenter$topActions$en.internal(_root);
+	late final Translations$myCenter$empty$en empty = Translations$myCenter$empty$en.internal(_root);
+	late final Translations$myCenter$card$en card = Translations$myCenter$card$en.internal(_root);
+	late final Translations$myCenter$orphanDialog$en orphanDialog = Translations$myCenter$orphanDialog$en.internal(_root);
+	late final Translations$myCenter$toast$en toast = Translations$myCenter$toast$en.internal(_root);
+}
+
+// Path: achievements.first_win
+class Translations$achievements$first_win$en {
+	Translations$achievements$first_win$en.internal(this._root);
+
+	final Translations _root; // ignore: unused_field
+
+	// Translations
+
+	/// en: 'First Win'
+	String get title => 'First Win';
+
+	/// en: 'Complete your first puzzle'
+	String get desc => 'Complete your first puzzle';
+}
+
+// Path: achievements.win_10
+class Translations$achievements$win_10$en {
+	Translations$achievements$win_10$en.internal(this._root);
+
+	final Translations _root; // ignore: unused_field
+
+	// Translations
+
+	/// en: 'Practice Makes Perfect'
+	String get title => 'Practice Makes Perfect';
+
+	/// en: 'Complete 10 puzzles'
+	String get desc => 'Complete 10 puzzles';
+}
+
+// Path: achievements.win_50
+class Translations$achievements$win_50$en {
+	Translations$achievements$win_50$en.internal(this._root);
+
+	final Translations _root; // ignore: unused_field
+
+	// Translations
+
+	/// en: 'Puzzle Expert'
+	String get title => 'Puzzle Expert';
+
+	/// en: 'Complete 50 puzzles'
+	String get desc => 'Complete 50 puzzles';
+}
+
+// Path: achievements.win_100
+class Translations$achievements$win_100$en {
+	Translations$achievements$win_100$en.internal(this._root);
+
+	final Translations _root; // ignore: unused_field
+
+	// Translations
+
+	/// en: 'Puzzle Master'
+	String get title => 'Puzzle Master';
+
+	/// en: 'Complete 100 puzzles'
+	String get desc => 'Complete 100 puzzles';
+}
+
+// Path: achievements.star_1
+class Translations$achievements$star_1$en {
+	Translations$achievements$star_1$en.internal(this._root);
+
+	final Translations _root; // ignore: unused_field
+
+	// Translations
+
+	/// en: 'Three-Star Debut'
+	String get title => 'Three-Star Debut';
+
+	/// en: 'Earn your first 3-star rating'
+	String get desc => 'Earn your first 3-star rating';
+}
+
+// Path: achievements.star_10
+class Translations$achievements$star_10$en {
+	Translations$achievements$star_10$en.internal(this._root);
+
+	final Translations _root; // ignore: unused_field
+
+	// Translations
+
+	/// en: 'Shining Star'
+	String get title => 'Shining Star';
+
+	/// en: 'Earn 10 three-star ratings'
+	String get desc => 'Earn 10 three-star ratings';
+}
+
+// Path: achievements.star_30
+class Translations$achievements$star_30$en {
+	Translations$achievements$star_30$en.internal(this._root);
+
+	final Translations _root; // ignore: unused_field
+
+	// Translations
+
+	/// en: 'Starry Sky'
+	String get title => 'Starry Sky';
+
+	/// en: 'Earn 30 three-star ratings'
+	String get desc => 'Earn 30 three-star ratings';
+}
+
+// Path: achievements.star_50
+class Translations$achievements$star_50$en {
+	Translations$achievements$star_50$en.internal(this._root);
+
+	final Translations _root; // ignore: unused_field
+
+	// Translations
+
+	/// en: 'Star Lord'
+	String get title => 'Star Lord';
+
+	/// en: 'Earn 50 three-star ratings'
+	String get desc => 'Earn 50 three-star ratings';
+}
+
+// Path: achievements.tier_l3
+class Translations$achievements$tier_l3$en {
+	Translations$achievements$tier_l3$en.internal(this._root);
+
+	final Translations _root; // ignore: unused_field
+
+	// Translations
+
+	/// en: 'Intermediate Challenge'
+	String get title => 'Intermediate Challenge';
+
+	/// en: 'Complete a Medium (L3) or higher puzzle'
+	String get desc => 'Complete a Medium (L3) or higher puzzle';
+}
+
+// Path: achievements.tier_l4
+class Translations$achievements$tier_l4$en {
+	Translations$achievements$tier_l4$en.internal(this._root);
+
+	final Translations _root; // ignore: unused_field
+
+	// Translations
+
+	/// en: 'Advanced Expert'
+	String get title => 'Advanced Expert';
+
+	/// en: 'Complete a Hard (L4) or higher puzzle'
+	String get desc => 'Complete a Hard (L4) or higher puzzle';
+}
+
+// Path: achievements.tier_l5
+class Translations$achievements$tier_l5$en {
+	Translations$achievements$tier_l5$en.internal(this._root);
+
+	final Translations _root; // ignore: unused_field
+
+	// Translations
+
+	/// en: 'Conqueror'
+	String get title => 'Conqueror';
+
+	/// en: 'Complete an Expert (L5) or higher puzzle'
+	String get desc => 'Complete an Expert (L5) or higher puzzle';
+}
+
+// Path: achievements.tier_l6
+class Translations$achievements$tier_l6$en {
+	Translations$achievements$tier_l6$en.internal(this._root);
+
+	final Translations _root; // ignore: unused_field
+
+	// Translations
+
+	/// en: 'Ultimate Summit'
+	String get title => 'Ultimate Summit';
+
+	/// en: 'Complete a Master (L6) puzzle'
+	String get desc => 'Complete a Master (L6) puzzle';
+}
+
+// Path: achievements.custom_1
+class Translations$achievements$custom_1$en {
+	Translations$achievements$custom_1$en.internal(this._root);
+
+	final Translations _root; // ignore: unused_field
+
+	// Translations
+
+	/// en: 'Creator'
+	String get title => 'Creator';
+
+	/// en: 'Complete 1 custom puzzle'
+	String get desc => 'Complete 1 custom puzzle';
+}
+
+// Path: achievements.custom_5
+class Translations$achievements$custom_5$en {
+	Translations$achievements$custom_5$en.internal(this._root);
+
+	final Translations _root; // ignore: unused_field
+
+	// Translations
+
+	/// en: 'Boundless Creativity'
+	String get title => 'Boundless Creativity';
+
+	/// en: 'Complete 5 custom puzzles'
+	String get desc => 'Complete 5 custom puzzles';
+}
+
+// Path: achievements.no_hint_win
+class Translations$achievements$no_hint_win$en {
+	Translations$achievements$no_hint_win$en.internal(this._root);
+
+	final Translations _root; // ignore: unused_field
+
+	// Translations
+
+	/// en: 'Dexterous'
+	String get title => 'Dexterous';
+
+	/// en: 'Complete a puzzle without hints'
+	String get desc => 'Complete a puzzle without hints';
+}
+
+// Path: achievements.speed_10min
+class Translations$achievements$speed_10min$en {
+	Translations$achievements$speed_10min$en.internal(this._root);
+
+	final Translations _root; // ignore: unused_field
+
+	// Translations
+
+	/// en: 'Speedster'
+	String get title => 'Speedster';
+
+	/// en: 'Complete a 100+ piece puzzle within 10 minutes'
+	String get desc => 'Complete a 100+ piece puzzle within 10 minutes';
+}
+
+// Path: achievements.night_owl
+class Translations$achievements$night_owl$en {
+	Translations$achievements$night_owl$en.internal(this._root);
+
+	final Translations _root; // ignore: unused_field
+
+	// Translations
+
+	/// en: 'Night Owl'
+	String get title => 'Night Owl';
+
+	/// en: 'Complete a puzzle between 22:00 - 05:00'
+	String get desc => 'Complete a puzzle between 22:00 - 05:00';
+}
+
+// Path: achievements.snap_100
+class Translations$achievements$snap_100$en {
+	Translations$achievements$snap_100$en.internal(this._root);
+
+	final Translations _root; // ignore: unused_field
+
+	// Translations
+
+	/// en: 'First Touch'
+	String get title => 'First Touch';
+
+	/// en: 'Snap 100 pieces'
+	String get desc => 'Snap 100 pieces';
+}
+
+// Path: achievements.snap_500
+class Translations$achievements$snap_500$en {
+	Translations$achievements$snap_500$en.internal(this._root);
+
+	final Translations _root; // ignore: unused_field
+
+	// Translations
+
+	/// en: 'Getting Better'
+	String get title => 'Getting Better';
+
+	/// en: 'Snap 500 pieces'
+	String get desc => 'Snap 500 pieces';
+}
+
+// Path: achievements.snap_2000
+class Translations$achievements$snap_2000$en {
+	Translations$achievements$snap_2000$en.internal(this._root);
+
+	final Translations _root; // ignore: unused_field
+
+	// Translations
+
+	/// en: 'Tempered'
+	String get title => 'Tempered';
+
+	/// en: 'Snap 2000 pieces'
+	String get desc => 'Snap 2000 pieces';
+}
+
+// Path: achievements.time_30m
+class Translations$achievements$time_30m$en {
+	Translations$achievements$time_30m$en.internal(this._root);
+
+	final Translations _root; // ignore: unused_field
+
+	// Translations
+
+	/// en: 'Immersed'
+	String get title => 'Immersed';
+
+	/// en: 'Play for 30 minutes total'
+	String get desc => 'Play for 30 minutes total';
+}
+
+// Path: achievements.time_2h
+class Translations$achievements$time_2h$en {
+	Translations$achievements$time_2h$en.internal(this._root);
+
+	final Translations _root; // ignore: unused_field
+
+	// Translations
+
+	/// en: 'Puzzle Enthusiast'
+	String get title => 'Puzzle Enthusiast';
+
+	/// en: 'Play for 2 hours total'
+	String get desc => 'Play for 2 hours total';
+}
+
+// Path: achievements.time_10h
+class Translations$achievements$time_10h$en {
+	Translations$achievements$time_10h$en.internal(this._root);
+
+	final Translations _root; // ignore: unused_field
+
+	// Translations
+
+	/// en: 'Time Flies'
+	String get title => 'Time Flies';
+
+	/// en: 'Play for 10 hours total'
+	String get desc => 'Play for 10 hours total';
+}
+
+// Path: achievements.daily_7
+class Translations$achievements$daily_7$en {
+	Translations$achievements$daily_7$en.internal(this._root);
+
+	final Translations _root; // ignore: unused_field
+
+	// Translations
+
+	/// en: 'Daily Dedication'
+	String get title => 'Daily Dedication';
+
+	/// en: 'Complete 7 daily challenges'
+	String get desc => 'Complete 7 daily challenges';
+}
+
+// Path: achievements.master_all
+class Translations$achievements$master_all$en {
+	Translations$achievements$master_all$en.internal(this._root);
+
+	final Translations _root; // ignore: unused_field
+
+	// Translations
+
+	/// en: 'Puzzle Grandmaster'
+	String get title => 'Puzzle Grandmaster';
+
+	/// en: 'Achieve all 24 achievements'
+	String get desc => 'Achieve all 24 achievements';
+}
+
+// Path: difficulty.tier
+class Translations$difficulty$tier$en {
+	Translations$difficulty$tier$en.internal(this._root);
+
+	final Translations _root; // ignore: unused_field
+
+	// Translations
+
+	/// en: 'Novice Easy'
+	String get l1 => 'Novice Easy';
+
+	/// en: 'Beginner+'
+	String get l1_5 => 'Beginner+';
+
+	/// en: 'Beginner'
+	String get l2 => 'Beginner';
+
+	/// en: 'Medium'
+	String get l3 => 'Medium';
+
+	/// en: 'Hard'
+	String get l4 => 'Hard';
+
+	/// en: 'Expert'
+	String get l5 => 'Expert';
+
+	/// en: 'Master'
+	String get l6 => 'Master';
+
+	/// en: 'Grandmaster'
+	String get l7 => 'Grandmaster';
+}
+
+// Path: difficulty.estimated
+class Translations$difficulty$estimated$en {
+	Translations$difficulty$estimated$en.internal(this._root);
+
+	final Translations _root; // ignore: unused_field
+
+	// Translations
+
+	/// en: '1-3 min'
+	String get l1 => '1-3 min';
+
+	/// en: '2-4 min'
+	String get l1_5 => '2-4 min';
+
+	/// en: '5-8 min'
+	String get l2 => '5-8 min';
+
+	/// en: '12-18 min'
+	String get l3 => '12-18 min';
+
+	/// en: '25-35 min'
+	String get l4 => '25-35 min';
+
+	/// en: '50-75 min'
+	String get l5 => '50-75 min';
+
+	/// en: '1.5-3 hrs'
+	String get l6 => '1.5-3 hrs';
+
+	/// en: '3-5 hrs'
+	String get l7 => '3-5 hrs';
+}
+
+// Path: difficulty.aspect
+class Translations$difficulty$aspect$en {
+	Translations$difficulty$aspect$en.internal(this._root);
+
+	final Translations _root; // ignore: unused_field
+
+	// Translations
+
+	/// en: '1:1 Square'
+	String get square => '1:1 Square';
+
+	/// en: '2:3 Portrait'
+	String get portrait2x3 => '2:3 Portrait';
+
+	/// en: '3:2 Landscape'
+	String get landscape3x2 => '3:2 Landscape';
+
+	/// en: '3:4 Portrait'
+	String get portrait3x4 => '3:4 Portrait';
+
+	/// en: '4:3 Landscape'
+	String get landscape4x3 => '4:3 Landscape';
+}
+
+// Path: myCenter.tabs
+class Translations$myCenter$tabs$en {
+	Translations$myCenter$tabs$en.internal(this._root);
+
+	final Translations _root; // ignore: unused_field
+
+	// Translations
+
+	/// en: 'In Progress ({count})'
+	String inProgress({required Object count}) => 'In Progress (${count})';
+
+	/// en: 'Favorites ({count})'
+	String favorites({required Object count}) => 'Favorites (${count})';
+
+	/// en: 'Completed ({count})'
+	String completed({required Object count}) => 'Completed (${count})';
+
+	/// en: 'Custom ({count})'
+	String custom({required Object count}) => 'Custom (${count})';
+}
+
+// Path: myCenter.topActions
+class Translations$myCenter$topActions$en {
+	Translations$myCenter$topActions$en.internal(this._root);
+
+	final Translations _root; // ignore: unused_field
+
+	// Translations
+
+	/// en: 'Gallery'
+	String get gallery => 'Gallery';
+
+	/// en: 'Custom'
+	String get gallerySub => 'Custom';
+
+	/// en: 'Online'
+	String get online => 'Online';
+
+	/// en: 'Search'
+	String get onlineSub => 'Search';
+
+	/// en: 'Archive'
+	String get archive => 'Archive';
+
+	/// en: '{count} images'
+	String archiveSub({required Object count}) => '${count} images';
+
+	/// en: 'Import'
+	String get import => 'Import';
+
+	/// en: 'ZIP'
+	String get importSub => 'ZIP';
+}
+
+// Path: myCenter.empty
+class Translations$myCenter$empty$en {
+	Translations$myCenter$empty$en.internal(this._root);
+
+	final Translations _root; // ignore: unused_field
+
+	// Translations
+
+	/// en: 'No puzzles in progress'
+	String get inProgressTitle => 'No puzzles in progress';
+
+	/// en: 'Pick a puzzle and start!'
+	String get inProgressSub => 'Pick a puzzle and start!';
+
+	/// en: 'No favorites yet'
+	String get favoritesTitle => 'No favorites yet';
+
+	/// en: 'Tap heart in difficulty sheet to favorite'
+	String get favoritesSub => 'Tap heart in difficulty sheet to favorite';
+
+	/// en: 'No completed puzzles yet'
+	String get completedTitle => 'No completed puzzles yet';
+
+	/// en: 'Complete any puzzle to see it here!'
+	String get completedSub => 'Complete any puzzle to see it here!';
+
+	/// en: 'No custom puzzles'
+	String get customTitle => 'No custom puzzles';
+
+	/// en: 'Use Gallery to create your own!'
+	String get customSub => 'Use Gallery to create your own!';
+
+	/// en: 'Explore'
+	String get goExplore => 'Explore';
+
+	/// en: 'Create from Gallery'
+	String get create => 'Create from Gallery';
+}
+
+// Path: myCenter.card
+class Translations$myCenter$card$en {
+	Translations$myCenter$card$en.internal(this._root);
+
+	final Translations _root; // ignore: unused_field
+
+	// Translations
+
+	/// en: 'Expired'
+	String get orphan => 'Expired';
+
+	/// en: 'Tap to clean'
+	String get orphanDesc => 'Tap to clean';
+
+	/// en: '{percent}%'
+	String progress({required Object percent}) => '${percent}%';
+
+	/// en: 'Retry'
+	String get retry => 'Retry';
+}
+
+// Path: myCenter.orphanDialog
+class Translations$myCenter$orphanDialog$en {
+	Translations$myCenter$orphanDialog$en.internal(this._root);
+
+	final Translations _root; // ignore: unused_field
+
+	// Translations
+
+	/// en: 'Puzzle source unavailable'
+	String get title => 'Puzzle source unavailable';
+
+	/// en: 'This puzzle source has been removed from local storage or the list and can no longer be played. Remove "{title}" from your records and favorites?'
+	String desc({required Object title}) => 'This puzzle source has been removed from local storage or the list and can no longer be played.\nRemove "${title}" from your records and favorites?';
+
+	/// en: 'Keep it'
+	String get keep => 'Keep it';
+
+	/// en: 'Remove'
+	String get remove => 'Remove';
+}
+
+// Path: myCenter.toast
+class Translations$myCenter$toast$en {
+	Translations$myCenter$toast$en.internal(this._root);
+
+	final Translations _root; // ignore: unused_field
+
+	// Translations
+
+	/// en: 'Imported {count} images to your library'
+	String importSuccess({required Object count}) => 'Imported ${count} images to your library';
+
+	/// en: 'Failed to pick images: {error}'
+	String importFailed({required Object error}) => 'Failed to pick images: ${error}';
+
+	/// en: 'WebView2 runtime is not installed; online image search is unavailable.'
+	String get webviewMissing => 'WebView2 runtime is not installed; online image search is unavailable.';
+}
+
 /// The flat map containing all translations for locale <en>.
 /// Only for edge cases! For simple maps, use the map function of this library.
 ///
@@ -359,6 +1343,194 @@ extension on Translations {
 			'settings.timeSeconds' => ({required Object count}) => '${count}s',
 			'settings.timeMinutes' => ({required Object count}) => '${count} min',
 			'settings.timeHoursMinutes' => ({required Object hours, required Object minutes}) => '${hours}h ${minutes}m',
+			'achievements.first_win.title' => 'First Win',
+			'achievements.first_win.desc' => 'Complete your first puzzle',
+			'achievements.win_10.title' => 'Practice Makes Perfect',
+			'achievements.win_10.desc' => 'Complete 10 puzzles',
+			'achievements.win_50.title' => 'Puzzle Expert',
+			'achievements.win_50.desc' => 'Complete 50 puzzles',
+			'achievements.win_100.title' => 'Puzzle Master',
+			'achievements.win_100.desc' => 'Complete 100 puzzles',
+			'achievements.star_1.title' => 'Three-Star Debut',
+			'achievements.star_1.desc' => 'Earn your first 3-star rating',
+			'achievements.star_10.title' => 'Shining Star',
+			'achievements.star_10.desc' => 'Earn 10 three-star ratings',
+			'achievements.star_30.title' => 'Starry Sky',
+			'achievements.star_30.desc' => 'Earn 30 three-star ratings',
+			'achievements.star_50.title' => 'Star Lord',
+			'achievements.star_50.desc' => 'Earn 50 three-star ratings',
+			'achievements.tier_l3.title' => 'Intermediate Challenge',
+			'achievements.tier_l3.desc' => 'Complete a Medium (L3) or higher puzzle',
+			'achievements.tier_l4.title' => 'Advanced Expert',
+			'achievements.tier_l4.desc' => 'Complete a Hard (L4) or higher puzzle',
+			'achievements.tier_l5.title' => 'Conqueror',
+			'achievements.tier_l5.desc' => 'Complete an Expert (L5) or higher puzzle',
+			'achievements.tier_l6.title' => 'Ultimate Summit',
+			'achievements.tier_l6.desc' => 'Complete a Master (L6) puzzle',
+			'achievements.custom_1.title' => 'Creator',
+			'achievements.custom_1.desc' => 'Complete 1 custom puzzle',
+			'achievements.custom_5.title' => 'Boundless Creativity',
+			'achievements.custom_5.desc' => 'Complete 5 custom puzzles',
+			'achievements.no_hint_win.title' => 'Dexterous',
+			'achievements.no_hint_win.desc' => 'Complete a puzzle without hints',
+			'achievements.speed_10min.title' => 'Speedster',
+			'achievements.speed_10min.desc' => 'Complete a 100+ piece puzzle within 10 minutes',
+			'achievements.night_owl.title' => 'Night Owl',
+			'achievements.night_owl.desc' => 'Complete a puzzle between 22:00 - 05:00',
+			'achievements.snap_100.title' => 'First Touch',
+			'achievements.snap_100.desc' => 'Snap 100 pieces',
+			'achievements.snap_500.title' => 'Getting Better',
+			'achievements.snap_500.desc' => 'Snap 500 pieces',
+			'achievements.snap_2000.title' => 'Tempered',
+			'achievements.snap_2000.desc' => 'Snap 2000 pieces',
+			'achievements.time_30m.title' => 'Immersed',
+			'achievements.time_30m.desc' => 'Play for 30 minutes total',
+			'achievements.time_2h.title' => 'Puzzle Enthusiast',
+			'achievements.time_2h.desc' => 'Play for 2 hours total',
+			'achievements.time_10h.title' => 'Time Flies',
+			'achievements.time_10h.desc' => 'Play for 10 hours total',
+			'achievements.daily_7.title' => 'Daily Dedication',
+			'achievements.daily_7.desc' => 'Complete 7 daily challenges',
+			'achievements.master_all.title' => 'Puzzle Grandmaster',
+			'achievements.master_all.desc' => 'Achieve all 24 achievements',
+			'difficulty.tier.l1' => 'Novice Easy',
+			'difficulty.tier.l1_5' => 'Beginner+',
+			'difficulty.tier.l2' => 'Beginner',
+			'difficulty.tier.l3' => 'Medium',
+			'difficulty.tier.l4' => 'Hard',
+			'difficulty.tier.l5' => 'Expert',
+			'difficulty.tier.l6' => 'Master',
+			'difficulty.tier.l7' => 'Grandmaster',
+			'difficulty.estimated.l1' => '1-3 min',
+			'difficulty.estimated.l1_5' => '2-4 min',
+			'difficulty.estimated.l2' => '5-8 min',
+			'difficulty.estimated.l3' => '12-18 min',
+			'difficulty.estimated.l4' => '25-35 min',
+			'difficulty.estimated.l5' => '50-75 min',
+			'difficulty.estimated.l6' => '1.5-3 hrs',
+			'difficulty.estimated.l7' => '3-5 hrs',
+			'difficulty.aspect.square' => '1:1 Square',
+			'difficulty.aspect.portrait2x3' => '2:3 Portrait',
+			'difficulty.aspect.landscape3x2' => '3:2 Landscape',
+			'difficulty.aspect.portrait3x4' => '3:4 Portrait',
+			'difficulty.aspect.landscape4x3' => '4:3 Landscape',
+			'difficulty.pieceCount' => ({required Object cols, required Object rows, required Object count}) => '${cols} x ${rows} (${count} pieces)',
+			'difficulty.recommended' => 'Recommended',
+			'game.titleLevel' => ({required Object index}) => 'Level ${index}',
+			'game.titleDaily' => ({required Object date}) => '${date} Daily',
+			'game.titleCustom' => 'Custom Puzzle',
+			'game.titlePack' => ({required Object title}) => '${title}',
+			'game.tooltipBack' => 'Back',
+			'game.tooltipEdges' => 'Edge pieces only',
+			'game.tooltipEdgesAll' => 'Show all pieces',
+			'game.tooltipHint' => 'Hint',
+			'game.tooltipGhost' => ({required Object opacity}) => 'Ghost ${opacity}%',
+			'game.tooltipGhostOff' => 'Ghost off',
+			'game.tooltipPreview' => 'Preview',
+			'game.tooltipOrganize' => 'Organize tray',
+			'game.tooltipChangeBg' => 'Change background',
+			'game.hintNotEnoughCoins' => ({required Object price, required Object coins}) => 'Not enough coins (need ${price}, you have ${coins})',
+			'game.imageDecodeFailed' => 'Image decode failed, please retry',
+			'game.tapToReturn' => 'Tap anywhere to return',
+			'game.zoomReset' => 'Reset',
+			'game.progress' => ({required Object percent}) => '${percent}%',
+			'victory.title' => 'Puzzle Complete!',
+			'victory.stars' => ({required Object count}) => '${count} Stars',
+			'victory.time' => ({required Object time}) => 'Time: ${time}',
+			'victory.pieces' => ({required Object count}) => '${count} pieces',
+			'victory.coinsReward' => ({required Object coins}) => '+${coins} coins',
+			'victory.newAchievements' => ({required Object count}) => '${count} new achievements',
+			'victory.btnNext' => 'Next Level',
+			'victory.btnShare' => 'Share',
+			'victory.btnView' => 'View Puzzle',
+			'victory.btnExit' => 'Exit',
+			'victory.btnSaveWallpaper' => 'Save Wallpaper',
+			'victory.perfect' => 'Perfect!',
+			'victory.great' => 'Great!',
+			'victory.btnClose' => 'Close (Esc)',
+			'victory.toastWallpaperSaved' => 'Wallpaper saved to local folder',
+			'victory.toastSaveWallpaperFailed' => ({required Object error}) => 'Failed to save wallpaper: ${error}',
+			'continueDialog.progressLabel' => 'Progress',
+			'continueDialog.timeLabel' => 'Time Spent',
+			'continueDialog.spec' => ({required Object key}) => 'Spec: ${key}',
+			'continueDialog.specPieces' => ({required Object key, required Object count}) => 'Spec: ${key} (${count} pieces)',
+			'continueDialog.piecesCount' => ({required Object count}) => 'Pieces ${count}',
+			'continueDialog.foxHint' => 'The little fox is waiting for you to finish this puzzle!',
+			'continueDialog.restartTitle' => 'Restart this puzzle?',
+			'continueDialog.restartDesc' => 'This will clear the saved progress for this difficulty. It cannot be undone. Restart now?',
+			'continueDialog.btnRestart' => 'Restart',
+			'continueDialog.restartConfirm' => 'Yes, Restart',
+			'continueDialog.btnResume' => 'Keep Going',
+			'chooseDifficulty.title' => 'Choose Difficulty',
+			'chooseDifficulty.pieces' => ({required Object count}) => '${count} pieces',
+			'chooseDifficulty.recommended' => 'Recommended',
+			'chooseDifficulty.locked' => 'Locked',
+			'chooseDifficulty.lockedByLevel' => 'Level locked',
+			'chooseDifficulty.lockedDesc' => 'Complete previous level to unlock',
+			'chooseDifficulty.btnStart' => 'Start',
+			'chooseDifficulty.btnReplay' => 'Replay',
+			'chooseDifficulty.btnContinue' => ({required Object percent}) => 'Continue (${percent}%)',
+			'chooseDifficulty.btnReset' => 'Reset progress',
+			'chooseDifficulty.savedProgress' => ({required Object percent}) => 'Saved progress ${percent}% detected',
+			'chooseDifficulty.previewHint' => 'Preview with cut lines',
+			'chooseDifficulty.badgeCleared' => 'Cleared',
+			'chooseDifficulty.deleteTitle' => 'Delete Custom Puzzle',
+			'chooseDifficulty.deleteDesc' => ({required Object title}) => 'Delete "${title}" permanently? This cannot be undone.',
+			'chooseDifficulty.deleteConfirm' => 'Delete',
+			'chooseDifficulty.deleteTooltip' => 'Delete this custom puzzle',
+			'chooseDifficulty.favAdd' => 'Add to favorites',
+			'chooseDifficulty.favRemove' => 'Remove from favorites',
+			'chooseDifficulty.lockedProgress' => ({required Object gap, required Object tier}) => 'Earn ${gap} more 3-star puzzles to unlock ${tier}',
+			'achievementsPage.title' => 'Achievements',
+			'achievementsPage.stats' => 'Stats',
+			'achievementsPage.groupClears' => 'Clears & Stars',
+			'achievementsPage.groupAssets' => 'Journey & Assets',
+			'achievementsPage.totalStars' => 'Total Stars',
+			'achievementsPage.totalSolved' => 'Puzzles Solved',
+			'achievementsPage.totalSnaps' => 'Pieces Snapped',
+			'achievementsPage.totalTime' => 'Total Play Time',
+			'achievementsPage.threeStarCount' => '3-Star Puzzles',
+			'achievementsPage.coinsOwned' => 'Coins',
+			'achievementsPage.wall' => 'Achievement Wall',
+			'achievementsPage.wallCount' => ({required Object count}) => '${count} achievements total',
+			'achievementsPage.unlocked' => 'Unlocked',
+			'achievementsPage.locked' => 'Locked',
+			'achievementsPage.claim' => 'Claim',
+			'achievementsPage.claimed' => 'Claimed',
+			'achievementsPage.coins' => ({required Object count}) => '${count} coins',
+			'myCenter.tabs.inProgress' => ({required Object count}) => 'In Progress (${count})',
+			'myCenter.tabs.favorites' => ({required Object count}) => 'Favorites (${count})',
+			'myCenter.tabs.completed' => ({required Object count}) => 'Completed (${count})',
+			'myCenter.tabs.custom' => ({required Object count}) => 'Custom (${count})',
+			'myCenter.topActions.gallery' => 'Gallery',
+			'myCenter.topActions.gallerySub' => 'Custom',
+			'myCenter.topActions.online' => 'Online',
+			'myCenter.topActions.onlineSub' => 'Search',
+			'myCenter.topActions.archive' => 'Archive',
+			'myCenter.topActions.archiveSub' => ({required Object count}) => '${count} images',
+			'myCenter.topActions.import' => 'Import',
+			'myCenter.topActions.importSub' => 'ZIP',
+			'myCenter.empty.inProgressTitle' => 'No puzzles in progress',
+			'myCenter.empty.inProgressSub' => 'Pick a puzzle and start!',
+			'myCenter.empty.favoritesTitle' => 'No favorites yet',
+			'myCenter.empty.favoritesSub' => 'Tap heart in difficulty sheet to favorite',
+			'myCenter.empty.completedTitle' => 'No completed puzzles yet',
+			'myCenter.empty.completedSub' => 'Complete any puzzle to see it here!',
+			'myCenter.empty.customTitle' => 'No custom puzzles',
+			'myCenter.empty.customSub' => 'Use Gallery to create your own!',
+			'myCenter.empty.goExplore' => 'Explore',
+			'myCenter.empty.create' => 'Create from Gallery',
+			'myCenter.card.orphan' => 'Expired',
+			'myCenter.card.orphanDesc' => 'Tap to clean',
+			'myCenter.card.progress' => ({required Object percent}) => '${percent}%',
+			'myCenter.card.retry' => 'Retry',
+			'myCenter.orphanDialog.title' => 'Puzzle source unavailable',
+			'myCenter.orphanDialog.desc' => ({required Object title}) => 'This puzzle source has been removed from local storage or the list and can no longer be played.\nRemove "${title}" from your records and favorites?',
+			'myCenter.orphanDialog.keep' => 'Keep it',
+			'myCenter.orphanDialog.remove' => 'Remove',
+			'myCenter.toast.importSuccess' => ({required Object count}) => 'Imported ${count} images to your library',
+			'myCenter.toast.importFailed' => ({required Object error}) => 'Failed to pick images: ${error}',
+			'myCenter.toast.webviewMissing' => 'WebView2 runtime is not installed; online image search is unavailable.',
 			_ => null,
 		};
 	}
