@@ -255,20 +255,6 @@ class _EventLevelsPageState extends State<EventLevelsPage> {
                 ),
               ),
             ),
-            Center(
-              child: Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: palette.brand,
-                  shape: BoxShape.circle,
-                ),
-                child: Icon(
-                  PhosphorIconsFill.play,
-                  color: palette.surface,
-                  size: 16,
-                ),
-              ),
-            ),
           ],
         ),
       ),

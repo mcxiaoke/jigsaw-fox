@@ -14,6 +14,7 @@ import '../../logic/content/models/canonical_id.dart';
 import '../../logic/content/models/puzzle_level_item.dart';
 import '../../logic/image_source.dart';
 import '../../logic/puzzle_model.dart';
+import '../../services/app_logger.dart';
 import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
 import '../../widgets/app_cached_image.dart';
@@ -30,6 +31,8 @@ class DailyTabView extends StatefulWidget {
 class _DailyTabViewState extends State<DailyTabView> {
   static const String _keyDailyFoldPrefs = 'jigsaw_daily_fold_v1';
   final Set<String> _expandedMonthKeys = {};
+  final Set<String> _loadingMonths = {};
+  final Set<String> _failedMonths = {};
 
   @override
   void initState() {
@@ -48,6 +51,7 @@ class _DailyTabViewState extends State<DailyTabView> {
   }
 
   void _onContentUpdate() {
+    AppLogger.daily.info('DailyTabView: contentUpdateNotifier triggered');
     if (mounted) setState(() {});
   }
 
@@ -65,19 +69,101 @@ class _DailyTabViewState extends State<DailyTabView> {
         ..clear()
         ..add(curMonth);
     }
+    AppLogger.daily.info(
+      'DailyTabView: Loaded fold preferences: $_expandedMonthKeys',
+    );
     if (mounted) setState(() {});
+
+    // 针对用户历史记录已展开的月份，若本地尚无关卡，按需异步触发下载
+    for (final monthKey in _expandedMonthKeys) {
+      final yyyyMm = monthKey.replaceAll('-', '');
+      if (yyyyMm.length == 6) {
+        _ensureMonthDownloaded(yyyyMm);
+      }
+    }
   }
 
   Future<void> _toggleMonth(String monthKey) async {
+    final isExpanding = !_expandedMonthKeys.contains(monthKey);
     setState(() {
-      if (_expandedMonthKeys.contains(monthKey)) {
-        _expandedMonthKeys.remove(monthKey);
-      } else {
+      if (isExpanding) {
         _expandedMonthKeys.add(monthKey);
+      } else {
+        _expandedMonthKeys.remove(monthKey);
       }
     });
+    AppLogger.daily.info(
+      'DailyTabView: Month $monthKey ${isExpanding ? "expanded" : "collapsed"} (all expanded: $_expandedMonthKeys)',
+    );
     final prefs = await SharedPreferences.getInstance();
     await prefs.setStringList(_keyDailyFoldPrefs, _expandedMonthKeys.toList());
+
+    if (isExpanding) {
+      final yyyyMm = monthKey.replaceAll('-', '');
+      if (yyyyMm.length == 6) {
+        _ensureMonthDownloaded(yyyyMm);
+      }
+    }
+  }
+
+  /// 确保历史月份关卡资源下载就绪
+  Future<void> _ensureMonthDownloaded(String yyyyMm) async {
+    if (_loadingMonths.contains(yyyyMm)) {
+      AppLogger.daily.info(
+        'DailyTabView: Month $yyyyMm download already in progress, skipping duplicate trigger',
+      );
+      return;
+    }
+
+    if (AppContent.instance.isInitialized) {
+      final existing = AppContent.instance.manager
+          .getDailyLevelsForMonth(yyyyMm)
+          .where((lvl) => !lvl.isTimeLocked)
+          .toList();
+      if (existing.isNotEmpty) {
+        AppLogger.daily.info(
+          'DailyTabView: Month $yyyyMm already ready with ${existing.length} levels, skipping download',
+        );
+        return;
+      }
+    }
+
+    setState(() {
+      _loadingMonths.add(yyyyMm);
+      _failedMonths.remove(yyyyMm);
+    });
+    AppLogger.daily.info(
+      'DailyTabView: Triggering on-demand download for month $yyyyMm...',
+    );
+    final sw = Stopwatch()..start();
+
+    try {
+      var success = false;
+      if (AppContent.instance.isInitialized) {
+        success = await AppContent.instance.manager.ensureDailyMonthReady(
+          yyyyMm,
+        );
+      }
+      AppLogger.daily.info(
+        'DailyTabView: ensureDailyMonthReady for $yyyyMm completed in ${sw.elapsedMilliseconds}ms, success=$success',
+      );
+      if (!success) {
+        _failedMonths.add(yyyyMm);
+      }
+    } catch (e, st) {
+      _failedMonths.add(yyyyMm);
+      AppLogger.daily.severe(
+        'DailyTabView: Error downloading month $yyyyMm',
+        e,
+        st,
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _loadingMonths.remove(yyyyMm);
+        });
+      }
+    }
   }
 
   /// 格式化 YYYYMM -> YYYY-MM
@@ -122,6 +208,7 @@ class _DailyTabViewState extends State<DailyTabView> {
       if (manifestMonth != null && manifestMonth.isNotEmpty) {
         monthSet.add(manifestMonth);
       }
+      monthSet.addAll(AppContent.instance.manager.availableDailyMonths);
     }
 
     final list = monthSet.toList()..sort((a, b) => b.compareTo(a));
@@ -141,6 +228,9 @@ class _DailyTabViewState extends State<DailyTabView> {
   }
 
   Future<void> _openDaily(PuzzleLevelItem level) async {
+    AppLogger.daily.info(
+      'DailyTabView: _openDaily level=${level.id} date=${level.dailyDate} isLocked=${level.isTimeLocked} localPath=${level.localPath}',
+    );
     if (level.isTimeLocked) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -153,9 +243,8 @@ class _DailyTabViewState extends State<DailyTabView> {
 
     Uint8List imgBytes;
     try {
-      final file = File(level.imagePathOrUrl);
-      if (await file.exists()) {
-        imgBytes = await file.readAsBytes();
+      if (level.localPath != null && await File(level.localPath!).exists()) {
+        imgBytes = await File(level.localPath!).readAsBytes();
       } else {
         final bytes = await rootBundle.load(assetSamples[0]);
         imgBytes = bytes.buffer.asUint8List(
@@ -229,7 +318,7 @@ class _DailyTabViewState extends State<DailyTabView> {
       completedPieceCounts: progress.completedPieceCounts.toSet(),
       canonicalId: canonicalId,
       title: title,
-      imagePathOrUrl: level.imagePathOrUrl,
+      imagePathOrUrl: level.displayPath,
       savedProgressPercent: displayPercent == 0 ? null : displayPercent,
       onResetProgress: () async {
         final prog = await ResumeHelper.loadProgress(canonicalId);
@@ -318,7 +407,7 @@ class _DailyTabViewState extends State<DailyTabView> {
         PuzzleLevelItem(
           id: CanonicalId.forDaily(todayStr),
           dailyDate: todayStr,
-          imagePathOrUrl: assetSamples[0],
+          localPath: assetSamples[0],
           isLocalFile: true,
           isTimeLocked: false,
         );
@@ -346,6 +435,9 @@ class _DailyTabViewState extends State<DailyTabView> {
     }
 
     final streak = _calculateStreak();
+    AppLogger.daily.info(
+      'DailyTabView: build availableMonths=$availableMonths, expanded=$_expandedMonthKeys, loading=$_loadingMonths, levels={${monthGroups.entries.map((e) => '${e.key}:${e.value.length}').join(', ')}}',
+    );
 
     return RefreshIndicator(
       onRefresh: () async {
@@ -474,7 +566,7 @@ class _DailyTabViewState extends State<DailyTabView> {
                           width: 130,
                           height: 120,
                           child: AppCachedImage(
-                            imagePathOrUrl: effectiveTodayItem.imagePathOrUrl,
+                            imagePathOrUrl: effectiveTodayItem.displayPath,
                             fit: BoxFit.cover,
                             errorWidget: Image.asset(
                               assetSamples[0],
@@ -560,60 +652,125 @@ class _DailyTabViewState extends State<DailyTabView> {
           const SliverToBoxAdapter(child: SizedBox(height: 8)),
 
           // Monthly Grids
-          for (final entry in monthGroups.entries) ...[
-            SliverToBoxAdapter(
-              child: _buildMonthHeader(
-                entry.key,
-                entry.value,
-                palette,
-                styles,
-                isExpanded: _expandedMonthKeys.contains(entry.key),
-                onToggle: () => _toggleMonth(entry.key),
-              ),
+          for (final entry in monthGroups.entries)
+            ..._buildMonthSection(
+              monthKey: entry.key,
+              levels: entry.value,
+              palette: palette,
+              styles: styles,
             ),
-            if (_expandedMonthKeys.contains(entry.key)) ...[
-              if (entry.value.isEmpty)
-                SliverToBoxAdapter(
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 24),
-                    child: Center(
-                      child: Text(
-                        '暂无当月挑战关卡',
-                        style: TextStyle(
-                          color: palette.secondaryText,
-                          fontSize: 13,
-                        ),
-                      ),
-                    ),
-                  ),
-                )
-              else
-                SliverPadding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 6,
-                  ),
-                  sliver: SliverGrid(
-                    gridDelegate:
-                        const SliverGridDelegateWithMaxCrossAxisExtent(
-                          maxCrossAxisExtent: 220,
-                          crossAxisSpacing: 14,
-                          mainAxisSpacing: 14,
-                          childAspectRatio: 1.0,
-                        ),
-                    delegate: SliverChildBuilderDelegate((context, index) {
-                      final item = entry.value[index];
-                      return _buildDailyCard(item, palette, styles);
-                    }, childCount: entry.value.length),
-                  ),
-                ),
-              const SliverToBoxAdapter(child: SizedBox(height: 12)),
-            ],
-          ],
           const SliverToBoxAdapter(child: SizedBox(height: 28)),
         ],
       ),
     );
+  }
+
+  List<Widget> _buildMonthSection({
+    required String monthKey,
+    required List<PuzzleLevelItem> levels,
+    required AppPalette palette,
+    required AppTextStyles styles,
+  }) {
+    final yyyyMm = monthKey.replaceAll('-', '');
+    final isLoading = _loadingMonths.contains(yyyyMm);
+    final isFailed = _failedMonths.contains(yyyyMm);
+    final isExpanded = _expandedMonthKeys.contains(monthKey);
+
+    return [
+      SliverToBoxAdapter(
+        child: _buildMonthHeader(
+          monthKey,
+          levels,
+          palette,
+          styles,
+          isExpanded: isExpanded,
+          isLoading: isLoading,
+          onToggle: () => _toggleMonth(monthKey),
+        ),
+      ),
+      if (isExpanded) ...[
+        if (isLoading)
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 36),
+              child: Center(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    SizedBox(
+                      width: 24,
+                      height: 24,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2.5,
+                        color: palette.brand,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Text(
+                      '正在加载 $monthKey 挑战关卡...',
+                      style: TextStyle(
+                        color: palette.secondaryText,
+                        fontSize: 13,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          )
+        else if (levels.isEmpty)
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 24),
+              child: Center(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      isFailed
+                          ? '加载 $monthKey 关卡失败，请检查网络后重试'
+                          : '暂未下载 $monthKey 关卡数据',
+                      style: TextStyle(
+                        color: palette.secondaryText,
+                        fontSize: 13,
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    FilledButton.tonalIcon(
+                      onPressed: () => _ensureMonthDownloaded(yyyyMm),
+                      icon: const Icon(
+                        PhosphorIconsBold.downloadSimple,
+                        size: 16,
+                      ),
+                      label: const Text('下载本月关卡'),
+                      style: FilledButton.styleFrom(
+                        visualDensity: VisualDensity.compact,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          )
+        else
+          SliverPadding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+            sliver: SliverGrid(
+              gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+                maxCrossAxisExtent: 220,
+                crossAxisSpacing: 14,
+                mainAxisSpacing: 14,
+                childAspectRatio: 1.0,
+              ),
+              delegate: SliverChildBuilderDelegate((context, index) {
+                final item = levels[index];
+                return _buildDailyCard(item, palette, styles);
+              }, childCount: levels.length),
+            ),
+          ),
+        const SliverToBoxAdapter(child: SizedBox(height: 12)),
+      ],
+    ];
   }
 
   Widget _buildMonthHeader(
@@ -623,6 +780,7 @@ class _DailyTabViewState extends State<DailyTabView> {
     AppTextStyles styles, {
     required bool isExpanded,
     required VoidCallback onToggle,
+    bool isLoading = false,
   }) {
     final parts = monthKey.split('-');
     final year = parts.isNotEmpty ? parts[0] : '';
@@ -660,7 +818,19 @@ class _DailyTabViewState extends State<DailyTabView> {
             ),
             Row(
               children: [
-                if (monthItems.isNotEmpty)
+                if (isLoading)
+                  Padding(
+                    padding: const EdgeInsets.only(right: 6),
+                    child: SizedBox(
+                      width: 14,
+                      height: 14,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: palette.brand,
+                      ),
+                    ),
+                  )
+                else if (monthItems.isNotEmpty)
                   Container(
                     padding: const EdgeInsets.symmetric(
                       horizontal: 10,
@@ -720,7 +890,7 @@ class _DailyTabViewState extends State<DailyTabView> {
           fit: StackFit.expand,
           children: [
             AppCachedImage(
-              imagePathOrUrl: item.imagePathOrUrl,
+              imagePathOrUrl: item.displayPath,
               fit: BoxFit.cover,
               errorWidget: Image.asset(assetSamples[0], fit: BoxFit.cover),
             ),

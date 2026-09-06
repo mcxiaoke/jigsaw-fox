@@ -210,6 +210,10 @@ class AppLogger {
           );
         }
       }
+    } else if (rec.level >= Level.INFO) {
+      // release / profile 模式下，INFO 及以上级别日志直接输出至控制台 / logcat
+      // ignore: avoid_print
+      print(line);
     }
     // 同时发到 developer.log 便于 IDE 过滤
     try {
@@ -269,8 +273,16 @@ class AppLogger {
     });
   }
 
+  static bool _isFlushing = false;
+
   static Future<void> _flushToFile() async {
-    if (!_fileEnabled || _logDir == null || _pendingLines.isEmpty) return;
+    if (!_fileEnabled ||
+        _logDir == null ||
+        _pendingLines.isEmpty ||
+        _isFlushing) {
+      return;
+    }
+    _isFlushing = true;
     final lines = List<String>.from(_pendingLines);
     _pendingLines.clear();
     try {
@@ -291,8 +303,9 @@ class AppLogger {
         await _sink?.close();
       } catch (_) {}
       _sink = null;
-      _fileEnabled = false;
       debugPrint('[AppLogger:File] flush failed: $e');
+    } finally {
+      _isFlushing = false;
     }
   }
 

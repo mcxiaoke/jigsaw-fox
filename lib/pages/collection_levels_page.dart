@@ -460,21 +460,6 @@ class _CollectionLevelsPageState extends State<CollectionLevelsPage> {
                     ),
                   ),
                 ),
-                // 播放动作图标
-                Center(
-                  child: Container(
-                    padding: const EdgeInsets.all(7),
-                    decoration: BoxDecoration(
-                      color: palette.brand.withValues(alpha: 0.9),
-                      shape: BoxShape.circle,
-                    ),
-                    child: Icon(
-                      PhosphorIconsFill.play,
-                      color: palette.surface,
-                      size: 15,
-                    ),
-                  ),
-                ),
                 // 右上角状态 (完成/进度)
                 if (isCompleted)
                   Positioned(
