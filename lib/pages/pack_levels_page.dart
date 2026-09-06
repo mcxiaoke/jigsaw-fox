@@ -8,6 +8,7 @@ import '../logic/content/app_content.dart';
 import '../logic/content/models/puzzle_level_item.dart';
 import '../logic/content/models/puzzle_pack_item.dart';
 import '../logic/puzzle_model.dart';
+import '../l10n/gen/strings.g.dart';
 import '../theme/app_palette.dart';
 import '../theme/app_text_styles.dart';
 import '../widgets/app_cached_image.dart';
@@ -45,25 +46,35 @@ class _PackLevelsPageState extends State<PackLevelsPage> {
     _levels = AppContent.instance.packs.getPackLevels(widget.pack);
   }
 
+  /// 本地化展示的导入来源标签
+  String _packSourceLabel() {
+    return widget.pack.sourceType == 'local_file'
+        ? t.pack.sourceLocal
+        : t.pack.sourceNetwork;
+  }
+
   Future<void> _confirmDeletePack() async {
     final palette = AppPalette.of(context);
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Text('删除「${widget.pack.title}」图包'),
+        title: Text(t.pack.deleteTitle(title: widget.pack.title)),
         content: Text(
-          '确定要删除此扩展图包吗？\n将同时清理包内 ${_levels.length} 个关卡并释放 ${widget.pack.displayFileSize} 存储空间。',
+          t.pack.deleteDesc(
+            count: _levels.length,
+            size: widget.pack.displayFileSize,
+          ),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(false),
-            child: const Text('取消'),
+            child: Text(t.common.cancel),
           ),
           FilledButton(
             style: FilledButton.styleFrom(backgroundColor: palette.error),
             onPressed: () => Navigator.of(ctx).pop(true),
-            child: const Text('确认删除'),
+            child: Text(t.pack.confirmDelete),
           ),
         ],
       ),
@@ -80,7 +91,7 @@ class _PackLevelsPageState extends State<PackLevelsPage> {
           GameToast.show(
             context,
             icon: PhosphorIconsRegular.warning,
-            message: '删除失败，请重试',
+            message: t.pack.toastDeleteFailed,
             type: GameToastType.error,
           );
         }
@@ -88,8 +99,12 @@ class _PackLevelsPageState extends State<PackLevelsPage> {
     }
   }
 
-  static const _defaultDiff = PuzzleDifficulty(
-    label: '4 × 4 (16 块)',
+  static PuzzleDifficulty get _defaultDiff => PuzzleDifficulty(
+    label: LocaleSettings.instance.currentTranslations.difficulty.pieceCount(
+      cols: 4,
+      rows: 4,
+      count: 16,
+    ),
     rows: 4,
     cols: 4,
     recommended: true,
@@ -136,7 +151,10 @@ class _PackLevelsPageState extends State<PackLevelsPage> {
               imageBytes: bytes,
               difficulty: diff,
               canonicalId: canonicalId,
-              packTitle: '${widget.pack.title} · 第 ${level.order} 关',
+              packTitle: t.levels.titleOf(
+                title: widget.pack.title,
+                index: level.order,
+              ),
               initialSnapshotJson: jsonStr,
             ),
           ),
@@ -154,7 +172,10 @@ class _PackLevelsPageState extends State<PackLevelsPage> {
               imageBytes: bytes,
               difficulty: diff,
               canonicalId: canonicalId,
-              packTitle: '${widget.pack.title} · 第 ${level.order} 关',
+              packTitle: t.levels.titleOf(
+                title: widget.pack.title,
+                index: level.order,
+              ),
               initialSnapshotJson: null,
             ),
           ),
@@ -173,8 +194,8 @@ class _PackLevelsPageState extends State<PackLevelsPage> {
       completedPieceCounts: progress.completedPieceCounts.toSet(),
       canonicalId: canonicalId,
       isUnlocked: true,
-      title: '${widget.pack.title} · 第 ${level.order} 关',
-      sourcePlatform: widget.pack.displaySource,
+      title: t.levels.titleOf(title: widget.pack.title, index: level.order),
+      sourcePlatform: _packSourceLabel(),
       savedProgressPercent: progress.hasSnapshot
           ? progress.progressPercent
           : null,
@@ -195,7 +216,10 @@ class _PackLevelsPageState extends State<PackLevelsPage> {
               imageBytes: bytes,
               difficulty: _defaultDiff,
               canonicalId: canonicalId,
-              packTitle: '${widget.pack.title} · 第 ${level.order} 关',
+              packTitle: t.levels.titleOf(
+                title: widget.pack.title,
+                index: level.order,
+              ),
               initialSnapshotJson: null,
             ),
           ),
@@ -215,7 +239,10 @@ class _PackLevelsPageState extends State<PackLevelsPage> {
               imageBytes: bytes,
               difficulty: diff,
               canonicalId: canonicalId,
-              packTitle: '${widget.pack.title} · 第 ${level.order} 关',
+              packTitle: t.levels.titleOf(
+                title: widget.pack.title,
+                index: level.order,
+              ),
               initialSnapshotJson: snapJson,
             ),
           ),
@@ -308,7 +335,7 @@ class _PackLevelsPageState extends State<PackLevelsPage> {
                                   borderRadius: BorderRadius.circular(6),
                                 ),
                                 child: Text(
-                                  '${pack.levelCount} 关卡',
+                                  t.pack.levelCount(count: pack.levelCount),
                                   style: TextStyle(
                                     fontSize: 11,
                                     color: palette.brand,
@@ -323,7 +350,7 @@ class _PackLevelsPageState extends State<PackLevelsPage> {
                               ),
                               const SizedBox(width: 6),
                               Text(
-                                '• ${pack.displaySource}',
+                                '• ${_packSourceLabel()}',
                                 style: styles.caption.copyWith(fontSize: 11),
                               ),
                             ],

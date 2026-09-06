@@ -5,6 +5,7 @@ import '../../logic/cache/image_cache_manager.dart';
 import '../../logic/content/app_content.dart';
 import '../../logic/content/models/puzzle_event_item.dart';
 import '../../services/app_logger.dart';
+import '../../l10n/gen/strings.g.dart';
 import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
 import '../../widgets/app_cached_image.dart';
@@ -266,7 +267,7 @@ class _EventsTabViewState extends State<EventsTabView> {
                     const SizedBox(width: 12),
                     ElevatedButton.icon(
                       icon: const Icon(PhosphorIconsBold.play, size: 14),
-                      label: const Text('进入挑战'),
+                      label: Text(t.events.enter),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: palette.brand,
                         foregroundColor: palette.surface,

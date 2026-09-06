@@ -8,6 +8,7 @@ import '../logic/content/app_content.dart';
 import '../logic/content/models/puzzle_event_item.dart';
 import '../logic/content/models/puzzle_level_item.dart';
 import '../logic/puzzle_model.dart';
+import '../l10n/gen/strings.g.dart';
 import '../services/app_logger.dart';
 import '../theme/app_palette.dart';
 import '../theme/app_text_styles.dart';
@@ -75,7 +76,15 @@ class _EventLevelsPageState extends State<EventLevelsPage> {
         level,
       );
       if (localPath.startsWith('http')) {
-        throw Exception('关卡图片下载失败，请检查网络后重试');
+        if (mounted) {
+          GameToast.show(
+            context,
+            icon: PhosphorIconsRegular.warning,
+            message: t.levels.networkFail,
+            type: GameToastType.error,
+          );
+        }
+        return;
       }
       if (!mounted) return;
       if (localPath.startsWith('assets/')) {
@@ -97,7 +106,7 @@ class _EventLevelsPageState extends State<EventLevelsPage> {
         GameToast.show(
           context,
           icon: PhosphorIconsRegular.warning,
-          message: '图片加载失败: $e',
+          message: t.levels.imgLoadFailed(error: e),
           type: GameToastType.error,
         );
       }
@@ -106,19 +115,25 @@ class _EventLevelsPageState extends State<EventLevelsPage> {
 
     if (imgBytes == null || !mounted) return;
 
+    final defaultDiff = PuzzleDifficulty(
+      label: LocaleSettings.instance.currentTranslations.difficulty.pieceCount(
+        cols: 4,
+        rows: 4,
+        count: 16,
+      ),
+      rows: 4,
+      cols: 4,
+      recommended: true,
+    );
+
     await ChooseDifficultySheet.show(
       context: context,
       imageBytes: imgBytes,
-      initialDifficulty: const PuzzleDifficulty(
-        label: '4 × 4 (16 块)',
-        rows: 4,
-        cols: 4,
-        recommended: true,
-      ),
+      initialDifficulty: defaultDiff,
       completedPieceCounts: const {},
       canonicalId: level.id,
       isUnlocked: true,
-      title: '${_currentEvent.title} · 第 $index 关',
+      title: t.levels.titleOf(title: _currentEvent.displayTitle, index: index),
       onStart: (diff) async {
         await Navigator.of(context).push(
           MaterialPageRoute<void>(
@@ -126,7 +141,7 @@ class _EventLevelsPageState extends State<EventLevelsPage> {
               imageBytes: imgBytes!,
               difficulty: diff,
               canonicalId: level.id,
-              packTitle: _currentEvent.title,
+              packTitle: _currentEvent.displayTitle,
             ),
           ),
         );
@@ -165,7 +180,7 @@ class _EventLevelsPageState extends State<EventLevelsPage> {
                   ),
                   const SizedBox(height: 12),
                   Text(
-                    '暂无可用关卡',
+                    t.levels.empty,
                     style: styles.body.copyWith(color: palette.secondaryText),
                   ),
                   const SizedBox(height: 12),
@@ -175,7 +190,7 @@ class _EventLevelsPageState extends State<EventLevelsPage> {
                       foregroundColor: palette.surface,
                     ),
                     onPressed: _loadLevels,
-                    child: const Text('重试下载'),
+                    child: Text(t.levels.retryDownload),
                   ),
                 ],
               ),
@@ -260,7 +275,7 @@ class _EventLevelsPageState extends State<EventLevelsPage> {
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Text(
-                  '第 $index 关',
+                  t.game.titleLevel(index: index),
                   style: const TextStyle(
                     color: Colors.white,
                     fontSize: 11,

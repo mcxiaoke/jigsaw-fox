@@ -10,6 +10,7 @@ import '../logic/content/app_content.dart';
 import '../logic/content/models/puzzle_collection_item.dart';
 import '../logic/content/models/puzzle_level_item.dart';
 import '../logic/puzzle_model.dart';
+import '../l10n/gen/strings.g.dart';
 import '../services/app_logger.dart';
 import '../theme/app_palette.dart';
 import '../theme/app_text_styles.dart';
@@ -127,7 +128,15 @@ class _CollectionLevelsPageState extends State<CollectionLevelsPage> {
         level,
       );
       if (localPath.startsWith('http')) {
-        throw Exception('关卡图片下载失败，请检查网络后重试');
+        if (mounted) {
+          GameToast.show(
+            context,
+            icon: PhosphorIconsRegular.warning,
+            message: t.levels.networkFail,
+            type: GameToastType.error,
+          );
+        }
+        return;
       }
       if (!mounted) return;
       if (localPath.startsWith('assets/')) {
@@ -149,7 +158,7 @@ class _CollectionLevelsPageState extends State<CollectionLevelsPage> {
         GameToast.show(
           context,
           icon: PhosphorIconsRegular.warning,
-          message: '图片加载失败: $e',
+          message: t.levels.imgLoadFailed(error: e),
           type: GameToastType.error,
         );
       }
@@ -255,7 +264,7 @@ class _CollectionLevelsPageState extends State<CollectionLevelsPage> {
               imageBytes: imgBytes!,
               difficulty: diff,
               canonicalId: canonicalId,
-              packTitle: _currentCollection.title,
+              packTitle: _currentCollection.displayTitle,
               initialSnapshotJson: snapJson,
             ),
           ),
@@ -465,7 +474,7 @@ class _CollectionLevelsPageState extends State<CollectionLevelsPage> {
                       borderRadius: BorderRadius.circular(6),
                     ),
                     child: Text(
-                      '第 $index 关',
+                      t.game.titleLevel(index: index),
                       style: const TextStyle(
                         color: Colors.white,
                         fontSize: 10.5,

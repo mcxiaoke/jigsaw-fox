@@ -21,6 +21,7 @@ import '../event_levels_page.dart';
 import '../game_page.dart';
 
 import '../../data/constants/puzzle_tags.dart';
+import '../../l10n/gen/strings.g.dart';
 import '../../utils/locale_helper.dart';
 
 // 热门N个（横滑常驻，末位固定入口之后展开全部 18 个黄金矩阵标签）
@@ -396,10 +397,13 @@ class _HeaderCarouselState extends State<_HeaderCarousel> {
       // 1. 每日挑战焦点卡片
       HeroBannerItem(
         id: 'daily_${widget.now.toIso8601String()}',
-        title: '${widget.now.month}月${widget.now.day}日 · 今日专属',
-        subtitle: '每日专属拼图 · 激活大脑',
+        title: t.home.bannerDailyTitle(
+          month: widget.now.month,
+          day: widget.now.day,
+        ),
+        subtitle: t.home.bannerDailySub,
         imagePathOrUrl: widget.todayDaily?.imagePathOrUrl ?? assetSamples[0],
-        badgeText: '每日挑战',
+        badgeText: t.home.bannerDailyBadge,
         badgeEmoji: '🔥',
         badgeColor: widget.palette.brand,
         onTap: () {
@@ -412,10 +416,10 @@ class _HeaderCarouselState extends State<_HeaderCarousel> {
         HeroBannerItem(
           id: ev.id,
           title: ev.title,
-          subtitle: ev.desc.isNotEmpty ? ev.desc : '限时活动挑战',
+          subtitle: ev.desc.isNotEmpty ? ev.desc : t.events.subFallback,
           imagePathOrUrl:
               ev.coverUrl ?? (ev.levels.isNotEmpty ? ev.levels.first : ''),
-          badgeText: '限时活动',
+          badgeText: t.events.badgeLimited,
           badgeEmoji: '⭐',
           badgeColor: const Color(0xFFD97706),
           onTap: () {
@@ -542,7 +546,7 @@ class _TagBarDelegate extends SliverPersistentHeaderDelegate {
                         size: 20,
                         color: palette.secondaryText,
                       ),
-                      tooltip: '全部分类',
+                      tooltip: t.home.allCategories,
                       onPressed: onShowAll,
                       padding: EdgeInsets.zero,
                       constraints: const BoxConstraints(

@@ -1,9 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:jigsawpuzzle/pages/tabs/events_tab_view.dart';
+import 'package:jigsawpuzzle/services/locale_service.dart';
 import 'package:phosphoricons_flutter/phosphoricons_flutter.dart';
 
 void main() {
+  setUpAll(() => LocaleService.instance.setOverrideForTest('zh'));
+  tearDownAll(() => LocaleService.instance.setOverrideForTest(null));
+
   testWidgets(
     'EventsTabView displays empty state and refresh button when no events',
     (tester) async {

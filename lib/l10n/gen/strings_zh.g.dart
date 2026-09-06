@@ -43,6 +43,13 @@ class TranslationsZh extends Translations with BaseTranslations<AppLocale, Trans
 	@override late final _Translations$common$zh common = _Translations$common$zh._(_root);
 	@override late final _Translations$nav$zh nav = _Translations$nav$zh._(_root);
 	@override late final _Translations$settings$zh settings = _Translations$settings$zh._(_root);
+	@override late final _Translations$home$zh home = _Translations$home$zh._(_root);
+	@override late final _Translations$daily$zh daily = _Translations$daily$zh._(_root);
+	@override late final _Translations$events$zh events = _Translations$events$zh._(_root);
+	@override late final _Translations$levels$zh levels = _Translations$levels$zh._(_root);
+	@override late final _Translations$collections$zh collections = _Translations$collections$zh._(_root);
+	@override late final _Translations$pack$zh pack = _Translations$pack$zh._(_root);
+	@override late final _Translations$unlock$zh unlock = _Translations$unlock$zh._(_root);
 	@override late final _Translations$achievements$zh achievements = _Translations$achievements$zh._(_root);
 	@override late final _Translations$difficulty$zh difficulty = _Translations$difficulty$zh._(_root);
 	@override late final _Translations$game$zh game = _Translations$game$zh._(_root);
@@ -80,6 +87,7 @@ class _Translations$common$zh extends Translations$common$en {
 	@override String get loading => '加载中…';
 	@override String get calculating => '计算中…';
 	@override String version({required Object version}) => '版本 ${version}';
+	@override String get sync => '刷新同步';
 }
 
 // Path: nav
@@ -154,6 +162,145 @@ class _Translations$settings$zh extends Translations$settings$en {
 	@override String timeSeconds({required Object count}) => '${count} 秒';
 	@override String timeMinutes({required Object count}) => '${count} 分';
 	@override String timeHoursMinutes({required Object hours, required Object minutes}) => '${hours} 小时 ${minutes} 分';
+}
+
+// Path: home
+class _Translations$home$zh extends Translations$home$en {
+	_Translations$home$zh._(TranslationsZh root) : this._root = root, super.internal(root);
+
+	final TranslationsZh _root; // ignore: unused_field
+
+	// Translations
+	@override String get loadImageFailed => '关卡图片加载失败，请重试';
+	@override String get puzzleTitle => '拼图';
+	@override String get emptyCategory => '小狐狸没找到该分类的关卡';
+	@override String get viewAll => '查看全部';
+	@override String get allCategories => '全部分类';
+	@override String bannerDailyTitle({required Object month, required Object day}) => '${month}月${day}日 · 今日专属';
+	@override String get bannerDailySub => '每日专属拼图 · 激活大脑';
+	@override String get bannerDailyBadge => '每日挑战';
+}
+
+// Path: daily
+class _Translations$daily$zh extends Translations$daily$en {
+	_Translations$daily$zh._(TranslationsZh root) : this._root = root, super.internal(root);
+
+	final TranslationsZh _root; // ignore: unused_field
+
+	// Translations
+	@override String get todayFallback => '今日挑战';
+	@override String dateChallenge({required Object month, required Object day}) => '${month}月${day}日 挑战';
+	@override String get notUnlocked => '⏳ 未到解锁时间，敬请期待！';
+	@override String dateCaption({required Object month, required Object day}) => '${month} 月 ${day} 日';
+	@override String todayTitle({required Object month, required Object day}) => '${month}月${day}日 · 今日挑战';
+	@override String get btnClearedReplay => '已通关 (重玩)';
+	@override String get btnResume => '继续挑战';
+	@override String get btnStart => '开始挑战';
+	@override String totalProgress({required Object done, required Object total}) => '每日总进度: ${done}/${total}';
+	@override String streakDays({required Object count}) => '连胜 ${count} 天';
+	@override String loadingMonth({required Object month}) => '正在加载 ${month} 挑战关卡...';
+	@override String loadMonthFailed({required Object month}) => '加载 ${month} 关卡失败，请检查网络后重试';
+	@override String emptyMonth({required Object month}) => '暂未下载 ${month} 关卡数据';
+	@override String get downloadMonth => '下载本月关卡';
+	@override String monthTitle({required Object year, required Object month}) => '${year}年${month}月';
+	@override String monthCompleted({required Object done, required Object total}) => '已完成 ${done}/${total}';
+}
+
+// Path: events
+class _Translations$events$zh extends Translations$events$en {
+	_Translations$events$zh._(TranslationsZh root) : this._root = root, super.internal(root);
+
+	final TranslationsZh _root; // ignore: unused_field
+
+	// Translations
+	@override String get emptyTitle => '小狐狸没找到正在进行的活动';
+	@override String get emptyHint => '下拉刷新或稍后再来看看吧';
+	@override String get badgeActive => '限时进行中';
+	@override String get badgePast => '往期活动';
+	@override String get badgeZip => '离线整包';
+	@override String get badgeOnline => '在线精选';
+	@override String get descFallback => '精彩专题拼图挑战';
+	@override String get subFallback => '限时活动挑战';
+	@override String get badgeLimited => '限时活动';
+	@override String get enter => '进入挑战';
+}
+
+// Path: levels
+class _Translations$levels$zh extends Translations$levels$en {
+	_Translations$levels$zh._(TranslationsZh root) : this._root = root, super.internal(root);
+
+	final TranslationsZh _root; // ignore: unused_field
+
+	// Translations
+	@override String get empty => '暂无可用关卡';
+	@override String titleOf({required Object title, required Object index}) => '${title} · 第 ${index} 关';
+	@override String get retryDownload => '重试下载';
+	@override String get retryLoad => '重试加载';
+	@override String countLabel({required Object count}) => '共 ${count} 个关卡';
+	@override String countWithSize({required Object count, required Object size}) => '共 ${count} 个关卡 · ${size}';
+	@override String imgLoadFailed({required Object error}) => '图片加载失败: ${error}';
+	@override String get networkFail => '关卡图片下载失败，请检查网络后重试';
+}
+
+// Path: collections
+class _Translations$collections$zh extends Translations$collections$en {
+	_Translations$collections$zh._(TranslationsZh root) : this._root = root, super.internal(root);
+
+	final TranslationsZh _root; // ignore: unused_field
+
+	// Translations
+	@override String toastReady({required Object title}) => '「${title}」下载就绪，可离线畅玩';
+	@override String get toastFailed => '下载失败，请检查网络后重试';
+	@override String toastError({required Object error}) => '下载异常: ${error}';
+	@override String get statsTitle => '精选图集';
+	@override String statsCount({required Object count}) => '${count} 套';
+	@override String get emptyAll => '暂无图集内容';
+	@override String get emptyHint => '下拉刷新同步官方资源';
+	@override String get emptyCollections => '暂无图集';
+	@override String downloading({required Object title, required Object percent}) => '「${title}」正在下载中 (${percent}%)，请稍候...';
+	@override String startDownload({required Object title}) => '开始下载「${title}」...';
+	@override String levelCount({required Object count}) => '${count} 关';
+	@override String get badgeDownloaded => '已下载';
+	@override String get badgeDownload => '下载';
+	@override String get freeTooltip => '释放图集存储空间';
+	@override String clearTitle({required Object title}) => '清理「${title}」';
+	@override String clearDesc({required Object size}) => '确定要清理已下载的本地资源吗？\n清理后可释放 ${size} 磁盘空间。您随时可以重新下载。';
+	@override String get confirmClear => '确认清理';
+	@override String get toastCleared => '已释放图集本地存储空间';
+	@override String get toastClearFailed => '清理失败，请重试';
+	@override String get typeOfficial => '官方图集';
+	@override String get typeEvent => '限时活动';
+}
+
+// Path: pack
+class _Translations$pack$zh extends Translations$pack$en {
+	_Translations$pack$zh._(TranslationsZh root) : this._root = root, super.internal(root);
+
+	final TranslationsZh _root; // ignore: unused_field
+
+	// Translations
+	@override String deleteTitle({required Object title}) => '删除「${title}」图包';
+	@override String deleteDesc({required Object count, required Object size}) => '确定要删除此扩展图包吗？\n将同时清理包内 ${count} 个关卡并释放 ${size} 存储空间。';
+	@override String get confirmDelete => '确认删除';
+	@override String get toastDeleteFailed => '删除失败，请重试';
+	@override String get imageMissing => '关卡图片文件不存在';
+	@override String get deleteTooltip => '删除此图包';
+	@override String levelCount({required Object count}) => '${count} 关卡';
+	@override String get emptyLevels => '此图包中暂无关卡图片';
+	@override String get sourceLocal => '相册 / 本地';
+	@override String get sourceNetwork => '网络';
+}
+
+// Path: unlock
+class _Translations$unlock$zh extends Translations$unlock$en {
+	_Translations$unlock$zh._(TranslationsZh root) : this._root = root, super.internal(root);
+
+	final TranslationsZh _root; // ignore: unused_field
+
+	// Translations
+	@override String stars3({required Object req, required Object current}) => '需要获得 3 星的不同拼图达到 ${req} 张（当前 ${current}/${req}）';
+	@override String get daily => '完成第 1 关主线即可解锁每日挑战';
+	@override String eventPack({required Object req, required Object current}) => '完成 ${req} 关主线即可解锁活动与主题包（当前 ${current}/${req}）';
 }
 
 // Path: achievements
@@ -775,6 +922,7 @@ extension on TranslationsZh {
 			'common.loading' => '加载中…',
 			'common.calculating' => '计算中…',
 			'common.version' => ({required Object version}) => '版本 ${version}',
+			'common.sync' => '刷新同步',
 			'nav.home' => '主页',
 			'nav.daily' => '每日',
 			'nav.collections' => '图集',
@@ -831,6 +979,82 @@ extension on TranslationsZh {
 			'settings.timeSeconds' => ({required Object count}) => '${count} 秒',
 			'settings.timeMinutes' => ({required Object count}) => '${count} 分',
 			'settings.timeHoursMinutes' => ({required Object hours, required Object minutes}) => '${hours} 小时 ${minutes} 分',
+			'home.loadImageFailed' => '关卡图片加载失败，请重试',
+			'home.puzzleTitle' => '拼图',
+			'home.emptyCategory' => '小狐狸没找到该分类的关卡',
+			'home.viewAll' => '查看全部',
+			'home.allCategories' => '全部分类',
+			'home.bannerDailyTitle' => ({required Object month, required Object day}) => '${month}月${day}日 · 今日专属',
+			'home.bannerDailySub' => '每日专属拼图 · 激活大脑',
+			'home.bannerDailyBadge' => '每日挑战',
+			'daily.todayFallback' => '今日挑战',
+			'daily.dateChallenge' => ({required Object month, required Object day}) => '${month}月${day}日 挑战',
+			'daily.notUnlocked' => '⏳ 未到解锁时间，敬请期待！',
+			'daily.dateCaption' => ({required Object month, required Object day}) => '${month} 月 ${day} 日',
+			'daily.todayTitle' => ({required Object month, required Object day}) => '${month}月${day}日 · 今日挑战',
+			'daily.btnClearedReplay' => '已通关 (重玩)',
+			'daily.btnResume' => '继续挑战',
+			'daily.btnStart' => '开始挑战',
+			'daily.totalProgress' => ({required Object done, required Object total}) => '每日总进度: ${done}/${total}',
+			'daily.streakDays' => ({required Object count}) => '连胜 ${count} 天',
+			'daily.loadingMonth' => ({required Object month}) => '正在加载 ${month} 挑战关卡...',
+			'daily.loadMonthFailed' => ({required Object month}) => '加载 ${month} 关卡失败，请检查网络后重试',
+			'daily.emptyMonth' => ({required Object month}) => '暂未下载 ${month} 关卡数据',
+			'daily.downloadMonth' => '下载本月关卡',
+			'daily.monthTitle' => ({required Object year, required Object month}) => '${year}年${month}月',
+			'daily.monthCompleted' => ({required Object done, required Object total}) => '已完成 ${done}/${total}',
+			'events.emptyTitle' => '小狐狸没找到正在进行的活动',
+			'events.emptyHint' => '下拉刷新或稍后再来看看吧',
+			'events.badgeActive' => '限时进行中',
+			'events.badgePast' => '往期活动',
+			'events.badgeZip' => '离线整包',
+			'events.badgeOnline' => '在线精选',
+			'events.descFallback' => '精彩专题拼图挑战',
+			'events.subFallback' => '限时活动挑战',
+			'events.badgeLimited' => '限时活动',
+			'events.enter' => '进入挑战',
+			'levels.empty' => '暂无可用关卡',
+			'levels.titleOf' => ({required Object title, required Object index}) => '${title} · 第 ${index} 关',
+			'levels.retryDownload' => '重试下载',
+			'levels.retryLoad' => '重试加载',
+			'levels.countLabel' => ({required Object count}) => '共 ${count} 个关卡',
+			'levels.countWithSize' => ({required Object count, required Object size}) => '共 ${count} 个关卡 · ${size}',
+			'levels.imgLoadFailed' => ({required Object error}) => '图片加载失败: ${error}',
+			'levels.networkFail' => '关卡图片下载失败，请检查网络后重试',
+			'collections.toastReady' => ({required Object title}) => '「${title}」下载就绪，可离线畅玩',
+			'collections.toastFailed' => '下载失败，请检查网络后重试',
+			'collections.toastError' => ({required Object error}) => '下载异常: ${error}',
+			'collections.statsTitle' => '精选图集',
+			'collections.statsCount' => ({required Object count}) => '${count} 套',
+			'collections.emptyAll' => '暂无图集内容',
+			'collections.emptyHint' => '下拉刷新同步官方资源',
+			'collections.emptyCollections' => '暂无图集',
+			'collections.downloading' => ({required Object title, required Object percent}) => '「${title}」正在下载中 (${percent}%)，请稍候...',
+			'collections.startDownload' => ({required Object title}) => '开始下载「${title}」...',
+			'collections.levelCount' => ({required Object count}) => '${count} 关',
+			'collections.badgeDownloaded' => '已下载',
+			'collections.badgeDownload' => '下载',
+			'collections.freeTooltip' => '释放图集存储空间',
+			'collections.clearTitle' => ({required Object title}) => '清理「${title}」',
+			'collections.clearDesc' => ({required Object size}) => '确定要清理已下载的本地资源吗？\n清理后可释放 ${size} 磁盘空间。您随时可以重新下载。',
+			'collections.confirmClear' => '确认清理',
+			'collections.toastCleared' => '已释放图集本地存储空间',
+			'collections.toastClearFailed' => '清理失败，请重试',
+			'collections.typeOfficial' => '官方图集',
+			'collections.typeEvent' => '限时活动',
+			'pack.deleteTitle' => ({required Object title}) => '删除「${title}」图包',
+			'pack.deleteDesc' => ({required Object count, required Object size}) => '确定要删除此扩展图包吗？\n将同时清理包内 ${count} 个关卡并释放 ${size} 存储空间。',
+			'pack.confirmDelete' => '确认删除',
+			'pack.toastDeleteFailed' => '删除失败，请重试',
+			'pack.imageMissing' => '关卡图片文件不存在',
+			'pack.deleteTooltip' => '删除此图包',
+			'pack.levelCount' => ({required Object count}) => '${count} 关卡',
+			'pack.emptyLevels' => '此图包中暂无关卡图片',
+			'pack.sourceLocal' => '相册 / 本地',
+			'pack.sourceNetwork' => '网络',
+			'unlock.stars3' => ({required Object req, required Object current}) => '需要获得 3 星的不同拼图达到 ${req} 张（当前 ${current}/${req}）',
+			'unlock.daily' => '完成第 1 关主线即可解锁每日挑战',
+			'unlock.eventPack' => ({required Object req, required Object current}) => '完成 ${req} 关主线即可解锁活动与主题包（当前 ${current}/${req}）',
 			'achievements.first_win.title' => '初露锋芒',
 			'achievements.first_win.desc' => '通关首张拼图',
 			'achievements.win_10.title' => '熟能生巧',

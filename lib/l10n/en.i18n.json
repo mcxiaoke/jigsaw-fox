@@ -12,7 +12,8 @@
     "clear": "Clear",
     "loading": "Loading...",
     "calculating": "Calculating...",
-    "version": "Version {version}"
+    "version": "Version {version}",
+    "sync": "Sync"
   },
   "nav": {
     "home": "Home",
@@ -73,6 +74,96 @@
     "timeSeconds": "{count}s",
     "timeMinutes": "{count} min",
     "timeHoursMinutes": "{hours}h {minutes}m"
+  },
+  "home": {
+    "loadImageFailed": "Level image failed to load. Please retry.",
+    "puzzleTitle": "Puzzle",
+    "emptyCategory": "No puzzles found in this category",
+    "viewAll": "View All",
+    "allCategories": "All categories",
+    "bannerDailyTitle": "{month}/{day} · Today's Special",
+    "bannerDailySub": "A fresh daily puzzle to keep your brain sharp",
+    "bannerDailyBadge": "Daily"
+  },
+  "daily": {
+    "todayFallback": "Today's Challenge",
+    "dateChallenge": "{month}/{day} Challenge",
+    "notUnlocked": "⏳ Not unlocked yet. Please come back later!",
+    "dateCaption": "{month}/{day}",
+    "todayTitle": "{month}/{day} · Today's Challenge",
+    "btnClearedReplay": "Cleared · Replay",
+    "btnResume": "Continue",
+    "btnStart": "Start",
+    "totalProgress": "Daily progress: {done}/{total}",
+    "streakDays": "{count}-day streak",
+    "loadingMonth": "Loading {month} challenges...",
+    "loadMonthFailed": "Failed to load {month} challenges. Check your network and retry.",
+    "emptyMonth": "No levels downloaded for {month} yet",
+    "downloadMonth": "Download this month",
+    "monthTitle": "{month}/{year}",
+    "monthCompleted": "Completed {done}/{total}"
+  },
+  "events": {
+    "emptyTitle": "The fox couldn't find any active events",
+    "emptyHint": "Pull to refresh or check back later",
+    "badgeActive": "Live Now",
+    "badgePast": "Past Events",
+    "badgeZip": "Offline Pack",
+    "badgeOnline": "Curated Online",
+    "descFallback": "Featured puzzle challenges",
+    "subFallback": "Limited-time event",
+    "badgeLimited": "Limited-time",
+    "enter": "Start"
+  },
+  "levels": {
+    "empty": "No levels available",
+    "titleOf": "{title} · Level {index}",
+    "retryDownload": "Retry Download",
+    "retryLoad": "Retry",
+    "countLabel": "{count} levels",
+    "countWithSize": "{count} levels · {size}",
+    "imgLoadFailed": "Image load failed: {error}",
+    "networkFail": "Level image download failed. Check your network and retry."
+  },
+  "collections": {
+    "toastReady": "\"{title}\" is ready to play offline",
+    "toastFailed": "Download failed. Check your network and retry.",
+    "toastError": "Download error: {error}",
+    "statsTitle": "Featured Collections",
+    "statsCount": "{count} sets",
+    "emptyAll": "No collections yet",
+    "emptyHint": "Pull to refresh to sync official content",
+    "emptyCollections": "No collections",
+    "downloading": "\"{title}\" is downloading ({percent}%)...",
+    "startDownload": "Downloading \"{title}\"...",
+    "levelCount": "{count} levels",
+    "badgeDownloaded": "Downloaded",
+    "badgeDownload": "Download",
+    "freeTooltip": "Free collection storage",
+    "clearTitle": "Clear \"{title}\"",
+    "clearDesc": "Remove downloaded resources for this collection?\nIt will free {size} of disk space. You can re-download at any time.",
+    "confirmClear": "Clear",
+    "toastCleared": "Collection storage freed",
+    "toastClearFailed": "Clear failed. Please retry.",
+    "typeOfficial": "Official Collection",
+    "typeEvent": "Limited-time Event"
+  },
+  "pack": {
+    "deleteTitle": "Delete pack \"{title}\"",
+    "deleteDesc": "Delete this extension pack?\n{count} levels and {size} of storage will be removed.",
+    "confirmDelete": "Delete",
+    "toastDeleteFailed": "Delete failed. Please retry.",
+    "imageMissing": "Level image is missing",
+    "deleteTooltip": "Delete this pack",
+    "levelCount": "{count} Levels",
+    "emptyLevels": "This pack has no level images",
+    "sourceLocal": "Gallery / Local",
+    "sourceNetwork": "Online"
+  },
+  "unlock": {
+    "stars3": "Earn 3 stars on {req} distinct puzzles (currently {current}/{req})",
+    "daily": "Clear level 1 of the main campaign to unlock the Daily Challenge",
+    "eventPack": "Clear {req} main-campaign levels to unlock Events & Packs (currently {current}/{req})"
   },
   "achievements": {
     "first_win": {

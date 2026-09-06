@@ -7,6 +7,7 @@ import '../../logic/content/models/puzzle_collection_item.dart';
 import '../../logic/content/models/puzzle_event_item.dart';
 import '../../services/app_logger.dart';
 import '../../services/sound_service.dart';
+import '../../l10n/gen/strings.g.dart';
 import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
 import '../../widgets/adaptive_hero_banner.dart';
@@ -176,7 +177,10 @@ class _CollectionsTabViewState extends State<CollectionsTabView> {
                             size: 20,
                           ),
                           const SizedBox(width: 6),
-                          Text('精选图集', style: styles.bodyBold),
+                          Text(
+                            t.collections.statsTitle,
+                            style: styles.bodyBold,
+                          ),
                         ],
                       ),
                       Container(
@@ -189,7 +193,7 @@ class _CollectionsTabViewState extends State<CollectionsTabView> {
                           borderRadius: BorderRadius.circular(12),
                         ),
                         child: Text(
-                          '${collections.length} 套',
+                          t.collections.statsCount(count: collections.length),
                           style: TextStyle(
                             color: palette.brand,
                             fontWeight: FontWeight.bold,
@@ -453,12 +457,16 @@ class _CollectionsTabViewState extends State<CollectionsTabView> {
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
-          children: const [
-            Icon(PhosphorIconsBold.check, color: Colors.greenAccent, size: 11),
-            SizedBox(width: 3),
+          children: [
+            const Icon(
+              PhosphorIconsBold.check,
+              color: Colors.greenAccent,
+              size: 11,
+            ),
+            const SizedBox(width: 3),
             Text(
-              '已下载',
-              style: TextStyle(
+              t.collections.badgeDownloaded,
+              style: const TextStyle(
                 color: Colors.white,
                 fontSize: 10,
                 fontWeight: FontWeight.bold,
@@ -528,7 +536,9 @@ class _CollectionsTabViewState extends State<CollectionsTabView> {
             ),
             const SizedBox(width: 3),
             Text(
-              col.displayFileSize.isNotEmpty ? col.displayFileSize : '下载',
+              col.displayFileSize.isNotEmpty
+                  ? col.displayFileSize
+                  : t.collections.badgeDownload,
               style: const TextStyle(
                 color: Colors.white,
                 fontSize: 10,

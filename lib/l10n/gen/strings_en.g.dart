@@ -45,6 +45,13 @@ class Translations with BaseTranslations<AppLocale, Translations> {
 	late final Translations$common$en common = Translations$common$en.internal(_root);
 	late final Translations$nav$en nav = Translations$nav$en.internal(_root);
 	late final Translations$settings$en settings = Translations$settings$en.internal(_root);
+	late final Translations$home$en home = Translations$home$en.internal(_root);
+	late final Translations$daily$en daily = Translations$daily$en.internal(_root);
+	late final Translations$events$en events = Translations$events$en.internal(_root);
+	late final Translations$levels$en levels = Translations$levels$en.internal(_root);
+	late final Translations$collections$en collections = Translations$collections$en.internal(_root);
+	late final Translations$pack$en pack = Translations$pack$en.internal(_root);
+	late final Translations$unlock$en unlock = Translations$unlock$en.internal(_root);
 	late final Translations$achievements$en achievements = Translations$achievements$en.internal(_root);
 	late final Translations$difficulty$en difficulty = Translations$difficulty$en.internal(_root);
 	late final Translations$game$en game = Translations$game$en.internal(_root);
@@ -104,6 +111,9 @@ class Translations$common$en {
 
 	/// en: 'Version {version}'
 	String version({required Object version}) => 'Version ${version}';
+
+	/// en: 'Sync'
+	String get sync => 'Sync';
 }
 
 // Path: nav
@@ -290,6 +300,297 @@ class Translations$settings$en {
 
 	/// en: '{hours}h {minutes}m'
 	String timeHoursMinutes({required Object hours, required Object minutes}) => '${hours}h ${minutes}m';
+}
+
+// Path: home
+class Translations$home$en {
+	Translations$home$en.internal(this._root);
+
+	final Translations _root; // ignore: unused_field
+
+	// Translations
+
+	/// en: 'Level image failed to load. Please retry.'
+	String get loadImageFailed => 'Level image failed to load. Please retry.';
+
+	/// en: 'Puzzle'
+	String get puzzleTitle => 'Puzzle';
+
+	/// en: 'No puzzles found in this category'
+	String get emptyCategory => 'No puzzles found in this category';
+
+	/// en: 'View All'
+	String get viewAll => 'View All';
+
+	/// en: 'All categories'
+	String get allCategories => 'All categories';
+
+	/// en: '{month}/{day} · Today's Special'
+	String bannerDailyTitle({required Object month, required Object day}) => '${month}/${day} · Today\'s Special';
+
+	/// en: 'A fresh daily puzzle to keep your brain sharp'
+	String get bannerDailySub => 'A fresh daily puzzle to keep your brain sharp';
+
+	/// en: 'Daily'
+	String get bannerDailyBadge => 'Daily';
+}
+
+// Path: daily
+class Translations$daily$en {
+	Translations$daily$en.internal(this._root);
+
+	final Translations _root; // ignore: unused_field
+
+	// Translations
+
+	/// en: 'Today's Challenge'
+	String get todayFallback => 'Today\'s Challenge';
+
+	/// en: '{month}/{day} Challenge'
+	String dateChallenge({required Object month, required Object day}) => '${month}/${day} Challenge';
+
+	/// en: '⏳ Not unlocked yet. Please come back later!'
+	String get notUnlocked => '⏳ Not unlocked yet. Please come back later!';
+
+	/// en: '{month}/{day}'
+	String dateCaption({required Object month, required Object day}) => '${month}/${day}';
+
+	/// en: '{month}/{day} · Today's Challenge'
+	String todayTitle({required Object month, required Object day}) => '${month}/${day} · Today\'s Challenge';
+
+	/// en: 'Cleared · Replay'
+	String get btnClearedReplay => 'Cleared · Replay';
+
+	/// en: 'Continue'
+	String get btnResume => 'Continue';
+
+	/// en: 'Start'
+	String get btnStart => 'Start';
+
+	/// en: 'Daily progress: {done}/{total}'
+	String totalProgress({required Object done, required Object total}) => 'Daily progress: ${done}/${total}';
+
+	/// en: '{count}-day streak'
+	String streakDays({required Object count}) => '${count}-day streak';
+
+	/// en: 'Loading {month} challenges...'
+	String loadingMonth({required Object month}) => 'Loading ${month} challenges...';
+
+	/// en: 'Failed to load {month} challenges. Check your network and retry.'
+	String loadMonthFailed({required Object month}) => 'Failed to load ${month} challenges. Check your network and retry.';
+
+	/// en: 'No levels downloaded for {month} yet'
+	String emptyMonth({required Object month}) => 'No levels downloaded for ${month} yet';
+
+	/// en: 'Download this month'
+	String get downloadMonth => 'Download this month';
+
+	/// en: '{month}/{year}'
+	String monthTitle({required Object month, required Object year}) => '${month}/${year}';
+
+	/// en: 'Completed {done}/{total}'
+	String monthCompleted({required Object done, required Object total}) => 'Completed ${done}/${total}';
+}
+
+// Path: events
+class Translations$events$en {
+	Translations$events$en.internal(this._root);
+
+	final Translations _root; // ignore: unused_field
+
+	// Translations
+
+	/// en: 'The fox couldn't find any active events'
+	String get emptyTitle => 'The fox couldn\'t find any active events';
+
+	/// en: 'Pull to refresh or check back later'
+	String get emptyHint => 'Pull to refresh or check back later';
+
+	/// en: 'Live Now'
+	String get badgeActive => 'Live Now';
+
+	/// en: 'Past Events'
+	String get badgePast => 'Past Events';
+
+	/// en: 'Offline Pack'
+	String get badgeZip => 'Offline Pack';
+
+	/// en: 'Curated Online'
+	String get badgeOnline => 'Curated Online';
+
+	/// en: 'Featured puzzle challenges'
+	String get descFallback => 'Featured puzzle challenges';
+
+	/// en: 'Limited-time event'
+	String get subFallback => 'Limited-time event';
+
+	/// en: 'Limited-time'
+	String get badgeLimited => 'Limited-time';
+
+	/// en: 'Start'
+	String get enter => 'Start';
+}
+
+// Path: levels
+class Translations$levels$en {
+	Translations$levels$en.internal(this._root);
+
+	final Translations _root; // ignore: unused_field
+
+	// Translations
+
+	/// en: 'No levels available'
+	String get empty => 'No levels available';
+
+	/// en: '{title} · Level {index}'
+	String titleOf({required Object title, required Object index}) => '${title} · Level ${index}';
+
+	/// en: 'Retry Download'
+	String get retryDownload => 'Retry Download';
+
+	/// en: 'Retry'
+	String get retryLoad => 'Retry';
+
+	/// en: '{count} levels'
+	String countLabel({required Object count}) => '${count} levels';
+
+	/// en: '{count} levels · {size}'
+	String countWithSize({required Object count, required Object size}) => '${count} levels · ${size}';
+
+	/// en: 'Image load failed: {error}'
+	String imgLoadFailed({required Object error}) => 'Image load failed: ${error}';
+
+	/// en: 'Level image download failed. Check your network and retry.'
+	String get networkFail => 'Level image download failed. Check your network and retry.';
+}
+
+// Path: collections
+class Translations$collections$en {
+	Translations$collections$en.internal(this._root);
+
+	final Translations _root; // ignore: unused_field
+
+	// Translations
+
+	/// en: '"{title}" is ready to play offline'
+	String toastReady({required Object title}) => '"${title}" is ready to play offline';
+
+	/// en: 'Download failed. Check your network and retry.'
+	String get toastFailed => 'Download failed. Check your network and retry.';
+
+	/// en: 'Download error: {error}'
+	String toastError({required Object error}) => 'Download error: ${error}';
+
+	/// en: 'Featured Collections'
+	String get statsTitle => 'Featured Collections';
+
+	/// en: '{count} sets'
+	String statsCount({required Object count}) => '${count} sets';
+
+	/// en: 'No collections yet'
+	String get emptyAll => 'No collections yet';
+
+	/// en: 'Pull to refresh to sync official content'
+	String get emptyHint => 'Pull to refresh to sync official content';
+
+	/// en: 'No collections'
+	String get emptyCollections => 'No collections';
+
+	/// en: '"{title}" is downloading ({percent}%)...'
+	String downloading({required Object title, required Object percent}) => '"${title}" is downloading (${percent}%)...';
+
+	/// en: 'Downloading "{title}"...'
+	String startDownload({required Object title}) => 'Downloading "${title}"...';
+
+	/// en: '{count} levels'
+	String levelCount({required Object count}) => '${count} levels';
+
+	/// en: 'Downloaded'
+	String get badgeDownloaded => 'Downloaded';
+
+	/// en: 'Download'
+	String get badgeDownload => 'Download';
+
+	/// en: 'Free collection storage'
+	String get freeTooltip => 'Free collection storage';
+
+	/// en: 'Clear "{title}"'
+	String clearTitle({required Object title}) => 'Clear "${title}"';
+
+	/// en: 'Remove downloaded resources for this collection? It will free {size} of disk space. You can re-download at any time.'
+	String clearDesc({required Object size}) => 'Remove downloaded resources for this collection?\nIt will free ${size} of disk space. You can re-download at any time.';
+
+	/// en: 'Clear'
+	String get confirmClear => 'Clear';
+
+	/// en: 'Collection storage freed'
+	String get toastCleared => 'Collection storage freed';
+
+	/// en: 'Clear failed. Please retry.'
+	String get toastClearFailed => 'Clear failed. Please retry.';
+
+	/// en: 'Official Collection'
+	String get typeOfficial => 'Official Collection';
+
+	/// en: 'Limited-time Event'
+	String get typeEvent => 'Limited-time Event';
+}
+
+// Path: pack
+class Translations$pack$en {
+	Translations$pack$en.internal(this._root);
+
+	final Translations _root; // ignore: unused_field
+
+	// Translations
+
+	/// en: 'Delete pack "{title}"'
+	String deleteTitle({required Object title}) => 'Delete pack "${title}"';
+
+	/// en: 'Delete this extension pack? {count} levels and {size} of storage will be removed.'
+	String deleteDesc({required Object count, required Object size}) => 'Delete this extension pack?\n${count} levels and ${size} of storage will be removed.';
+
+	/// en: 'Delete'
+	String get confirmDelete => 'Delete';
+
+	/// en: 'Delete failed. Please retry.'
+	String get toastDeleteFailed => 'Delete failed. Please retry.';
+
+	/// en: 'Level image is missing'
+	String get imageMissing => 'Level image is missing';
+
+	/// en: 'Delete this pack'
+	String get deleteTooltip => 'Delete this pack';
+
+	/// en: '{count} Levels'
+	String levelCount({required Object count}) => '${count} Levels';
+
+	/// en: 'This pack has no level images'
+	String get emptyLevels => 'This pack has no level images';
+
+	/// en: 'Gallery / Local'
+	String get sourceLocal => 'Gallery / Local';
+
+	/// en: 'Online'
+	String get sourceNetwork => 'Online';
+}
+
+// Path: unlock
+class Translations$unlock$en {
+	Translations$unlock$en.internal(this._root);
+
+	final Translations _root; // ignore: unused_field
+
+	// Translations
+
+	/// en: 'Earn 3 stars on {req} distinct puzzles (currently {current}/{req})'
+	String stars3({required Object req, required Object current}) => 'Earn 3 stars on ${req} distinct puzzles (currently ${current}/${req})';
+
+	/// en: 'Clear level 1 of the main campaign to unlock the Daily Challenge'
+	String get daily => 'Clear level 1 of the main campaign to unlock the Daily Challenge';
+
+	/// en: 'Clear {req} main-campaign levels to unlock Events & Packs (currently {current}/{req})'
+	String eventPack({required Object req, required Object current}) => 'Clear ${req} main-campaign levels to unlock Events & Packs (currently ${current}/${req})';
 }
 
 // Path: achievements
@@ -1287,6 +1588,7 @@ extension on Translations {
 			'common.loading' => 'Loading...',
 			'common.calculating' => 'Calculating...',
 			'common.version' => ({required Object version}) => 'Version ${version}',
+			'common.sync' => 'Sync',
 			'nav.home' => 'Home',
 			'nav.daily' => 'Daily',
 			'nav.collections' => 'Collections',
@@ -1343,6 +1645,82 @@ extension on Translations {
 			'settings.timeSeconds' => ({required Object count}) => '${count}s',
 			'settings.timeMinutes' => ({required Object count}) => '${count} min',
 			'settings.timeHoursMinutes' => ({required Object hours, required Object minutes}) => '${hours}h ${minutes}m',
+			'home.loadImageFailed' => 'Level image failed to load. Please retry.',
+			'home.puzzleTitle' => 'Puzzle',
+			'home.emptyCategory' => 'No puzzles found in this category',
+			'home.viewAll' => 'View All',
+			'home.allCategories' => 'All categories',
+			'home.bannerDailyTitle' => ({required Object month, required Object day}) => '${month}/${day} · Today\'s Special',
+			'home.bannerDailySub' => 'A fresh daily puzzle to keep your brain sharp',
+			'home.bannerDailyBadge' => 'Daily',
+			'daily.todayFallback' => 'Today\'s Challenge',
+			'daily.dateChallenge' => ({required Object month, required Object day}) => '${month}/${day} Challenge',
+			'daily.notUnlocked' => '⏳ Not unlocked yet. Please come back later!',
+			'daily.dateCaption' => ({required Object month, required Object day}) => '${month}/${day}',
+			'daily.todayTitle' => ({required Object month, required Object day}) => '${month}/${day} · Today\'s Challenge',
+			'daily.btnClearedReplay' => 'Cleared · Replay',
+			'daily.btnResume' => 'Continue',
+			'daily.btnStart' => 'Start',
+			'daily.totalProgress' => ({required Object done, required Object total}) => 'Daily progress: ${done}/${total}',
+			'daily.streakDays' => ({required Object count}) => '${count}-day streak',
+			'daily.loadingMonth' => ({required Object month}) => 'Loading ${month} challenges...',
+			'daily.loadMonthFailed' => ({required Object month}) => 'Failed to load ${month} challenges. Check your network and retry.',
+			'daily.emptyMonth' => ({required Object month}) => 'No levels downloaded for ${month} yet',
+			'daily.downloadMonth' => 'Download this month',
+			'daily.monthTitle' => ({required Object month, required Object year}) => '${month}/${year}',
+			'daily.monthCompleted' => ({required Object done, required Object total}) => 'Completed ${done}/${total}',
+			'events.emptyTitle' => 'The fox couldn\'t find any active events',
+			'events.emptyHint' => 'Pull to refresh or check back later',
+			'events.badgeActive' => 'Live Now',
+			'events.badgePast' => 'Past Events',
+			'events.badgeZip' => 'Offline Pack',
+			'events.badgeOnline' => 'Curated Online',
+			'events.descFallback' => 'Featured puzzle challenges',
+			'events.subFallback' => 'Limited-time event',
+			'events.badgeLimited' => 'Limited-time',
+			'events.enter' => 'Start',
+			'levels.empty' => 'No levels available',
+			'levels.titleOf' => ({required Object title, required Object index}) => '${title} · Level ${index}',
+			'levels.retryDownload' => 'Retry Download',
+			'levels.retryLoad' => 'Retry',
+			'levels.countLabel' => ({required Object count}) => '${count} levels',
+			'levels.countWithSize' => ({required Object count, required Object size}) => '${count} levels · ${size}',
+			'levels.imgLoadFailed' => ({required Object error}) => 'Image load failed: ${error}',
+			'levels.networkFail' => 'Level image download failed. Check your network and retry.',
+			'collections.toastReady' => ({required Object title}) => '"${title}" is ready to play offline',
+			'collections.toastFailed' => 'Download failed. Check your network and retry.',
+			'collections.toastError' => ({required Object error}) => 'Download error: ${error}',
+			'collections.statsTitle' => 'Featured Collections',
+			'collections.statsCount' => ({required Object count}) => '${count} sets',
+			'collections.emptyAll' => 'No collections yet',
+			'collections.emptyHint' => 'Pull to refresh to sync official content',
+			'collections.emptyCollections' => 'No collections',
+			'collections.downloading' => ({required Object title, required Object percent}) => '"${title}" is downloading (${percent}%)...',
+			'collections.startDownload' => ({required Object title}) => 'Downloading "${title}"...',
+			'collections.levelCount' => ({required Object count}) => '${count} levels',
+			'collections.badgeDownloaded' => 'Downloaded',
+			'collections.badgeDownload' => 'Download',
+			'collections.freeTooltip' => 'Free collection storage',
+			'collections.clearTitle' => ({required Object title}) => 'Clear "${title}"',
+			'collections.clearDesc' => ({required Object size}) => 'Remove downloaded resources for this collection?\nIt will free ${size} of disk space. You can re-download at any time.',
+			'collections.confirmClear' => 'Clear',
+			'collections.toastCleared' => 'Collection storage freed',
+			'collections.toastClearFailed' => 'Clear failed. Please retry.',
+			'collections.typeOfficial' => 'Official Collection',
+			'collections.typeEvent' => 'Limited-time Event',
+			'pack.deleteTitle' => ({required Object title}) => 'Delete pack "${title}"',
+			'pack.deleteDesc' => ({required Object count, required Object size}) => 'Delete this extension pack?\n${count} levels and ${size} of storage will be removed.',
+			'pack.confirmDelete' => 'Delete',
+			'pack.toastDeleteFailed' => 'Delete failed. Please retry.',
+			'pack.imageMissing' => 'Level image is missing',
+			'pack.deleteTooltip' => 'Delete this pack',
+			'pack.levelCount' => ({required Object count}) => '${count} Levels',
+			'pack.emptyLevels' => 'This pack has no level images',
+			'pack.sourceLocal' => 'Gallery / Local',
+			'pack.sourceNetwork' => 'Online',
+			'unlock.stars3' => ({required Object req, required Object current}) => 'Earn 3 stars on ${req} distinct puzzles (currently ${current}/${req})',
+			'unlock.daily' => 'Clear level 1 of the main campaign to unlock the Daily Challenge',
+			'unlock.eventPack' => ({required Object req, required Object current}) => 'Clear ${req} main-campaign levels to unlock Events & Packs (currently ${current}/${req})',
 			'achievements.first_win.title' => 'First Win',
 			'achievements.first_win.desc' => 'Complete your first puzzle',
 			'achievements.win_10.title' => 'Practice Makes Perfect',

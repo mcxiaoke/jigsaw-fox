@@ -3,11 +3,14 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:jigsawpuzzle/data/game_repository.dart';
 import 'package:jigsawpuzzle/data/storage_manager.dart';
 import 'package:jigsawpuzzle/pages/tabs/daily_tab_view.dart';
+import 'package:jigsawpuzzle/services/locale_service.dart';
 
 import 'test_helper.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+  setUpAll(() => LocaleService.instance.setOverrideForTest('zh'));
+  tearDownAll(() => LocaleService.instance.setOverrideForTest(null));
   late StorageManager sm;
 
   setUp(() async {

@@ -12,7 +12,8 @@
     "clear": "清理",
     "loading": "加载中…",
     "calculating": "计算中…",
-    "version": "版本 {version}"
+    "version": "版本 {version}",
+    "sync": "刷新同步"
   },
   "nav": {
     "home": "主页",
@@ -73,6 +74,96 @@
     "timeSeconds": "{count} 秒",
     "timeMinutes": "{count} 分",
     "timeHoursMinutes": "{hours} 小时 {minutes} 分"
+  },
+  "home": {
+    "loadImageFailed": "关卡图片加载失败，请重试",
+    "puzzleTitle": "拼图",
+    "emptyCategory": "小狐狸没找到该分类的关卡",
+    "viewAll": "查看全部",
+    "allCategories": "全部分类",
+    "bannerDailyTitle": "{month}月{day}日 · 今日专属",
+    "bannerDailySub": "每日专属拼图 · 激活大脑",
+    "bannerDailyBadge": "每日挑战"
+  },
+  "daily": {
+    "todayFallback": "今日挑战",
+    "dateChallenge": "{month}月{day}日 挑战",
+    "notUnlocked": "⏳ 未到解锁时间，敬请期待！",
+    "dateCaption": "{month} 月 {day} 日",
+    "todayTitle": "{month}月{day}日 · 今日挑战",
+    "btnClearedReplay": "已通关 (重玩)",
+    "btnResume": "继续挑战",
+    "btnStart": "开始挑战",
+    "totalProgress": "每日总进度: {done}/{total}",
+    "streakDays": "连胜 {count} 天",
+    "loadingMonth": "正在加载 {month} 挑战关卡...",
+    "loadMonthFailed": "加载 {month} 关卡失败，请检查网络后重试",
+    "emptyMonth": "暂未下载 {month} 关卡数据",
+    "downloadMonth": "下载本月关卡",
+    "monthTitle": "{year}年{month}月",
+    "monthCompleted": "已完成 {done}/{total}"
+  },
+  "events": {
+    "emptyTitle": "小狐狸没找到正在进行的活动",
+    "emptyHint": "下拉刷新或稍后再来看看吧",
+    "badgeActive": "限时进行中",
+    "badgePast": "往期活动",
+    "badgeZip": "离线整包",
+    "badgeOnline": "在线精选",
+    "descFallback": "精彩专题拼图挑战",
+    "subFallback": "限时活动挑战",
+    "badgeLimited": "限时活动",
+    "enter": "进入挑战"
+  },
+  "levels": {
+    "empty": "暂无可用关卡",
+    "titleOf": "{title} · 第 {index} 关",
+    "retryDownload": "重试下载",
+    "retryLoad": "重试加载",
+    "countLabel": "共 {count} 个关卡",
+    "countWithSize": "共 {count} 个关卡 · {size}",
+    "imgLoadFailed": "图片加载失败: {error}",
+    "networkFail": "关卡图片下载失败，请检查网络后重试"
+  },
+  "collections": {
+    "toastReady": "「{title}」下载就绪，可离线畅玩",
+    "toastFailed": "下载失败，请检查网络后重试",
+    "toastError": "下载异常: {error}",
+    "statsTitle": "精选图集",
+    "statsCount": "{count} 套",
+    "emptyAll": "暂无图集内容",
+    "emptyHint": "下拉刷新同步官方资源",
+    "emptyCollections": "暂无图集",
+    "downloading": "「{title}」正在下载中 ({percent}%)，请稍候...",
+    "startDownload": "开始下载「{title}」...",
+    "levelCount": "{count} 关",
+    "badgeDownloaded": "已下载",
+    "badgeDownload": "下载",
+    "freeTooltip": "释放图集存储空间",
+    "clearTitle": "清理「{title}」",
+    "clearDesc": "确定要清理已下载的本地资源吗？\n清理后可释放 {size} 磁盘空间。您随时可以重新下载。",
+    "confirmClear": "确认清理",
+    "toastCleared": "已释放图集本地存储空间",
+    "toastClearFailed": "清理失败，请重试",
+    "typeOfficial": "官方图集",
+    "typeEvent": "限时活动"
+  },
+  "pack": {
+    "deleteTitle": "删除「{title}」图包",
+    "deleteDesc": "确定要删除此扩展图包吗？\n将同时清理包内 {count} 个关卡并释放 {size} 存储空间。",
+    "confirmDelete": "确认删除",
+    "toastDeleteFailed": "删除失败，请重试",
+    "imageMissing": "关卡图片文件不存在",
+    "deleteTooltip": "删除此图包",
+    "levelCount": "{count} 关卡",
+    "emptyLevels": "此图包中暂无关卡图片",
+    "sourceLocal": "相册 / 本地",
+    "sourceNetwork": "网络"
+  },
+  "unlock": {
+    "stars3": "需要获得 3 星的不同拼图达到 {req} 张（当前 {current}/{req}）",
+    "daily": "完成第 1 关主线即可解锁每日挑战",
+    "eventPack": "完成 {req} 关主线即可解锁活动与主题包（当前 {current}/{req}）"
   },
   "achievements": {
     "first_win": {

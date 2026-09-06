@@ -14,6 +14,7 @@ import '../../logic/content/models/canonical_id.dart';
 import '../../logic/content/models/puzzle_level_item.dart';
 import '../../logic/image_source.dart';
 import '../../logic/puzzle_model.dart';
+import '../../l10n/gen/strings.g.dart';
 import '../../services/app_logger.dart';
 import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
@@ -221,10 +222,10 @@ class _DailyTabViewState extends State<DailyTabView> {
   }
 
   String _formatDailyDateDisplay(String? dailyDate) {
-    if (dailyDate == null || dailyDate.length < 8) return '今日挑战';
+    if (dailyDate == null || dailyDate.length < 8) return t.daily.todayFallback;
     final m = int.tryParse(dailyDate.substring(4, 6)) ?? 1;
     final d = int.tryParse(dailyDate.substring(6, 8)) ?? 1;
-    return '$m月$d日 挑战';
+    return t.daily.dateChallenge(month: m, day: d);
   }
 
   Future<void> _openDaily(PuzzleLevelItem level) async {
@@ -634,7 +635,7 @@ class _DailyTabViewState extends State<DailyTabView> {
                           ),
                           const SizedBox(width: 4),
                           Text(
-                            '连胜 $streak 天',
+                            t.daily.streakDays(count: streak),
                             style: TextStyle(
                               color: palette.warning,
                               fontWeight: FontWeight.bold,
@@ -785,7 +786,7 @@ class _DailyTabViewState extends State<DailyTabView> {
     final parts = monthKey.split('-');
     final year = parts.isNotEmpty ? parts[0] : '';
     final month = parts.length > 1 ? int.tryParse(parts[1]) ?? 1 : 1;
-    final headerTitle = '$year年$month月';
+    final headerTitle = t.daily.monthTitle(month: month, year: year);
 
     var completedCount = 0;
     for (final item in monthItems) {

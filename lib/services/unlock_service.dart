@@ -1,5 +1,6 @@
 import '../data/game_repository.dart';
 import '../data/progress_store.dart';
+import '../l10n/gen/strings.g.dart';
 
 /// 解锁状态详细信息
 class UnlockStatus {
@@ -65,7 +66,10 @@ class UnlockService {
 
     return UnlockStatus(
       isUnlocked: false,
-      reason: '需要获得 3 星的不同拼图达到 $req 张（当前 $count3Star/$req）',
+      reason: LocaleSettings.instance.currentTranslations.unlock.stars3(
+        req: req,
+        current: count3Star,
+      ),
       currentProgress: count3Star,
       targetRequired: req,
     );
@@ -94,7 +98,10 @@ class UnlockService {
 
     return UnlockStatus(
       isUnlocked: false,
-      reason: '需要获得 3 星的不同拼图达到 $req 张（当前 $count3Star/$req）',
+      reason: LocaleSettings.instance.currentTranslations.unlock.stars3(
+        req: req,
+        current: count3Star,
+      ),
       currentProgress: count3Star,
       targetRequired: req,
     );
@@ -115,7 +122,7 @@ class UnlockService {
 
     return UnlockStatus(
       isUnlocked: false,
-      reason: '完成第 1 关主线即可解锁每日挑战',
+      reason: LocaleSettings.instance.currentTranslations.unlock.daily,
       currentProgress: completedCount,
       targetRequired: kDailyUnlockRequiredMainLevels,
     );
@@ -136,8 +143,10 @@ class UnlockService {
 
     return UnlockStatus(
       isUnlocked: false,
-      reason:
-          '完成 5 关主线即可解锁活动与主题包（当前 $completedCount/$kEventUnlockRequiredMainLevels）',
+      reason: LocaleSettings.instance.currentTranslations.unlock.eventPack(
+        req: kEventUnlockRequiredMainLevels,
+        current: completedCount,
+      ),
       currentProgress: completedCount,
       targetRequired: kEventUnlockRequiredMainLevels,
     );
