@@ -59,6 +59,8 @@ class Translations with BaseTranslations<AppLocale, Translations> {
 	late final Translations$share$en share = Translations$share$en.internal(_root);
 	late final Translations$importPack$en importPack = Translations$importPack$en.internal(_root);
 	late final Translations$background$en background = Translations$background$en.internal(_root);
+	late final Translations$howTo$en howTo = Translations$howTo$en.internal(_root);
+	late final Translations$logs$en logs = Translations$logs$en.internal(_root);
 	late final Translations$achievements$en achievements = Translations$achievements$en.internal(_root);
 	late final Translations$difficulty$en difficulty = Translations$difficulty$en.internal(_root);
 	late final Translations$game$en game = Translations$game$en.internal(_root);
@@ -876,6 +878,79 @@ class Translations$background$en {
 	String tableLabel({required Object index}) => 'Table ${index}';
 }
 
+// Path: howTo
+class Translations$howTo$en {
+	Translations$howTo$en.internal(this._root);
+
+	final Translations _root; // ignore: unused_field
+
+	// Translations
+
+	/// en: 'How to Play'
+	String get title => 'How to Play';
+
+	/// en: 'Get Started with Jigsaw Puzzles'
+	String get welcomeTitle => 'Get Started with Jigsaw Puzzles';
+
+	/// en: 'Master these core gestures and helper tools, and you will breeze through even the hardest puzzles!'
+	String get welcomeSub => 'Master these core gestures and helper tools, and you will breeze through even the hardest puzzles!';
+
+	late final Translations$howTo$t1$en t1 = Translations$howTo$t1$en.internal(_root);
+	late final Translations$howTo$t2$en t2 = Translations$howTo$t2$en.internal(_root);
+	late final Translations$howTo$t3$en t3 = Translations$howTo$t3$en.internal(_root);
+	late final Translations$howTo$t4$en t4 = Translations$howTo$t4$en.internal(_root);
+	late final Translations$howTo$t5$en t5 = Translations$howTo$t5$en.internal(_root);
+	late final Translations$howTo$t6$en t6 = Translations$howTo$t6$en.internal(_root);
+}
+
+// Path: logs
+class Translations$logs$en {
+	Translations$logs$en.internal(this._root);
+
+	final Translations _root; // ignore: unused_field
+
+	// Translations
+
+	/// en: 'Runtime Logs'
+	String get title => 'Runtime Logs';
+
+	/// en: 'Filter: '
+	String get filterPrefix => 'Filter: ';
+
+	/// en: 'All'
+	String get filterAll => 'All';
+
+	/// en: 'Back to top (newest)'
+	String get scrollTopTooltip => 'Back to top (newest)';
+
+	/// en: 'Copy logs'
+	String get copyTooltip => 'Copy logs';
+
+	/// en: 'Copy current view ({count})'
+	String copyFiltered({required Object count}) => 'Copy current view (${count})';
+
+	/// en: 'Copy all logs ({count})'
+	String copyAll({required Object count}) => 'Copy all logs (${count})';
+
+	/// en: 'No logs to copy'
+	String get nothingToCopy => 'No logs to copy';
+
+	/// en: 'Copied {count} logs from current view'
+	String copiedFiltered({required Object count}) => 'Copied ${count} logs from current view';
+
+	/// en: 'Copied all {count} logs'
+	String copiedAll({required Object count}) => 'Copied all ${count} logs';
+
+	/// en: 'No logs under the current filter'
+	String get emptyFiltered => 'No logs under the current filter';
+
+	/// en: 'Loading logs...'
+	String get loading => 'Loading logs...';
+
+	/// en: 'Close'
+	String get close => 'Close';
+}
+
 // Path: achievements
 class Translations$achievements$en {
 	Translations$achievements$en.internal(this._root);
@@ -1232,6 +1307,96 @@ class Translations$myCenter$en {
 	late final Translations$myCenter$card$en card = Translations$myCenter$card$en.internal(_root);
 	late final Translations$myCenter$orphanDialog$en orphanDialog = Translations$myCenter$orphanDialog$en.internal(_root);
 	late final Translations$myCenter$toast$en toast = Translations$myCenter$toast$en.internal(_root);
+}
+
+// Path: howTo.t1
+class Translations$howTo$t1$en {
+	Translations$howTo$t1$en.internal(this._root);
+
+	final Translations _root; // ignore: unused_field
+
+	// Translations
+
+	/// en: 'Drag & Snap'
+	String get title => 'Drag & Snap';
+
+	/// en: 'Drag a piece with one finger near its correct spot; it snaps into place with a crisp click.'
+	String get page => 'Drag a piece with one finger near its correct spot; it snaps into place with a crisp click.';
+}
+
+// Path: howTo.t2
+class Translations$howTo$t2$en {
+	Translations$howTo$t2$en.internal(this._root);
+
+	final Translations _root; // ignore: unused_field
+
+	// Translations
+
+	/// en: 'Group Merge (Cluster)'
+	String get title => 'Group Merge (Cluster)';
+
+	/// en: 'Connected pieces can be joined anywhere on the tray or canvas, even before reaching their correct cells, then moved as a group.'
+	String get page => 'Connected pieces can be joined anywhere on the tray or canvas, even before reaching their correct cells, then moved as a group.';
+}
+
+// Path: howTo.t3
+class Translations$howTo$t3$en {
+	Translations$howTo$t3$en.internal(this._root);
+
+	final Translations _root; // ignore: unused_field
+
+	// Translations
+
+	/// en: 'Pinch to Zoom & Pan'
+	String get title => 'Pinch to Zoom & Pan';
+
+	/// en: 'Pinch to zoom the board seamlessly; two-finger drag or middle-mouse drag pans the canvas, making it easy to align fine details.'
+	String get page => 'Pinch to zoom the board seamlessly; two-finger drag or middle-mouse drag pans the canvas, making it easy to align fine details.';
+}
+
+// Path: howTo.t4
+class Translations$howTo$t4$en {
+	Translations$howTo$t4$en.internal(this._root);
+
+	final Translations _root; // ignore: unused_field
+
+	// Translations
+
+	/// en: 'Ghost Guide Overlay'
+	String get title => 'Ghost Guide Overlay';
+
+	/// en: 'Tap the ghost icon in the top bar to overlay a 20%/45% translucent image, helping you spot lines and colors to place pieces faster.'
+	String get page => 'Tap the ghost icon in the top bar to overlay a 20%/45% translucent image, helping you spot lines and colors to place pieces faster.';
+}
+
+// Path: howTo.t5
+class Translations$howTo$t5$en {
+	Translations$howTo$t5$en.internal(this._root);
+
+	final Translations _root; // ignore: unused_field
+
+	// Translations
+
+	/// en: 'Edge Pieces Filter'
+	String get title => 'Edge Pieces Filter';
+
+	/// en: 'Tap the edge filter icon to highlight flat outer pieces and dim inner ones, so you can build the frame first.'
+	String get page => 'Tap the edge filter icon to highlight flat outer pieces and dim inner ones, so you can build the frame first.';
+}
+
+// Path: howTo.t6
+class Translations$howTo$t6$en {
+	Translations$howTo$t6$en.internal(this._root);
+
+	final Translations _root; // ignore: unused_field
+
+	// Translations
+
+	/// en: 'Organize Tray'
+	String get title => 'Organize Tray';
+
+	/// en: 'Scattered single pieces on the board can be tidied into the tray instantly with the broom icon, restoring a clean view.'
+	String get page => 'Scattered single pieces on the board can be tidied into the tray instantly with the broom icon, restoring a clean view.';
 }
 
 // Path: achievements.first_win
@@ -2075,6 +2240,34 @@ extension on Translations {
 			'importPack.startImport' => 'Start Import',
 			'background.title' => 'Change Puzzle Background',
 			'background.tableLabel' => ({required Object index}) => 'Table ${index}',
+			'howTo.title' => 'How to Play',
+			'howTo.welcomeTitle' => 'Get Started with Jigsaw Puzzles',
+			'howTo.welcomeSub' => 'Master these core gestures and helper tools, and you will breeze through even the hardest puzzles!',
+			'howTo.t1.title' => 'Drag & Snap',
+			'howTo.t1.page' => 'Drag a piece with one finger near its correct spot; it snaps into place with a crisp click.',
+			'howTo.t2.title' => 'Group Merge (Cluster)',
+			'howTo.t2.page' => 'Connected pieces can be joined anywhere on the tray or canvas, even before reaching their correct cells, then moved as a group.',
+			'howTo.t3.title' => 'Pinch to Zoom & Pan',
+			'howTo.t3.page' => 'Pinch to zoom the board seamlessly; two-finger drag or middle-mouse drag pans the canvas, making it easy to align fine details.',
+			'howTo.t4.title' => 'Ghost Guide Overlay',
+			'howTo.t4.page' => 'Tap the ghost icon in the top bar to overlay a 20%/45% translucent image, helping you spot lines and colors to place pieces faster.',
+			'howTo.t5.title' => 'Edge Pieces Filter',
+			'howTo.t5.page' => 'Tap the edge filter icon to highlight flat outer pieces and dim inner ones, so you can build the frame first.',
+			'howTo.t6.title' => 'Organize Tray',
+			'howTo.t6.page' => 'Scattered single pieces on the board can be tidied into the tray instantly with the broom icon, restoring a clean view.',
+			'logs.title' => 'Runtime Logs',
+			'logs.filterPrefix' => 'Filter: ',
+			'logs.filterAll' => 'All',
+			'logs.scrollTopTooltip' => 'Back to top (newest)',
+			'logs.copyTooltip' => 'Copy logs',
+			'logs.copyFiltered' => ({required Object count}) => 'Copy current view (${count})',
+			'logs.copyAll' => ({required Object count}) => 'Copy all logs (${count})',
+			'logs.nothingToCopy' => 'No logs to copy',
+			'logs.copiedFiltered' => ({required Object count}) => 'Copied ${count} logs from current view',
+			'logs.copiedAll' => ({required Object count}) => 'Copied all ${count} logs',
+			'logs.emptyFiltered' => 'No logs under the current filter',
+			'logs.loading' => 'Loading logs...',
+			'logs.close' => 'Close',
 			'achievements.first_win.title' => 'First Win',
 			'achievements.first_win.desc' => 'Complete your first puzzle',
 			'achievements.win_10.title' => 'Practice Makes Perfect',

@@ -57,6 +57,8 @@ class TranslationsZh extends Translations with BaseTranslations<AppLocale, Trans
 	@override late final _Translations$share$zh share = _Translations$share$zh._(_root);
 	@override late final _Translations$importPack$zh importPack = _Translations$importPack$zh._(_root);
 	@override late final _Translations$background$zh background = _Translations$background$zh._(_root);
+	@override late final _Translations$howTo$zh howTo = _Translations$howTo$zh._(_root);
+	@override late final _Translations$logs$zh logs = _Translations$logs$zh._(_root);
 	@override late final _Translations$achievements$zh achievements = _Translations$achievements$zh._(_root);
 	@override late final _Translations$difficulty$zh difficulty = _Translations$difficulty$zh._(_root);
 	@override late final _Translations$game$zh game = _Translations$game$zh._(_root);
@@ -444,6 +446,46 @@ class _Translations$background$zh extends Translations$background$en {
 	@override String tableLabel({required Object index}) => '桌板 ${index}';
 }
 
+// Path: howTo
+class _Translations$howTo$zh extends Translations$howTo$en {
+	_Translations$howTo$zh._(TranslationsZh root) : this._root = root, super.internal(root);
+
+	final TranslationsZh _root; // ignore: unused_field
+
+	// Translations
+	@override String get title => '玩法与操作技巧';
+	@override String get welcomeTitle => '轻松上手异形拼图';
+	@override String get welcomeSub => '熟悉以下核心操作手势与辅助工具，能让你在挑战高难度拼图时事半功倍！';
+	@override late final _Translations$howTo$t1$zh t1 = _Translations$howTo$t1$zh._(_root);
+	@override late final _Translations$howTo$t2$zh t2 = _Translations$howTo$t2$zh._(_root);
+	@override late final _Translations$howTo$t3$zh t3 = _Translations$howTo$t3$zh._(_root);
+	@override late final _Translations$howTo$t4$zh t4 = _Translations$howTo$t4$zh._(_root);
+	@override late final _Translations$howTo$t5$zh t5 = _Translations$howTo$t5$zh._(_root);
+	@override late final _Translations$howTo$t6$zh t6 = _Translations$howTo$t6$zh._(_root);
+}
+
+// Path: logs
+class _Translations$logs$zh extends Translations$logs$en {
+	_Translations$logs$zh._(TranslationsZh root) : this._root = root, super.internal(root);
+
+	final TranslationsZh _root; // ignore: unused_field
+
+	// Translations
+	@override String get title => '运行日志';
+	@override String get filterPrefix => '过滤：';
+	@override String get filterAll => '全部';
+	@override String get scrollTopTooltip => '回到顶部（最新日志）';
+	@override String get copyTooltip => '复制日志';
+	@override String copyFiltered({required Object count}) => '复制当前视图（${count}）';
+	@override String copyAll({required Object count}) => '复制全部日志（${count}）';
+	@override String get nothingToCopy => '暂无可复制的日志';
+	@override String copiedFiltered({required Object count}) => '已复制当前视图 ${count} 条日志';
+	@override String copiedAll({required Object count}) => '已复制全部 ${count} 条日志';
+	@override String get emptyFiltered => '当前过滤条件下暂无日志';
+	@override String get loading => '日志加载中…';
+	@override String get close => '关闭';
+}
+
 // Path: achievements
 class _Translations$achievements$zh extends Translations$achievements$en {
 	_Translations$achievements$zh._(TranslationsZh root) : this._root = root, super.internal(root);
@@ -632,6 +674,72 @@ class _Translations$myCenter$zh extends Translations$myCenter$en {
 	@override late final _Translations$myCenter$card$zh card = _Translations$myCenter$card$zh._(_root);
 	@override late final _Translations$myCenter$orphanDialog$zh orphanDialog = _Translations$myCenter$orphanDialog$zh._(_root);
 	@override late final _Translations$myCenter$toast$zh toast = _Translations$myCenter$toast$zh._(_root);
+}
+
+// Path: howTo.t1
+class _Translations$howTo$t1$zh extends Translations$howTo$t1$en {
+	_Translations$howTo$t1$zh._(TranslationsZh root) : this._root = root, super.internal(root);
+
+	final TranslationsZh _root; // ignore: unused_field
+
+	// Translations
+	@override String get title => '拖拽与磁吸';
+	@override String get page => '单指拖拽碎片到棋盘正确位置附近，会自动发出清脆吸附声并精准归位锁定。';
+}
+
+// Path: howTo.t2
+class _Translations$howTo$t2$zh extends Translations$howTo$t2$en {
+	_Translations$howTo$t2$zh._(TranslationsZh root) : this._root = root, super.internal(root);
+
+	final TranslationsZh _root; // ignore: unused_field
+
+	// Translations
+	@override String get title => '碎片组队合并 (Cluster)';
+	@override String get page => '相连的碎片即使尚未放在棋盘正确格子，也可以在托盘或画布任意处互相拼合，合并后可整体拖动调整。';
+}
+
+// Path: howTo.t3
+class _Translations$howTo$t3$zh extends Translations$howTo$t3$en {
+	_Translations$howTo$t3$zh._(TranslationsZh root) : this._root = root, super.internal(root);
+
+	final TranslationsZh _root; // ignore: unused_field
+
+	// Translations
+	@override String get title => '双指缩放与平移';
+	@override String get page => '双指捏合可无级放大/缩小棋盘，双指滑动或鼠标中键拖拽可平移画布，助你轻松对齐细节局部。';
+}
+
+// Path: howTo.t4
+class _Translations$howTo$t4$zh extends Translations$howTo$t4$en {
+	_Translations$howTo$t4$zh._(TranslationsZh root) : this._root = root, super.internal(root);
+
+	final TranslationsZh _root; // ignore: unused_field
+
+	// Translations
+	@override String get title => '底图透视参考 (Ghost)';
+	@override String get page => '点击顶部透视图标可在棋盘开启 20%/45% 半透明底图，辅助观察画面线条与色彩快速定位。';
+}
+
+// Path: howTo.t5
+class _Translations$howTo$t5$zh extends Translations$howTo$t5$en {
+	_Translations$howTo$t5$zh._(TranslationsZh root) : this._root = root, super.internal(root);
+
+	final TranslationsZh _root; // ignore: unused_field
+
+	// Translations
+	@override String get title => '边缘碎片筛选';
+	@override String get page => '点击边框筛选图标，可高亮所有外围平边碎片并暗淡内部碎片，助你先拼好外层框架。';
+}
+
+// Path: howTo.t6
+class _Translations$howTo$t6$zh extends Translations$howTo$t6$en {
+	_Translations$howTo$t6$zh._(TranslationsZh root) : this._root = root, super.internal(root);
+
+	final TranslationsZh _root; // ignore: unused_field
+
+	// Translations
+	@override String get title => '一键整理托盘';
+	@override String get page => '散落在棋盘画布上的单块碎片，点击扫把图标即可瞬间整齐归纳至下方托盘，恢复整洁视野。';
 }
 
 // Path: achievements.first_win
@@ -1267,6 +1375,34 @@ extension on TranslationsZh {
 			'importPack.startImport' => '开始导入并解析',
 			'background.title' => '更换拼图背景',
 			'background.tableLabel' => ({required Object index}) => '桌板 ${index}',
+			'howTo.title' => '玩法与操作技巧',
+			'howTo.welcomeTitle' => '轻松上手异形拼图',
+			'howTo.welcomeSub' => '熟悉以下核心操作手势与辅助工具，能让你在挑战高难度拼图时事半功倍！',
+			'howTo.t1.title' => '拖拽与磁吸',
+			'howTo.t1.page' => '单指拖拽碎片到棋盘正确位置附近，会自动发出清脆吸附声并精准归位锁定。',
+			'howTo.t2.title' => '碎片组队合并 (Cluster)',
+			'howTo.t2.page' => '相连的碎片即使尚未放在棋盘正确格子，也可以在托盘或画布任意处互相拼合，合并后可整体拖动调整。',
+			'howTo.t3.title' => '双指缩放与平移',
+			'howTo.t3.page' => '双指捏合可无级放大/缩小棋盘，双指滑动或鼠标中键拖拽可平移画布，助你轻松对齐细节局部。',
+			'howTo.t4.title' => '底图透视参考 (Ghost)',
+			'howTo.t4.page' => '点击顶部透视图标可在棋盘开启 20%/45% 半透明底图，辅助观察画面线条与色彩快速定位。',
+			'howTo.t5.title' => '边缘碎片筛选',
+			'howTo.t5.page' => '点击边框筛选图标，可高亮所有外围平边碎片并暗淡内部碎片，助你先拼好外层框架。',
+			'howTo.t6.title' => '一键整理托盘',
+			'howTo.t6.page' => '散落在棋盘画布上的单块碎片，点击扫把图标即可瞬间整齐归纳至下方托盘，恢复整洁视野。',
+			'logs.title' => '运行日志',
+			'logs.filterPrefix' => '过滤：',
+			'logs.filterAll' => '全部',
+			'logs.scrollTopTooltip' => '回到顶部（最新日志）',
+			'logs.copyTooltip' => '复制日志',
+			'logs.copyFiltered' => ({required Object count}) => '复制当前视图（${count}）',
+			'logs.copyAll' => ({required Object count}) => '复制全部日志（${count}）',
+			'logs.nothingToCopy' => '暂无可复制的日志',
+			'logs.copiedFiltered' => ({required Object count}) => '已复制当前视图 ${count} 条日志',
+			'logs.copiedAll' => ({required Object count}) => '已复制全部 ${count} 条日志',
+			'logs.emptyFiltered' => '当前过滤条件下暂无日志',
+			'logs.loading' => '日志加载中…',
+			'logs.close' => '关闭',
 			'achievements.first_win.title' => '初露锋芒',
 			'achievements.first_win.desc' => '通关首张拼图',
 			'achievements.win_10.title' => '熟能生巧',

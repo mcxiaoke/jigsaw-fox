@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:logging/logging.dart';
 import 'package:phosphoricons_flutter/phosphoricons_flutter.dart';
 
+import '../l10n/gen/strings.g.dart';
 import '../services/app_logger.dart';
 import '../theme/app_palette.dart';
 import '../theme/app_text_styles.dart';
@@ -29,7 +30,7 @@ class LogViewerPage extends StatefulWidget {
 
 /// 视图过滤档位：只展示 >= 该数值等级 的日志（取 package:logging Level.value）
 enum LogViewFilter {
-  all('全部', 0),
+  all('', 0),
   info('INFO+', 800),
   warn('WARN+', 900),
   error('ERROR+', 1000);
@@ -299,9 +300,9 @@ class _LogViewerPageState extends State<LogViewerPage> {
     if (source.isEmpty) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('暂无可复制的日志'),
-            duration: Duration(seconds: 1),
+          SnackBar(
+            content: Text(t.logs.nothingToCopy),
+            duration: const Duration(seconds: 1),
           ),
         );
       }
@@ -317,8 +318,8 @@ class _LogViewerPageState extends State<LogViewerPage> {
         SnackBar(
           content: Text(
             filteredOnly
-                ? '已复制当前视图 ${_shown.length} 条日志'
-                : '已复制全部 ${_all.length} 条日志',
+                ? t.logs.copiedFiltered(count: _shown.length)
+                : t.logs.copiedAll(count: _all.length),
           ),
           duration: const Duration(seconds: 2),
         ),
@@ -327,6 +328,14 @@ class _LogViewerPageState extends State<LogViewerPage> {
   }
 
   // ---- UI ----
+
+  /// 过滤档位 chip 文案（'INFO+' 等为开发者通用术语不翻译，'全部' 本地化）
+  String _filterChipLabel(LogViewFilter f) {
+    return switch (f) {
+      LogViewFilter.all => t.logs.filterAll,
+      _ => f.label,
+    };
+  }
 
   Color _levelColor(String short, AppPalette palette) {
     switch (short) {
@@ -355,10 +364,10 @@ class _LogViewerPageState extends State<LogViewerPage> {
         elevation: 0.5,
         scrolledUnderElevation: 0.5,
         centerTitle: false,
-        title: Text('运行日志', style: styles.h3.copyWith(fontSize: 19)),
+        title: Text(t.logs.title, style: styles.h3.copyWith(fontSize: 19)),
         actions: [
           IconButton(
-            tooltip: '回到顶部（最新日志）',
+            tooltip: t.logs.scrollTopTooltip,
             icon: Icon(
               PhosphorIconsBold.arrowFatLinesUp,
               color: palette.brand,
@@ -372,7 +381,7 @@ class _LogViewerPageState extends State<LogViewerPage> {
               color: palette.brand,
               size: 22,
             ),
-            tooltip: '复制日志',
+            tooltip: t.logs.copyTooltip,
             onSelected: (v) {
               if (v == 'filtered') {
                 _copyLogs(filteredOnly: true);
@@ -391,7 +400,10 @@ class _LogViewerPageState extends State<LogViewerPage> {
                       color: palette.primaryText,
                     ),
                     const SizedBox(width: 8),
-                    Text('复制当前视图（${_shown.length}）', style: styles.body),
+                    Text(
+                      t.logs.copyFiltered(count: _shown.length),
+                      style: styles.body,
+                    ),
                   ],
                 ),
               ),
@@ -405,7 +417,10 @@ class _LogViewerPageState extends State<LogViewerPage> {
                       color: palette.primaryText,
                     ),
                     const SizedBox(width: 8),
-                    Text('复制全部日志（${_all.length}）', style: styles.body),
+                    Text(
+                      t.logs.copyAll(count: _all.length),
+                      style: styles.body,
+                    ),
                   ],
                 ),
               ),
@@ -426,7 +441,7 @@ class _LogViewerPageState extends State<LogViewerPage> {
               child: Row(
                 children: [
                   Text(
-                    '过滤：',
+                    t.logs.filterPrefix,
                     style: styles.caption.copyWith(
                       color: palette.secondaryText,
                     ),
@@ -434,7 +449,7 @@ class _LogViewerPageState extends State<LogViewerPage> {
                   const SizedBox(width: 8),
                   for (final f in LogViewFilter.values) ...[
                     ChoiceChip(
-                      label: Text(f.label),
+                      label: Text(_filterChipLabel(f)),
                       selected: _filter == f,
                       onSelected: (_) => setState(() {
                         _filter = f;
@@ -484,7 +499,7 @@ class _LogViewerPageState extends State<LogViewerPage> {
           Text('📄', style: TextStyle(fontSize: 40)),
           const SizedBox(height: 8),
           Text(
-            _historyLoaded ? '当前过滤条件下暂无日志' : '日志加载中…',
+            _historyLoaded ? t.logs.emptyFiltered : t.logs.loading,
             style: styles.body.copyWith(color: palette.secondaryText),
           ),
         ],
@@ -603,7 +618,7 @@ class _LogViewerPageState extends State<LogViewerPage> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: const Text('关闭'),
+            child: Text(t.logs.close),
           ),
         ],
       ),

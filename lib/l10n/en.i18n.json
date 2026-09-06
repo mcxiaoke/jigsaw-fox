@@ -250,6 +250,32 @@
     "title": "Change Puzzle Background",
     "tableLabel": "Table {index}"
   },
+  "howTo": {
+    "title": "How to Play",
+    "welcomeTitle": "Get Started with Jigsaw Puzzles",
+    "welcomeSub": "Master these core gestures and helper tools, and you will breeze through even the hardest puzzles!",
+    "t1": { "title": "Drag & Snap", "page": "Drag a piece with one finger near its correct spot; it snaps into place with a crisp click." },
+    "t2": { "title": "Group Merge (Cluster)", "page": "Connected pieces can be joined anywhere on the tray or canvas, even before reaching their correct cells, then moved as a group." },
+    "t3": { "title": "Pinch to Zoom & Pan", "page": "Pinch to zoom the board seamlessly; two-finger drag or middle-mouse drag pans the canvas, making it easy to align fine details." },
+    "t4": { "title": "Ghost Guide Overlay", "page": "Tap the ghost icon in the top bar to overlay a 20%/45% translucent image, helping you spot lines and colors to place pieces faster." },
+    "t5": { "title": "Edge Pieces Filter", "page": "Tap the edge filter icon to highlight flat outer pieces and dim inner ones, so you can build the frame first." },
+    "t6": { "title": "Organize Tray", "page": "Scattered single pieces on the board can be tidied into the tray instantly with the broom icon, restoring a clean view." }
+  },
+  "logs": {
+    "title": "Runtime Logs",
+    "filterPrefix": "Filter: ",
+    "filterAll": "All",
+    "scrollTopTooltip": "Back to top (newest)",
+    "copyTooltip": "Copy logs",
+    "copyFiltered": "Copy current view ({count})",
+    "copyAll": "Copy all logs ({count})",
+    "nothingToCopy": "No logs to copy",
+    "copiedFiltered": "Copied {count} logs from current view",
+    "copiedAll": "Copied all {count} logs",
+    "emptyFiltered": "No logs under the current filter",
+    "loading": "Loading logs...",
+    "close": "Close"
+  },
   "achievements": {
     "first_win": {
       "title": "First Win",

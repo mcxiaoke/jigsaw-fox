@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:phosphoricons_flutter/phosphoricons_flutter.dart';
 
+import '../l10n/gen/strings.g.dart';
 import '../theme/app_palette.dart';
 import '../theme/app_text_styles.dart';
 
@@ -23,38 +24,38 @@ class HowToPlayPage extends StatelessWidget {
       _TipItemData(
         icon: PhosphorIconsBold.handTap,
         color: palette.brand,
-        title: '拖拽与磁吸',
-        desc: '单指拖拽碎片到棋盘正确位置附近，会自动发出清脆吸附声并精准归位锁定。',
+        title: t.howTo.t1.title,
+        desc: t.howTo.t1.page,
       ),
       _TipItemData(
         icon: PhosphorIconsBold.stack,
         color: palette.info,
-        title: '碎片组队合并 (Cluster)',
-        desc: '相连的碎片即使尚未放在棋盘正确格子，也可以在托盘或画布任意处互相拼合，合并后可整体拖动调整。',
+        title: t.howTo.t2.title,
+        desc: t.howTo.t2.page,
       ),
       _TipItemData(
         icon: PhosphorIconsBold.magnifyingGlassPlus,
         color: palette.warning,
-        title: '双指缩放与平移',
-        desc: '双指捏合可无级放大/缩小棋盘，双指滑动或鼠标中键拖拽可平移画布，助你轻松对齐细节局部。',
+        title: t.howTo.t3.title,
+        desc: t.howTo.t3.page,
       ),
       _TipItemData(
         icon: PhosphorIconsFill.stack,
         color: palette.info,
-        title: '底图透视参考 (Ghost)',
-        desc: '点击顶部透视图标可在棋盘开启 20%/45% 半透明底图，辅助观察画面线条与色彩快速定位。',
+        title: t.howTo.t4.title,
+        desc: t.howTo.t4.page,
       ),
       _TipItemData(
         icon: PhosphorIconsBold.cornersOut,
         color: palette.success,
-        title: '边缘碎片筛选',
-        desc: '点击边框筛选图标，可高亮所有外围平边碎片并暗淡内部碎片，助你先拼好外层框架。',
+        title: t.howTo.t5.title,
+        desc: t.howTo.t5.page,
       ),
       _TipItemData(
         icon: PhosphorIconsBold.broom,
         color: palette.warning,
-        title: '一键整理托盘',
-        desc: '散落在棋盘画布上的单块碎片，点击扫把图标即可瞬间整齐归纳至下方托盘，恢复整洁视野。',
+        title: t.howTo.t6.title,
+        desc: t.howTo.t6.page,
       ),
     ];
 
@@ -71,7 +72,7 @@ class HowToPlayPage extends StatelessWidget {
           children: [
             Icon(PhosphorIconsBold.question, color: palette.brand, size: 22),
             const SizedBox(width: 8),
-            Text('玩法与操作技巧', style: styles.h3.copyWith(fontSize: 19)),
+            Text(t.howTo.title, style: styles.h3.copyWith(fontSize: 19)),
           ],
         ),
       ),
@@ -122,7 +123,7 @@ class HowToPlayPage extends StatelessWidget {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            '轻松上手异形拼图',
+                            t.howTo.welcomeTitle,
                             style: styles.bodyBold.copyWith(
                               fontSize: 15,
                               color: palette.brand,
@@ -130,7 +131,7 @@ class HowToPlayPage extends StatelessWidget {
                           ),
                           const SizedBox(height: 2),
                           Text(
-                            '熟悉以下核心操作手势与辅助工具，能让你在挑战高难度拼图时事半功倍！',
+                            t.howTo.welcomeSub,
                             style: styles.caption.copyWith(height: 1.3),
                           ),
                         ],
