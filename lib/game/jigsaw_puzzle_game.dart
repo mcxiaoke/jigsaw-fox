@@ -2020,6 +2020,11 @@ class JigsawPuzzleGame extends FlameGame
     final savedMode = newState.extra['scatterMode'] as String?;
     // 旧存档或模式切换时，直接将所有未吸附/未拼合的游离单片按当前模式初始化归位（相当于自动执行一次扫把整理）
     final needsRealign = (savedMode == null || savedMode != currentMode);
+    if (needsRealign) {
+      AppLogger.game.info(
+        'Snapshot realign savedMode=${savedMode ?? '(none)'} currentMode=$currentMode dkey=${newState.difficultyKey} canonical=${newState.canonicalId}',
+      );
+    }
 
     // 2. 统计所有 cluster 尺寸，保全已拼合多片组合
     final clusterSizes = <int, int>{};
@@ -2162,7 +2167,13 @@ class JigsawPuzzleGame extends FlameGame
     final hint = PuzzleEngine.hintFor(_boardState);
     final targetPieceId = hint.pieceId;
     final targetComp = _pieces[targetPieceId];
-    if (targetComp == null) return;
+    if (targetComp == null) {
+      AppLogger.game.warning(
+        'hint skipped: target comp missing pieceId=$targetPieceId',
+      );
+      return;
+    }
+    AppLogger.game.info('hint used pieceId=$targetPieceId');
 
     final prevState = _boardState;
     final updated = _boardState.pieces.map((p) {

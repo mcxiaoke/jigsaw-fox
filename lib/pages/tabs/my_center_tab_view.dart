@@ -18,6 +18,7 @@ import '../../logic/content/app_content.dart';
 import '../../logic/download_manager.dart';
 import '../../logic/puzzle_model.dart';
 import '../../logic/unified_puzzle_resolver.dart';
+import '../../services/app_logger.dart';
 import '../../services/sound_service.dart';
 import '../../services/webview_service.dart';
 import '../../theme/app_palette.dart';
@@ -176,6 +177,9 @@ class _MyCenterTabViewState extends State<MyCenterTabView> {
       return tb.compareTo(ta);
     });
 
+    AppLogger.ui.info(
+      'MyCenter loadAllData done inProgress=${inProgress.length} completed=${completed.length} favorites=${favorites.length} custom=${custom.length}',
+    );
     if (mounted) {
       setState(() {
         _inProgressList = inProgress;
@@ -233,13 +237,23 @@ class _MyCenterTabViewState extends State<MyCenterTabView> {
           }
         }
       }
-    } catch (_) {}
+    } catch (e, st) {
+      AppLogger.ui.warning(
+        'MyCenter resolveImageBytes fallback cid=${card.canonicalId} src=${AppLogger.sanitizePath(card.imagePathOrUrl)}',
+        e,
+        st,
+      );
+    }
     // 兜底图
     final data = await rootBundle.load('assets/samples/animal_01.webp');
     return data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes);
   }
 
   Future<void> _handleCardClick(UnifiedPuzzleCardData card) async {
+    AppLogger.debug(
+      AppLogger.ui,
+      'MyCenter card click cid=${card.canonicalId} isOrphan=${card.isOrphan}',
+    );
     if (card.isOrphan) {
       await _cleanOrphan(card);
       return;

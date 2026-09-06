@@ -4,6 +4,7 @@ import 'package:phosphoricons_flutter/phosphoricons_flutter.dart';
 import '../../logic/cache/image_cache_manager.dart';
 import '../../logic/content/app_content.dart';
 import '../../logic/content/models/puzzle_event_item.dart';
+import '../../services/app_logger.dart';
 import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
 import '../../widgets/app_cached_image.dart';
@@ -125,7 +126,13 @@ class _EventsTabViewState extends State<EventsTabView> {
       ),
       clipBehavior: Clip.antiAlias,
       child: InkWell(
-        onTap: () => EventLevelsPage.open(context, event),
+        onTap: () {
+          AppLogger.debug(
+            AppLogger.events,
+            'Events tab open event id=${event.id} title=${event.title}',
+          );
+          EventLevelsPage.open(context, event);
+        },
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [

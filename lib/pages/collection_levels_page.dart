@@ -10,6 +10,7 @@ import '../logic/content/app_content.dart';
 import '../logic/content/models/puzzle_collection_item.dart';
 import '../logic/content/models/puzzle_level_item.dart';
 import '../logic/puzzle_model.dart';
+import '../services/app_logger.dart';
 import '../theme/app_palette.dart';
 import '../theme/app_text_styles.dart';
 import '../widgets/choose_difficulty_sheet.dart';
@@ -56,7 +57,15 @@ class _CollectionLevelsPageState extends State<CollectionLevelsPage> {
     try {
       await _content.ensureCollectionDownloaded(_currentCollection);
       _levels = _content.getCollectionLevels(_currentCollection);
-    } catch (e) {
+      AppLogger.content.info(
+        'CollectionLevels loaded id=${_currentCollection.id} count=${_levels.length}',
+      );
+    } catch (e, st) {
+      AppLogger.content.warning(
+        'CollectionLevels load failed id=${_currentCollection.id}',
+        e,
+        st,
+      );
       _levels = [];
     } finally {
       if (mounted) setState(() => _isLoading = false);
@@ -130,7 +139,12 @@ class _CollectionLevelsPageState extends State<CollectionLevelsPage> {
       } else if (File(localPath).existsSync()) {
         imgBytes = await File(localPath).readAsBytes();
       }
-    } catch (e) {
+    } catch (e, st) {
+      AppLogger.content.warning(
+        'CollectionLevels openLevel image fail id=${level.id}',
+        e,
+        st,
+      );
       if (mounted) {
         GameToast.show(
           context,

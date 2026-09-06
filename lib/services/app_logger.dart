@@ -43,6 +43,7 @@ class AppLogger {
   static final Logger imageCache = Logger('App.ImageCache');
   static final Logger thumbnail = Logger('App.Thumbnail');
   static final Logger upscaler = Logger('App.Upscaler');
+  static final Logger image = Logger('App.Image');
 
   // --- 文件落盘状态 ---
   static Directory? _logDir;
@@ -57,6 +58,10 @@ class AppLogger {
   static final List<String> _pendingLines = <String>[];
   static bool _fileEnabled = false;
   static Completer<void>? _initCompleter;
+
+  // --- 内存环形缓冲（供"查看日志"页读取快照与实时流） ---
+  static const int _memoryLimit = 3000;
+  static final List<LogRecord> _memoryRecords = <LogRecord>[];
 
   /// 初始化日志系统，需在 main() 最早调用（WidgetsFlutterBinding 之后）
   static Future<void> init({Level? level}) async {
@@ -159,14 +164,13 @@ class AppLogger {
 
   // ---- 内部：处理每条日志记录 ----
   static void _handleRecord(LogRecord rec) {
-    final timeStr = rec.time.toIso8601String();
-    final levelStr = _levelToShort(rec.level);
-    final loggerName = rec.loggerName;
-    final msg = rec.message;
-    final errStr = rec.error != null ? ' | error=${rec.error}' : '';
-    final stackStr = rec.stackTrace != null ? '\n${rec.stackTrace}' : '';
+    // 维护进程内最近记录环形缓冲（日志查看页快照数据源）
+    _memoryRecords.add(rec);
+    if (_memoryRecords.length > _memoryLimit) {
+      _memoryRecords.removeAt(0);
+    }
 
-    final line = '$timeStr [$levelStr] [$loggerName] $msg$errStr$stackStr';
+    final line = formatRecord(rec);
 
     // 控制台
     _writeToConsole(rec, line);
@@ -175,6 +179,18 @@ class AppLogger {
     if (_fileEnabled) {
       _enqueueFileLine(line);
     }
+  }
+
+  /// 将记录格式化为标准一行文本（控制台 / 文件 / 日志页共用）
+  static String formatRecord(LogRecord rec) {
+    final timeStr = rec.time.toIso8601String();
+    final levelStr = _levelToShort(rec.level);
+    final loggerName = rec.loggerName;
+    final msg = rec.message;
+    final errStr = rec.error != null ? ' | error=${rec.error}' : '';
+    final stackStr = rec.stackTrace != null ? '\n${rec.stackTrace}' : '';
+
+    return '$timeStr [$levelStr] [$loggerName] $msg$errStr$stackStr';
   }
 
   static String _levelToShort(Level level) {
@@ -435,6 +451,31 @@ class AppLogger {
   /// 获取当前日志文件路径
   static String? get currentLogPath => _currentFile?.path;
 
+  /// 进程内最近记录快照（日志查看页初始渲染数据源，最多 [_memoryLimit] 条）
+  static List<LogRecord> get memoryRecords =>
+      List<LogRecord>.of(_memoryRecords);
+
+  /// 实时记录广播流（需在 [AppLogger.init] 之后监听）
+  static Stream<LogRecord> get liveRecords => Logger.root.onRecord;
+
+  /// 读取今天所有日志文件的行（含分片，按序号升序合并），供日志查看页加载历史
+  static Future<List<String>> readTodayLogLines() async {
+    final files = await listLogFiles();
+    if (files.isEmpty) return const [];
+    final now = DateTime.now();
+    final day =
+        '${now.year.toString().padLeft(4, '0')}${now.month.toString().padLeft(2, '0')}${now.day.toString().padLeft(2, '0')}';
+    final lines = <String>[];
+    for (final f in files) {
+      if (p.basename(f.path).startsWith('app_$day')) {
+        try {
+          lines.addAll(await f.readAsLines());
+        } catch (_) {}
+      }
+    }
+    return lines;
+  }
+
   /// 列出所有日志文件（按时间升序）
   static Future<List<File>> listLogFiles() async {
     if (_logDir == null || !await _logDir!.exists()) return [];
@@ -467,8 +508,9 @@ class AppLogger {
     await _sink?.flush();
   }
 
-  /// 清空所有日志
+  /// 清空所有日志（内存缓冲 + 磁盘文件）
   static Future<void> clearAll() async {
+    _memoryRecords.clear();
     _pendingLines.clear();
     try {
       await _sink?.close();

@@ -303,6 +303,10 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
       },
     );
 
+    AppLogger.game.info(
+      'GamePage enter game cid=${_canonicalIdForSave()} rows=${effectiveDiff.rows} cols=${effectiveDiff.cols} pieceCount=${effectiveDiff.pieceCount} hasSnapshot=${widget.initialSnapshotJson != null} scatterMode=${_repo.pieceScatterMode}',
+    );
+
     if (mounted) {
       setState(() {
         _game = game;
@@ -370,8 +374,13 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
           snapshotJson: snapshot,
           difficultyHint: _effectiveDifficulty ?? widget.difficulty,
         );
+        AppLogger.game.info(
+          'flushSync saved ok cid=$canonicalId percent=$percent',
+        );
       }
-    } catch (_) {}
+    } catch (e, st) {
+      AppLogger.game.warning('flushSync save failed', e, st);
+    }
   }
 
   String _canonicalIdForSave() {
@@ -513,6 +522,9 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
       _effectiveDifficulty ?? widget.difficulty,
     );
     final cid = _canonicalIdForSave();
+    AppLogger.game.info(
+      'Settlement start cid=$cid dkey=$dkey stars=$stars pieces=$actualPieces hints=$hints sec=$_seconds',
+    );
 
     // 1. 原子更新 ProgressStore 档位记录并获得 deltaStars 与 minHintsUsed 状态
     final updateResult = await ProgressStore.instance
@@ -598,6 +610,9 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
     final results = await Future.wait([rewardFuture, newAchievementsFuture]);
     final reward = results[0] as SettlementRewardResult;
     final newAchievements = results[1] as List<AchievementDefinition>;
+    AppLogger.game.info(
+      'Settlement done cid=$cid stars=$stars rewardCoins=${reward.earnedCoins} newAchievements=${newAchievements.length}',
+    );
 
     // 4. 后台异步删除快照，附加 catchError 避免 unobserved exception
     unawaited(

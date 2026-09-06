@@ -4,6 +4,7 @@ import 'package:phosphoricons_flutter/phosphoricons_flutter.dart';
 import '../data/game_repository.dart';
 import '../data/progress_store.dart';
 import '../logic/cache/image_cache_manager.dart';
+import '../services/app_logger.dart';
 import '../services/economy_service.dart';
 import '../services/sound_service.dart';
 import '../theme/app_palette.dart';
@@ -11,6 +12,7 @@ import '../theme/app_text_styles.dart';
 import '../widgets/choose_background_sheet.dart';
 import '../widgets/game_toast.dart';
 import 'how_to_play_page.dart';
+import 'log_viewer_page.dart';
 
 /// Full-screen Game Settings page with grouped settings cards.
 class SettingsPage extends StatefulWidget {
@@ -65,8 +67,10 @@ class _SettingsPageState extends State<SettingsPage> {
     if (_clearingCache) return;
     setState(() => _clearingCache = true);
     try {
+      AppLogger.ui.info('Settings clear thumbnail cache start');
       await ImageCacheManager.instance.clearCache();
       await _loadCacheSize();
+      AppLogger.ui.info('Settings clear thumbnail cache done');
       if (mounted) {
         GameToast.show(
           context,
@@ -75,7 +79,8 @@ class _SettingsPageState extends State<SettingsPage> {
           type: GameToastType.success,
         );
       }
-    } catch (e) {
+    } catch (e, st) {
+      AppLogger.ui.warning('Settings clear thumbnail cache failed', e, st);
       if (mounted) {
         GameToast.show(
           context,
@@ -279,6 +284,24 @@ class _SettingsPageState extends State<SettingsPage> {
                 Divider(height: 1, indent: 56, color: palette.divider),
                 ListTile(
                   leading: Icon(
+                    PhosphorIconsBold.fileText,
+                    color: palette.info,
+                  ),
+                  title: Text('查看运行日志', style: styles.bodyBold),
+                  subtitle: Text(
+                    '查看、过滤并复制 App 运行日志（诊断用）',
+                    style: styles.caption,
+                  ),
+                  trailing: Icon(
+                    PhosphorIconsBold.caretRight,
+                    size: 18,
+                    color: palette.secondaryText,
+                  ),
+                  onTap: () => LogViewerPage.open(context),
+                ),
+                Divider(height: 1, indent: 56, color: palette.divider),
+                ListTile(
+                  leading: Icon(
                     PhosphorIconsBold.trashSimple,
                     color: palette.error,
                   ),
@@ -317,6 +340,9 @@ class _SettingsPageState extends State<SettingsPage> {
                       ),
                     );
                     if (ok == true) {
+                      AppLogger.ui.warning(
+                        'Settings resetAllData coinsBefore=$_coins solvedBefore=$_totalSolved starsBefore=$_totalStars',
+                      );
                       await _repo.resetAllData();
                       if (context.mounted) {
                         setState(() {});

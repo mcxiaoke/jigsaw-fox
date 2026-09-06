@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:phosphoricons_flutter/phosphoricons_flutter.dart';
 
+import '../services/app_logger.dart';
 import '../services/sound_service.dart';
 import '../theme/app_palette.dart';
 import '../theme/app_text_styles.dart';
@@ -67,6 +68,10 @@ class _MainScreenState extends State<MainScreen> {
           HomeTabView(
             onSwitchToDaily: () {
               SoundService.I.play(Sfx.tap);
+              AppLogger.debug(
+                AppLogger.ui,
+                'Main goto tab 1 daily from $_currentIndex',
+              );
               setState(() => _currentIndex = 1);
             },
           ),
@@ -76,6 +81,10 @@ class _MainScreenState extends State<MainScreen> {
             isActive: _currentIndex == 3,
             onGoExplore: () {
               SoundService.I.play(Sfx.tap);
+              AppLogger.debug(
+                AppLogger.ui,
+                'Main goto tab 0 home from $_currentIndex',
+              );
               setState(() => _currentIndex = 0);
             },
           ),
@@ -86,6 +95,10 @@ class _MainScreenState extends State<MainScreen> {
         onTap: (idx) {
           if (idx != _currentIndex) {
             SoundService.I.play(Sfx.tap);
+            AppLogger.debug(
+              AppLogger.ui,
+              'Main tab switch $_currentIndex -> $idx',
+            );
           }
           setState(() => _currentIndex = idx);
         },

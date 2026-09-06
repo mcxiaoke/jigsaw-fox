@@ -8,6 +8,7 @@ import '../logic/content/app_content.dart';
 import '../logic/content/models/puzzle_event_item.dart';
 import '../logic/content/models/puzzle_level_item.dart';
 import '../logic/puzzle_model.dart';
+import '../services/app_logger.dart';
 import '../theme/app_palette.dart';
 import '../theme/app_text_styles.dart';
 import '../widgets/choose_difficulty_sheet.dart';
@@ -49,8 +50,16 @@ class _EventLevelsPageState extends State<EventLevelsPage> {
     try {
       await _content.ensureEventDownloaded(_currentEvent);
       _levels = _content.getEventLevels(_currentEvent);
-    } catch (e) {
+      AppLogger.events.info(
+        'EventLevels loaded id=${_currentEvent.id} count=${_levels.length}',
+      );
+    } catch (e, st) {
       // P13 永久 loading 防护：网络失败仍需置位
+      AppLogger.events.warning(
+        'EventLevels load failed id=${_currentEvent.id}',
+        e,
+        st,
+      );
       _levels = [];
     } finally {
       if (mounted) setState(() => _isLoading = false);
@@ -78,7 +87,12 @@ class _EventLevelsPageState extends State<EventLevelsPage> {
       } else if (File(localPath).existsSync()) {
         imgBytes = await File(localPath).readAsBytes();
       }
-    } catch (e) {
+    } catch (e, st) {
+      AppLogger.events.warning(
+        'EventLevels openLevel image fail id=${level.id}',
+        e,
+        st,
+      );
       if (mounted) {
         GameToast.show(
           context,

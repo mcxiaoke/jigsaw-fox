@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../logic/models/puzzle_state.dart';
 import '../logic/puzzle_model.dart';
+import '../services/app_logger.dart';
 import '../widgets/continue_dialog.dart';
 import 'progress_store.dart';
 import 'snapshot_store.dart';
@@ -63,6 +64,9 @@ class ResumeHelper {
     }
     if (snapshot == null) {
       // 索引记录有快照但实际文件不存在或已损坏被删：自动对账纠正索引（P1-8）
+      AppLogger.repo.warning(
+        'ResumeHelper self-heal: index has snapshot but file missing, clear index cid=$canonicalId dkey=$usedDkey',
+      );
       await ProgressStore.instance.clearAllSnapshots(canonicalId);
       return null;
     }
@@ -177,11 +181,15 @@ class ResumeHelper {
   }) async {
     if (!context.mounted) return true;
     if (result == 'cancelled') {
+      AppLogger.repo.info('ResumeHelper choice=cancelled cid=$canonicalId');
       onCancelled();
       return true;
     }
     if (result.startsWith('continue:')) {
       final k = result.substring('continue:'.length);
+      AppLogger.repo.info(
+        'ResumeHelper choice=continue cid=$canonicalId dkey=$k',
+      );
       final diff = await diffForKey(k, fallbackDifficulty);
       final jsonStr = await SnapshotStore.instance.loadJsonString(
         canonicalId,
@@ -192,6 +200,9 @@ class ResumeHelper {
       return true;
     } else if (result.startsWith('restart:')) {
       final k = result.substring('restart:'.length);
+      AppLogger.repo.info(
+        'ResumeHelper choice=restart cid=$canonicalId dkey=$k',
+      );
       await clearResume(canonicalId, k);
       await onClearRepo(k);
       // 重开不直接进游戏，清除后返回 false 让调用方展示无记录的难度选择页

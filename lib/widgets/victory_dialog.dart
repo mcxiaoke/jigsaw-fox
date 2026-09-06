@@ -8,6 +8,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:phosphoricons_flutter/phosphoricons_flutter.dart';
 
 import '../services/achievement_service.dart';
+import '../services/app_logger.dart';
 import '../services/sound_service.dart';
 import '../theme/app_palette.dart';
 import '../theme/app_text_styles.dart';
@@ -77,6 +78,9 @@ class VictoryDialog extends StatefulWidget {
     VoidCallback? onViewPuzzle,
     VoidCallback? onExit,
   }) {
+    AppLogger.ui.info(
+      'VictoryDialog shown stars=$stars rewardCoins=$rewardCoins pieceCount=$pieceCount newAchievements=${newAchievements.length}',
+    );
     return showDialog<void>(
       context: context,
       barrierDismissible: false,
@@ -221,7 +225,8 @@ class _VictoryDialogState extends State<VictoryDialog>
           icon: PhosphorIconsFill.checkCircle,
         );
       }
-    } catch (e) {
+    } catch (e, st) {
+      AppLogger.ui.warning('VictoryDialog save wallpaper failed', e, st);
       if (mounted) {
         GameToast.show(context, message: '保存失败: $e', type: GameToastType.error);
       }

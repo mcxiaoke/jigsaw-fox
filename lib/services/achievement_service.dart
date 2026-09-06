@@ -367,6 +367,10 @@ class AchievementService {
     bool isFirstNoHintWin = false,
   }) async {
     await _store.init();
+    AppLogger.debug(
+      AppLogger.repo,
+      'onPuzzleSolved cid=$canonicalId pieces=$actualPieces stars=$stars sec=$elapsedSeconds hints=$hintsUsed type=$puzzleType tier=$tierIndex',
+    );
 
     // 1. 通关图数同步（选型 1：以 ProgressStore.getTotalSolved 去重图数为 SSOT）
     try {
@@ -425,19 +429,45 @@ class AchievementService {
     if (tierIndex >= 5) await _store.setCounter('tier_l5_solved', 1);
     if (tierIndex >= 6) await _store.setCounter('tier_l6_solved', 1);
 
-    return await _evaluateAll();
+    final newlyUnlocked = await _evaluateAll();
+    if (newlyUnlocked.isNotEmpty) {
+      AppLogger.repo.info(
+        'Achievements evaluated unlocked=${newlyUnlocked.map((d) => d.id).join(',')} cid=$canonicalId',
+      );
+    } else {
+      AppLogger.debug(
+        AppLogger.repo,
+        'Achievements evaluated no new cid=$canonicalId',
+      );
+    }
+    return newlyUnlocked;
   }
 
   /// 领取成就金币奖励（计入每日 200 币软帽，设计 §6.1 "全渠道" + §8.1 日上限兜底）
   Future<bool> claimReward(String achievementId) async {
     await _store.init();
-    if (!_store.isUnlocked(achievementId)) return false;
-    if (_store.isClaimed(achievementId)) return false;
+    if (!_store.isUnlocked(achievementId)) {
+      AppLogger.debug(
+        AppLogger.repo,
+        'claimReward skip notUnlocked id=$achievementId',
+      );
+      return false;
+    }
+    if (_store.isClaimed(achievementId)) {
+      AppLogger.debug(
+        AppLogger.repo,
+        'claimReward skip alreadyClaimed id=$achievementId',
+      );
+      return false;
+    }
 
     final def = allAchievements.firstWhere((a) => a.id == achievementId);
     await _store.markClaimed(achievementId);
     await EconomyService.instance.init();
     await EconomyService.instance.addCoins(def.coinReward);
+    AppLogger.repo.info(
+      'Achievement reward claimed id=$achievementId coins=+${def.coinReward}',
+    );
     return true;
   }
 }

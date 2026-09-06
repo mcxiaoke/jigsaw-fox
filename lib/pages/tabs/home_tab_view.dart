@@ -9,12 +9,14 @@ import '../../data/snapshot_store.dart';
 import '../../logic/cache/image_cache_manager.dart';
 import '../../logic/content/app_content.dart';
 import '../../logic/image_source.dart';
+import '../../services/app_logger.dart';
 import '../../services/sound_service.dart';
 import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
 import '../../widgets/adaptive_hero_banner.dart';
 import '../../widgets/app_cached_image.dart';
 import '../../widgets/choose_difficulty_sheet.dart';
+import '../../widgets/game_toast.dart';
 import '../event_levels_page.dart';
 import '../game_page.dart';
 
@@ -104,10 +106,30 @@ class _HomeTabViewState extends State<HomeTabView> {
   }
 
   Future<void> _openLevel(LevelItem level) async {
-    final bytes = await rootBundle.load(level.assetPath);
-    final imgBytes = bytes.buffer.asUint8List(
-      bytes.offsetInBytes,
-      bytes.lengthInBytes,
+    Uint8List imgBytes;
+    try {
+      final bytes = await rootBundle.load(level.assetPath);
+      imgBytes = bytes.buffer.asUint8List(
+        bytes.offsetInBytes,
+        bytes.lengthInBytes,
+      );
+    } catch (e, st) {
+      AppLogger.game.warning(
+        'Home openLevel asset load failed index=${level.index} path=${level.assetPath}',
+        e,
+        st,
+      );
+      if (mounted) {
+        GameToast.show(
+          context,
+          message: '关卡图片加载失败，请重试',
+          type: GameToastType.error,
+        );
+      }
+      return;
+    }
+    AppLogger.game.info(
+      'Home openLevel index=${level.index} canonical=${GameRepository.canonicalForLevel(level.index)}',
     );
     if (!mounted) return;
     final canonicalId = GameRepository.canonicalForLevel(level.index);

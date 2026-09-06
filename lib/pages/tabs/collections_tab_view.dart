@@ -5,6 +5,7 @@ import '../../logic/cache/image_cache_manager.dart';
 import '../../logic/content/app_content.dart';
 import '../../logic/content/models/puzzle_collection_item.dart';
 import '../../logic/content/models/puzzle_event_item.dart';
+import '../../services/app_logger.dart';
 import '../../services/sound_service.dart';
 import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
@@ -49,10 +50,14 @@ class _CollectionsTabViewState extends State<CollectionsTabView> {
 
   Future<void> _startDownload(PuzzleCollectionItem item) async {
     SoundService.I.play(Sfx.tap);
+    AppLogger.content.info(
+      'Collections start download id=${item.id} title=${item.title} isZip=${item.isZipType}',
+    );
     try {
       final ok = await _content.collections.ensureCollectionDownloaded(item);
       if (mounted) {
         if (ok) {
+          AppLogger.content.info('Collections download ok id=${item.id}');
           GameToast.show(
             context,
             icon: PhosphorIconsFill.checkCircle,
@@ -60,6 +65,9 @@ class _CollectionsTabViewState extends State<CollectionsTabView> {
             type: GameToastType.success,
           );
         } else {
+          AppLogger.content.warning(
+            'Collections download failed id=${item.id}',
+          );
           GameToast.show(
             context,
             icon: PhosphorIconsRegular.warning,
@@ -68,7 +76,12 @@ class _CollectionsTabViewState extends State<CollectionsTabView> {
           );
         }
       }
-    } catch (e) {
+    } catch (e, st) {
+      AppLogger.content.warning(
+        'Collections download exception id=${item.id}',
+        e,
+        st,
+      );
       if (mounted) {
         GameToast.show(
           context,
