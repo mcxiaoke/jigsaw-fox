@@ -57,19 +57,20 @@ class LevelImageResolver {
 
   /// 解析关卡本地路径：本地/资产直接返回；网络则后台下载落盘（幂等，单飞由调用方队列保证）
   Future<String> resolveLevelLocalPath(PuzzleLevelItem level) async {
-    final path = level.imagePathOrUrl;
-
-    // 1. 本地文件快路径
-    if (level.isLocalFile && path.isNotEmpty) {
-      if (File(path).existsSync()) return path;
+    // 1. 本地文件快路径：有 localPath 就优先用 localPath
+    final local = level.localPath;
+    if (local != null && local.isNotEmpty) {
+      if (local.startsWith('assets/') || File(local).existsSync()) {
+        return local;
+      }
       // 管线已标记本地但文件被误删，回退到网络下载
     }
 
-    // 2. 资产
-    if (path.startsWith('assets/')) return path;
+    // 2. 远端 URL 解析与下载
+    final remoteUrl = level.url;
+    if (remoteUrl.startsWith('assets/')) return remoteUrl;
 
-    // 3. 网络：优先复用主线管线（已落盘则直接用）
-    if (path.startsWith('http://') || path.startsWith('https://')) {
+    if (remoteUrl.startsWith('http://') || remoteUrl.startsWith('https://')) {
       // 尝试主线管线已缓存（避免与通用目录重复）
       try {
         final mainLevels = AppContent.instance.isInitialized
@@ -77,22 +78,22 @@ class LevelImageResolver {
             : <PuzzleLevelItem>[];
         final existing = mainLevels.where((l) => l.id == level.id).toList();
         if (existing.isNotEmpty &&
-            existing.first.isLocalFile &&
-            File(existing.first.imagePathOrUrl).existsSync()) {
-          return existing.first.imagePathOrUrl;
+            existing.first.localPath != null &&
+            File(existing.first.localPath!).existsSync()) {
+          return existing.first.localPath!;
         }
       } catch (_) {}
 
-      // 4. 通用网络关卡落地（懒下载，幂等）
+      // 3. 通用网络关卡落地（懒下载，幂等）
       try {
         // 若管线侧 ensure 已支持，直接复用（保持 _levelsMap 同步）
         if (AppContent.instance.isInitialized) {
           try {
             final ensured = await AppContent.instance.manager
                 .ensureMainLevelDownloaded(level);
-            if (ensured.isLocalFile &&
-                File(ensured.imagePathOrUrl).existsSync()) {
-              return ensured.imagePathOrUrl;
+            if (ensured.localPath != null &&
+                File(ensured.localPath!).existsSync()) {
+              return ensured.localPath!;
             }
           } catch (_) {
             // 回退通用目录
@@ -100,8 +101,8 @@ class LevelImageResolver {
         }
 
         final dir = await _getNetworkLevelsDir();
-        final hash = _hashUrl(path);
-        final ext = _extensionForUrl(path);
+        final hash = _hashUrl(remoteUrl);
+        final ext = _extensionForUrl(remoteUrl);
         final targetPath = p.join(dir, 'net_$hash$ext');
         final targetFile = File(targetPath);
         if (targetFile.existsSync() && await targetFile.length() > 0) {
@@ -109,9 +110,12 @@ class LevelImageResolver {
         }
 
         AppLogger.content.info(
-          'LevelImageResolver downloading $hash -> $targetPath url=${AppLogger.sanitizeUrl(path)}',
+          'LevelImageResolver downloading $hash -> $targetPath url=${AppLogger.sanitizeUrl(remoteUrl)}',
         );
-        final downloaded = await _httpClient.downloadFile(path, targetPath);
+        final downloaded = await _httpClient.downloadFile(
+          remoteUrl,
+          targetPath,
+        );
         if (downloaded.existsSync() && await downloaded.length() > 0) {
           AppLogger.content.info(
             'LevelImageResolver done $hash bytes=${await downloaded.length()}',
@@ -120,29 +124,32 @@ class LevelImageResolver {
         }
       } catch (e, st) {
         AppLogger.content.warning(
-          'LevelImageResolver failed url=${AppLogger.sanitizeUrl(path)}',
+          'LevelImageResolver failed url=${AppLogger.sanitizeUrl(remoteUrl)}',
           e,
           st,
         );
       }
 
       // 失败回退原 URL（让上层显示占位）
-      return path;
+      return remoteUrl;
     }
 
-    return path;
+    return level.displayPath;
   }
 
   /// 同步快路径：仅判断是否已落地，不触发下载（用于预检）
   bool isLocallyAvailable(PuzzleLevelItem level) {
-    final path = level.imagePathOrUrl;
-    if (path.startsWith('assets/')) return true;
-    if (level.isLocalFile && File(path).existsSync()) return true;
-    // 检查通用目录是否已有
-    if (path.startsWith('http')) {
+    final local = level.localPath;
+    if (local != null && local.isNotEmpty) {
+      if (local.startsWith('assets/')) return true;
+      if (File(local).existsSync()) return true;
+    }
+    final remoteUrl = level.url;
+    if (remoteUrl.startsWith('assets/')) return true;
+    if (remoteUrl.startsWith('http')) {
       try {
-        final hash = _hashUrl(path);
-        final ext = _extensionForUrl(path);
+        final hash = _hashUrl(remoteUrl);
+        final ext = _extensionForUrl(remoteUrl);
         // 同步取 dir 可能未初始化，降级为 false（不阻塞）
         if (_networkLevelsDir != null) {
           final targetPath = p.join(_networkLevelsDir!, 'net_$hash$ext');

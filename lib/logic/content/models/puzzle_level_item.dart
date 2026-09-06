@@ -4,8 +4,10 @@ import 'canonical_id.dart';
 class PuzzleLevelItem {
   const PuzzleLevelItem({
     required this.id,
-    required this.imagePathOrUrl,
-    required this.isLocalFile,
+    this.url = '',
+    this.localPath,
+    this.hash,
+    bool? isLocalFile,
     this.title,
     this.order = 0,
     this.tags = const [],
@@ -21,16 +23,37 @@ class PuzzleLevelItem {
     this.addedAt,
     this.unlockCoins,
     this.unlockCode,
-  });
+  }) : _isLocalFile = isLocalFile; // ignore: prefer_initializing_formals
 
   /// 全局唯一 Canonical ID (如 "main:101", "daily:20260827", "event:cyberpunk:01")
   final String id;
 
-  /// 本地绝对路径、Asset 路径或网络 CDN URL
-  final String imagePathOrUrl;
+  /// 远端网络绝对/相对 URL (如 "http://.../main/images/0101.webp" 或 "main/images/0101.webp")
+  /// 终生保持稳定，不被本地下载路径所篡改覆盖
+  final String url;
 
-  /// 资源是否已下载在本地磁盘 (可直接离线秒开)
-  final bool isLocalFile;
+  /// 本地持久化缓存绝对路径 (如果已下载/解压落盘，如 "C:/.../101.webp")
+  final String? localPath;
+
+  /// 资源内容指纹 (SHA-256)，用于补丁换图与缓存失效检测
+  final String? hash;
+
+  final bool? _isLocalFile;
+
+  /// 资源是否已下载在本地磁盘 (优先依据 localPath 是否存在且非空推导，也可显式指定)
+  bool get isLocalFile =>
+      _isLocalFile ??
+      (localPath != null &&
+          localPath!.isNotEmpty &&
+          !localPath!.startsWith('http://') &&
+          !localPath!.startsWith('https://'));
+
+  /// 供图像加载器使用的实际路径：优先使用 localPath，无则回退使用 url
+  String get displayPath =>
+      (localPath != null && localPath!.isNotEmpty) ? localPath! : url;
+
+  /// 兼容老接口访问
+  String get imagePathOrUrl => displayPath;
 
   /// 自定义展示标题 (可选，若无则由 displayTitle 自动推导)
   final String? title;
@@ -85,8 +108,12 @@ class PuzzleLevelItem {
   /// 复制并更新部分属性
   PuzzleLevelItem copyWith({
     String? id,
-    String? imagePathOrUrl,
+    String? url,
+    String? localPath,
+    bool clearLocalPath = false,
     bool? isLocalFile,
+    String? hash,
+    bool clearHash = false,
     String? title,
     int? order,
     List<String>? tags,
@@ -108,8 +135,10 @@ class PuzzleLevelItem {
   }) {
     return PuzzleLevelItem(
       id: id ?? this.id,
-      imagePathOrUrl: imagePathOrUrl ?? this.imagePathOrUrl,
+      url: url ?? this.url,
+      localPath: clearLocalPath ? null : (localPath ?? this.localPath),
       isLocalFile: isLocalFile ?? this.isLocalFile,
+      hash: clearHash ? null : (hash ?? this.hash),
       title: title ?? this.title,
       order: order ?? this.order,
       tags: tags ?? this.tags,
@@ -137,8 +166,10 @@ class PuzzleLevelItem {
   Map<String, dynamic> toJson() {
     return {
       'id': id,
-      'imagePathOrUrl': imagePathOrUrl,
+      'url': url,
+      if (localPath != null) 'localPath': localPath,
       'isLocalFile': isLocalFile,
+      if (hash != null) 'hash': hash,
       'title': title,
       'order': order,
       'tags': tags,
@@ -147,16 +178,18 @@ class PuzzleLevelItem {
       'dailyDate': dailyDate,
       'isTimeLocked': isTimeLocked,
       'addedAt': addedAt?.toIso8601String(),
-      'unlockCoins': unlockCoins,
-      'unlockCode': unlockCode,
+      if (unlockCoins != null) 'unlockCoins': unlockCoins,
+      if (unlockCode != null) 'unlockCode': unlockCode,
     };
   }
 
   factory PuzzleLevelItem.fromJson(Map<String, dynamic> json) {
     return PuzzleLevelItem(
       id: json['id'] as String? ?? 'unknown',
-      imagePathOrUrl: json['imagePathOrUrl'] as String? ?? '',
-      isLocalFile: json['isLocalFile'] as bool? ?? false,
+      url: json['url'] as String? ?? '',
+      localPath: json['localPath'] as String?,
+      isLocalFile: json['isLocalFile'] as bool?,
+      hash: json['hash'] as String?,
       title: json['title'] as String?,
       order: json['order'] as int? ?? 0,
       tags:

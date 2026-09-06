@@ -2,11 +2,12 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:jigsawpuzzle/logic/content/content_manager.dart';
 import 'package:jigsawpuzzle/logic/content/models/canonical_id.dart';
+import 'package:jigsawpuzzle/logic/content/network/content_http_client.dart';
 import 'package:jigsawpuzzle/logic/content/pipelines/daily_content_pipeline.dart';
 import 'package:path/path.dart' as p;
 
 void main() {
-  const testServerBase = 'http://192.168.1.118/data/www/game/test';
+  const testServerBase = 'http://192.168.1.118/data/www/game/test2';
   late Directory sandboxDir;
   late String supportDir;
   late String documentsDir;
@@ -82,7 +83,7 @@ void main() {
 
       // 验证 Root Manifest
       expect(manager.currentManifest, isNotNull);
-      expect(manager.currentManifest?.mainModule.version, equals(120));
+      expect(manager.currentManifest?.mainModule.version, equals(103));
 
       // 验证首页关卡
       final mainLevels = manager.getMainLevels();
@@ -90,19 +91,20 @@ void main() {
       expect(mainLevels.first.id, equals('main:101'));
       expect(mainLevels.last.id, equals('main:120'));
 
-      // 验证标签列表
+      // 验证标签列表 (对齐 data/taxonomy.json 规范)
       final tags = manager.getMainTags();
       expect(tags.contains('all'), isTrue);
-      expect(tags.contains('animal'), isTrue);
-      expect(tags.contains('bird'), isTrue);
-      expect(tags.contains('panda'), isTrue);
+      expect(tags.contains('Animals'), isTrue);
+      expect(tags.contains('Nature'), isTrue);
+      expect(tags.contains('Landscapes'), isTrue);
+      expect(tags.contains('Structures'), isTrue);
 
       // 验证多标签过滤
-      final animalLevels = manager.filterMainByTag('animal');
+      final animalLevels = manager.filterMainByTag('Animals');
       expect(animalLevels.isNotEmpty, isTrue);
 
-      final birdLevels = manager.filterMainByTag('bird');
-      expect(birdLevels.isNotEmpty, isTrue);
+      final natureLevels = manager.filterMainByTag('Nature');
+      expect(natureLevels.isNotEmpty, isTrue);
 
       final allFiltered = manager.filterMainByTag('all');
       expect(allFiltered.length, equals(20));
@@ -115,7 +117,8 @@ void main() {
         level101,
       );
       expect(downloadedLevel101.isLocalFile, isTrue);
-      expect(File(downloadedLevel101.imagePathOrUrl).existsSync(), isTrue);
+      expect(downloadedLevel101.localPath, isNotNull);
+      expect(File(downloadedLevel101.localPath!).existsSync(), isTrue);
     });
 
     test(
@@ -213,7 +216,8 @@ void main() {
         final cyberpunkLevels = manager.getEventLevels(cyberpunkEvent);
         expect(cyberpunkLevels.length, equals(6));
         expect(cyberpunkLevels.first.id, equals('event:cyberpunk_2026:01'));
-        expect(File(cyberpunkLevels.first.imagePathOrUrl).existsSync(), isTrue);
+        expect(cyberpunkLevels.first.localPath, isNotNull);
+        expect(File(cyberpunkLevels.first.localPath!).existsSync(), isTrue);
 
         // 验证 Array 模式活动关卡映射
         final animalEvent = visibleEvents.firstWhere(
@@ -223,7 +227,7 @@ void main() {
 
         final animalLevels = manager.getEventLevels(animalEvent);
         expect(animalLevels.length, equals(5));
-        expect(animalLevels.first.id, equals('event:cute_animals_party:101'));
+        expect(animalLevels.first.id, equals('event:cute_animals_party:0101'));
       },
     );
 
@@ -240,7 +244,7 @@ void main() {
         );
 
         final manifest = await manager.manifestRouter.resolveManifest();
-        expect(manifest.mainModule.version, equals(120));
+        expect(manifest.mainModule.version, equals(103));
       },
     );
 
@@ -266,9 +270,9 @@ void main() {
         // 初始化自愈：从本地缓存恢复
         await offlineManager.initialize();
         expect(offlineManager.currentManifest, isNotNull);
-        expect(offlineManager.currentManifest?.mainModule.version, equals(120));
+        expect(offlineManager.currentManifest?.mainModule.version, equals(103));
         expect(offlineManager.getMainLevels().length, equals(20));
-        expect(offlineManager.getMainTags().contains('animal'), isTrue);
+        expect(offlineManager.getMainTags().contains('Animals'), isTrue);
       },
     );
 
@@ -312,6 +316,195 @@ void main() {
         );
         expect(sepLevels.length, equals(25));
         expect(sepLevels.last.dailyDate, equals('20260925'));
+      },
+    );
+  });
+
+  group('RFC 3986 URL Resolution Tests', () {
+    test('Correctly resolves relative and absolute URLs', () {
+      const baseManifest =
+          'http://192.168.1.118/data/www/game/test2/manifest.json';
+
+      // 1. 同级相对路径
+      expect(
+        ContentHttpClient.resolveUrl(baseManifest, 'main/index.json'),
+        equals('http://192.168.1.118/data/www/game/test2/main/index.json'),
+      );
+
+      // 2. 模块内批次相对路径
+      const baseMainIndex =
+          'http://192.168.1.118/data/www/game/test2/main/index.json';
+      expect(
+        ContentHttpClient.resolveUrl(baseMainIndex, 'batches/batch_001.json'),
+        equals(
+          'http://192.168.1.118/data/www/game/test2/main/batches/batch_001.json',
+        ),
+      );
+
+      // 3. 批次内部相对上级图片导航 (../images/0101.webp)
+      const baseBatch =
+          'http://192.168.1.118/data/www/game/test2/main/batches/batch_001.json';
+      expect(
+        ContentHttpClient.resolveUrl(baseBatch, '../images/0101.webp'),
+        equals(
+          'http://192.168.1.118/data/www/game/test2/main/images/0101.webp',
+        ),
+      );
+
+      // 4. 绝对路径保持原样
+      expect(
+        ContentHttpClient.resolveUrl(
+          baseManifest,
+          'https://cdn2.other.com/extra.json',
+        ),
+        equals('https://cdn2.other.com/extra.json'),
+      );
+    });
+  });
+
+  group('Universal v2.3.0 Deterministic Content Tests with test2 Server', () {
+    const test2ServerBase = 'http://192.168.1.118/data/www/game/test2';
+
+    test(
+      '1. Full sync with test2, batch difference and explicit ID contract',
+      () async {
+        final manager = ContentManager(
+          bootstrapUrls: ['$test2ServerBase/manifest.json'],
+          appSupportDir: supportDir,
+          appDocumentsDir: documentsDir,
+        );
+
+        await manager.syncAll();
+
+        // 验证 Manifest 版本与 BaseURI
+        expect(manager.currentManifest, isNotNull);
+        expect(manager.currentManifest?.schemaVersion, equals(4));
+        expect(
+          manager.currentManifest?.baseUri,
+          equals('$test2ServerBase/manifest.json'),
+        );
+
+        // 验证 Main 关卡加载
+        final levels = manager.getMainLevels();
+        expect(
+          levels.length,
+          equals(20),
+          reason: 'Total levels should be exactly 20 (no twin levels)',
+        );
+
+        // 验证所有关卡 ID 均严格遵循 main:XXX 格式，不含 url 噪音
+        for (final l in levels) {
+          expect(
+            RegExp(r'^main:\d+$').hasMatch(l.id),
+            isTrue,
+            reason: 'ID ${l.id} must be main:order',
+          );
+        }
+
+        // 核心验证：P0-3 修图补丁覆盖 (第 105 关)
+        final level105 = levels.firstWhere((l) => l.order == 105);
+        expect(
+          level105.id,
+          equals('main:105'),
+          reason: 'Explicit ID must be preserved from batch_003',
+        );
+        expect(
+          level105.url.endsWith('0105-r2.webp'),
+          isTrue,
+          reason: 'URL must point to patched image 0105-r2.webp',
+        );
+        expect(
+          level105.tags.contains('retouched'),
+          isTrue,
+          reason: 'Tags must include patch tag',
+        );
+        expect(level105.hash, isNotNull, reason: 'Hash must be populated');
+
+        // 验证不存在重复的 105 关
+        final count105 = levels.where((l) => l.order == 105).length;
+        expect(
+          count105,
+          equals(1),
+          reason: 'There must NOT be duplicate/twin levels for order 105',
+        );
+
+        // 验证 Daily 模块从 daily/index.json 成功同步当月 ZIP
+        final dailyLevels = manager.getDailyLevelsForMonth(
+          '202609',
+          overrideToday: DateTime(2026, 9, 5),
+        );
+        expect(dailyLevels.length, equals(30));
+
+        // 验证 Events 与 Collections
+        expect(manager.eventsPipeline.visibleEvents.length, equals(5));
+        expect(
+          manager.collectionsPipeline.visibleCollections.length,
+          equals(4),
+        );
+      },
+    );
+
+    test(
+      '2. Cold start cache restoration does NOT drift Canonical ID (Anti-Drift Proof)',
+      () async {
+        // 步骤 1：在线同步一次产生本地缓存并下载图片
+        final onlineManager = ContentManager(
+          bootstrapUrls: ['$test2ServerBase/manifest.json'],
+          appSupportDir: supportDir,
+          appDocumentsDir: documentsDir,
+        );
+        await onlineManager.syncAll();
+        final level101 = onlineManager.getMainLevels().firstWhere(
+          (l) => l.order == 101,
+        );
+
+        // 下载关卡 101 图片到本地，将其路径改为本地绝对路径
+        final downloaded101 = await onlineManager.ensureMainLevelDownloaded(
+          level101,
+        );
+        expect(downloaded101.isLocalFile, isTrue);
+        expect(downloaded101.localPath, isNotNull);
+        expect(File(downloaded101.localPath!).existsSync(), isTrue);
+
+        // 触发持久化
+        await onlineManager.mainPipeline.syncWithRemote(
+          remoteUrl: '$test2ServerBase/main/index.json',
+          remoteVersion: 103,
+        );
+
+        // 步骤 2：创建全新的离线 Manager (模拟应用冷启动并断网)
+        final offlineManager = ContentManager(
+          bootstrapUrls: ['http://127.0.0.1:9999/dead_url.json'],
+          appSupportDir: supportDir,
+          appDocumentsDir: documentsDir,
+        );
+        await offlineManager.initialize();
+
+        // 核心验证：冷启动后，ID 绝对不能漂移成 main:main_101
+        final restoredLevels = offlineManager.getMainLevels();
+        expect(restoredLevels.length, equals(20));
+
+        for (final l in restoredLevels) {
+          expect(
+            l.id.contains('main_'),
+            isFalse,
+            reason:
+                'ID ${l.id} drifted into double prefix! Must strictly be main:<order>',
+          );
+          expect(
+            l.id.contains('-r2'),
+            isFalse,
+            reason:
+                'ID ${l.id} leaked revision suffix! Must strictly be main:<order>',
+          );
+        }
+
+        final restored101 = restoredLevels.firstWhere((l) => l.order == 101);
+        expect(restored101.id, equals('main:101'));
+        expect(restored101.isLocalFile, isTrue);
+
+        final restored105 = restoredLevels.firstWhere((l) => l.order == 105);
+        expect(restored105.id, equals('main:105'));
       },
     );
   });

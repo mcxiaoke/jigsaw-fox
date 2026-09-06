@@ -5,7 +5,47 @@ import '../models/puzzle_level_item.dart';
 import '../network/content_http_client.dart';
 import '../../../services/app_logger.dart';
 
-/// 首页主线关卡管线 (多标签筛选 + 增量版本同步 + 按需懒加载)
+/// 主线不可变分卷信息模型
+class MainBatchInfo {
+  const MainBatchInfo({
+    required this.batchId,
+    required this.version,
+    required this.url,
+    this.count = 0,
+    this.startOrder = 0,
+    this.endOrder = 0,
+    this.isPatch = false,
+    this.levelsAffected = const [],
+  });
+
+  final String batchId;
+  final int version;
+  final String url;
+  final int count;
+  final int startOrder;
+  final int endOrder;
+  final bool isPatch;
+  final List<int> levelsAffected;
+
+  factory MainBatchInfo.fromJson(Map<String, dynamic> json) {
+    return MainBatchInfo(
+      batchId: json['batchId']?.toString() ?? '',
+      version: (json['version'] as num?)?.toInt() ?? 0,
+      url: json['url']?.toString() ?? '',
+      count: (json['count'] as num?)?.toInt() ?? 0,
+      startOrder: (json['startOrder'] as num?)?.toInt() ?? 0,
+      endOrder: (json['endOrder'] as num?)?.toInt() ?? 0,
+      isPatch: json['patch'] as bool? ?? false,
+      levelsAffected:
+          (json['levelsAffected'] as List<dynamic>?)
+              ?.map((e) => (e as num).toInt())
+              .toList() ??
+          const [],
+    );
+  }
+}
+
+/// 首页主线关卡管线 (不可变批次差集同步 + 显式ID契约 + 纯异步热更修图 + 按需懒加载)
 class MainContentPipeline {
   MainContentPipeline({
     required this.cacheFilePath,
@@ -19,6 +59,9 @@ class MainContentPipeline {
 
   int _localVersion = 0;
   int get localVersion => _localVersion;
+
+  final Set<String> _localBatchIds = <String>{};
+  Set<String> get localBatchIds => Set.unmodifiable(_localBatchIds);
 
   final Map<String, PuzzleLevelItem> _levelsMap = {};
 
@@ -50,7 +93,7 @@ class MainContentPipeline {
         .toList();
   }
 
-  /// 从本地缓存初始化加载
+  /// 从本地缓存初始化加载 (离线秒开，彻底消除 ID 漂移)
   Future<void> initializeFromCache() async {
     try {
       final file = File(cacheFilePath);
@@ -59,19 +102,21 @@ class MainContentPipeline {
         final json = jsonDecode(text);
         if (json is Map<String, dynamic>) {
           _localVersion = (json['version'] as num?)?.toInt() ?? 0;
-          final rawLevels = json['levels'] as List<dynamic>? ?? [];
+          final cachedBatchIds = json['batchIds'] as List<dynamic>? ?? [];
+          _localBatchIds.clear();
+          _localBatchIds.addAll(cachedBatchIds.map((e) => e.toString()));
+
+          final rawLevels = json['items'] as List<dynamic>? ?? [];
           var loaded = 0;
           for (final raw in rawLevels) {
             if (raw is Map<String, dynamic>) {
               final level = _parseLevelItem(raw);
               if (level != null) {
                 // 检查本地对应图片文件是否存在
-                final localFile = File(_getLocalImagePath(level.id));
+                final localFile = File(_getLocalImagePath(level.id, level.url));
                 final isLocal = localFile.existsSync();
                 _levelsMap[level.id] = level.copyWith(
-                  imagePathOrUrl: isLocal
-                      ? localFile.path
-                      : level.imagePathOrUrl,
+                  localPath: isLocal ? localFile.path : null,
                   isLocalFile: isLocal,
                 );
                 loaded++;
@@ -79,7 +124,7 @@ class MainContentPipeline {
             }
           }
           AppLogger.mainPipe.info(
-            'initializeFromCache version=$_localVersion loaded=$loaded file=${AppLogger.sanitizePath(cacheFilePath)}',
+            'initializeFromCache version=$_localVersion batches=${_localBatchIds.length} loaded=$loaded file=${AppLogger.sanitizePath(cacheFilePath)}',
           );
         } else {
           AppLogger.mainPipe.warning(
@@ -96,7 +141,7 @@ class MainContentPipeline {
     }
   }
 
-  /// 与远端同步增量更新 (若 remoteVersion > localVersion 则拉取)
+  /// 与远端同步增量更新 (统一 items 分卷架构)
   Future<bool> syncWithRemote({
     required String remoteUrl,
     required int remoteVersion,
@@ -119,31 +164,98 @@ class MainContentPipeline {
       if (json is! Map<String, dynamic>) return false;
 
       final newVersion = (json['version'] as num?)?.toInt() ?? remoteVersion;
-      final rawLevels = json['levels'] as List<dynamic>? ?? [];
-
       bool hasNewItems = false;
-      for (final raw in rawLevels) {
-        if (raw is Map<String, dynamic>) {
-          final level = _parseLevelItem(raw);
-          if (level != null) {
-            // Append-Only Upsert: 如果本地已存在，仅更新 tags，保留原有本地图片路径与存档
+
+      // 1. 统一分卷架构 (items / batches)
+      // 统一分卷架构 (items)
+      final rawBatches = json['items'] as List<dynamic>?;
+      if (rawBatches != null && rawBatches.isNotEmpty) {
+        final remoteBatches = rawBatches
+            .whereType<Map<String, dynamic>>()
+            .map(MainBatchInfo.fromJson)
+            .toList();
+
+        // 差集计算：仅下载本地未处理的批次
+        final missingBatches = remoteBatches
+            .where((b) => !_localBatchIds.contains(b.batchId))
+            .toList();
+
+        AppLogger.mainPipe.info(
+          'syncWithRemote batches total=${remoteBatches.length} missing=${missingBatches.length}',
+        );
+
+        // 严格遵循 Append-Only 数组顺序处理批次 (顺序决定补丁覆盖优先级)
+        for (final batch in missingBatches) {
+          final batchUrl = ContentHttpClient.resolveUrl(remoteUrl, batch.url);
+          final batchJson = await _httpClient.fetchJson(batchUrl);
+          if (batchJson is! Map<String, dynamic>) continue;
+
+          final rawLevels = batchJson['items'] as List<dynamic>? ?? [];
+          for (final raw in rawLevels) {
+            if (raw is! Map<String, dynamic>) continue;
+            // 将相对路径图片 URL 递归解析为绝对 URL (RFC 3986)
+            final rawUrl = raw['url']?.toString() ?? '';
+            if (rawUrl.isNotEmpty) {
+              raw['url'] = ContentHttpClient.resolveUrl(batchUrl, rawUrl);
+            }
+
+            final level = _parseLevelItem(raw);
+            if (level == null) continue;
+
             final existing = _levelsMap[level.id];
             if (existing != null) {
-              _levelsMap[level.id] = existing.copyWith(
-                tags: level.tags,
-                order: level.order != 0 ? level.order : existing.order,
-              );
+              // 同一关卡再次出现（修图补丁或配置更新）
+              // 严格且仅以 Hash 变化或 URL 变化为准判断是否换图！
+              final isImageHashChanged =
+                  (level.hash != existing.hash) ||
+                  (level.url.isNotEmpty &&
+                      existing.url.isNotEmpty &&
+                      level.url != existing.url);
+              if (isImageHashChanged) {
+                final oldPath =
+                    existing.localPath != null && existing.localPath!.isNotEmpty
+                    ? existing.localPath!
+                    : _getLocalImagePath(level.id, existing.url);
+                final oldFile = File(oldPath);
+                if (await oldFile.exists()) {
+                  try {
+                    await oldFile.delete();
+                    AppLogger.mainPipe.info(
+                      'Deleted stale cached image for ${level.id} due to hash/url change: ${existing.hash} -> ${level.hash}',
+                    );
+                  } catch (e) {
+                    AppLogger.mainPipe.warning(
+                      'Failed to delete stale cache: $e',
+                    );
+                  }
+                }
+                // 更新为远端新信息，重置本地缓存，标记有新内容
+                _levelsMap[level.id] = level.copyWith(
+                  clearLocalPath: true,
+                  isLocalFile: false,
+                );
+                hasNewItems = true;
+              } else {
+                // 内容未变，平滑更新 tags / order / url (保留已有 localPath)
+                _levelsMap[level.id] = existing.copyWith(
+                  url: level.url,
+                  tags: level.tags,
+                  order: level.order != 0 ? level.order : existing.order,
+                  hash: level.hash ?? existing.hash,
+                );
+              }
             } else {
-              // 检查本地是否已有下载好的图片
-              final localFile = File(_getLocalImagePath(level.id));
-              final isLocal = localFile.existsSync();
+              // 全新关卡
+              final localFile = File(_getLocalImagePath(level.id, level.url));
+              final isLocal = await localFile.exists();
               _levelsMap[level.id] = level.copyWith(
-                imagePathOrUrl: isLocal ? localFile.path : level.imagePathOrUrl,
+                localPath: isLocal ? localFile.path : null,
                 isLocalFile: isLocal,
               );
               hasNewItems = true;
             }
           }
+          _localBatchIds.add(batch.batchId);
         }
       }
 
@@ -167,18 +279,17 @@ class MainContentPipeline {
   Future<PuzzleLevelItem> ensureLevelImageDownloaded(
     PuzzleLevelItem level,
   ) async {
-    if (level.isLocalFile && File(level.imagePathOrUrl).existsSync()) {
+    if (level.isLocalFile &&
+        level.localPath != null &&
+        File(level.localPath!).existsSync()) {
       AppLogger.mainPipe.fine('ensureDownloaded already local ${level.id}');
       return level;
     }
 
-    final localPath = _getLocalImagePath(level.id);
+    final localPath = _getLocalImagePath(level.id, level.url);
     final localFile = File(localPath);
-    if (localFile.existsSync()) {
-      final updated = level.copyWith(
-        imagePathOrUrl: localPath,
-        isLocalFile: true,
-      );
+    if (await localFile.exists()) {
+      final updated = level.copyWith(localPath: localPath, isLocalFile: true);
       _levelsMap[level.id] = updated;
       AppLogger.mainPipe.fine(
         'ensureDownloaded hit local file ${level.id} -> ${AppLogger.sanitizePath(localPath)}',
@@ -187,15 +298,12 @@ class MainContentPipeline {
     }
 
     AppLogger.mainPipe.info(
-      'ensureDownloaded downloading ${level.id} from ${AppLogger.sanitizeUrl(level.imagePathOrUrl)}',
+      'ensureDownloaded downloading ${level.id} from ${AppLogger.sanitizeUrl(level.url)}',
     );
     try {
-      final downloaded = await _httpClient.downloadFile(
-        level.imagePathOrUrl,
-        localPath,
-      );
+      final downloaded = await _httpClient.downloadFile(level.url, localPath);
       final updated = level.copyWith(
-        imagePathOrUrl: downloaded.path,
+        localPath: downloaded.path,
         isLocalFile: true,
       );
       _levelsMap[level.id] = updated;
@@ -209,7 +317,7 @@ class MainContentPipeline {
     }
   }
 
-  /// 解析单条服务端 main.json 中的 level 数据项
+  /// 解析单条 level 数据项 (显式 ID 与 Hash 绝对优先，根除动态反推缺陷)
   PuzzleLevelItem? _parseLevelItem(Map<String, dynamic> raw) {
     final url = raw['url']?.toString();
     if (url == null || url.trim().isEmpty) return null;
@@ -219,27 +327,37 @@ class MainContentPipeline {
             ?.map((e) => e.toString().trim())
             .toList() ??
         <String>[];
-    final canonicalId = CanonicalId.fromSource(
-      sourceModule: CanonicalId.prefixMain,
-      pathOrUrl: url,
-    );
 
-    // 从 ID 中尝试提取数字序号作为 order (如 main:101 -> 101)
-    int order = 0;
-    final namePart = canonicalId.split(':').last;
-    final numMatch = RegExp(r'(\d+)').firstMatch(namePart);
-    if (numMatch != null) {
-      order = int.tryParse(numMatch.group(1)!) ?? 0;
+    // 核心硬规则：优先使用显式下发的稳定 Canonical ID (如 main:101)
+    // 坚决杜绝补丁图片 0105-r2.webp 反推成 main:0105-r2 产生孪生关卡
+    final explicitId = raw['id']?.toString().trim();
+    final canonicalId = (explicitId != null && explicitId.isNotEmpty)
+        ? explicitId
+        : CanonicalId.fromSource(
+            sourceModule: CanonicalId.prefixMain,
+            pathOrUrl: url,
+          );
+
+    int order = (raw['order'] as num?)?.toInt() ?? 0;
+    if (order == 0) {
+      final namePart = canonicalId.split(':').last;
+      final numMatch = RegExp(r'(\d+)').firstMatch(namePart);
+      if (numMatch != null) {
+        order = int.tryParse(numMatch.group(1)!) ?? 0;
+      }
     }
 
+    final hash = raw['hash']?.toString();
     final addedAt = raw['addedAt'] != null
         ? DateTime.tryParse(raw['addedAt'].toString())
         : null;
+
     return PuzzleLevelItem(
       id: canonicalId,
-      imagePathOrUrl: url,
+      hash: hash,
+      url: url,
       isLocalFile: false,
-      order: (raw['order'] as num?)?.toInt() ?? order,
+      order: order,
       tags: tags,
       sourceModule: CanonicalId.prefixMain,
       addedAt: addedAt,
@@ -248,37 +366,61 @@ class MainContentPipeline {
     );
   }
 
-  /// 本地图片存储路径生成
-  String _getLocalImagePath(String canonicalId) {
+  /// 本地图片存储路径生成 (根据 URL 真实扩展名动态生成后缀)
+  String _getLocalImagePath(String canonicalId, [String? url]) {
     final sanitized = canonicalId.replaceAll(':', '_');
-    return '$imagesStorageDir/$sanitized.webp';
+    String ext = '.webp';
+    if (url != null && url.isNotEmpty) {
+      final lastDot = url.lastIndexOf('.');
+      if (lastDot != -1 && lastDot > url.lastIndexOf('/')) {
+        final rawExt = url.substring(lastDot).toLowerCase();
+        final queryIndex = rawExt.indexOf('?');
+        final cleanExt = queryIndex != -1
+            ? rawExt.substring(0, queryIndex)
+            : rawExt;
+        if (['.webp', '.jpg', '.jpeg', '.png'].contains(cleanExt)) {
+          ext = cleanExt;
+        }
+      }
+    }
+    return '$imagesStorageDir/$sanitized$ext';
   }
 
-  /// 持久化写入本地缓存 JSON
+  /// 持久化写入本地缓存 JSON (原子安全落盘，显式保存 id 与 hash)
   Future<void> _persistToCache() async {
     try {
       final file = File(cacheFilePath);
       if (!file.parent.existsSync()) {
         file.parent.createSync(recursive: true);
       }
+      final items = _levelsMap.values
+          .map(
+            (l) => {
+              'id': l.id,
+              if (l.hash != null) 'hash': l.hash,
+              'url': l.url,
+              if (l.localPath != null) 'localPath': l.localPath,
+              'order': l.order,
+              'tags': l.tags,
+              if (l.addedAt != null) 'addedAt': l.addedAt!.toIso8601String(),
+              if (l.unlockCoins != null) 'unlockCoins': l.unlockCoins,
+              if (l.unlockCode != null) 'unlockCode': l.unlockCode,
+            },
+          )
+          .toList();
       final payload = {
         'version': _localVersion,
-        'levels': _levelsMap.values
-            .map(
-              (l) => {
-                'url': l.imagePathOrUrl,
-                'order': l.order,
-                'tags': l.tags,
-                if (l.addedAt != null) 'addedAt': l.addedAt!.toIso8601String(),
-                if (l.unlockCoins != null) 'unlockCoins': l.unlockCoins,
-                if (l.unlockCode != null) 'unlockCode': l.unlockCode,
-              },
-            )
-            .toList(),
+        'batchIds': _localBatchIds.toList(),
+        'items': items,
       };
-      await file.writeAsString(jsonEncode(payload), flush: true);
+      final tmpFile = File('$cacheFilePath.tmp');
+      await tmpFile.writeAsString(jsonEncode(payload), flush: true);
+      if (await file.exists()) {
+        await file.delete();
+      }
+      await tmpFile.rename(file.path);
       AppLogger.mainPipe.fine(
-        'Persisted cache version=$_localVersion count=${_levelsMap.length}',
+        'Persisted cache version=$_localVersion batches=${_localBatchIds.length} count=${_levelsMap.length}',
       );
     } catch (e, st) {
       AppLogger.mainPipe.warning('Persist cache failed', e, st);

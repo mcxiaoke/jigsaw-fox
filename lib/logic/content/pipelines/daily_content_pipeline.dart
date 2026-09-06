@@ -25,24 +25,29 @@ class DailyContentPipeline {
   /// 确保某月份的每日关卡已就绪 (若本地不存在则尝试从远端 Zip 下载解压)
   Future<bool> ensureMonthReady({
     required String yyyyMm,
-    required String zipUrlPattern,
+    String zipUrlPattern = '',
+    String? explicitZipUrl,
     DateTime? overrideToday,
   }) async {
     final monthDir = Directory(p.join(dailyStorageBaseDir, yyyyMm));
     if (monthDir.existsSync() && monthDir.listSync().isNotEmpty) {
-      AppLogger.daily.fine(
+      AppLogger.daily.info(
         'ensureMonthReady $yyyyMm already ready files=${monthDir.listSync().length}',
       );
       return true;
     }
 
-    if (zipUrlPattern.isEmpty) {
+    final String zipUrl;
+    if (explicitZipUrl != null && explicitZipUrl.isNotEmpty) {
+      zipUrl = explicitZipUrl;
+    } else if (zipUrlPattern.isNotEmpty) {
+      zipUrl = zipUrlPattern.replaceAll('{YYYYMM}', yyyyMm);
+    } else {
       AppLogger.daily.warning(
-        'ensureMonthReady empty zipUrlPattern for $yyyyMm',
+        'ensureMonthReady empty zipUrl/zipUrlPattern for $yyyyMm',
       );
       return false;
     }
-    final zipUrl = zipUrlPattern.replaceAll('{YYYYMM}', yyyyMm);
     AppLogger.daily.info(
       'ensureMonthReady $yyyyMm url=${AppLogger.sanitizeUrl(zipUrl)}',
     );
@@ -169,7 +174,7 @@ class DailyContentPipeline {
         items.add(
           PuzzleLevelItem(
             id: canonicalId,
-            imagePathOrUrl: file.path,
+            localPath: file.path,
             isLocalFile: true,
             sourceModule: CanonicalId.prefixDaily,
             dailyDate: dateStr,
@@ -183,6 +188,9 @@ class DailyContentPipeline {
 
     // 按日期升序排列 (只保留实际存在且合法的图片)
     items.sort((a, b) => (a.dailyDate ?? '').compareTo(b.dailyDate ?? ''));
+    AppLogger.daily.fine(
+      'DailyPipeline: getLevelsForMonth $yyyyMm found ${items.length} levels in ${monthDir.path}',
+    );
     return items;
   }
 

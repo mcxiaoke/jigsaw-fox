@@ -114,18 +114,39 @@ class CollectionsContentPipeline {
     );
     try {
       final json = await _httpClient.fetchJson(remoteUrl);
-      if (json is! List<dynamic>) {
+      final List<dynamic> rawList;
+      if (json is Map<String, dynamic> && json['items'] is List) {
+        rawList = json['items'] as List<dynamic>;
+      } else {
         AppLogger.content.warning(
-          'Collections syncWithRemote unexpected type ${json.runtimeType}',
+          'Collections syncWithRemote unexpected type or missing items: ${json.runtimeType}',
         );
         return false;
       }
 
       final updatedCollections = <PuzzleCollectionItem>[];
       var skipped = 0;
-      for (final raw in json) {
+      for (final raw in rawList) {
         if (raw is Map<String, dynamic>) {
           try {
+            // 相对路径 URL 递归解析 (RFC 3986)
+            final cover = raw['coverUrl']?.toString();
+            if (cover != null && cover.isNotEmpty) {
+              raw['coverUrl'] = ContentHttpClient.resolveUrl(remoteUrl, cover);
+            }
+            final zip = raw['zipUrl']?.toString();
+            if (zip != null && zip.isNotEmpty) {
+              raw['zipUrl'] = ContentHttpClient.resolveUrl(remoteUrl, zip);
+            }
+            final levels = (raw['levels'] as List<dynamic>?)
+                ?.map(
+                  (e) => ContentHttpClient.resolveUrl(remoteUrl, e.toString()),
+                )
+                .toList();
+            if (levels != null) {
+              raw['levels'] = levels;
+            }
+
             final item = PuzzleCollectionItem.fromJson(raw);
             final prevDownloaded =
                 _collectionsMap[item.id]?.isLocalDownloaded == true;
@@ -383,7 +404,7 @@ class CollectionsContentPipeline {
         items.add(
           PuzzleLevelItem(
             id: canonicalId,
-            imagePathOrUrl: file.path,
+            localPath: file.path,
             isLocalFile: true,
             sourceModule: CanonicalId.prefixCollection,
             eventId: collection.id,
@@ -399,7 +420,7 @@ class CollectionsContentPipeline {
         items.add(
           PuzzleLevelItem(
             id: canonicalId,
-            imagePathOrUrl: url,
+            url: url,
             isLocalFile: false,
             sourceModule: CanonicalId.prefixCollection,
             eventId: collection.id,

@@ -13,6 +13,8 @@ class PuzzleEventItem {
     this.startTime,
     this.endTime,
     this.displayOrder = 0,
+    this.totalCount = 0,
+    this.fileSizeBytes = 0,
     this.isLocalDownloaded = false,
   });
 
@@ -52,6 +54,12 @@ class PuzzleEventItem {
   /// 排序权重
   final int displayOrder;
 
+  /// 关卡总数
+  final int totalCount;
+
+  /// 文件大小字节数
+  final int fileSizeBytes;
+
   /// 本地是否已下载就绪
   final bool isLocalDownloaded;
 
@@ -61,6 +69,15 @@ class PuzzleEventItem {
   bool get isUpcoming => status == 'upcoming';
   bool get isZipType => type == 'zip';
   bool get isArrayType => type == 'array';
+
+  /// 格式化显示的友好体积 (如 "14.5 MB")
+  String get displayFileSize {
+    if (fileSizeBytes <= 0) return '';
+    if (fileSizeBytes < 1024 * 1024) {
+      return '${(fileSizeBytes / 1024).toStringAsFixed(1)} KB';
+    }
+    return '${(fileSizeBytes / (1024 * 1024)).toStringAsFixed(1)} MB';
+  }
 
   PuzzleEventItem copyWith({
     String? id,
@@ -75,6 +92,8 @@ class PuzzleEventItem {
     DateTime? startTime,
     DateTime? endTime,
     int? displayOrder,
+    int? totalCount,
+    int? fileSizeBytes,
     bool? isLocalDownloaded,
   }) {
     return PuzzleEventItem(
@@ -90,6 +109,8 @@ class PuzzleEventItem {
       startTime: startTime ?? this.startTime,
       endTime: endTime ?? this.endTime,
       displayOrder: displayOrder ?? this.displayOrder,
+      totalCount: totalCount ?? this.totalCount,
+      fileSizeBytes: fileSizeBytes ?? this.fileSizeBytes,
       isLocalDownloaded: isLocalDownloaded ?? this.isLocalDownloaded,
     );
   }
@@ -121,6 +142,11 @@ class PuzzleEventItem {
       startTime: parseDate(json['startTime']),
       endTime: parseDate(json['endTime']),
       displayOrder: (json['displayOrder'] as num?)?.toInt() ?? 0,
+      totalCount:
+          (json['totalCount'] as num?)?.toInt() ??
+          (json['count'] as num?)?.toInt() ??
+          0,
+      fileSizeBytes: (json['fileSizeBytes'] as num?)?.toInt() ?? 0,
       isLocalDownloaded: json['isLocalDownloaded'] as bool? ?? false,
     );
   }
@@ -139,6 +165,8 @@ class PuzzleEventItem {
       'startTime': startTime?.toIso8601String(),
       'endTime': endTime?.toIso8601String(),
       'displayOrder': displayOrder,
+      'totalCount': totalCount,
+      'fileSizeBytes': fileSizeBytes,
       'isLocalDownloaded': isLocalDownloaded,
     };
   }

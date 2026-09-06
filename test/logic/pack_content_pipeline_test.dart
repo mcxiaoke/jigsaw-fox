@@ -86,7 +86,8 @@ void main() {
         expect(levels.first.id, equals(CanonicalId.forPack(pack.id, 'cat_01')));
         expect(levels.first.sourceModule, equals('pack'));
         expect(levels.first.isLocalFile, isTrue);
-        expect(File(levels.first.imagePathOrUrl).existsSync(), isTrue);
+        expect(levels.first.localPath, isNotNull);
+        expect(File(levels.first.localPath!).existsSync(), isTrue);
       },
     );
 
@@ -206,10 +207,8 @@ void main() {
 
       final levels = pipeline.getPackLevels(pack);
       expect(levels.length, equals(1));
-      expect(
-        p.basename(levels.first.imagePathOrUrl),
-        equals('valid_image.png'),
-      );
+      expect(levels.first.localPath, isNotNull);
+      expect(p.basename(levels.first.localPath!), equals('valid_image.png'));
     });
   });
 }

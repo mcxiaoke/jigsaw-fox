@@ -43,8 +43,9 @@ class AppContent {
   /// 全局响应式通知：当内容更新时触发 UI 刷新
   final ValueNotifier<int> contentUpdateNotifier = ValueNotifier<int>(0);
 
-  /// 默认主备 CDN 端点列表 (优先指向测试服务器)
+  /// 默认主备 CDN 端点列表 (优先指向 test2 新架构测试服务器)
   static const List<String> defaultBootstrapUrls = [
+    'http://192.168.1.118/data/www/game/test2/manifest.json',
     'http://192.168.1.118/data/www/game/test/manifest.json',
   ];
 

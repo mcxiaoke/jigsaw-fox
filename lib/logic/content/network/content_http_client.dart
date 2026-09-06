@@ -19,8 +19,27 @@ class ContentHttpClient {
 
   final Dio _dio;
 
+  /// RFC 3986 规范级 URL 递归解析：
+  /// - 若 targetUrl 为绝对地址 (带 http/https 协议头)，直接原样返回；
+  /// - 否则以 baseUrl 为基准递归解析相对路径 (完美支持 ../images/ 等相对导航)。
+  static String resolveUrl(String baseUrl, String targetUrl) {
+    final trimmed = targetUrl.trim();
+    if (trimmed.isEmpty) return baseUrl;
+    final parsed = Uri.tryParse(trimmed);
+    if (parsed != null && parsed.hasScheme) {
+      if (parsed.scheme == 'http' || parsed.scheme == 'https') {
+        return trimmed;
+      }
+    }
+    final baseUri = Uri.parse(baseUrl);
+    return baseUri.resolve(trimmed).toString();
+  }
+
   /// 请求 JSON 字符串并解析为 Map 或 List
   Future<dynamic> fetchJson(String url, {Duration? timeout}) async {
+    if (url.trim().isEmpty) {
+      throw ArgumentError('url must not be empty');
+    }
     final sw = Stopwatch()..start();
     AppLogger.network.fine(
       'fetchJson start ${AppLogger.sanitizeUrl(url)} timeout=${timeout?.inSeconds}s',
@@ -64,6 +83,9 @@ class ContentHttpClient {
     Duration? timeout,
     void Function(int received, int total)? onProgress,
   }) async {
+    if (url.trim().isEmpty) {
+      throw ArgumentError('url must not be empty');
+    }
     AppLogger.network.info(
       'downloadFile start ${AppLogger.sanitizeUrl(url)} -> ${AppLogger.sanitizePath(destinationPath)}',
     );

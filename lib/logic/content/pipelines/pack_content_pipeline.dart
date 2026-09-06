@@ -388,7 +388,7 @@ class PackContentPipeline {
       levels.add(
         PuzzleLevelItem(
           id: canonicalId,
-          imagePathOrUrl: file.path,
+          localPath: file.path,
           isLocalFile: true,
           sourceModule: CanonicalId.prefixPack,
           order: i + 1,

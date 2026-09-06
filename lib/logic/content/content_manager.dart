@@ -46,8 +46,10 @@ class ContentManager {
        packPipeline = PackContentPipeline(
          packsBaseDir: p.join(appDocumentsDir, 'packs'),
          httpClient: httpClient,
-       );
+       ),
+       _httpClient = httpClient ?? ContentHttpClient();
 
+  final ContentHttpClient _httpClient;
   final ManifestRouter manifestRouter;
   final MainContentPipeline mainPipeline;
   final DailyContentPipeline dailyPipeline;
@@ -59,6 +61,70 @@ class ContentManager {
 
   bool _isSyncing = false;
   Future<void>? _syncFuture;
+  final Map<String, String> _dailyMonthZipUrls = {};
+  List<String> get availableDailyMonths => _dailyMonthZipUrls.keys.toList();
+
+  /// 解析指定月份每日挑战 ZIP 地址 (优先读缓存，无则拉取 daily/index.json 解析)
+  Future<String?> resolveDailyMonthZipUrl(String yyyyMm) async {
+    if (_dailyMonthZipUrls.containsKey(yyyyMm)) {
+      AppLogger.daily.info(
+        'resolveDailyMonthZipUrl cache hit $yyyyMm -> ${_dailyMonthZipUrls[yyyyMm]}',
+      );
+      return _dailyMonthZipUrls[yyyyMm];
+    }
+    final manifest = currentManifest;
+    if (manifest == null || manifest.dailyModule.url.isEmpty) {
+      AppLogger.daily.warning(
+        'resolveDailyMonthZipUrl failed: manifest is null or dailyModule.url is empty',
+      );
+      return null;
+    }
+    final dailyIndexUrl = ContentHttpClient.resolveUrl(
+      manifest.baseUri,
+      manifest.dailyModule.url,
+    );
+    AppLogger.daily.info(
+      'resolveDailyMonthZipUrl fetching daily index from $dailyIndexUrl for month $yyyyMm',
+    );
+    try {
+      final dailyJson = await _httpClient.fetchJson(dailyIndexUrl);
+      if (dailyJson is Map<String, dynamic>) {
+        final rawMonths = dailyJson['items'];
+        if (rawMonths is List) {
+          for (final m in rawMonths) {
+            if (m is Map<String, dynamic>) {
+              final monthStr = m['month']?.toString();
+              final zip = m['zipUrl']?.toString();
+              if (monthStr != null && zip != null) {
+                _dailyMonthZipUrls[monthStr] = ContentHttpClient.resolveUrl(
+                  dailyIndexUrl,
+                  zip,
+                );
+              }
+            }
+          }
+          AppLogger.daily.info(
+            'resolveDailyMonthZipUrl parsed ${rawMonths.length} months from daily index: ${_dailyMonthZipUrls.keys.toList()}',
+          );
+        } else {
+          AppLogger.daily.warning(
+            'resolveDailyMonthZipUrl unexpected items type: ${rawMonths.runtimeType}',
+          );
+        }
+      }
+    } catch (e, st) {
+      AppLogger.daily.warning(
+        'Failed to fetch daily index for month $yyyyMm from $dailyIndexUrl',
+        e,
+        st,
+      );
+    }
+    final resolvedUrl = _dailyMonthZipUrls[yyyyMm];
+    AppLogger.daily.info(
+      'resolveDailyMonthZipUrl result for $yyyyMm: $resolvedUrl',
+    );
+    return resolvedUrl;
+  }
 
   /// 1. 初始化所有本地缓存与扩展包 (冷启动快速秒开)
   /// P20 优化：manifest 先读盘缓存，避免弱网 4-16s 阻塞秒开
@@ -103,13 +169,27 @@ class ContentManager {
         'syncAll manifest resolved version=${manifest.schemaVersion} main=${AppLogger.sanitizeUrl(manifest.mainModule.url)} events=${AppLogger.sanitizeUrl(manifest.eventsModule.url)}',
       );
 
+      final baseUri = manifest.baseUri;
+      final mainUrl = ContentHttpClient.resolveUrl(
+        baseUri,
+        manifest.mainModule.url,
+      );
+      final eventsUrl = ContentHttpClient.resolveUrl(
+        baseUri,
+        manifest.eventsModule.url,
+      );
+      final collectionsUrl = ContentHttpClient.resolveUrl(
+        baseUri,
+        manifest.collectionsModule.url,
+      );
+
       // 2. 并发同步各模块元数据
       try {
         await Future.wait([
           // 同步首页关卡
           mainPipeline
               .syncWithRemote(
-                remoteUrl: manifest.mainModule.url,
+                remoteUrl: mainUrl,
                 remoteVersion: manifest.mainModule.version,
               )
               .then(
@@ -119,7 +199,7 @@ class ContentManager {
               ),
           // 同步活动列表 (自动触发 Auto-GC)
           eventsPipeline
-              .syncWithRemote(remoteUrl: manifest.eventsModule.url)
+              .syncWithRemote(remoteUrl: eventsUrl)
               .then(
                 (v) => AppLogger.content.info(
                   'events sync done $v events=${eventsPipeline.visibleEvents.length}',
@@ -127,7 +207,7 @@ class ContentManager {
               ),
           // 同步官方图集列表
           collectionsPipeline
-              .syncWithRemote(remoteUrl: manifest.collectionsModule.url)
+              .syncWithRemote(remoteUrl: collectionsUrl)
               .then(
                 (v) => AppLogger.content.info(
                   'collections sync done $v collections=${collectionsPipeline.visibleCollections.length}',
@@ -140,10 +220,15 @@ class ContentManager {
                 : (manifest.dailyModule.currentMonth.isNotEmpty
                       ? manifest.dailyModule.currentMonth
                       : _formatCurrentMonth(DateTime.now()));
-            if (manifest.dailyModule.zipUrlPattern.isNotEmpty) {
+
+            final targetZipUrl = await resolveDailyMonthZipUrl(currentMonth);
+
+            if (targetZipUrl != null ||
+                manifest.dailyModule.zipUrlPattern.isNotEmpty) {
               final ok = await dailyPipeline.ensureMonthReady(
                 yyyyMm: currentMonth,
                 zipUrlPattern: manifest.dailyModule.zipUrlPattern,
+                explicitZipUrl: targetZipUrl,
                 overrideToday: overrideToday,
               );
               AppLogger.content.info(
@@ -151,7 +236,7 @@ class ContentManager {
               );
             } else {
               AppLogger.content.fine(
-                'daily zipUrlPattern empty skip month $currentMonth',
+                'daily zipUrl empty skip month $currentMonth',
               );
             }
           }(),
@@ -203,12 +288,17 @@ class ContentManager {
   PuzzleLevelItem? getTodayDailyLevel({DateTime? overrideToday}) =>
       dailyPipeline.getTodayLevel(overrideToday: overrideToday);
 
-  /// 确保某月份每日关卡已下载就绪
-  Future<bool> ensureDailyMonthReady(String yyyyMm, {DateTime? overrideToday}) {
+  /// 确保某月份每日关卡已下载就绪 (支持历史月份懒加载)
+  Future<bool> ensureDailyMonthReady(
+    String yyyyMm, {
+    DateTime? overrideToday,
+  }) async {
+    final explicitZip = await resolveDailyMonthZipUrl(yyyyMm);
     final pattern = currentManifest?.dailyModule.zipUrlPattern ?? '';
     return dailyPipeline.ensureMonthReady(
       yyyyMm: yyyyMm,
       zipUrlPattern: pattern,
+      explicitZipUrl: explicitZip,
       overrideToday: overrideToday,
     );
   }

@@ -56,12 +56,14 @@ class ManifestRouter {
           timeout: const Duration(seconds: 4),
         );
         if (json is Map<String, dynamic>) {
-          final manifest = RootManifest.fromJson(json);
+          final manifest = RootManifest.fromJson(json).copyWith(baseUri: url);
           AppLogger.manifest.info(
             'Manifest fetched success ${AppLogger.sanitizeUrl(url)} version=${manifest.schemaVersion} notice=${manifest.notice}',
           );
-          // 写入本地缓存
-          await _saveToDiskCache(json);
+          // 写入本地缓存 (同时记录生效的 baseUri)
+          final cacheJson = Map<String, dynamic>.from(json);
+          cacheJson['baseUri'] = url;
+          await _saveToDiskCache(cacheJson);
           _cachedManifest = manifest;
           return manifest;
         } else {
@@ -97,7 +99,9 @@ class ManifestRouter {
     AppLogger.manifest.warning(
       'Disk cache miss, using fallback offline manifest',
     );
-    final fallback = _createDefaultFallbackManifest();
+    final fallback = _createDefaultFallbackManifest().copyWith(
+      baseUri: bootstrapUrls.isNotEmpty ? bootstrapUrls.first : '',
+    );
     _cachedManifest = fallback;
     return fallback;
   }
@@ -133,7 +137,10 @@ class ManifestRouter {
           AppLogger.manifest.info(
             'Loaded manifest from disk cache ${AppLogger.sanitizePath(cacheFilePath)}',
           );
-          return RootManifest.fromJson(json);
+          final base =
+              json['baseUri']?.toString() ??
+              (bootstrapUrls.isNotEmpty ? bootstrapUrls.first : '');
+          return RootManifest.fromJson(json).copyWith(baseUri: base);
         } else {
           AppLogger.manifest.warning(
             'Disk cache manifest unexpected type ${json.runtimeType}',

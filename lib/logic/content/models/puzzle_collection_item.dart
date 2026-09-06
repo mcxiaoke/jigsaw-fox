@@ -19,6 +19,7 @@ class PuzzleCollectionItem {
     this.levels = const [],
     this.totalCount = 0,
     this.fileSizeBytes = 0,
+    this.unlockCoins = 0,
     this.displayOrder = 0,
     this.status = 'active',
     this.isLocalDownloaded = false,
@@ -60,6 +61,9 @@ class PuzzleCollectionItem {
 
   /// 占用的物理磁盘或下载字节数
   final int fileSizeBytes;
+
+  /// 解锁所需金币 (0 表示免费或由其他条件解锁)
+  final int unlockCoins;
 
   /// 排序权重
   final int displayOrder;
@@ -122,6 +126,7 @@ class PuzzleCollectionItem {
     List<String>? levels,
     int? totalCount,
     int? fileSizeBytes,
+    int? unlockCoins,
     int? displayOrder,
     String? status,
     bool? isLocalDownloaded,
@@ -142,6 +147,7 @@ class PuzzleCollectionItem {
       levels: levels ?? this.levels,
       totalCount: totalCount ?? this.totalCount,
       fileSizeBytes: fileSizeBytes ?? this.fileSizeBytes,
+      unlockCoins: unlockCoins ?? this.unlockCoins,
       displayOrder: displayOrder ?? this.displayOrder,
       status: status ?? this.status,
       isLocalDownloaded: isLocalDownloaded ?? this.isLocalDownloaded,
@@ -185,6 +191,7 @@ class PuzzleCollectionItem {
       levels: rawLevels,
       totalCount: (json['totalCount'] as num?)?.toInt() ?? rawLevels.length,
       fileSizeBytes: (json['fileSizeBytes'] as num?)?.toInt() ?? 0,
+      unlockCoins: (json['unlockCoins'] as num?)?.toInt() ?? 0,
       displayOrder: (json['displayOrder'] as num?)?.toInt() ?? 0,
       status: json['status']?.toString().toLowerCase() ?? 'active',
       isLocalDownloaded: isDownloaded,
@@ -209,6 +216,7 @@ class PuzzleCollectionItem {
       'levels': levels,
       'totalCount': totalCount,
       'fileSizeBytes': fileSizeBytes,
+      'unlockCoins': unlockCoins,
       'displayOrder': displayOrder,
       'status': status,
       'isLocalDownloaded': isLocalDownloaded,
