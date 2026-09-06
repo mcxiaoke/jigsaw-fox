@@ -1735,6 +1735,8 @@ class JigsawPuzzleGame extends FlameGame
         result.didMerge ||
         result.isCompleted ||
         _boardState.isSolved) {
+      // 音效前置：在重计算之前立即入队平台通道调用，避免同步逻辑阻塞导致超时丢音
+      SoundService.I.play(Sfx.snap);
       _boardState = result.state;
       undoManager.record(prevState);
 
@@ -2203,6 +2205,9 @@ class JigsawPuzzleGame extends FlameGame
 
     _boardState = result.state;
     undoManager.record(prevState.copyWith(hintsUsed: _boardState.hintsUsed));
+
+    // 音效前置：在重计算之前立即入队平台通道调用，避免同步逻辑阻塞导致超时丢音
+    SoundService.I.play(Sfx.snap);
 
     // 全量同步 clusterId
     for (final p in _boardState.pieces) {

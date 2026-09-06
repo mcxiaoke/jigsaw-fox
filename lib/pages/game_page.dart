@@ -5,6 +5,7 @@ import 'dart:ui' as ui;
 import 'package:flame/game.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 import 'package:phosphoricons_flutter/phosphoricons_flutter.dart';
 
@@ -91,6 +92,9 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
   Timer? _saveDebounce;
   static const Duration _saveDebounceDuration = Duration(milliseconds: 800);
   bool _isSaving = false;
+
+  /// 批量合并 UI 更新标志，避免 onProgressChanged + onStateUpdated 连续触发双重 setState
+  bool _uiUpdateScheduled = false;
 
   @override
   void initState() {
@@ -293,18 +297,16 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
       onSolved: _handleSolved,
       onPieceSnapped: _onPieceSnapped,
       onProgressChanged: (count) {
-        if (mounted) setState(() => _solvedPieces = count);
+        _solvedPieces = count;
+        _markNeedsUIUpdate();
         _scheduleSave(immediate: false);
       },
       onStateUpdated: () {
-        if (mounted) {
-          setState(() {
-            if (_game != null) {
-              _isSolved = _game!.isSolved;
-            }
-          });
+        if (_game != null) {
+          _isSolved = _game!.isSolved;
         }
         // 自由摆放等非吸附位移也需要保存
+        _markNeedsUIUpdate();
         _scheduleSave(immediate: false);
       },
     );
@@ -329,11 +331,24 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
   }
 
   void _onPieceSnapped() {
-    SoundService.I.play(Sfx.snap);
+    // snap 音效已前置到 JigsawPuzzleGame 吸附分支开头，避免同步逻辑阻塞导致超时丢音
     if (_repo.hapticEnabled) {
       HapticFeedback.lightImpact();
     }
     _repo.recordSnapStats(pieceCount: 1);
+  }
+
+  /// 将 onProgressChanged / onStateUpdated 的 UI 刷新合并为一次 postFrameCallback，
+  /// 避免连续 setState 导致的双重 widget tree 重建。
+  void _markNeedsUIUpdate() {
+    if (!mounted || _uiUpdateScheduled) return;
+    _uiUpdateScheduled = true;
+    SchedulerBinding.instance.addPostFrameCallback((_) {
+      _uiUpdateScheduled = false;
+      if (mounted) {
+        setState(() {});
+      }
+    });
   }
 
   void _scheduleSave({bool immediate = false}) {

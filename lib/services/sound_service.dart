@@ -220,6 +220,8 @@ class SoundService {
       ).build();
       for (int i = 0; i < _kPoolSize; i++) {
         final player = AudioPlayer();
+        // 禁用每帧向原生平台查询播放进度的 FramePositionUpdater，彻底消除高频 MethodChannel 轮询与微任务开销
+        player.positionUpdater = null;
         player.audioCache = FlameAudio.audioCache;
         await player.setAudioContext(audioContext);
         await player.setReleaseMode(ReleaseMode.stop);
@@ -333,10 +335,12 @@ class SoundService {
     );
 
     try {
-      // 2.5s 超时熔断，防止平台通道 prepared 事件丢失导致槽位永久卡死
+      // 超时熔断，防止平台通道 prepared 事件丢失导致槽位永久卡死。
+      // 音效已前置到同步逻辑之前调用，正常情况下平台通道在毫秒级返回；
+      // 800ms 足够覆盖极端 GC 抖动，同时避免长时间占用槽位。
       await slot.player
           .play(AssetSource(file), volume: vol, mode: PlayerMode.lowLatency)
-          .timeout(const Duration(milliseconds: 2500));
+          .timeout(const Duration(milliseconds: 800));
     } catch (e, st) {
       AppLogger.sound.warning(
         'play $file failed/timeout on slot ${slot.id}',
