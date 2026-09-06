@@ -1,5 +1,7 @@
 import 'dart:math' as math;
 
+import '../l10n/gen/strings.g.dart';
+
 /// Representation of a difficulty tier with UI metadata.
 class DifficultyTier {
   const DifficultyTier({
@@ -15,6 +17,38 @@ class DifficultyTier {
   final String estimatedMinutes;
   final double secPerPiece;
   final String tierLevel;
+
+  /// 本地化 tag
+  String get localizedTag {
+    final tr = LocaleSettings.instance.currentTranslations.difficulty.tier;
+    return switch (tierLevel) {
+      'L1' => tr.l1,
+      'L1.5' => tr.l1_5,
+      'L2' => tr.l2,
+      'L3' => tr.l3,
+      'L4' => tr.l4,
+      'L5' => tr.l5,
+      'L6' => tr.l6,
+      'L7' => tr.l7,
+      _ => tag,
+    };
+  }
+
+  /// 本地化预估时长
+  String get localizedEstimatedMinutes {
+    final tr = LocaleSettings.instance.currentTranslations.difficulty.estimated;
+    return switch (tierLevel) {
+      'L1' => tr.l1,
+      'L1.5' => tr.l1_5,
+      'L2' => tr.l2,
+      'L3' => tr.l3,
+      'L4' => tr.l4,
+      'L5' => tr.l5,
+      'L6' => tr.l6,
+      'L7' => tr.l7,
+      _ => estimatedMinutes,
+    };
+  }
 }
 
 /// Standard aspect ratios supported by the game (v3.4: 1:1, 2:3, 3:2, 3:4, 4:3).
@@ -65,6 +99,18 @@ enum PuzzleAspectRatio {
   final List<int>
   multipliers; // Ladder multipliers under pure square piece constraint
 
+  /// 本地化标签
+  String get localizedLabel {
+    final tr = LocaleSettings.instance.currentTranslations.difficulty.aspect;
+    return switch (this) {
+      PuzzleAspectRatio.square1x1 => tr.square,
+      PuzzleAspectRatio.portrait2x3 => tr.portrait2x3,
+      PuzzleAspectRatio.landscape3x2 => tr.landscape3x2,
+      PuzzleAspectRatio.portrait3x4 => tr.portrait3x4,
+      PuzzleAspectRatio.landscape4x3 => tr.landscape4x3,
+    };
+  }
+
   double get ratio => aspectCols / aspectRows;
 
   /// Calculates the area crop loss when cropping an image with [imageRatio] to [targetRatio].
@@ -94,6 +140,7 @@ enum PuzzleAspectRatio {
 
   /// Generates the list of regular square-piece difficulty tiers for this aspect ratio.
   List<DifficultyTier> get tiers {
+    final tr = LocaleSettings.instance.currentTranslations.difficulty;
     return multipliers.map((k) {
       final cols = aspectCols * k;
       final rows = aspectRows * k;
@@ -101,7 +148,7 @@ enum PuzzleAspectRatio {
       final diff = PuzzleDifficulty(
         rows: rows,
         cols: cols,
-        label: '$cols × $rows ($count 块)',
+        label: tr.pieceCount(cols: cols, rows: rows, count: count),
         recommended: k == recommendedK,
       );
       return DifficultyTier(
@@ -143,29 +190,24 @@ class PuzzleDifficulty {
     return 'L7';
   }
 
-  /// Difficulty tier tag label.
+  /// Difficulty tier tag label (localized).
   String get tierTag {
-    switch (tierLevel) {
-      case 'L1':
-        return '新手 Easy';
-      case 'L1.5':
-        return '入门+ (过渡)';
-      case 'L2':
-        return '简单 Beginner';
-      case 'L3':
-        return '普通 Medium';
-      case 'L4':
-        return '进阶 Hard';
-      case 'L5':
-        return '困难 Expert';
-      case 'L6':
-        return '大师 Master';
-      case 'L7':
-        return '宗师 Grandmaster';
-      default:
-        return '普通 Medium';
-    }
+    final tr = LocaleSettings.instance.currentTranslations.difficulty.tier;
+    return switch (tierLevel) {
+      'L1' => tr.l1,
+      'L1.5' => tr.l1_5,
+      'L2' => tr.l2,
+      'L3' => tr.l3,
+      'L4' => tr.l4,
+      'L5' => tr.l5,
+      'L6' => tr.l6,
+      'L7' => tr.l7,
+      _ => tr.l3,
+    };
   }
+
+  /// 兼容旧命名：保留 localized 显式
+  String get localizedTierTag => tierTag;
 
   /// Difficulty tier index (0 ~ 7).
   int get tierIndex {
@@ -191,29 +233,23 @@ class PuzzleDifficulty {
     }
   }
 
-  /// Estimated completion time text (matches existing baselines).
+  /// Estimated completion time text (localized).
   String get estimatedMinutes {
-    switch (tierLevel) {
-      case 'L1':
-        return '1~3分钟';
-      case 'L1.5':
-        return '2~4分钟';
-      case 'L2':
-        return '5~8分钟';
-      case 'L3':
-        return '12~18分钟';
-      case 'L4':
-        return '25~35分钟';
-      case 'L5':
-        return '50~75分钟';
-      case 'L6':
-        return '1.5~3小时';
-      case 'L7':
-        return '3~5小时';
-      default:
-        return '10~20分钟';
-    }
+    final tr = LocaleSettings.instance.currentTranslations.difficulty.estimated;
+    return switch (tierLevel) {
+      'L1' => tr.l1,
+      'L1.5' => tr.l1_5,
+      'L2' => tr.l2,
+      'L3' => tr.l3,
+      'L4' => tr.l4,
+      'L5' => tr.l5,
+      'L6' => tr.l6,
+      'L7' => tr.l7,
+      _ => tr.l3,
+    };
   }
+
+  String get localizedEstimatedMinutes => estimatedMinutes;
 
   /// Returns the corresponding non-linear secPerPiece benchmark for star rating.
   double get secPerPiece {
@@ -268,6 +304,11 @@ class PuzzleDifficulty {
 
   @override
   int get hashCode => Object.hash(rows, cols);
+
+  String get localizedLabel {
+    final tr = LocaleSettings.instance.currentTranslations.difficulty;
+    return tr.pieceCount(cols: cols, rows: rows, count: pieceCount);
+  }
 
   @override
   String toString() => label;

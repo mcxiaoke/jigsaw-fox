@@ -1,10 +1,11 @@
 import 'dart:async';
 
+import '../data/progress_store.dart';
+import '../l10n/gen/strings.g.dart';
 import 'achievement_store.dart';
 import 'app_logger.dart';
 import 'economy_service.dart';
 import 'sound_service.dart';
-import '../data/progress_store.dart';
 
 /// 成就类型
 enum AchievementType {
@@ -37,6 +38,72 @@ class AchievementDefinition {
   final int target;
   final String metricKey;
   final int coinReward;
+
+  /// 本地化标题（优先取 `t.achievements.<id>.title`，缺失回退至硬编码 title）
+  String get localizedTitle {
+    final tr = LocaleSettings.instance.currentTranslations.achievements;
+    return switch (id) {
+      'first_win' => tr.first_win.title,
+      'win_10' => tr.win_10.title,
+      'win_50' => tr.win_50.title,
+      'win_100' => tr.win_100.title,
+      'star_1' => tr.star_1.title,
+      'star_10' => tr.star_10.title,
+      'star_30' => tr.star_30.title,
+      'star_50' => tr.star_50.title,
+      'tier_l3' => tr.tier_l3.title,
+      'tier_l4' => tr.tier_l4.title,
+      'tier_l5' => tr.tier_l5.title,
+      'tier_l6' => tr.tier_l6.title,
+      'custom_1' => tr.custom_1.title,
+      'custom_5' => tr.custom_5.title,
+      'no_hint_win' => tr.no_hint_win.title,
+      'speed_10min' => tr.speed_10min.title,
+      'night_owl' => tr.night_owl.title,
+      'snap_100' => tr.snap_100.title,
+      'snap_500' => tr.snap_500.title,
+      'snap_2000' => tr.snap_2000.title,
+      'time_30m' => tr.time_30m.title,
+      'time_2h' => tr.time_2h.title,
+      'time_10h' => tr.time_10h.title,
+      'daily_7' => tr.daily_7.title,
+      'master_all' => tr.master_all.title,
+      _ => title,
+    };
+  }
+
+  /// 本地化描述
+  String get localizedDescription {
+    final tr = LocaleSettings.instance.currentTranslations.achievements;
+    return switch (id) {
+      'first_win' => tr.first_win.desc,
+      'win_10' => tr.win_10.desc,
+      'win_50' => tr.win_50.desc,
+      'win_100' => tr.win_100.desc,
+      'star_1' => tr.star_1.desc,
+      'star_10' => tr.star_10.desc,
+      'star_30' => tr.star_30.desc,
+      'star_50' => tr.star_50.desc,
+      'tier_l3' => tr.tier_l3.desc,
+      'tier_l4' => tr.tier_l4.desc,
+      'tier_l5' => tr.tier_l5.desc,
+      'tier_l6' => tr.tier_l6.desc,
+      'custom_1' => tr.custom_1.desc,
+      'custom_5' => tr.custom_5.desc,
+      'no_hint_win' => tr.no_hint_win.desc,
+      'speed_10min' => tr.speed_10min.desc,
+      'night_owl' => tr.night_owl.desc,
+      'snap_100' => tr.snap_100.desc,
+      'snap_500' => tr.snap_500.desc,
+      'snap_2000' => tr.snap_2000.desc,
+      'time_30m' => tr.time_30m.desc,
+      'time_2h' => tr.time_2h.desc,
+      'time_10h' => tr.time_10h.desc,
+      'daily_7' => tr.daily_7.desc,
+      'master_all' => tr.master_all.desc,
+      _ => description,
+    };
+  }
 }
 
 /// 成就服务核心引擎（25 项官方成就 SSOT）
@@ -316,7 +383,9 @@ class AchievementService {
     if (reached) {
       final success = await _store.markUnlocked(def.id);
       if (success) {
-        AppLogger.repo.info('Achievement unlocked: ${def.title} (${def.id})');
+        AppLogger.repo.info(
+          'Achievement unlocked: ${def.localizedTitle} (${def.id})',
+        );
         SoundService.I.play(Sfx.coinsFly);
         _unlockStreamController.add(def);
         return true;
