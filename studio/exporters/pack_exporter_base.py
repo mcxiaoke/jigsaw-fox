@@ -1,0 +1,300 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+studio.exporters.pack_exporter_base — Events 与 Collections 共享打包导出基类
+纯净输出: index.json (items 数组) + packs/ + covers/，无 legacy 兼容包袱。
+"""
+
+from __future__ import annotations
+
+from abc import abstractmethod
+import datetime as dt
+import json
+from pathlib import Path
+import tempfile
+from typing import Any, Callable
+import zipfile
+
+from studio.core.exports_ledger import ExportsLedger
+from studio.core.image_proc import HAS_PIL, convert_image, make_rename, validate_image
+from studio.core.scanner import compute_file_sha256, scan_images
+from studio.core.workspace import StudioWorkspace
+from studio.exporters.base import BaseExporter, ExportResult
+from studio.exporters.manifest_manager import ManifestManager
+
+
+class PackExporterBase(BaseExporter):
+    """Events 与 Collections 模块共享的纯净 ZIP 归档与两阶段发布引擎"""
+
+    module: str = ""  # 由子类定义: "events" 或 "collections"
+    id_field: str = ""  # 由子类定义: "eventId" 或 "collectionId"
+
+    def validate(self) -> None:
+        pack_id = (self.data.get("id") or self.data.get(self.id_field) or "").strip()
+        if not pack_id:
+            raise ValueError(f"必须指定唯一标识 ID (id 或 {self.id_field})")
+        if not self.src_p.exists() or not self.src_p.is_dir():
+            raise ValueError(f"源目录不存在: {self.src_p}")
+
+    @abstractmethod
+    def build_item_extra(self) -> dict[str, Any]:
+        """子类扩展元数据字段 (如 startTime, unlockCoins, category 等)"""
+        pass
+
+    def execute(self) -> ExportResult:
+        pack_id = (self.data.get("id") or self.data.get(self.id_field) or "").strip()
+        title = self.data.get("title") or pack_id
+        desc = self.data.get("description", "")
+        status = self.data.get("status", "active")
+        display_order = int(self.data.get("displayOrder", 1))
+
+        ws = StudioWorkspace(self.src_p)
+        ledger = ExportsLedger(self.src_p)
+
+        # 1. 扫描与选图过滤
+        selected_paths = self.data.get("selectedPaths")
+        if selected_paths and isinstance(selected_paths, list) and len(selected_paths) > 0:
+            selected_set = {str(p).replace("\\", "/").strip().lower() for p in selected_paths}
+            images = [
+                p for p in scan_images(self.src_p)
+                if p.relative_to(self.src_p).as_posix().lower() in selected_set
+            ]
+            self.log(f"已按指定范围载入 {len(images)} 张待打包图片，目标 ID: {pack_id}", "info")
+        else:
+            images = scan_images(self.src_p)
+            self.log(f"扫描源目录获得 {len(images)} 张图片，目标 ID: {pack_id}", "info")
+
+        if not images:
+            raise ValueError("源目录中没有找到可导出的图片文件")
+
+        # 2. 物理完整性与格式损坏校验 (3-p2-1)
+        for p in images:
+            is_valid, err_msg = validate_image(p)
+            if not is_valid:
+                rel_p = p.relative_to(self.src_p).as_posix()
+                self.log(f"导出中止: 图片损坏或格式无效: {rel_p} ({err_msg})", "err")
+                raise ValueError(f"待导出图片中存在损坏或格式无效的文件: {rel_p} ({err_msg})")
+
+        # 3. 排除已导出图片 (excludeExported)
+        if self.data.get("excludeExported"):
+            exported_hashes = ledger.get_exported_hashes()
+            if exported_hashes:
+                filtered_images = []
+                excluded_cnt = 0
+                for p in images:
+                    h = compute_file_sha256(p).strip().lower()
+                    if h in exported_hashes:
+                        excluded_cnt += 1
+                    else:
+                        filtered_images.append(p)
+                if excluded_cnt > 0:
+                    self.log(f"已自动排除 {excluded_cnt} 张已导出的历史图片，剩余 {len(filtered_images)} 张待打包", "info")
+                images = filtered_images
+                if not images:
+                    raise ValueError("所选范围内的图片均已在历史批次中导出，无新图片可供导出")
+
+        # 4. 查重拦截：严禁同批次内部重复
+        seen_hashes: dict[str, list[str]] = {}
+        for p in images:
+            rel = p.relative_to(self.src_p).as_posix().replace("\\", "/")
+            h = compute_file_sha256(p).strip().lower()
+            if h:
+                seen_hashes.setdefault(h, []).append(rel)
+
+        dup_groups = {h: paths for h, paths in seen_hashes.items() if len(paths) >= 2}
+        if dup_groups:
+            self.log(f"导出已被安全中止: 待导出列表中发现 {len(dup_groups)} 组完全相同的重复图片！", "err")
+            detail_lines = [f"  • 重复组 [Hash: {h[:12]}...]: {', '.join(paths)}" for h, paths in dup_groups.items()]
+            raise ValueError(
+                f"待导出图片列表中存在 {len(dup_groups)} 组内容完全相同的重复图片，导出已被安全拦截！\n"
+                + "\n".join(detail_lines)
+            )
+
+        # 5. 历史查重与跨模块预警 (细化至每个图片的 logicalId: module:pack_id:filename)
+        for p in images:
+            h = compute_file_sha256(p).strip().lower()
+            conflict, msg, sev = ledger.check_history_duplicate(
+                h,
+                module=self.module,
+                logical_id=f"{self.module}:{pack_id}:{p.name}",
+            )
+            if conflict:
+                if sev == "error":
+                    self.log(f"导出中止: {msg} (文件: {p.name})", "err")
+                    raise ValueError(f"导出已被拦截: {msg}")
+                elif sev == "warning":
+                    self.log(f"注意: {msg} (文件: {p.name})", "warn")
+
+        # 6. 构建输出目录拓扑 (两阶段发布：先构建至 .studio/release/{module})
+        release_mod_dir = ws.release_dir / self.module
+        packs_dir = release_mod_dir / "packs"
+        covers_dir = release_mod_dir / "covers"
+        packs_dir.mkdir(parents=True, exist_ok=True)
+        covers_dir.mkdir(parents=True, exist_ok=True)
+
+        # 读取现有 index.json 以检测是否同名重复导出
+        index_json_path = release_mod_dir / "index.json"
+        existing_items: list[dict[str, Any]] = []
+        existing_version = 0
+        if index_json_path.exists():
+            try:
+                loaded = json.loads(index_json_path.read_text(encoding="utf-8"))
+                if isinstance(loaded, dict):
+                    existing_items = loaded.get("items", [])
+                    existing_version = int(loaded.get("version", 0))
+            except Exception:
+                existing_items = []
+
+        prev_item = next((it for it in existing_items if isinstance(it, dict) and it.get("id") == pack_id), None)
+
+        # 预打包 ZIP 到临时文件以确定内容哈希
+        tmp_zip = Path(tempfile.gettempdir()) / f"_{self.module}_{pack_id}_tmp.zip"
+        with zipfile.ZipFile(tmp_zip, "w", zipfile.ZIP_DEFLATED) as zf:
+            for idx, p in enumerate(images, start=1):
+                arc_name = make_rename(p.name, idx, self.rename_rule, self.fmt)
+                if self.fmt != "original" and HAS_PIL:
+                    tmp_f = Path(tempfile.gettempdir()) / f"_{self.module}_{arc_name}"
+                    ok, _ = convert_image(p, tmp_f, self.fmt)
+                    if ok:
+                        zf.write(tmp_f, arcname=arc_name)
+                        tmp_f.unlink(missing_ok=True)
+                        continue
+                zf.write(p, arcname=arc_name)
+
+        zip_size = tmp_zip.stat().st_size
+        zip_hash = compute_file_sha256(tmp_zip)
+
+        # CDN 不可变缓存防冲突：若重导且哈希变化则使用带 revision 的文件名
+        rev = 1
+        if prev_item:
+            prev_hash = prev_item.get("zipSha256")
+            prev_rev = int(prev_item.get("revision", 1) or 1)
+            if prev_hash and prev_hash != zip_hash:
+                rev = prev_rev + 1
+            else:
+                rev = prev_rev
+
+        if rev > 1:
+            zip_file_name = f"{pack_id}-r{rev}.zip"
+            cover_file_name = f"{pack_id}-r{rev}.webp"
+        else:
+            zip_file_name = f"{pack_id}.zip"
+            cover_file_name = f"{pack_id}.webp"
+
+        zip_rel_url = f"packs/{zip_file_name}"
+        cover_rel_url = f"covers/{cover_file_name}"
+        zip_path = packs_dir / zip_file_name
+        cover_path = covers_dir / cover_file_name
+
+        tmp_zip.replace(zip_path)
+        self.log(f"ZIP 归档生成完毕: {zip_path.name} ({zip_size:,} bytes, hash: {zip_hash[:8]}...)", "ok")
+
+        exported_items: list[dict[str, Any]] = []
+        now_str = dt.datetime.now(dt.timezone.utc).isoformat().replace("+00:00", "Z")
+
+        for idx, p in enumerate(images, start=1):
+            arc_name = make_rename(p.name, idx, self.rename_rule, self.fmt)
+            file_hash = compute_file_sha256(p)
+            exported_items.append({
+                "sourceHash": file_hash,
+                "sourcePath": p.relative_to(self.src_p).as_posix().replace("\\", "/"),
+                "sourceSize": p.stat().st_size if p.exists() else 0,
+                "module": self.module,
+                "logicalId": f"{self.module}:{pack_id}:{p.name}",
+                "targetFile": f"{self.module}/packs/{zip_file_name}#{arc_name}",
+                "revision": rev,
+            })
+
+        # 生成封面图并双重校验完整性
+        ok_cov, err_cov = convert_image(images[0], cover_path, "webp")
+        if not ok_cov:
+            self.log(f"封面生成失败: {err_cov}", "err")
+            raise ValueError(f"封面图生成失败 ({images[0].name}): {err_cov}")
+        ok_val, err_val = validate_image(cover_path)
+        if not ok_val:
+            self.log(f"封面校验未通过: {err_val}", "err")
+            raise ValueError(f"封面图校验未通过 ({cover_path.name}): {err_val}")
+        self.log(f"封面生成完毕: {cover_path.name}", "ok")
+
+        # 7. 更新模块总索引 index.json (统一数组容器键 items，无 legacy 兼容冗余)
+        item_entry: dict[str, Any] = {
+            "id": pack_id,
+            "type": "zip",
+            "title": title,
+            "desc": desc,
+            "status": status,
+            "displayOrder": display_order,
+            "coverUrl": cover_rel_url,
+            "zipUrl": zip_rel_url,
+            "fileSizeBytes": zip_size,
+            "zipSha256": zip_hash,
+            "totalCount": len(images),
+            "revision": rev,
+            "updatedAt": now_str,
+            **self.build_item_extra(),
+        }
+
+        # 查找替换或追加
+        found = False
+        for i, it in enumerate(existing_items):
+            if isinstance(it, dict) and it.get("id") == pack_id:
+                existing_items[i] = item_entry
+                found = True
+                break
+        if not found:
+            existing_items.append(item_entry)
+
+        new_version = existing_version + 1 if existing_version > 0 else len(existing_items)
+        index_payload = {
+            "module": self.module,
+            "version": new_version,
+            "updatedAt": now_str,
+            "items": existing_items,
+        }
+
+        tmp_idx = index_json_path.with_suffix(".tmp")
+        tmp_idx.write_text(json.dumps(index_payload, ensure_ascii=False, indent=2), encoding="utf-8")
+        tmp_idx.replace(index_json_path)
+        self.log(f"{self.module}/index.json 写入成功 (version={new_version}, items={len(existing_items)})", "ok")
+
+        # 8. 两阶段发布：拷贝 release 目录文件至 outDir (纯净交付，不包含任何旧格式兼容文件)
+        copied_files = ws.copy_release_to_out(self.module, self.out_p)
+
+        # 9. 更新根 manifest.json (同时进入 release 镜像与 outDir)
+        index_hash = compute_file_sha256(index_json_path)
+        rel_mod_url = f"{self.module}/index.json"
+        manifest_file = ManifestManager.update_module(
+            self.out_p,
+            self.module,
+            new_version,
+            rel_mod_url,
+            self.log,
+            count=len(existing_items),
+            module_hash=index_hash,
+            ws=ws,
+        )
+        if manifest_file:
+            copied_files.append(str(manifest_file.resolve()))
+
+        # 10. 记录权威账本与导出流水
+        try:
+            ledger.append_records(exported_items)
+            ws.log_export(
+                f"export_{self.module}",
+                packId=pack_id,
+                module=self.module,
+                count=len(images),
+                version=new_version,
+                zipSize=zip_size,
+                zipHash=zip_hash,
+                outDir=str(self.out_p),
+            )
+            self.log(f"已将 {len(exported_items)} 张图片记入源侧权威账本", "ok")
+        except Exception as e:
+            self.log(f"更新权威账本失败: {e}", "warn")
+
+        return ExportResult(
+            success=True,
+            summary=f"已成功导出 {self.module} 模块包 {pack_id} (count={len(images)})",
+            files=copied_files,
+        )

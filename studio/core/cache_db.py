@@ -14,7 +14,9 @@ import threading
 from pathlib import Path
 from typing import Any, Iterable
 
-CACHE_DB_NAME = ".studio.db"
+from studio.core.workspace import StudioWorkspace
+
+CACHE_DB_NAME = "studio.db"
 
 
 class CacheDB:
@@ -26,7 +28,8 @@ class CacheDB:
 
     def __init__(self, src_dir: Path | str) -> None:
         self.src_dir = Path(src_dir).resolve()
-        self.db_path = self.src_dir / CACHE_DB_NAME
+        self.workspace = StudioWorkspace(self.src_dir)
+        self.db_path = self.workspace.db_file
         self._lock = threading.Lock()
         self._conn: sqlite3.Connection | None = None
         self._init_db()

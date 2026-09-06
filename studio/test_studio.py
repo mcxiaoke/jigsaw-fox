@@ -211,24 +211,30 @@ class TestCoreAndExporters(unittest.TestCase):
         result = exporter.execute()
 
         self.assertTrue(result.success)
-        main_json = self.out_dir / "main.json"
-        self.assertTrue(main_json.exists())
-        data = json.loads(main_json.read_text(encoding="utf-8"))
-        self.assertEqual(data["version"], 5)
-        self.assertEqual(data["count"], 3)
-        self.assertIn("updatedAt", data)
-        self.assertEqual(len(data["levels"]), 3)
-        self.assertEqual(data["levels"][0]["order"], 101)
-        self.assertEqual(data["levels"][0]["tags"], ["Pets"])
+        main_index = self.out_dir / "main" / "index.json"
+        self.assertTrue(main_index.exists())
+        idx_data = json.loads(main_index.read_text(encoding="utf-8"))
+        self.assertEqual(idx_data["version"], 5)
+        self.assertEqual(idx_data["totalCount"], 3)
+        self.assertIn("updatedAt", idx_data)
+        self.assertEqual(len(idx_data["items"]), 1)
 
-        # 验证 manifest.json 纯路由清单
+        batch_json = self.out_dir / "main" / "batches" / "batch_001.json"
+        self.assertTrue(batch_json.exists())
+        b_data = json.loads(batch_json.read_text(encoding="utf-8"))
+        self.assertEqual(b_data["count"], 3)
+        self.assertEqual(len(b_data["items"]), 3)
+        self.assertEqual(b_data["items"][0]["order"], 101)
+        self.assertEqual(b_data["items"][0]["tags"], ["Pets"])
+
+        # 验证 manifest.json 纯路由清单 (v2.3 规范相对路径与 schemaVersion 4)
         manifest_json = self.out_dir / "manifest.json"
         self.assertTrue(manifest_json.exists())
         m_data = json.loads(manifest_json.read_text(encoding="utf-8"))
         self.assertIn("main", m_data["modules"])
         self.assertEqual(m_data["modules"]["main"]["version"], 5)
-        self.assertEqual(m_data["modules"]["main"]["url"], "http://test.local/data/main.json")
-        self.assertEqual(m_data["modules"]["main"]["count"], 3)
+        self.assertEqual(m_data["modules"]["main"]["url"], "main/index.json")
+        self.assertEqual(m_data["modules"]["main"]["totalCount"], 3)
         self.assertIn("updatedAt", m_data["modules"]["main"])
 
     def test_daily_exporter(self):
@@ -249,19 +255,18 @@ class TestCoreAndExporters(unittest.TestCase):
         result = exporter.execute()
 
         self.assertTrue(result.success)
-        daily_zip = self.out_dir / "daily" / "202609.zip"
+        daily_zip = self.out_dir / "daily" / "zips" / "202609.zip"
         self.assertTrue(daily_zip.exists())
 
-        daily_json = self.out_dir / "daily.json"
-        self.assertTrue(daily_json.exists())
-        d_data = json.loads(daily_json.read_text(encoding="utf-8"))
+        daily_index = self.out_dir / "daily" / "index.json"
+        self.assertTrue(daily_index.exists())
+        d_data = json.loads(daily_index.read_text(encoding="utf-8"))
         self.assertEqual(d_data["currentMonth"], "202609")
-        self.assertEqual(d_data["count"], 3)
         self.assertIn("updatedAt", d_data)
-        self.assertEqual(len(d_data["months"]), 1)
-        self.assertEqual(d_data["months"][0]["month"], "202609")
-        self.assertEqual(d_data["months"][0]["count"], 3)
-        self.assertIn("updatedAt", d_data["months"][0])
+        self.assertEqual(len(d_data["items"]), 1)
+        self.assertEqual(d_data["items"][0]["month"], "202609")
+        self.assertEqual(d_data["items"][0]["totalCount"], 3)
+        self.assertIn("updatedAt", d_data["items"][0])
 
         manifest_json = self.out_dir / "manifest.json"
         self.assertTrue(manifest_json.exists())
@@ -289,16 +294,17 @@ class TestCoreAndExporters(unittest.TestCase):
         result = exporter.execute()
 
         self.assertTrue(result.success)
-        event_zip = self.out_dir / "events" / "test_event_2026.zip"
+        event_zip = self.out_dir / "events" / "packs" / "test_event_2026.zip"
         self.assertTrue(event_zip.exists())
 
-        events_json = self.out_dir / "events" / "events.json"
+        events_json = self.out_dir / "events" / "index.json"
         self.assertTrue(events_json.exists())
         ev_data = json.loads(events_json.read_text(encoding="utf-8"))
-        self.assertEqual(len(ev_data), 1)
-        self.assertEqual(ev_data[0]["id"], "test_event_2026")
-        self.assertEqual(ev_data[0]["count"], 3)
-        self.assertIn("updatedAt", ev_data[0])
+        self.assertIn("items", ev_data)
+        self.assertEqual(len(ev_data["items"]), 1)
+        self.assertEqual(ev_data["items"][0]["id"], "test_event_2026")
+        self.assertEqual(ev_data["items"][0]["totalCount"], 3)
+        self.assertIn("updatedAt", ev_data["items"][0])
 
     def test_collection_exporter(self):
         logs = []
@@ -320,16 +326,17 @@ class TestCoreAndExporters(unittest.TestCase):
         result = exporter.execute()
 
         self.assertTrue(result.success)
-        col_zip = self.out_dir / "collections" / "test_col_2026.zip"
+        col_zip = self.out_dir / "collections" / "packs" / "test_col_2026.zip"
         self.assertTrue(col_zip.exists())
 
-        cols_json = self.out_dir / "collections" / "collections.json"
+        cols_json = self.out_dir / "collections" / "index.json"
         self.assertTrue(cols_json.exists())
         col_data = json.loads(cols_json.read_text(encoding="utf-8"))
-        self.assertEqual(len(col_data), 1)
-        self.assertEqual(col_data[0]["id"], "test_col_2026")
-        self.assertEqual(col_data[0]["count"], 3)
-        self.assertIn("updatedAt", col_data[0])
+        self.assertIn("items", col_data)
+        self.assertEqual(len(col_data["items"]), 1)
+        self.assertEqual(col_data["items"][0]["id"], "test_col_2026")
+        self.assertEqual(col_data["items"][0]["totalCount"], 3)
+        self.assertIn("updatedAt", col_data["items"][0])
 
 
 class TestExportTracker(unittest.TestCase):
@@ -438,7 +445,9 @@ class TestHashAndReconciliation(unittest.TestCase):
         img_p.rename(new_img_p)
 
         # 3. 再次扫描目录并自动对齐
-        loaded_raw, _ = normalize_records(json.loads((self.src_dir / "tags.json").read_text(encoding="utf-8")), self.src_dir)
+        tag_file = find_tags_file(self.src_dir)
+        self.assertIsNotNone(tag_file)
+        loaded_raw, _ = normalize_records(json.loads(tag_file.read_text(encoding="utf-8")), self.src_dir)
         new_images = scan_images(self.src_dir)
         new_infos = scan_image_infos(new_images, self.src_dir)
         new_records, new_stats = merge_scanned_images(new_images, self.src_dir, loaded_raw, image_infos=new_infos)
@@ -493,9 +502,9 @@ class TestExporterTrackingAndDeduplication(unittest.TestCase):
         res1 = exporter1.execute()
         self.assertTrue(res1.success)
 
-        # 检查 exported.json 是否已生成
-        exp_file = self.src_dir / "exported.json"
-        self.assertTrue(exp_file.exists())
+        # 检查 .studio/ledger/exports.json 权威账本是否已生成
+        ledger_file = self.src_dir / ".studio" / "ledger" / "exports.json"
+        self.assertTrue(ledger_file.exists())
         hashes = get_exported_hashes(self.src_dir)
         self.assertEqual(len(hashes), 2)
 
@@ -931,10 +940,10 @@ class TestDuplicateHandling(unittest.TestCase):
             log_fn=lambda msg, level: logs.append((msg, level)),
         )
         res = exporter.execute()
-        self.assertTrue(res.success)
-        main_json = self.out_dir / "main.json"
-        data = json.loads(main_json.read_text(encoding="utf-8"))
-        self.assertEqual(len(data["levels"]), 2)
+        batch_json = self.out_dir / "main" / "batches" / "batch_001.json"
+        self.assertTrue(batch_json.exists())
+        data = json.loads(batch_json.read_text(encoding="utf-8"))
+        self.assertEqual(len(data["items"]), 2)
 
     def test_server_duplicate_scan_api(self):
         from studio.server import StudioRequestHandler, StudioServer

@@ -227,8 +227,12 @@ def scan_image_infos(
 
 
 def find_tags_file(root: str | Path) -> Path | None:
-    """在目录下寻找现存的 tags.json 文件（支持常见候选名）。"""
+    """在目录下寻找现存的 tags.json 文件（优先新版 .studio/tags.json，兼顾历史候选名）。"""
     r = Path(root).resolve()
+    studio_tags = r / ".studio" / "tags.json"
+    if studio_tags.exists() and studio_tags.is_file():
+        return studio_tags
+
     candidates = ["tags.json", "ai_tags.json", "puzzle_tags.json", ".puzzle_tags.json"]
     for name in candidates:
         target = r / name

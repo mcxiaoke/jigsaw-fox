@@ -23,22 +23,44 @@ try:
 except ImportError:
     HAS_PIL = False
 
-# 服务端缩略图磁盘缓存目录 (存放于 temp/studio_cache/thumbs/)
-THUMB_CACHE_DIR = Path(__file__).resolve().parent.parent.parent / "temp" / "studio_cache" / "thumbs"
+# 服务端缩略图磁盘缓存目录 (优先存放于源工作区 srcDir/.studio/cache/thumbs/)
+DEFAULT_THUMB_CACHE_DIR = Path(__file__).resolve().parent.parent.parent / "temp" / "studio_cache" / "thumbs"
+THUMB_CACHE_DIR = DEFAULT_THUMB_CACHE_DIR
 
 
-def get_thumb_cache_path(img_path: Path, size: int) -> Path | None:
-    """计算缩略图唯一缓存路径 (基于绝对路径、文件修改时间戳、文件大小与目标尺寸)。"""
+def _find_studio_cache_dir(p: Path) -> Path | None:
+    """自底向上查找素材源工作区的 .studio/cache/thumbs 目录。"""
+    try:
+        curr = p.resolve().parent
+        for _ in range(12):
+            if (curr / ".studio").is_dir():
+                return curr / ".studio" / "cache" / "thumbs"
+            if curr.parent == curr:
+                break
+            curr = curr.parent
+    except Exception:
+        pass
+    return None
+
+
+def get_thumb_cache_path(img_path: Path, size: int, cache_dir: Path | None = None) -> Path | None:
+    """计算缩略图唯一缓存路径 (优先存放于素材源目录的 .studio/cache/thumbs，保障自包含时光机)。"""
     try:
         st = img_path.stat()
         key_str = f"{img_path.resolve()}_{st.st_mtime_ns}_{st.st_size}_{size}"
         key_hash = hashlib.md5(key_str.encode("utf-8")).hexdigest()
-        return THUMB_CACHE_DIR / key_hash[:2] / f"{key_hash}.jpg"
+        target_dir = cache_dir or _find_studio_cache_dir(img_path) or THUMB_CACHE_DIR
+        return target_dir / key_hash[:2] / f"{key_hash}.jpg"
     except Exception:
         return None
 
 
-def generate_thumbnail_bytes(img_path: Path | str, size: int = 360, quality: int = 82) -> tuple[bytes | None, str]:
+def generate_thumbnail_bytes(
+    img_path: Path | str,
+    size: int = 360,
+    quality: int = 82,
+    cache_dir: Path | None = None,
+) -> tuple[bytes | None, str]:
     """
     生成指定尺寸的缩略图字节数据 (默认 JPEG 格式)。
     内置服务端多级磁盘缓存：相同文件在未被修改前直接秒级命中缓存返回，避免重复 LANCZOS 重绘计算。
@@ -53,7 +75,7 @@ def generate_thumbnail_bytes(img_path: Path | str, size: int = 360, quality: int
     size = max(64, min(size, 1200))
 
     # 1. 优先命中服务端磁盘缓存 (避免重复解压缩与缩放)
-    cache_path = get_thumb_cache_path(p, size)
+    cache_path = get_thumb_cache_path(p, size, cache_dir=cache_dir)
     if cache_path and cache_path.exists():
         try:
             return cache_path.read_bytes(), "image/jpeg"
@@ -184,3 +206,32 @@ def make_rename(
     if fmt and fmt != "original":
         return f"{Path(original_name).stem}{target_ext}"
     return original_name
+
+
+def validate_image(img_path: Path | str) -> tuple[bool, str | None]:
+    """
+    深度校验图片文件的物理存在性、非空以及是否损坏或不可解码。
+    返回: (is_valid: bool, error_msg: str | None)
+    """
+    p = Path(img_path)
+    if not p.exists() or not p.is_file():
+        return False, f"文件不存在或无法访问: {p}"
+    try:
+        size = p.stat().st_size
+        if size <= 0:
+            return False, f"文件大小为 0 字节: {p.name}"
+    except Exception as e:
+        return False, f"无法读取文件属性: {e}"
+
+    if HAS_PIL:
+        try:
+            with Image.open(p) as im:
+                im.verify()
+            with Image.open(p) as im:
+                im.draft(None, (32, 32))
+                im.load()
+        except Exception as e:
+            return False, f"图片数据损坏或格式不可识别 ({p.name}): {e}"
+
+    return True, None
+

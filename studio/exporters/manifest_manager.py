@@ -24,12 +24,20 @@ class ManifestManager:
         url: str,
         log_fn: Callable[[str, str], None],
         count: int | None = None,
+        module_hash: str | None = None,
+        extra_fields: dict[str, Any] | None = None,
+        ws: Any = None,
+        release_dir: Path | None = None,
     ) -> Path | None:
         manifest_file = out_p / "manifest.json"
         now_str = dt.datetime.now(dt.timezone.utc).isoformat().replace("+00:00", "Z")
         manifest_data: dict[str, Any] = {
-            "version": 1,
+            "schemaVersion": 4,
             "updatedAt": now_str,
+            "appConfig": {
+                "notice": "",
+                "minAppVersion": 1,
+            },
             "modules": {},
         }
 
@@ -38,6 +46,10 @@ class ManifestManager:
                 content = json.loads(manifest_file.read_text(encoding="utf-8"))
                 if isinstance(content, dict):
                     manifest_data = content
+                    if "schemaVersion" not in manifest_data and "version" in manifest_data:
+                        manifest_data["schemaVersion"] = 4
+                    if "appConfig" not in manifest_data:
+                        manifest_data["appConfig"] = {"notice": "", "minAppVersion": 1}
                     if "modules" not in manifest_data:
                         manifest_data["modules"] = {}
             except Exception as e:
@@ -50,7 +62,16 @@ class ManifestManager:
             "updatedAt": now_str,
         }
         if count is not None:
-            mod_entry["count"] = count
+            if module_name == "main":
+                mod_entry["totalCount"] = count
+            else:
+                mod_entry["count"] = count
+        if module_hash:
+            mod_entry["hash"] = module_hash
+        if extra_fields:
+            mod_entry.update(extra_fields)
+            if module_name == "main" and "count" in mod_entry:
+                del mod_entry["count"]
 
         manifest_data["modules"][module_name] = mod_entry
         manifest_data["updatedAt"] = now_str
@@ -60,6 +81,21 @@ class ManifestManager:
             tmp_file.write_text(json.dumps(manifest_data, ensure_ascii=False, indent=2), encoding="utf-8")
             tmp_file.replace(manifest_file)
             log_fn(f"manifest.json 已更新: [{module_name}] version={version}", "ok")
+
+            # 同步镜像至 workspace release_dir (如果存在)
+            target_release_dir = release_dir or (getattr(ws, "release_dir", None) if ws else None)
+            if target_release_dir:
+                try:
+                    rel_dir = Path(target_release_dir)
+                    rel_dir.mkdir(parents=True, exist_ok=True)
+                    rel_manifest = rel_dir / "manifest.json"
+                    rel_tmp = rel_manifest.with_suffix(".tmp")
+                    rel_tmp.write_text(json.dumps(manifest_data, ensure_ascii=False, indent=2), encoding="utf-8")
+                    rel_tmp.replace(rel_manifest)
+                    log_fn(f"manifest.json 镜像已同步至 release_dir", "info")
+                except Exception as ex:
+                    log_fn(f"镜像 manifest.json 到 release_dir 失败: {ex}", "warn")
+
             return manifest_file
         except Exception as e:
             log_fn(f"写入 manifest.json 失败: {e}", "warn")

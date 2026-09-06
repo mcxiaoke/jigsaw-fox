@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Any
 
 from studio.core.scanner import find_tags_file
+from studio.core.workspace import StudioWorkspace
 from studio.taxonomy import (
     get_catalogs_for_tags,
     guess_tags_from_path,
@@ -349,7 +350,8 @@ def save_tags_file(root: str | Path, records: list[dict[str, Any]], target_file:
     返回: (success: bool, filepath_or_error: str, count: int)
     """
     r = Path(root).resolve()
-    dest = target_file if target_file else (r / "tags.json")
+    ws = StudioWorkspace(r)
+    dest = target_file if target_file else ws.tags_file
 
     # 保留原有的 sha1 和 hash 映射
     hash_map: dict[str, str] = {}
@@ -424,6 +426,11 @@ def save_tags_file(root: str | Path, records: list[dict[str, Any]], target_file:
         tmp_file = dest.with_suffix(".tmp")
         tmp_file.write_text(json.dumps(out_list, ensure_ascii=False, indent=2), encoding="utf-8")
         tmp_file.replace(dest)
+        try:
+            rel_dest = dest.relative_to(r).as_posix()
+        except Exception:
+            rel_dest = str(dest)
+        ws.log_operation("tag_save", path=rel_dest, count=len(out_list))
         return True, str(dest.resolve()), len(out_list)
     except Exception as e:
         return False, str(e), 0
