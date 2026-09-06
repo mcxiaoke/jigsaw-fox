@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:phosphoricons_flutter/phosphoricons_flutter.dart';
 
 import '../data/models/downloaded_image_item.dart';
+import '../l10n/gen/strings.g.dart';
 import '../logic/download_manager.dart';
 import '../pages/crop_puzzle_page.dart';
 import '../theme/app_palette.dart';
@@ -33,7 +34,7 @@ class DownloadedDrawerSheet extends StatelessWidget {
       if (context.mounted) {
         GameToast.show(
           context,
-          message: '素材文件不存在或已被清理',
+          message: t.drawer.fileMissing,
           type: GameToastType.warning,
         );
       }
@@ -64,17 +65,20 @@ class DownloadedDrawerSheet extends StatelessWidget {
       builder: (ctx) => AlertDialog(
         backgroundColor: palette.surfaceContainer,
         title: Text(
-          '清空素材库',
+          t.drawer.clearAllTitle,
           style: styles.h3.copyWith(color: palette.primaryText),
         ),
         content: Text(
-          '确定要清空所有待制作的素材图片吗？（不会影响已经制作成功的拼图关卡）',
+          t.drawer.clearAllDesc,
           style: styles.body.copyWith(color: palette.secondaryText),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(),
-            child: Text('取消', style: TextStyle(color: palette.secondaryText)),
+            child: Text(
+              t.common.cancel,
+              style: TextStyle(color: palette.secondaryText),
+            ),
           ),
           FilledButton(
             style: FilledButton.styleFrom(backgroundColor: palette.error),
@@ -82,7 +86,7 @@ class DownloadedDrawerSheet extends StatelessWidget {
               Navigator.of(ctx).pop();
               await DownloadManager.instance.clearAll();
             },
-            child: const Text('清空全部'),
+            child: Text(t.drawer.clearAll),
           ),
         ],
       ),
@@ -140,7 +144,7 @@ class DownloadedDrawerSheet extends StatelessWidget {
                         ),
                         const SizedBox(width: 8),
                         Text(
-                          '素材库',
+                          t.drawer.title,
                           style: styles.h3.copyWith(
                             fontWeight: FontWeight.bold,
                             fontSize: 18,
@@ -158,7 +162,7 @@ class DownloadedDrawerSheet extends StatelessWidget {
                             borderRadius: BorderRadius.circular(12),
                           ),
                           child: Text(
-                            '${items.length} 张素材',
+                            t.drawer.count(count: items.length),
                             style: TextStyle(
                               color: palette.warning,
                               fontWeight: FontWeight.bold,
@@ -179,7 +183,7 @@ class DownloadedDrawerSheet extends StatelessWidget {
                               color: palette.error,
                             ),
                             label: Text(
-                              '清空全部',
+                              t.drawer.clearAll,
                               style: TextStyle(
                                 color: palette.error,
                                 fontSize: 13,
@@ -199,7 +203,7 @@ class DownloadedDrawerSheet extends StatelessWidget {
                             size: 20,
                             color: palette.secondaryText,
                           ),
-                          tooltip: '关闭',
+                          tooltip: t.drawer.close,
                         ),
                       ],
                     ),
@@ -229,7 +233,7 @@ class DownloadedDrawerSheet extends StatelessWidget {
                           ),
                           const SizedBox(height: 12),
                           Text(
-                            '素材库暂无图片',
+                            t.drawer.emptyTitle,
                             style: TextStyle(
                               fontSize: 16,
                               fontWeight: FontWeight.bold,
@@ -238,7 +242,7 @@ class DownloadedDrawerSheet extends StatelessWidget {
                           ),
                           const SizedBox(height: 6),
                           Text(
-                            '点击「相册选图」批量导入本地照片，或在「在线搜图」中一键下载，即可将图片加入素材库随时制作拼图。',
+                            t.drawer.emptyHint,
                             textAlign: TextAlign.center,
                             style: TextStyle(
                               fontSize: 13,
@@ -421,9 +425,9 @@ class DownloadedDrawerSheet extends StatelessWidget {
                       padding: const EdgeInsets.symmetric(vertical: 6),
                     ),
                     icon: const Icon(PhosphorIconsBold.puzzlePiece, size: 14),
-                    label: const Text(
-                      '制作拼图',
-                      style: TextStyle(
+                    label: Text(
+                      t.drawer.makePuzzle,
+                      style: const TextStyle(
                         fontSize: 12,
                         fontWeight: FontWeight.bold,
                       ),
@@ -439,7 +443,7 @@ class DownloadedDrawerSheet extends StatelessWidget {
                     color: palette.secondaryText,
                   ),
                   visualDensity: VisualDensity.compact,
-                  tooltip: '删除此图片',
+                  tooltip: t.drawer.deleteImageTooltip,
                 ),
               ],
             ),

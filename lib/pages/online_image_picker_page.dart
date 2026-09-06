@@ -8,6 +8,7 @@ import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 
 import '../data/models/downloaded_image_item.dart';
 import '../services/app_logger.dart';
+import '../l10n/gen/strings.g.dart';
 import '../logic/download_manager.dart';
 import '../services/webview_service.dart';
 import '../theme/app_palette.dart';
@@ -43,7 +44,7 @@ class OnlineImagePickerPage extends StatefulWidget {
       GameToast.show(
         context,
         icon: PhosphorIconsRegular.warningCircle,
-        message: '当前系统未安装 WebView2 运行时，无法使用在线搜图',
+        message: t.myCenter.toast.webviewMissing,
         type: GameToastType.warning,
       );
       return Future.value();
@@ -359,7 +360,11 @@ class _OnlineImagePickerPageState extends State<OnlineImagePickerPage> {
         '[WebView:DownloadAction] Image already in download cache.',
       );
       if (mounted) {
-        GameToast.show(context, message: '该图片已在下载箱中', type: GameToastType.info);
+        GameToast.show(
+          context,
+          message: t.online.alreadyInBox,
+          type: GameToastType.info,
+        );
       }
       return;
     }
@@ -393,7 +398,7 @@ class _OnlineImagePickerPageState extends State<OnlineImagePickerPage> {
       if (mounted) {
         GameToast.show(
           context,
-          message: '下载图片失败: $e',
+          message: t.online.downloadFailed(error: e),
           type: GameToastType.error,
         );
       }
@@ -418,7 +423,7 @@ class _OnlineImagePickerPageState extends State<OnlineImagePickerPage> {
         if (mounted) {
           GameToast.show(
             context,
-            message: '未在当前页面检测到高清大图，请点击进入照片详情页后再试',
+            message: t.online.noHighResDetected,
             type: GameToastType.warning,
           );
         }
@@ -456,7 +461,7 @@ class _OnlineImagePickerPageState extends State<OnlineImagePickerPage> {
               );
               Navigator.of(context).pop();
             },
-            tooltip: '关闭在线选图',
+            tooltip: t.online.closePickerTooltip,
           ),
           titleSpacing: 0,
           title: Center(
@@ -484,7 +489,7 @@ class _OnlineImagePickerPageState extends State<OnlineImagePickerPage> {
                       _updateHistoryState();
                     }
                   : null,
-              tooltip: '后退',
+              tooltip: t.online.backTooltip,
             ),
 
             // Browser Refresh Button (Compact)
@@ -496,7 +501,7 @@ class _OnlineImagePickerPageState extends State<OnlineImagePickerPage> {
                 AppLogger.webview.info('[WebView:Action] User clicked reload.');
                 _webViewController?.reload();
               },
-              tooltip: '刷新',
+              tooltip: t.online.refreshTooltip,
             ),
 
             // Material Box Button with Badge (Compact)
@@ -513,7 +518,7 @@ class _OnlineImagePickerPageState extends State<OnlineImagePickerPage> {
                         minHeight: 36,
                       ),
                       icon: const Icon(PhosphorIconsBold.archive, size: 19),
-                      tooltip: '素材库',
+                      tooltip: t.drawer.title,
                       onPressed: () => DownloadedDrawerSheet.show(context),
                     ),
                     if (items.isNotEmpty)
@@ -747,7 +752,10 @@ class _OnlineImagePickerPageState extends State<OnlineImagePickerPage> {
                             mainAxisSize: MainAxisSize.min,
                             children: [
                               Text(
-                                '已存入素材库 (${_lastDownloadedItem!.width}×${_lastDownloadedItem!.height})',
+                                t.online.savedBanner(
+                                  width: _lastDownloadedItem!.width,
+                                  height: _lastDownloadedItem!.height,
+                                ),
                                 style: const TextStyle(
                                   color: Colors.white,
                                   fontWeight: FontWeight.bold,
@@ -756,9 +764,9 @@ class _OnlineImagePickerPageState extends State<OnlineImagePickerPage> {
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                               ),
-                              const Text(
-                                '来源: 网络 · 点击查看',
-                                style: TextStyle(
+                              Text(
+                                t.online.savedSourceSub,
+                                style: const TextStyle(
                                   color: Colors.white70,
                                   fontSize: 11,
                                 ),
@@ -782,9 +790,9 @@ class _OnlineImagePickerPageState extends State<OnlineImagePickerPage> {
                               borderRadius: BorderRadius.circular(12),
                             ),
                           ),
-                          child: const Text(
-                            '制作拼图',
-                            style: TextStyle(
+                          child: Text(
+                            t.drawer.makePuzzle,
+                            style: const TextStyle(
                               color: Colors.white,
                               fontSize: 12,
                               fontWeight: FontWeight.bold,
@@ -798,7 +806,7 @@ class _OnlineImagePickerPageState extends State<OnlineImagePickerPage> {
                             size: 16,
                             color: Colors.white70,
                           ),
-                          tooltip: '关闭提示',
+                          tooltip: t.online.dismissTooltip,
                           visualDensity: VisualDensity.compact,
                           onPressed: () =>
                               setState(() => _showDownloadBanner = false),
@@ -855,7 +863,9 @@ class _OnlineImagePickerPageState extends State<OnlineImagePickerPage> {
                           ),
                         const SizedBox(width: 6),
                         Text(
-                          _isExtracting ? '正在提取...' : '提取本页大图',
+                          _isExtracting
+                              ? t.online.extracting
+                              : t.online.extractCurrent,
                           style: const TextStyle(
                             color: Colors.white,
                             fontWeight: FontWeight.bold,

@@ -13,7 +13,8 @@
     "loading": "Loading...",
     "calculating": "Calculating...",
     "version": "Version {version}",
-    "sync": "Sync"
+    "sync": "Sync",
+    "back": "Back"
   },
   "nav": {
     "home": "Home",
@@ -164,6 +165,90 @@
     "stars3": "Earn 3 stars on {req} distinct puzzles (currently {current}/{req})",
     "daily": "Clear level 1 of the main campaign to unlock the Daily Challenge",
     "eventPack": "Clear {req} main-campaign levels to unlock Events & Packs (currently {current}/{req})"
+  },
+  "myPuzzles": {
+    "actionGallery": "From Gallery",
+    "subBatch": "Batch import",
+    "actionImportPack": "Import Pack",
+    "subZip": "ZIP packs",
+    "actionOnline": "Search Online",
+    "subOnline": "Web gallery",
+    "importedPacksTitle": "Imported Packs",
+    "importedPacksCount": "{count} packs",
+    "customTitle": "Custom Puzzles",
+    "emptyTitle": "The fox is waiting with an empty basket for your puzzles",
+    "emptyHint": "Tap \"From Gallery\" or \"Library\" above to get started!",
+    "packBadge": "Pack Collection",
+    "packDescFallback": "A curated collection of bonus puzzle levels",
+    "packTotalLevels": "{count} levels total"
+  },
+  "drawer": {
+    "title": "Library",
+    "count": "{count} images",
+    "clearAllTitle": "Clear Library",
+    "clearAllDesc": "Clear all pending material images? (Puzzles already made are not affected.)",
+    "clearAll": "Clear All",
+    "emptyTitle": "No images in your library yet",
+    "emptyHint": "Import local photos via \"From Gallery\", or download them in \"Search Online\" — every image lands in your library, ready for puzzle making.",
+    "close": "Close",
+    "makePuzzle": "Make Puzzle",
+    "deleteImageTooltip": "Delete image",
+    "fileMissing": "Material file missing or already cleaned"
+  },
+  "crop": {
+    "title": "Crop & Custom Puzzle",
+    "regionLabel": "Crop area: {width} × {height}",
+    "gestureHint": "Drag to move the crop area · pinch or scroll to zoom",
+    "saving": "Saving...",
+    "saveButton": "Save Custom Level",
+    "optimizing": "Optimizing image quality and creating your custom puzzle...",
+    "saveFailedToast": "Save failed: {error}"
+  },
+  "online": {
+    "savedBanner": "Saved to library ({width}×{height})",
+    "savedSourceSub": "From web · Tap to view",
+    "alreadyInBox": "This image is already in your download box",
+    "downloadFailed": "Download failed: {error}",
+    "noHighResDetected": "No high-res image detected on this page. Open the photo detail page and try again.",
+    "closePickerTooltip": "Close online search",
+    "backTooltip": "Back",
+    "refreshTooltip": "Refresh",
+    "extracting": "Extracting...",
+    "extractCurrent": "Extract this page's image",
+    "dismissTooltip": "Dismiss"
+  },
+  "share": {
+    "title": "Share Result",
+    "exportTooltip": "Export",
+    "toastSaved": "Share card saved to temp folder",
+    "toastExportFailed": "Export failed: {error}",
+    "completed": "Puzzle Complete!",
+    "timeLabel": "Time",
+    "piecesLabel": "Pieces",
+    "stepsLabel": "Moves",
+    "exporting": "Exporting...",
+    "saveButton": "Save Share Card"
+  },
+  "importPack": {
+    "pickFailed": "File selection failed: {error}",
+    "hintPickFile": "Pick a local ZIP file or enter a download URL",
+    "extractingLocal": "Extracting & parsing local pack...",
+    "downloadingNet": "Downloading & extracting network pack...",
+    "imported": "Imported \"{title}\" ({count} levels)",
+    "importFailedToast": "Import failed: {error}",
+    "appbarTitle": "Import Extension Pack (.zip)",
+    "infoBanner": "Any ZIP containing JPG/PNG/WebP images can be imported; it becomes its own collection that you can delete anytime.",
+    "methodLocal": "Method 1: Choose a local file",
+    "browseHint": "Tap the button on the right to pick a .zip file",
+    "browse": "Browse...",
+    "methodNetwork": "Method 2: Enter a download URL",
+    "testChip1": "Test pack: Cyber Neon",
+    "testChip2": "Test pack: Cat Images",
+    "startImport": "Start Import"
+  },
+  "background": {
+    "title": "Change Puzzle Background",
+    "tableLabel": "Table {index}"
   },
   "achievements": {
     "first_win": {

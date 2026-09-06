@@ -13,6 +13,7 @@ import '../data/models/custom_puzzle_item.dart';
 import '../logic/cache/image_cache_manager.dart';
 import '../logic/image_upscaler.dart';
 import '../logic/puzzle_model.dart';
+import '../l10n/gen/strings.g.dart';
 import '../theme/app_palette.dart';
 import '../widgets/game_toast.dart';
 
@@ -357,7 +358,7 @@ class _CropPuzzlePageState extends State<CropPuzzlePage> {
         final byteData = await croppedImage.toByteData(
           format: ui.ImageByteFormat.png,
         );
-        if (byteData == null) throw Exception('图片导出失败');
+        if (byteData == null) throw Exception('PNG encode failed');
         pngBytes = byteData.buffer.asUint8List(
           byteData.offsetInBytes,
           byteData.lengthInBytes,
@@ -414,7 +415,11 @@ class _CropPuzzlePageState extends State<CropPuzzlePage> {
       }
     } catch (e) {
       if (mounted) {
-        GameToast.show(context, message: '保存失败: $e', type: GameToastType.error);
+        GameToast.show(
+          context,
+          message: t.crop.saveFailedToast(error: e),
+          type: GameToastType.error,
+        );
       }
     } finally {
       if (mounted) setState(() => _isSaving = false);
@@ -435,7 +440,7 @@ class _CropPuzzlePageState extends State<CropPuzzlePage> {
         foregroundColor: palette.primaryText,
         elevation: 0,
         title: Text(
-          '裁剪与自制拼图',
+          t.crop.title,
           style: TextStyle(
             fontWeight: FontWeight.bold,
             fontSize: 18,
@@ -567,7 +572,10 @@ class _CropPuzzlePageState extends State<CropPuzzlePage> {
                                     ),
                                   ),
                                   child: Text(
-                                    '裁切区域: $realCropW × $realCropH',
+                                    t.crop.regionLabel(
+                                      width: realCropW,
+                                      height: realCropH,
+                                    ),
                                     style: const TextStyle(
                                       color: Colors.white70,
                                       fontSize: 12,
@@ -766,15 +774,15 @@ class _CropPuzzlePageState extends State<CropPuzzlePage> {
                           const SizedBox(height: 8),
                           Row(
                             mainAxisAlignment: MainAxisAlignment.center,
-                            children: const [
-                              Icon(
+                            children: [
+                              const Icon(
                                 PhosphorIconsBold.handGrabbing,
                                 size: 13,
                                 color: Colors.white54,
                               ),
-                              SizedBox(width: 5),
+                              const SizedBox(width: 5),
                               Text(
-                                '按住拖动调整裁切位置 · 双指或滚轮缩放',
+                                t.crop.gestureHint,
                                 style: TextStyle(
                                   color: Colors.white54,
                                   fontSize: 11.5,
@@ -813,7 +821,7 @@ class _CropPuzzlePageState extends State<CropPuzzlePage> {
                     ),
                     icon: const Icon(PhosphorIconsBold.checkCircle),
                     label: Text(
-                      _isSaving ? '正在保存...' : '保存自制关卡',
+                      _isSaving ? t.crop.saving : t.crop.saveButton,
                       style: const TextStyle(
                         fontSize: 15.5,
                         fontWeight: FontWeight.bold,
@@ -838,7 +846,7 @@ class _CropPuzzlePageState extends State<CropPuzzlePage> {
                       ),
                       SizedBox(height: 16),
                       Text(
-                        '正在优化画质并生成自制关卡...',
+                        t.crop.optimizing,
                         style: TextStyle(
                           color: Colors.white,
                           fontSize: 14.5,

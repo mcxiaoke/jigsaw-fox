@@ -4,6 +4,7 @@ import 'package:phosphoricons_flutter/phosphoricons_flutter.dart';
 
 import '../logic/content/app_content.dart';
 import '../logic/content/models/puzzle_pack_item.dart';
+import '../l10n/gen/strings.g.dart';
 import '../theme/app_palette.dart';
 import '../theme/app_text_styles.dart';
 import '../widgets/game_toast.dart';
@@ -58,7 +59,7 @@ class _ImportPackPageState extends State<ImportPackPage> {
       if (mounted) {
         GameToast.show(
           context,
-          message: '选择文件失败: $e',
+          message: t.importPack.pickFailed(error: e),
           type: GameToastType.error,
         );
       }
@@ -72,7 +73,7 @@ class _ImportPackPageState extends State<ImportPackPage> {
     if (localPath.isEmpty && networkUrl.isEmpty) {
       GameToast.show(
         context,
-        message: '请选择本地 ZIP 文件或输入网络下载地址',
+        message: t.importPack.hintPickFile,
         type: GameToastType.warning,
       );
       return;
@@ -81,8 +82,8 @@ class _ImportPackPageState extends State<ImportPackPage> {
     setState(() {
       _isImporting = true;
       _statusMessage = localPath.isNotEmpty
-          ? '正在解压并解析本地图包...'
-          : '正在下载并解压网络图包...';
+          ? t.importPack.extractingLocal
+          : t.importPack.downloadingNet;
     });
 
     try {
@@ -97,7 +98,10 @@ class _ImportPackPageState extends State<ImportPackPage> {
 
       GameToast.show(
         context,
-        message: '成功导入《${pack.title}》(共 ${pack.levelCount} 关)',
+        message: t.importPack.imported(
+          title: pack.title,
+          count: pack.levelCount,
+        ),
         type: GameToastType.success,
       );
 
@@ -105,7 +109,11 @@ class _ImportPackPageState extends State<ImportPackPage> {
       Navigator.of(context).pop(pack);
     } catch (e) {
       if (mounted) {
-        GameToast.show(context, message: '导入失败: $e', type: GameToastType.error);
+        GameToast.show(
+          context,
+          message: t.importPack.importFailedToast(error: e),
+          type: GameToastType.error,
+        );
       }
     } finally {
       if (mounted) {
@@ -129,7 +137,7 @@ class _ImportPackPageState extends State<ImportPackPage> {
         foregroundColor: palette.primaryText,
         elevation: 0,
         title: Text(
-          '导入扩展图包 (.zip)',
+          t.importPack.appbarTitle,
           style: styles.h3.copyWith(fontWeight: FontWeight.bold),
         ),
         centerTitle: true,
@@ -153,7 +161,7 @@ class _ImportPackPageState extends State<ImportPackPage> {
                   const SizedBox(width: 10),
                   Expanded(
                     child: Text(
-                      '支持导入任意包含 JPG/PNG/WebP 图片的 ZIP 压缩包；导入后将自动生成独立合辑，可随时整包删除。',
+                      t.importPack.infoBanner,
                       style: styles.body.copyWith(
                         color: palette.primaryText,
                         height: 1.35,
@@ -166,7 +174,7 @@ class _ImportPackPageState extends State<ImportPackPage> {
             const SizedBox(height: 24),
 
             // Method 1: Local file
-            _buildSectionHeader('方式一：从本地文件选择', palette, styles),
+            _buildSectionHeader(t.importPack.methodLocal, palette, styles),
             const SizedBox(height: 10),
             Row(
               children: [
@@ -176,7 +184,7 @@ class _ImportPackPageState extends State<ImportPackPage> {
                     readOnly: true,
                     style: TextStyle(color: palette.primaryText, fontSize: 13),
                     decoration: InputDecoration(
-                      hintText: '点击右侧按钮选择 .zip 文件',
+                      hintText: t.importPack.browseHint,
                       hintStyle: TextStyle(
                         fontSize: 13,
                         color: palette.disabledText,
@@ -202,7 +210,7 @@ class _ImportPackPageState extends State<ImportPackPage> {
                 ElevatedButton.icon(
                   onPressed: _isImporting ? null : _pickLocalZip,
                   icon: const Icon(PhosphorIconsRegular.folderOpen, size: 16),
-                  label: const Text('浏览...'),
+                  label: Text(t.importPack.browse),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: palette.brand,
                     foregroundColor: Colors.white,
@@ -220,7 +228,7 @@ class _ImportPackPageState extends State<ImportPackPage> {
             const SizedBox(height: 28),
 
             // Method 2: Network URL
-            _buildSectionHeader('方式二：输入网络下载地址', palette, styles),
+            _buildSectionHeader(t.importPack.methodNetwork, palette, styles),
             const SizedBox(height: 10),
             TextField(
               controller: _networkUrlController,
@@ -274,9 +282,9 @@ class _ImportPackPageState extends State<ImportPackPage> {
                     size: 14,
                     color: palette.warning,
                   ),
-                  label: const Text(
-                    '测试包: 赛博霓虹',
-                    style: TextStyle(fontSize: 11.5),
+                  label: Text(
+                    t.importPack.testChip1,
+                    style: const TextStyle(fontSize: 11.5),
                   ),
                   backgroundColor: palette.warning.withValues(alpha: 0.12),
                   onPressed: _isImporting
@@ -294,9 +302,9 @@ class _ImportPackPageState extends State<ImportPackPage> {
                     size: 14,
                     color: palette.info,
                   ),
-                  label: const Text(
-                    '测试包: 纯图片猫咪',
-                    style: TextStyle(fontSize: 11.5),
+                  label: Text(
+                    t.importPack.testChip2,
+                    style: const TextStyle(fontSize: 11.5),
                   ),
                   backgroundColor: palette.info.withValues(alpha: 0.12),
                   onPressed: _isImporting
@@ -347,14 +355,17 @@ class _ImportPackPageState extends State<ImportPackPage> {
                           ),
                         ],
                       )
-                    : const Row(
+                    : Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          Icon(PhosphorIconsFill.downloadSimple, size: 20),
-                          SizedBox(width: 8),
+                          const Icon(
+                            PhosphorIconsFill.downloadSimple,
+                            size: 20,
+                          ),
+                          const SizedBox(width: 8),
                           Text(
-                            '开始导入并解析',
-                            style: TextStyle(
+                            t.importPack.startImport,
+                            style: const TextStyle(
                               fontSize: 16,
                               fontWeight: FontWeight.bold,
                             ),

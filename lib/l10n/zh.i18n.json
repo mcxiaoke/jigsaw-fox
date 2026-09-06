@@ -13,7 +13,8 @@
     "loading": "加载中…",
     "calculating": "计算中…",
     "version": "版本 {version}",
-    "sync": "刷新同步"
+    "sync": "刷新同步",
+    "back": "返回"
   },
   "nav": {
     "home": "主页",
@@ -164,6 +165,90 @@
     "stars3": "需要获得 3 星的不同拼图达到 {req} 张（当前 {current}/{req}）",
     "daily": "完成第 1 关主线即可解锁每日挑战",
     "eventPack": "完成 {req} 关主线即可解锁活动与主题包（当前 {current}/{req}）"
+  },
+  "myPuzzles": {
+    "actionGallery": "相册选图",
+    "subBatch": "批量导入",
+    "actionImportPack": "导入关卡包",
+    "subZip": "ZIP 扩展包",
+    "actionOnline": "在线搜图",
+    "subOnline": "海量图库",
+    "importedPacksTitle": "已导入扩展包",
+    "importedPacksCount": "{count} 个扩展包",
+    "customTitle": "自制关卡",
+    "emptyTitle": "小狐狸抱着空篮子等你制作拼图",
+    "emptyHint": "点击上方「相册选图」或「素材库」开始制作吧！",
+    "packBadge": "扩展合辑",
+    "packDescFallback": "精选拼图扩展关卡合辑",
+    "packTotalLevels": "共 {count} 关"
+  },
+  "drawer": {
+    "title": "素材库",
+    "count": "{count} 张素材",
+    "clearAllTitle": "清空素材库",
+    "clearAllDesc": "确定要清空所有待制作的素材图片吗？（不会影响已经制作成功的拼图关卡）",
+    "clearAll": "清空全部",
+    "emptyTitle": "素材库暂无图片",
+    "emptyHint": "点击「相册选图」批量导入本地照片，或在「在线搜图」中一键下载，即可将图片加入素材库随时制作拼图。",
+    "close": "关闭",
+    "makePuzzle": "制作拼图",
+    "deleteImageTooltip": "删除此图片",
+    "fileMissing": "素材文件不存在或已被清理"
+  },
+  "crop": {
+    "title": "裁剪与自制拼图",
+    "regionLabel": "裁切区域: {width} × {height}",
+    "gestureHint": "按住拖动调整裁切位置 · 双指或滚轮缩放",
+    "saving": "正在保存...",
+    "saveButton": "保存自制关卡",
+    "optimizing": "正在优化画质并生成自制关卡...",
+    "saveFailedToast": "保存失败: {error}"
+  },
+  "online": {
+    "savedBanner": "已存入素材库 ({width}×{height})",
+    "savedSourceSub": "来源: 网络 · 点击查看",
+    "alreadyInBox": "该图片已在下载箱中",
+    "downloadFailed": "下载图片失败: {error}",
+    "noHighResDetected": "未在当前页面检测到高清大图，请点击进入照片详情页后再试",
+    "closePickerTooltip": "关闭在线选图",
+    "backTooltip": "后退",
+    "refreshTooltip": "刷新",
+    "extracting": "正在提取...",
+    "extractCurrent": "提取本页大图",
+    "dismissTooltip": "关闭提示"
+  },
+  "share": {
+    "title": "分享成绩",
+    "exportTooltip": "导出分享",
+    "toastSaved": "分享卡片已保存到临时目录",
+    "toastExportFailed": "导出失败: {error}",
+    "completed": "拼图完成!",
+    "timeLabel": "用时",
+    "piecesLabel": "碎片",
+    "stepsLabel": "步数",
+    "exporting": "导出中...",
+    "saveButton": "保存分享卡片"
+  },
+  "importPack": {
+    "pickFailed": "选择文件失败: {error}",
+    "hintPickFile": "请选择本地 ZIP 文件或输入网络下载地址",
+    "extractingLocal": "正在解压并解析本地图包...",
+    "downloadingNet": "正在下载并解压网络图包...",
+    "imported": "成功导入《{title}》(共 {count} 关)",
+    "importFailedToast": "导入失败: {error}",
+    "appbarTitle": "导入扩展图包 (.zip)",
+    "infoBanner": "支持导入任意包含 JPG/PNG/WebP 图片的 ZIP 压缩包；导入后将自动生成独立合辑，可随时整包删除。",
+    "methodLocal": "方式一：从本地文件选择",
+    "browseHint": "点击右侧按钮选择 .zip 文件",
+    "browse": "浏览...",
+    "methodNetwork": "方式二：输入网络下载地址",
+    "testChip1": "测试包: 赛博霓虹",
+    "testChip2": "测试包: 纯图片猫咪",
+    "startImport": "开始导入并解析"
+  },
+  "background": {
+    "title": "更换拼图背景",
+    "tableLabel": "桌板 {index}"
   },
   "achievements": {
     "first_win": {

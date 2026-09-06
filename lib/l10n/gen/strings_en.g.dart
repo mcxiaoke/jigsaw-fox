@@ -52,6 +52,13 @@ class Translations with BaseTranslations<AppLocale, Translations> {
 	late final Translations$collections$en collections = Translations$collections$en.internal(_root);
 	late final Translations$pack$en pack = Translations$pack$en.internal(_root);
 	late final Translations$unlock$en unlock = Translations$unlock$en.internal(_root);
+	late final Translations$myPuzzles$en myPuzzles = Translations$myPuzzles$en.internal(_root);
+	late final Translations$drawer$en drawer = Translations$drawer$en.internal(_root);
+	late final Translations$crop$en crop = Translations$crop$en.internal(_root);
+	late final Translations$online$en online = Translations$online$en.internal(_root);
+	late final Translations$share$en share = Translations$share$en.internal(_root);
+	late final Translations$importPack$en importPack = Translations$importPack$en.internal(_root);
+	late final Translations$background$en background = Translations$background$en.internal(_root);
 	late final Translations$achievements$en achievements = Translations$achievements$en.internal(_root);
 	late final Translations$difficulty$en difficulty = Translations$difficulty$en.internal(_root);
 	late final Translations$game$en game = Translations$game$en.internal(_root);
@@ -114,6 +121,9 @@ class Translations$common$en {
 
 	/// en: 'Sync'
 	String get sync => 'Sync';
+
+	/// en: 'Back'
+	String get back => 'Back';
 }
 
 // Path: nav
@@ -591,6 +601,279 @@ class Translations$unlock$en {
 
 	/// en: 'Clear {req} main-campaign levels to unlock Events & Packs (currently {current}/{req})'
 	String eventPack({required Object req, required Object current}) => 'Clear ${req} main-campaign levels to unlock Events & Packs (currently ${current}/${req})';
+}
+
+// Path: myPuzzles
+class Translations$myPuzzles$en {
+	Translations$myPuzzles$en.internal(this._root);
+
+	final Translations _root; // ignore: unused_field
+
+	// Translations
+
+	/// en: 'From Gallery'
+	String get actionGallery => 'From Gallery';
+
+	/// en: 'Batch import'
+	String get subBatch => 'Batch import';
+
+	/// en: 'Import Pack'
+	String get actionImportPack => 'Import Pack';
+
+	/// en: 'ZIP packs'
+	String get subZip => 'ZIP packs';
+
+	/// en: 'Search Online'
+	String get actionOnline => 'Search Online';
+
+	/// en: 'Web gallery'
+	String get subOnline => 'Web gallery';
+
+	/// en: 'Imported Packs'
+	String get importedPacksTitle => 'Imported Packs';
+
+	/// en: '{count} packs'
+	String importedPacksCount({required Object count}) => '${count} packs';
+
+	/// en: 'Custom Puzzles'
+	String get customTitle => 'Custom Puzzles';
+
+	/// en: 'The fox is waiting with an empty basket for your puzzles'
+	String get emptyTitle => 'The fox is waiting with an empty basket for your puzzles';
+
+	/// en: 'Tap "From Gallery" or "Library" above to get started!'
+	String get emptyHint => 'Tap "From Gallery" or "Library" above to get started!';
+
+	/// en: 'Pack Collection'
+	String get packBadge => 'Pack Collection';
+
+	/// en: 'A curated collection of bonus puzzle levels'
+	String get packDescFallback => 'A curated collection of bonus puzzle levels';
+
+	/// en: '{count} levels total'
+	String packTotalLevels({required Object count}) => '${count} levels total';
+}
+
+// Path: drawer
+class Translations$drawer$en {
+	Translations$drawer$en.internal(this._root);
+
+	final Translations _root; // ignore: unused_field
+
+	// Translations
+
+	/// en: 'Library'
+	String get title => 'Library';
+
+	/// en: '{count} images'
+	String count({required Object count}) => '${count} images';
+
+	/// en: 'Clear Library'
+	String get clearAllTitle => 'Clear Library';
+
+	/// en: 'Clear all pending material images? (Puzzles already made are not affected.)'
+	String get clearAllDesc => 'Clear all pending material images? (Puzzles already made are not affected.)';
+
+	/// en: 'Clear All'
+	String get clearAll => 'Clear All';
+
+	/// en: 'No images in your library yet'
+	String get emptyTitle => 'No images in your library yet';
+
+	/// en: 'Import local photos via "From Gallery", or download them in "Search Online" — every image lands in your library, ready for puzzle making.'
+	String get emptyHint => 'Import local photos via "From Gallery", or download them in "Search Online" — every image lands in your library, ready for puzzle making.';
+
+	/// en: 'Close'
+	String get close => 'Close';
+
+	/// en: 'Make Puzzle'
+	String get makePuzzle => 'Make Puzzle';
+
+	/// en: 'Delete image'
+	String get deleteImageTooltip => 'Delete image';
+
+	/// en: 'Material file missing or already cleaned'
+	String get fileMissing => 'Material file missing or already cleaned';
+}
+
+// Path: crop
+class Translations$crop$en {
+	Translations$crop$en.internal(this._root);
+
+	final Translations _root; // ignore: unused_field
+
+	// Translations
+
+	/// en: 'Crop & Custom Puzzle'
+	String get title => 'Crop & Custom Puzzle';
+
+	/// en: 'Crop area: {width} × {height}'
+	String regionLabel({required Object width, required Object height}) => 'Crop area: ${width} × ${height}';
+
+	/// en: 'Drag to move the crop area · pinch or scroll to zoom'
+	String get gestureHint => 'Drag to move the crop area · pinch or scroll to zoom';
+
+	/// en: 'Saving...'
+	String get saving => 'Saving...';
+
+	/// en: 'Save Custom Level'
+	String get saveButton => 'Save Custom Level';
+
+	/// en: 'Optimizing image quality and creating your custom puzzle...'
+	String get optimizing => 'Optimizing image quality and creating your custom puzzle...';
+
+	/// en: 'Save failed: {error}'
+	String saveFailedToast({required Object error}) => 'Save failed: ${error}';
+}
+
+// Path: online
+class Translations$online$en {
+	Translations$online$en.internal(this._root);
+
+	final Translations _root; // ignore: unused_field
+
+	// Translations
+
+	/// en: 'Saved to library ({width}×{height})'
+	String savedBanner({required Object width, required Object height}) => 'Saved to library (${width}×${height})';
+
+	/// en: 'From web · Tap to view'
+	String get savedSourceSub => 'From web · Tap to view';
+
+	/// en: 'This image is already in your download box'
+	String get alreadyInBox => 'This image is already in your download box';
+
+	/// en: 'Download failed: {error}'
+	String downloadFailed({required Object error}) => 'Download failed: ${error}';
+
+	/// en: 'No high-res image detected on this page. Open the photo detail page and try again.'
+	String get noHighResDetected => 'No high-res image detected on this page. Open the photo detail page and try again.';
+
+	/// en: 'Close online search'
+	String get closePickerTooltip => 'Close online search';
+
+	/// en: 'Back'
+	String get backTooltip => 'Back';
+
+	/// en: 'Refresh'
+	String get refreshTooltip => 'Refresh';
+
+	/// en: 'Extracting...'
+	String get extracting => 'Extracting...';
+
+	/// en: 'Extract this page's image'
+	String get extractCurrent => 'Extract this page\'s image';
+
+	/// en: 'Dismiss'
+	String get dismissTooltip => 'Dismiss';
+}
+
+// Path: share
+class Translations$share$en {
+	Translations$share$en.internal(this._root);
+
+	final Translations _root; // ignore: unused_field
+
+	// Translations
+
+	/// en: 'Share Result'
+	String get title => 'Share Result';
+
+	/// en: 'Export'
+	String get exportTooltip => 'Export';
+
+	/// en: 'Share card saved to temp folder'
+	String get toastSaved => 'Share card saved to temp folder';
+
+	/// en: 'Export failed: {error}'
+	String toastExportFailed({required Object error}) => 'Export failed: ${error}';
+
+	/// en: 'Puzzle Complete!'
+	String get completed => 'Puzzle Complete!';
+
+	/// en: 'Time'
+	String get timeLabel => 'Time';
+
+	/// en: 'Pieces'
+	String get piecesLabel => 'Pieces';
+
+	/// en: 'Moves'
+	String get stepsLabel => 'Moves';
+
+	/// en: 'Exporting...'
+	String get exporting => 'Exporting...';
+
+	/// en: 'Save Share Card'
+	String get saveButton => 'Save Share Card';
+}
+
+// Path: importPack
+class Translations$importPack$en {
+	Translations$importPack$en.internal(this._root);
+
+	final Translations _root; // ignore: unused_field
+
+	// Translations
+
+	/// en: 'File selection failed: {error}'
+	String pickFailed({required Object error}) => 'File selection failed: ${error}';
+
+	/// en: 'Pick a local ZIP file or enter a download URL'
+	String get hintPickFile => 'Pick a local ZIP file or enter a download URL';
+
+	/// en: 'Extracting & parsing local pack...'
+	String get extractingLocal => 'Extracting & parsing local pack...';
+
+	/// en: 'Downloading & extracting network pack...'
+	String get downloadingNet => 'Downloading & extracting network pack...';
+
+	/// en: 'Imported "{title}" ({count} levels)'
+	String imported({required Object title, required Object count}) => 'Imported "${title}" (${count} levels)';
+
+	/// en: 'Import failed: {error}'
+	String importFailedToast({required Object error}) => 'Import failed: ${error}';
+
+	/// en: 'Import Extension Pack (.zip)'
+	String get appbarTitle => 'Import Extension Pack (.zip)';
+
+	/// en: 'Any ZIP containing JPG/PNG/WebP images can be imported; it becomes its own collection that you can delete anytime.'
+	String get infoBanner => 'Any ZIP containing JPG/PNG/WebP images can be imported; it becomes its own collection that you can delete anytime.';
+
+	/// en: 'Method 1: Choose a local file'
+	String get methodLocal => 'Method 1: Choose a local file';
+
+	/// en: 'Tap the button on the right to pick a .zip file'
+	String get browseHint => 'Tap the button on the right to pick a .zip file';
+
+	/// en: 'Browse...'
+	String get browse => 'Browse...';
+
+	/// en: 'Method 2: Enter a download URL'
+	String get methodNetwork => 'Method 2: Enter a download URL';
+
+	/// en: 'Test pack: Cyber Neon'
+	String get testChip1 => 'Test pack: Cyber Neon';
+
+	/// en: 'Test pack: Cat Images'
+	String get testChip2 => 'Test pack: Cat Images';
+
+	/// en: 'Start Import'
+	String get startImport => 'Start Import';
+}
+
+// Path: background
+class Translations$background$en {
+	Translations$background$en.internal(this._root);
+
+	final Translations _root; // ignore: unused_field
+
+	// Translations
+
+	/// en: 'Change Puzzle Background'
+	String get title => 'Change Puzzle Background';
+
+	/// en: 'Table {index}'
+	String tableLabel({required Object index}) => 'Table ${index}';
 }
 
 // Path: achievements
@@ -1589,6 +1872,7 @@ extension on Translations {
 			'common.calculating' => 'Calculating...',
 			'common.version' => ({required Object version}) => 'Version ${version}',
 			'common.sync' => 'Sync',
+			'common.back' => 'Back',
 			'nav.home' => 'Home',
 			'nav.daily' => 'Daily',
 			'nav.collections' => 'Collections',
@@ -1721,6 +2005,76 @@ extension on Translations {
 			'unlock.stars3' => ({required Object req, required Object current}) => 'Earn 3 stars on ${req} distinct puzzles (currently ${current}/${req})',
 			'unlock.daily' => 'Clear level 1 of the main campaign to unlock the Daily Challenge',
 			'unlock.eventPack' => ({required Object req, required Object current}) => 'Clear ${req} main-campaign levels to unlock Events & Packs (currently ${current}/${req})',
+			'myPuzzles.actionGallery' => 'From Gallery',
+			'myPuzzles.subBatch' => 'Batch import',
+			'myPuzzles.actionImportPack' => 'Import Pack',
+			'myPuzzles.subZip' => 'ZIP packs',
+			'myPuzzles.actionOnline' => 'Search Online',
+			'myPuzzles.subOnline' => 'Web gallery',
+			'myPuzzles.importedPacksTitle' => 'Imported Packs',
+			'myPuzzles.importedPacksCount' => ({required Object count}) => '${count} packs',
+			'myPuzzles.customTitle' => 'Custom Puzzles',
+			'myPuzzles.emptyTitle' => 'The fox is waiting with an empty basket for your puzzles',
+			'myPuzzles.emptyHint' => 'Tap "From Gallery" or "Library" above to get started!',
+			'myPuzzles.packBadge' => 'Pack Collection',
+			'myPuzzles.packDescFallback' => 'A curated collection of bonus puzzle levels',
+			'myPuzzles.packTotalLevels' => ({required Object count}) => '${count} levels total',
+			'drawer.title' => 'Library',
+			'drawer.count' => ({required Object count}) => '${count} images',
+			'drawer.clearAllTitle' => 'Clear Library',
+			'drawer.clearAllDesc' => 'Clear all pending material images? (Puzzles already made are not affected.)',
+			'drawer.clearAll' => 'Clear All',
+			'drawer.emptyTitle' => 'No images in your library yet',
+			'drawer.emptyHint' => 'Import local photos via "From Gallery", or download them in "Search Online" — every image lands in your library, ready for puzzle making.',
+			'drawer.close' => 'Close',
+			'drawer.makePuzzle' => 'Make Puzzle',
+			'drawer.deleteImageTooltip' => 'Delete image',
+			'drawer.fileMissing' => 'Material file missing or already cleaned',
+			'crop.title' => 'Crop & Custom Puzzle',
+			'crop.regionLabel' => ({required Object width, required Object height}) => 'Crop area: ${width} × ${height}',
+			'crop.gestureHint' => 'Drag to move the crop area · pinch or scroll to zoom',
+			'crop.saving' => 'Saving...',
+			'crop.saveButton' => 'Save Custom Level',
+			'crop.optimizing' => 'Optimizing image quality and creating your custom puzzle...',
+			'crop.saveFailedToast' => ({required Object error}) => 'Save failed: ${error}',
+			'online.savedBanner' => ({required Object width, required Object height}) => 'Saved to library (${width}×${height})',
+			'online.savedSourceSub' => 'From web · Tap to view',
+			'online.alreadyInBox' => 'This image is already in your download box',
+			'online.downloadFailed' => ({required Object error}) => 'Download failed: ${error}',
+			'online.noHighResDetected' => 'No high-res image detected on this page. Open the photo detail page and try again.',
+			'online.closePickerTooltip' => 'Close online search',
+			'online.backTooltip' => 'Back',
+			'online.refreshTooltip' => 'Refresh',
+			'online.extracting' => 'Extracting...',
+			'online.extractCurrent' => 'Extract this page\'s image',
+			'online.dismissTooltip' => 'Dismiss',
+			'share.title' => 'Share Result',
+			'share.exportTooltip' => 'Export',
+			'share.toastSaved' => 'Share card saved to temp folder',
+			'share.toastExportFailed' => ({required Object error}) => 'Export failed: ${error}',
+			'share.completed' => 'Puzzle Complete!',
+			'share.timeLabel' => 'Time',
+			'share.piecesLabel' => 'Pieces',
+			'share.stepsLabel' => 'Moves',
+			'share.exporting' => 'Exporting...',
+			'share.saveButton' => 'Save Share Card',
+			'importPack.pickFailed' => ({required Object error}) => 'File selection failed: ${error}',
+			'importPack.hintPickFile' => 'Pick a local ZIP file or enter a download URL',
+			'importPack.extractingLocal' => 'Extracting & parsing local pack...',
+			'importPack.downloadingNet' => 'Downloading & extracting network pack...',
+			'importPack.imported' => ({required Object title, required Object count}) => 'Imported "${title}" (${count} levels)',
+			'importPack.importFailedToast' => ({required Object error}) => 'Import failed: ${error}',
+			'importPack.appbarTitle' => 'Import Extension Pack (.zip)',
+			'importPack.infoBanner' => 'Any ZIP containing JPG/PNG/WebP images can be imported; it becomes its own collection that you can delete anytime.',
+			'importPack.methodLocal' => 'Method 1: Choose a local file',
+			'importPack.browseHint' => 'Tap the button on the right to pick a .zip file',
+			'importPack.browse' => 'Browse...',
+			'importPack.methodNetwork' => 'Method 2: Enter a download URL',
+			'importPack.testChip1' => 'Test pack: Cyber Neon',
+			'importPack.testChip2' => 'Test pack: Cat Images',
+			'importPack.startImport' => 'Start Import',
+			'background.title' => 'Change Puzzle Background',
+			'background.tableLabel' => ({required Object index}) => 'Table ${index}',
 			'achievements.first_win.title' => 'First Win',
 			'achievements.first_win.desc' => 'Complete your first puzzle',
 			'achievements.win_10.title' => 'Practice Makes Perfect',

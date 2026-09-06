@@ -4,6 +4,7 @@ import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:jigsawpuzzle/pages/crop_puzzle_page.dart';
+import 'package:jigsawpuzzle/services/locale_service.dart';
 
 Future<Uint8List> createTestImageBytes(int width, int height) async {
   final recorder = ui.PictureRecorder();
@@ -23,6 +24,8 @@ Future<Uint8List> createTestImageBytes(int width, int height) async {
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+  setUpAll(() => LocaleService.instance.setOverrideForTest('zh'));
+  tearDownAll(() => LocaleService.instance.setOverrideForTest(null));
 
   test(
     'supportedCropOptions dynamically derives 5 standard aspect ratios with consistent properties',

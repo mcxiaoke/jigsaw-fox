@@ -7,6 +7,7 @@ import 'package:flutter/rendering.dart';
 import 'package:phosphoricons_flutter/phosphoricons_flutter.dart';
 import 'package:path_provider/path_provider.dart';
 
+import '../l10n/gen/strings.g.dart';
 import '../theme/app_palette.dart';
 import '../theme/app_text_styles.dart';
 import 'game_toast.dart';
@@ -116,14 +117,18 @@ class _ShareCardGeneratorState extends State<ShareCardGenerator>
       if (mounted) {
         GameToast.show(
           context,
-          message: '分享卡片已保存到临时目录',
+          message: t.share.toastSaved,
           type: GameToastType.success,
           icon: PhosphorIconsFill.checkCircle,
         );
       }
     } catch (e) {
       if (mounted) {
-        GameToast.show(context, message: '导出失败: $e', type: GameToastType.error);
+        GameToast.show(
+          context,
+          message: t.share.toastExportFailed(error: e),
+          type: GameToastType.error,
+        );
       }
     } finally {
       if (mounted) setState(() => _isExporting = false);
@@ -149,7 +154,7 @@ class _ShareCardGeneratorState extends State<ShareCardGenerator>
           ),
           onPressed: () => Navigator.of(context).pop(),
         ),
-        title: Text('分享成绩', style: styles.h3.copyWith(fontSize: 18)),
+        title: Text(t.share.title, style: styles.h3.copyWith(fontSize: 18)),
         actions: [
           IconButton(
             icon: Icon(
@@ -157,7 +162,7 @@ class _ShareCardGeneratorState extends State<ShareCardGenerator>
               color: palette.brand,
               size: 22,
             ),
-            tooltip: '导出分享',
+            tooltip: t.share.exportTooltip,
             onPressed: _isExporting ? null : _exportPng,
           ),
         ],
@@ -229,7 +234,7 @@ class _ShareCardGeneratorState extends State<ShareCardGenerator>
                                       ),
                                       const SizedBox(height: 10),
                                       Text(
-                                        '拼图完成!',
+                                        t.share.completed,
                                         style: styles.h2.copyWith(
                                           color: palette.brand,
                                           fontSize: 26,
@@ -337,7 +342,7 @@ class _ShareCardGeneratorState extends State<ShareCardGenerator>
                                         _buildStatItem(
                                           palette,
                                           icon: PhosphorIconsBold.clock,
-                                          label: '用时',
+                                          label: t.share.timeLabel,
                                           value: _formatTime(
                                             widget.elapsedSeconds,
                                           ),
@@ -346,14 +351,14 @@ class _ShareCardGeneratorState extends State<ShareCardGenerator>
                                         _buildStatItem(
                                           palette,
                                           icon: PhosphorIconsFill.puzzlePiece,
-                                          label: '碎片',
+                                          label: t.share.piecesLabel,
                                           value: '${widget.pieceCount}',
                                         ),
                                         _buildDivider(palette),
                                         _buildStatItem(
                                           palette,
                                           icon: PhosphorIconsBold.handTap,
-                                          label: '步数',
+                                          label: t.share.stepsLabel,
                                           value: '${widget.stepCount}',
                                         ),
                                       ],
@@ -407,7 +412,7 @@ class _ShareCardGeneratorState extends State<ShareCardGenerator>
                             PhosphorIconsBold.arrowLeft,
                             size: 18,
                           ),
-                          label: const Text('返回'),
+                          label: Text(t.common.back),
                         ),
                       ),
                       const SizedBox(width: 12),
@@ -438,7 +443,9 @@ class _ShareCardGeneratorState extends State<ShareCardGenerator>
                                   size: 18,
                                 ),
                           label: Text(
-                            _isExporting ? '导出中...' : '保存分享卡片',
+                            _isExporting
+                                ? t.share.exporting
+                                : t.share.saveButton,
                             style: const TextStyle(
                               fontSize: 15,
                               fontWeight: FontWeight.bold,

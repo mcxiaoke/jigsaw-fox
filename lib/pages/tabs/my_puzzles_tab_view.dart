@@ -13,6 +13,7 @@ import '../../logic/content/app_content.dart';
 import '../../logic/content/models/puzzle_pack_item.dart';
 import '../../logic/download_manager.dart';
 import '../../logic/image_source.dart';
+import '../../l10n/gen/strings.g.dart';
 import '../../services/webview_service.dart';
 import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
@@ -73,7 +74,7 @@ class _MyPuzzlesTabViewState extends State<MyPuzzlesTabView> {
           GameToast.show(
             context,
             icon: PhosphorIconsFill.archive,
-            message: '已成功导入 ${imported.length} 张图片到素材库',
+            message: t.myCenter.toast.importSuccess(count: imported.length),
             type: GameToastType.success,
           );
         }
@@ -83,7 +84,7 @@ class _MyPuzzlesTabViewState extends State<MyPuzzlesTabView> {
         GameToast.show(
           context,
           icon: PhosphorIconsRegular.warning,
-          message: '选择图片失败: $e',
+          message: t.myCenter.toast.importFailed(error: e),
           type: GameToastType.error,
         );
       }
@@ -116,7 +117,7 @@ class _MyPuzzlesTabViewState extends State<MyPuzzlesTabView> {
       canonicalId: canonicalId,
       fallbackDifficulty: item.difficulty,
       isCompleted: item.isCompleted,
-      title: '自制拼图',
+      title: t.game.titleCustom,
       imageBytes: bytes,
       onClearRepo: (k) => _repo.updateCustomProgress(
         id: item.id,
@@ -239,8 +240,8 @@ class _MyPuzzlesTabViewState extends State<MyPuzzlesTabView> {
                         children: [
                           Expanded(
                             child: _buildTopActionCard(
-                              title: '相册选图',
-                              subtitle: '批量导入',
+                              title: t.myPuzzles.actionGallery,
+                              subtitle: t.myPuzzles.subBatch,
                               icon: _loading
                                   ? SizedBox(
                                       width: 14,
@@ -263,8 +264,8 @@ class _MyPuzzlesTabViewState extends State<MyPuzzlesTabView> {
                           const SizedBox(width: 8),
                           Expanded(
                             child: _buildTopActionCard(
-                              title: '导入关卡包',
-                              subtitle: 'ZIP 扩展包',
+                              title: t.myPuzzles.actionImportPack,
+                              subtitle: t.myPuzzles.subZip,
                               icon: Icon(
                                 PhosphorIconsFill.downloadSimple,
                                 color: palette.info,
@@ -291,8 +292,10 @@ class _MyPuzzlesTabViewState extends State<MyPuzzlesTabView> {
                                   DownloadManager.instance.itemsNotifier,
                               builder: (context, materialItems, _) {
                                 return _buildTopActionCard(
-                                  title: '素材库',
-                                  subtitle: '${materialItems.length} 张素材',
+                                  title: t.drawer.title,
+                                  subtitle: t.drawer.count(
+                                    count: materialItems.length,
+                                  ),
                                   icon: Icon(
                                     PhosphorIconsFill.archive,
                                     color: palette.warning,
@@ -310,8 +313,8 @@ class _MyPuzzlesTabViewState extends State<MyPuzzlesTabView> {
                           const SizedBox(width: 8),
                           Expanded(
                             child: _buildTopActionCard(
-                              title: '在线搜图',
-                              subtitle: '海量图库',
+                              title: t.myPuzzles.actionOnline,
+                              subtitle: t.myPuzzles.subOnline,
                               icon: Icon(
                                 PhosphorIconsFill.globeHemisphereWest,
                                 color: palette.success,
@@ -324,7 +327,7 @@ class _MyPuzzlesTabViewState extends State<MyPuzzlesTabView> {
                                   GameToast.show(
                                     context,
                                     icon: PhosphorIconsRegular.warningCircle,
-                                    message: '当前系统未安装 WebView2 运行时，无法使用在线搜图',
+                                    message: t.myCenter.toast.webviewMissing,
                                     type: GameToastType.warning,
                                   );
                                   return;
@@ -355,11 +358,13 @@ class _MyPuzzlesTabViewState extends State<MyPuzzlesTabView> {
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
                               Text(
-                                '已导入扩展包',
+                                t.myPuzzles.importedPacksTitle,
                                 style: styles.h3.copyWith(fontSize: 16.5),
                               ),
                               Text(
-                                '${packs.length} 个扩展包',
+                                t.myPuzzles.importedPacksCount(
+                                  count: packs.length,
+                                ),
                                 style: styles.caption,
                               ),
                             ],
@@ -389,8 +394,14 @@ class _MyPuzzlesTabViewState extends State<MyPuzzlesTabView> {
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Text('自制关卡', style: styles.h3.copyWith(fontSize: 16.5)),
-                      Text('共 ${customList.length} 个关卡', style: styles.caption),
+                      Text(
+                        t.myPuzzles.customTitle,
+                        style: styles.h3.copyWith(fontSize: 16.5),
+                      ),
+                      Text(
+                        t.levels.countLabel(count: customList.length),
+                        style: styles.caption,
+                      ),
                     ],
                   ),
                 ),
@@ -405,11 +416,11 @@ class _MyPuzzlesTabViewState extends State<MyPuzzlesTabView> {
                           const Text('🦊', style: TextStyle(fontSize: 44)),
                           const SizedBox(height: 8),
                           Text(
-                            '小狐狸抱着空篮子等你制作拼图',
+                            t.myPuzzles.emptyTitle,
                             style: styles.caption.copyWith(fontSize: 14),
                           ),
                           const SizedBox(height: 4),
-                          Text('点击上方「相册选图」或「素材库」开始制作吧！', style: styles.caption),
+                          Text(t.myPuzzles.emptyHint, style: styles.caption),
                         ],
                       ),
                     ),
@@ -593,7 +604,7 @@ class _MyPuzzlesTabViewState extends State<MyPuzzlesTabView> {
                       ),
                       const SizedBox(width: 4),
                       Text(
-                        '开始',
+                        t.chooseDifficulty.btnStart,
                         style: TextStyle(
                           color: palette.surface,
                           fontWeight: FontWeight.bold,
@@ -631,6 +642,12 @@ class _MyPuzzlesTabViewState extends State<MyPuzzlesTabView> {
       fit: BoxFit.cover,
       errorWidget: Image.asset(assetSamples[0], fit: BoxFit.cover),
     );
+  }
+
+  String _packSourceLabel(PuzzlePackItem p) {
+    return p.sourceType == 'local_file'
+        ? t.pack.sourceLocal
+        : t.pack.sourceNetwork;
   }
 
   Widget _buildLargePackCard(
@@ -698,7 +715,7 @@ class _MyPuzzlesTabViewState extends State<MyPuzzlesTabView> {
                       ),
                       const SizedBox(width: 4),
                       Text(
-                        '扩展合辑',
+                        t.myPuzzles.packBadge,
                         style: TextStyle(
                           color: palette.surface,
                           fontSize: 11,
@@ -722,7 +739,7 @@ class _MyPuzzlesTabViewState extends State<MyPuzzlesTabView> {
                     borderRadius: BorderRadius.circular(10),
                   ),
                   child: Text(
-                    '${pack.displaySource} • ${pack.displayFileSize}',
+                    '${_packSourceLabel(pack)} • ${pack.displayFileSize}',
                     style: const TextStyle(
                       color: Colors.white70,
                       fontSize: 10.5,
@@ -759,7 +776,7 @@ class _MyPuzzlesTabViewState extends State<MyPuzzlesTabView> {
                       Text(
                         pack.description.isNotEmpty
                             ? pack.description
-                            : '精选拼图扩展关卡合辑',
+                            : t.myPuzzles.packDescFallback,
                         style: styles.caption.copyWith(height: 1.3),
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
@@ -775,7 +792,7 @@ class _MyPuzzlesTabViewState extends State<MyPuzzlesTabView> {
                           borderRadius: BorderRadius.circular(6),
                         ),
                         child: Text(
-                          '共 ${pack.levelCount} 关',
+                          t.myPuzzles.packTotalLevels(count: pack.levelCount),
                           style: TextStyle(
                             fontSize: 11,
                             color: palette.brand,
@@ -789,7 +806,7 @@ class _MyPuzzlesTabViewState extends State<MyPuzzlesTabView> {
                 const SizedBox(width: 12),
                 ElevatedButton.icon(
                   icon: const Icon(PhosphorIconsBold.play, size: 14),
-                  label: const Text('进入挑战'),
+                  label: Text(t.events.enter),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: palette.brand,
                     foregroundColor: palette.surface,

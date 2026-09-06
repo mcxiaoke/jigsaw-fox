@@ -50,6 +50,13 @@ class TranslationsZh extends Translations with BaseTranslations<AppLocale, Trans
 	@override late final _Translations$collections$zh collections = _Translations$collections$zh._(_root);
 	@override late final _Translations$pack$zh pack = _Translations$pack$zh._(_root);
 	@override late final _Translations$unlock$zh unlock = _Translations$unlock$zh._(_root);
+	@override late final _Translations$myPuzzles$zh myPuzzles = _Translations$myPuzzles$zh._(_root);
+	@override late final _Translations$drawer$zh drawer = _Translations$drawer$zh._(_root);
+	@override late final _Translations$crop$zh crop = _Translations$crop$zh._(_root);
+	@override late final _Translations$online$zh online = _Translations$online$zh._(_root);
+	@override late final _Translations$share$zh share = _Translations$share$zh._(_root);
+	@override late final _Translations$importPack$zh importPack = _Translations$importPack$zh._(_root);
+	@override late final _Translations$background$zh background = _Translations$background$zh._(_root);
 	@override late final _Translations$achievements$zh achievements = _Translations$achievements$zh._(_root);
 	@override late final _Translations$difficulty$zh difficulty = _Translations$difficulty$zh._(_root);
 	@override late final _Translations$game$zh game = _Translations$game$zh._(_root);
@@ -88,6 +95,7 @@ class _Translations$common$zh extends Translations$common$en {
 	@override String get calculating => '计算中…';
 	@override String version({required Object version}) => '版本 ${version}';
 	@override String get sync => '刷新同步';
+	@override String get back => '返回';
 }
 
 // Path: nav
@@ -301,6 +309,139 @@ class _Translations$unlock$zh extends Translations$unlock$en {
 	@override String stars3({required Object req, required Object current}) => '需要获得 3 星的不同拼图达到 ${req} 张（当前 ${current}/${req}）';
 	@override String get daily => '完成第 1 关主线即可解锁每日挑战';
 	@override String eventPack({required Object req, required Object current}) => '完成 ${req} 关主线即可解锁活动与主题包（当前 ${current}/${req}）';
+}
+
+// Path: myPuzzles
+class _Translations$myPuzzles$zh extends Translations$myPuzzles$en {
+	_Translations$myPuzzles$zh._(TranslationsZh root) : this._root = root, super.internal(root);
+
+	final TranslationsZh _root; // ignore: unused_field
+
+	// Translations
+	@override String get actionGallery => '相册选图';
+	@override String get subBatch => '批量导入';
+	@override String get actionImportPack => '导入关卡包';
+	@override String get subZip => 'ZIP 扩展包';
+	@override String get actionOnline => '在线搜图';
+	@override String get subOnline => '海量图库';
+	@override String get importedPacksTitle => '已导入扩展包';
+	@override String importedPacksCount({required Object count}) => '${count} 个扩展包';
+	@override String get customTitle => '自制关卡';
+	@override String get emptyTitle => '小狐狸抱着空篮子等你制作拼图';
+	@override String get emptyHint => '点击上方「相册选图」或「素材库」开始制作吧！';
+	@override String get packBadge => '扩展合辑';
+	@override String get packDescFallback => '精选拼图扩展关卡合辑';
+	@override String packTotalLevels({required Object count}) => '共 ${count} 关';
+}
+
+// Path: drawer
+class _Translations$drawer$zh extends Translations$drawer$en {
+	_Translations$drawer$zh._(TranslationsZh root) : this._root = root, super.internal(root);
+
+	final TranslationsZh _root; // ignore: unused_field
+
+	// Translations
+	@override String get title => '素材库';
+	@override String count({required Object count}) => '${count} 张素材';
+	@override String get clearAllTitle => '清空素材库';
+	@override String get clearAllDesc => '确定要清空所有待制作的素材图片吗？（不会影响已经制作成功的拼图关卡）';
+	@override String get clearAll => '清空全部';
+	@override String get emptyTitle => '素材库暂无图片';
+	@override String get emptyHint => '点击「相册选图」批量导入本地照片，或在「在线搜图」中一键下载，即可将图片加入素材库随时制作拼图。';
+	@override String get close => '关闭';
+	@override String get makePuzzle => '制作拼图';
+	@override String get deleteImageTooltip => '删除此图片';
+	@override String get fileMissing => '素材文件不存在或已被清理';
+}
+
+// Path: crop
+class _Translations$crop$zh extends Translations$crop$en {
+	_Translations$crop$zh._(TranslationsZh root) : this._root = root, super.internal(root);
+
+	final TranslationsZh _root; // ignore: unused_field
+
+	// Translations
+	@override String get title => '裁剪与自制拼图';
+	@override String regionLabel({required Object width, required Object height}) => '裁切区域: ${width} × ${height}';
+	@override String get gestureHint => '按住拖动调整裁切位置 · 双指或滚轮缩放';
+	@override String get saving => '正在保存...';
+	@override String get saveButton => '保存自制关卡';
+	@override String get optimizing => '正在优化画质并生成自制关卡...';
+	@override String saveFailedToast({required Object error}) => '保存失败: ${error}';
+}
+
+// Path: online
+class _Translations$online$zh extends Translations$online$en {
+	_Translations$online$zh._(TranslationsZh root) : this._root = root, super.internal(root);
+
+	final TranslationsZh _root; // ignore: unused_field
+
+	// Translations
+	@override String savedBanner({required Object width, required Object height}) => '已存入素材库 (${width}×${height})';
+	@override String get savedSourceSub => '来源: 网络 · 点击查看';
+	@override String get alreadyInBox => '该图片已在下载箱中';
+	@override String downloadFailed({required Object error}) => '下载图片失败: ${error}';
+	@override String get noHighResDetected => '未在当前页面检测到高清大图，请点击进入照片详情页后再试';
+	@override String get closePickerTooltip => '关闭在线选图';
+	@override String get backTooltip => '后退';
+	@override String get refreshTooltip => '刷新';
+	@override String get extracting => '正在提取...';
+	@override String get extractCurrent => '提取本页大图';
+	@override String get dismissTooltip => '关闭提示';
+}
+
+// Path: share
+class _Translations$share$zh extends Translations$share$en {
+	_Translations$share$zh._(TranslationsZh root) : this._root = root, super.internal(root);
+
+	final TranslationsZh _root; // ignore: unused_field
+
+	// Translations
+	@override String get title => '分享成绩';
+	@override String get exportTooltip => '导出分享';
+	@override String get toastSaved => '分享卡片已保存到临时目录';
+	@override String toastExportFailed({required Object error}) => '导出失败: ${error}';
+	@override String get completed => '拼图完成!';
+	@override String get timeLabel => '用时';
+	@override String get piecesLabel => '碎片';
+	@override String get stepsLabel => '步数';
+	@override String get exporting => '导出中...';
+	@override String get saveButton => '保存分享卡片';
+}
+
+// Path: importPack
+class _Translations$importPack$zh extends Translations$importPack$en {
+	_Translations$importPack$zh._(TranslationsZh root) : this._root = root, super.internal(root);
+
+	final TranslationsZh _root; // ignore: unused_field
+
+	// Translations
+	@override String pickFailed({required Object error}) => '选择文件失败: ${error}';
+	@override String get hintPickFile => '请选择本地 ZIP 文件或输入网络下载地址';
+	@override String get extractingLocal => '正在解压并解析本地图包...';
+	@override String get downloadingNet => '正在下载并解压网络图包...';
+	@override String imported({required Object title, required Object count}) => '成功导入《${title}》(共 ${count} 关)';
+	@override String importFailedToast({required Object error}) => '导入失败: ${error}';
+	@override String get appbarTitle => '导入扩展图包 (.zip)';
+	@override String get infoBanner => '支持导入任意包含 JPG/PNG/WebP 图片的 ZIP 压缩包；导入后将自动生成独立合辑，可随时整包删除。';
+	@override String get methodLocal => '方式一：从本地文件选择';
+	@override String get browseHint => '点击右侧按钮选择 .zip 文件';
+	@override String get browse => '浏览...';
+	@override String get methodNetwork => '方式二：输入网络下载地址';
+	@override String get testChip1 => '测试包: 赛博霓虹';
+	@override String get testChip2 => '测试包: 纯图片猫咪';
+	@override String get startImport => '开始导入并解析';
+}
+
+// Path: background
+class _Translations$background$zh extends Translations$background$en {
+	_Translations$background$zh._(TranslationsZh root) : this._root = root, super.internal(root);
+
+	final TranslationsZh _root; // ignore: unused_field
+
+	// Translations
+	@override String get title => '更换拼图背景';
+	@override String tableLabel({required Object index}) => '桌板 ${index}';
 }
 
 // Path: achievements
@@ -923,6 +1064,7 @@ extension on TranslationsZh {
 			'common.calculating' => '计算中…',
 			'common.version' => ({required Object version}) => '版本 ${version}',
 			'common.sync' => '刷新同步',
+			'common.back' => '返回',
 			'nav.home' => '主页',
 			'nav.daily' => '每日',
 			'nav.collections' => '图集',
@@ -1055,6 +1197,76 @@ extension on TranslationsZh {
 			'unlock.stars3' => ({required Object req, required Object current}) => '需要获得 3 星的不同拼图达到 ${req} 张（当前 ${current}/${req}）',
 			'unlock.daily' => '完成第 1 关主线即可解锁每日挑战',
 			'unlock.eventPack' => ({required Object req, required Object current}) => '完成 ${req} 关主线即可解锁活动与主题包（当前 ${current}/${req}）',
+			'myPuzzles.actionGallery' => '相册选图',
+			'myPuzzles.subBatch' => '批量导入',
+			'myPuzzles.actionImportPack' => '导入关卡包',
+			'myPuzzles.subZip' => 'ZIP 扩展包',
+			'myPuzzles.actionOnline' => '在线搜图',
+			'myPuzzles.subOnline' => '海量图库',
+			'myPuzzles.importedPacksTitle' => '已导入扩展包',
+			'myPuzzles.importedPacksCount' => ({required Object count}) => '${count} 个扩展包',
+			'myPuzzles.customTitle' => '自制关卡',
+			'myPuzzles.emptyTitle' => '小狐狸抱着空篮子等你制作拼图',
+			'myPuzzles.emptyHint' => '点击上方「相册选图」或「素材库」开始制作吧！',
+			'myPuzzles.packBadge' => '扩展合辑',
+			'myPuzzles.packDescFallback' => '精选拼图扩展关卡合辑',
+			'myPuzzles.packTotalLevels' => ({required Object count}) => '共 ${count} 关',
+			'drawer.title' => '素材库',
+			'drawer.count' => ({required Object count}) => '${count} 张素材',
+			'drawer.clearAllTitle' => '清空素材库',
+			'drawer.clearAllDesc' => '确定要清空所有待制作的素材图片吗？（不会影响已经制作成功的拼图关卡）',
+			'drawer.clearAll' => '清空全部',
+			'drawer.emptyTitle' => '素材库暂无图片',
+			'drawer.emptyHint' => '点击「相册选图」批量导入本地照片，或在「在线搜图」中一键下载，即可将图片加入素材库随时制作拼图。',
+			'drawer.close' => '关闭',
+			'drawer.makePuzzle' => '制作拼图',
+			'drawer.deleteImageTooltip' => '删除此图片',
+			'drawer.fileMissing' => '素材文件不存在或已被清理',
+			'crop.title' => '裁剪与自制拼图',
+			'crop.regionLabel' => ({required Object width, required Object height}) => '裁切区域: ${width} × ${height}',
+			'crop.gestureHint' => '按住拖动调整裁切位置 · 双指或滚轮缩放',
+			'crop.saving' => '正在保存...',
+			'crop.saveButton' => '保存自制关卡',
+			'crop.optimizing' => '正在优化画质并生成自制关卡...',
+			'crop.saveFailedToast' => ({required Object error}) => '保存失败: ${error}',
+			'online.savedBanner' => ({required Object width, required Object height}) => '已存入素材库 (${width}×${height})',
+			'online.savedSourceSub' => '来源: 网络 · 点击查看',
+			'online.alreadyInBox' => '该图片已在下载箱中',
+			'online.downloadFailed' => ({required Object error}) => '下载图片失败: ${error}',
+			'online.noHighResDetected' => '未在当前页面检测到高清大图，请点击进入照片详情页后再试',
+			'online.closePickerTooltip' => '关闭在线选图',
+			'online.backTooltip' => '后退',
+			'online.refreshTooltip' => '刷新',
+			'online.extracting' => '正在提取...',
+			'online.extractCurrent' => '提取本页大图',
+			'online.dismissTooltip' => '关闭提示',
+			'share.title' => '分享成绩',
+			'share.exportTooltip' => '导出分享',
+			'share.toastSaved' => '分享卡片已保存到临时目录',
+			'share.toastExportFailed' => ({required Object error}) => '导出失败: ${error}',
+			'share.completed' => '拼图完成!',
+			'share.timeLabel' => '用时',
+			'share.piecesLabel' => '碎片',
+			'share.stepsLabel' => '步数',
+			'share.exporting' => '导出中...',
+			'share.saveButton' => '保存分享卡片',
+			'importPack.pickFailed' => ({required Object error}) => '选择文件失败: ${error}',
+			'importPack.hintPickFile' => '请选择本地 ZIP 文件或输入网络下载地址',
+			'importPack.extractingLocal' => '正在解压并解析本地图包...',
+			'importPack.downloadingNet' => '正在下载并解压网络图包...',
+			'importPack.imported' => ({required Object title, required Object count}) => '成功导入《${title}》(共 ${count} 关)',
+			'importPack.importFailedToast' => ({required Object error}) => '导入失败: ${error}',
+			'importPack.appbarTitle' => '导入扩展图包 (.zip)',
+			'importPack.infoBanner' => '支持导入任意包含 JPG/PNG/WebP 图片的 ZIP 压缩包；导入后将自动生成独立合辑，可随时整包删除。',
+			'importPack.methodLocal' => '方式一：从本地文件选择',
+			'importPack.browseHint' => '点击右侧按钮选择 .zip 文件',
+			'importPack.browse' => '浏览...',
+			'importPack.methodNetwork' => '方式二：输入网络下载地址',
+			'importPack.testChip1' => '测试包: 赛博霓虹',
+			'importPack.testChip2' => '测试包: 纯图片猫咪',
+			'importPack.startImport' => '开始导入并解析',
+			'background.title' => '更换拼图背景',
+			'background.tableLabel' => ({required Object index}) => '桌板 ${index}',
 			'achievements.first_win.title' => '初露锋芒',
 			'achievements.first_win.desc' => '通关首张拼图',
 			'achievements.win_10.title' => '熟能生巧',

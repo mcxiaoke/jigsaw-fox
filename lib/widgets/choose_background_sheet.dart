@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:phosphoricons_flutter/phosphoricons_flutter.dart';
 
 import '../data/game_repository.dart';
+import '../l10n/gen/strings.g.dart';
 import '../theme/app_palette.dart';
 import '../theme/app_text_styles.dart';
 
@@ -62,7 +63,7 @@ class ChooseBackgroundSheet extends StatelessWidget {
                     ),
                     const SizedBox(width: 8),
                     Text(
-                      '更换拼图背景',
+                      t.background.title,
                       style: styles.h3.copyWith(fontWeight: FontWeight.bold),
                     ),
                   ],
@@ -162,7 +163,7 @@ class ChooseBackgroundSheet extends StatelessWidget {
                             padding: const EdgeInsets.symmetric(vertical: 4),
                             color: Colors.black.withValues(alpha: 0.45),
                             child: Text(
-                              '桌板 ${index + 1}',
+                              t.background.tableLabel(index: index + 1),
                               textAlign: TextAlign.center,
                               style: TextStyle(
                                 color: palette.primaryText,
