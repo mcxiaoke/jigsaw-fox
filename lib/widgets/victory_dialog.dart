@@ -263,392 +263,371 @@ class _VictoryDialogState extends State<VictoryDialog>
         }
         return KeyEventResult.ignored;
       },
-      child: AnimatedBuilder(
-        animation: _fadeAnim,
-        builder: (context, child) {
-          return Container(
-            color: palette.surface.withValues(alpha: 0.92 * _fadeAnim.value),
-            child: child,
-          );
-        },
-        child: Stack(
-          children: [
-            // Confetti layer
-            Positioned.fill(
-              child: CustomPaint(painter: _ConfettiPainter(palette)),
-            ),
+      child: Material(
+        type: MaterialType.transparency,
+        child: AnimatedBuilder(
+          animation: _fadeAnim,
+          builder: (context, child) {
+            return Container(
+              color: palette.surface.withValues(alpha: 0.92 * _fadeAnim.value),
+              child: child,
+            );
+          },
+          child: Stack(
+            children: [
+              // Confetti layer
+              Positioned.fill(
+                child: CustomPaint(painter: _ConfettiPainter(palette)),
+              ),
 
-            // Top-right close button (X)
-            Positioned(
-              top: 16,
-              right: 16,
-              child: SafeArea(
-                child: Material(
-                  color: palette.surfaceContainer.withValues(alpha: 0.85),
-                  shape: const CircleBorder(),
-                  elevation: 2,
-                  child: IconButton(
-                    icon: Icon(
-                      PhosphorIconsBold.x,
-                      size: 20,
-                      color: palette.primaryText,
+              // Top-right close button (X)
+              Positioned(
+                top: 16,
+                right: 16,
+                child: SafeArea(
+                  child: Material(
+                    color: palette.surfaceContainer.withValues(alpha: 0.85),
+                    shape: const CircleBorder(),
+                    elevation: 2,
+                    child: IconButton(
+                      icon: Icon(
+                        PhosphorIconsBold.x,
+                        size: 20,
+                        color: palette.primaryText,
+                      ),
+                      tooltip: t.victory.btnClose,
+                      onPressed: () {
+                        Navigator.of(context).pop();
+                        if (widget.onViewPuzzle != null) {
+                          widget.onViewPuzzle!();
+                        }
+                      },
                     ),
-                    tooltip: t.victory.btnClose,
-                    onPressed: () {
-                      Navigator.of(context).pop();
-                      if (widget.onViewPuzzle != null) {
-                        widget.onViewPuzzle!();
-                      }
-                    },
                   ),
                 ),
               ),
-            ),
 
-            // Main content
-            Center(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 24,
-                  vertical: 20,
-                ),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    // Title - uses perfect/great/title based on stars
-                    Text(
-                      widget.stars >= 3
-                          ? t.victory.perfect
-                          : widget.stars == 2
-                          ? t.victory.great
-                          : t.victory.title,
-                      style: styles.h1.copyWith(
-                        fontSize: 24,
-                        color: palette.brand,
-                      ),
-                    ),
-                    // Subtitle shows full victory title when perfect/great is shown
-                    if (widget.stars >= 2) ...[
-                      const SizedBox(height: 4),
+              // Main content
+              Center(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 24,
+                    vertical: 20,
+                  ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      // Title - uses perfect/great/title based on stars
                       Text(
-                        t.victory.title,
-                        style: styles.caption.copyWith(
-                          fontSize: 12,
-                          color: palette.secondaryText,
+                        widget.stars >= 3
+                            ? t.victory.perfect
+                            : widget.stars == 2
+                            ? t.victory.great
+                            : t.victory.title,
+                        style: styles.h1.copyWith(
+                          fontSize: 24,
+                          color: palette.brand,
                         ),
                       ),
-                    ],
-                    const SizedBox(height: 16),
-
-                    // Completed image with brand border
-                    ScaleTransition(
-                      scale: _imageScale,
-                      child: Container(
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(16),
-                          border: Border.all(color: palette.brand, width: 4),
-                          boxShadow: [
-                            BoxShadow(
-                              color: palette.brand.withValues(alpha: 0.3),
-                              blurRadius: 20,
-                              offset: const Offset(0, 4),
-                            ),
-                          ],
+                      // Subtitle shows full victory title when perfect/great is shown
+                      if (widget.stars >= 2) ...[
+                        const SizedBox(height: 4),
+                        Text(
+                          t.victory.title,
+                          style: styles.caption.copyWith(
+                            fontSize: 12,
+                            color: palette.secondaryText,
+                          ),
                         ),
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(12),
-                          child: Image.memory(
-                            widget.imageBytes,
-                            width: 200,
-                            height: 200,
-                            fit: BoxFit.cover,
-                            cacheWidth: 600,
-                            errorBuilder: (_, _, _) => Container(
+                      ],
+                      const SizedBox(height: 16),
+
+                      // Completed image with brand border
+                      ScaleTransition(
+                        scale: _imageScale,
+                        child: Container(
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(color: palette.brand, width: 4),
+                            boxShadow: [
+                              BoxShadow(
+                                color: palette.brand.withValues(alpha: 0.3),
+                                blurRadius: 20,
+                                offset: const Offset(0, 4),
+                              ),
+                            ],
+                          ),
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(12),
+                            child: Image.memory(
+                              widget.imageBytes,
                               width: 200,
                               height: 200,
-                              color: palette.surfaceContainer,
-                              child: Icon(
-                                PhosphorIconsFill.puzzlePiece,
-                                size: 48,
-                                color: palette.brand,
+                              fit: BoxFit.cover,
+                              cacheWidth: 600,
+                              errorBuilder: (_, _, _) => Container(
+                                width: 200,
+                                height: 200,
+                                color: palette.surfaceContainer,
+                                child: Icon(
+                                  PhosphorIconsFill.puzzlePiece,
+                                  size: 48,
+                                  color: palette.brand,
+                                ),
                               ),
                             ),
                           ),
                         ),
                       ),
-                    ),
-                    const SizedBox(height: 16),
+                      const SizedBox(height: 16),
 
-                    // Stars
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: List.generate(3, (i) {
-                        final lit = i < _litStars;
-                        return Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 6),
-                          child: AnimatedScale(
-                            scale: lit ? 1.0 : 0.6,
-                            duration: const Duration(milliseconds: 300),
-                            curve: Curves.easeOutBack,
-                            child: Icon(
-                              lit
-                                  ? PhosphorIconsFill.star
-                                  : PhosphorIconsRegular.star,
-                              size: 36,
-                              color: lit ? palette.gold : palette.divider,
+                      // Stars
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: List.generate(3, (i) {
+                          final lit = i < _litStars;
+                          return Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 6),
+                            child: AnimatedScale(
+                              scale: lit ? 1.0 : 0.6,
+                              duration: const Duration(milliseconds: 300),
+                              curve: Curves.easeOutBack,
+                              child: Icon(
+                                lit
+                                    ? PhosphorIconsFill.star
+                                    : PhosphorIconsRegular.star,
+                                size: 36,
+                                color: lit ? palette.gold : palette.divider,
+                              ),
                             ),
-                          ),
-                        );
-                      }),
-                    ),
-                    const SizedBox(height: 6),
-                    // Stars count text
-                    Text(
-                      t.victory.stars(count: widget.stars),
-                      style: styles.caption.copyWith(
-                        fontSize: 12,
-                        fontWeight: FontWeight.bold,
-                        color: palette.gold,
+                          );
+                        }),
                       ),
-                    ),
-                    // Perfect / Great badge below stars count
-                    if (widget.stars >= 2) ...[
-                      const SizedBox(height: 2),
-                      Text(
-                        widget.stars >= 3 ? t.victory.perfect : t.victory.great,
-                        style: styles.caption.copyWith(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w600,
-                          color: palette.brand,
+                      const SizedBox(height: 6),
+                      // Stars count badge
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 3,
+                        ),
+                        decoration: BoxDecoration(
+                          color: palette.gold.withValues(alpha: 0.15),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Text(
+                          t.victory.stars(count: widget.stars),
+                          style: styles.caption.copyWith(
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                            color: palette.gold,
+                          ),
                         ),
                       ),
-                    ],
-                    const SizedBox(height: 18),
+                      const SizedBox(height: 18),
 
-                    // Stats row
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        vertical: 12,
-                        horizontal: 16,
-                      ),
-                      decoration: BoxDecoration(
-                        color: palette.surfaceContainer,
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(color: palette.divider),
-                      ),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                        children: [
-                          _buildStat(
-                            icon: PhosphorIconsRegular.clock,
-                            label: '',
-                            value: t.victory.time(
-                              time: _formatTime(_displayedTime),
+                      // Stats row
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          vertical: 12,
+                          horizontal: 16,
+                        ),
+                        decoration: BoxDecoration(
+                          color: palette.surfaceContainer,
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(color: palette.divider),
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                          children: [
+                            _buildStat(
+                              icon: PhosphorIconsRegular.clock,
+                              label: '',
+                              value: t.victory.time(
+                                time: _formatTime(_displayedTime),
+                              ),
+                              palette: palette,
+                              styles: styles,
                             ),
-                            palette: palette,
-                            styles: styles,
-                          ),
-                          Container(
-                            width: 1,
-                            height: 32,
-                            color: palette.divider,
-                          ),
-                          _buildStat(
-                            icon: PhosphorIconsRegular.puzzlePiece,
-                            label: '',
-                            value: widget.pieceCount != null
-                                ? t.victory.pieces(count: widget.pieceCount!)
-                                : t.victory.pieces(count: _displayedMoves),
-                            palette: palette,
-                            styles: styles,
-                          ),
-                          if (widget.rewardCoins > 0) ...[
                             Container(
                               width: 1,
                               height: 32,
                               color: palette.divider,
                             ),
                             _buildStat(
-                              icon: PhosphorIconsFill.coins,
+                              icon: PhosphorIconsRegular.puzzlePiece,
                               label: '',
-                              value: t.victory.coinsReward(
-                                coins: _displayedCoins,
-                              ),
-                              color: palette.gold,
+                              value: widget.pieceCount != null
+                                  ? t.victory.pieces(count: widget.pieceCount!)
+                                  : t.victory.pieces(count: _displayedMoves),
                               palette: palette,
                               styles: styles,
                             ),
-                          ],
-                        ],
-                      ),
-                    ),
-
-                    // New achievements bar (if any)
-                    if (widget.newAchievements.isNotEmpty) ...[
-                      const SizedBox(height: 12),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          vertical: 8,
-                          horizontal: 14,
-                        ),
-                        decoration: BoxDecoration(
-                          color: palette.gold.withValues(alpha: 0.12),
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(
-                            color: palette.gold.withValues(alpha: 0.35),
-                          ),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(
-                              PhosphorIconsFill.trophy,
-                              size: 20,
-                              color: palette.gold,
-                            ),
-                            const SizedBox(width: 8),
-                            Flexible(
-                              child: Text(
-                                '${t.victory.newAchievements(count: widget.newAchievements.length)}: ${widget.newAchievements.map((a) => a.title).join(", ")}',
-                                style: styles.caption.copyWith(
-                                  fontWeight: FontWeight.bold,
-                                  color: palette.brand,
-                                ),
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
+                            if (widget.rewardCoins > 0) ...[
+                              Container(
+                                width: 1,
+                                height: 32,
+                                color: palette.divider,
                               ),
-                            ),
+                              _buildStat(
+                                icon: PhosphorIconsFill.coins,
+                                label: '',
+                                value: t.victory.coinsReward(
+                                  coins: _displayedCoins,
+                                ),
+                                color: palette.gold,
+                                palette: palette,
+                                styles: styles,
+                              ),
+                            ],
                           ],
                         ),
                       ),
-                    ],
-                    const SizedBox(height: 20),
 
-                    // 1. Primary Action Buttons
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        if (widget.onNextLevel != null) ...[
-                          Expanded(
-                            child: OutlinedButton.icon(
-                              onPressed: () {
-                                Navigator.of(context).pop();
-                                if (widget.onExit != null) {
-                                  widget.onExit!();
-                                }
-                              },
-                              icon: const Icon(
-                                PhosphorIconsBold.arrowLeft,
-                                size: 16,
-                              ),
-                              label: Text(t.victory.btnExit),
-                              style: OutlinedButton.styleFrom(
-                                foregroundColor: palette.primaryText,
-                                side: BorderSide(
-                                  color: palette.divider,
-                                  width: 1.2,
-                                ),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(14),
-                                ),
-                                padding: const EdgeInsets.symmetric(
-                                  vertical: 12,
-                                ),
-                              ),
+                      // New achievements bar (if any)
+                      if (widget.newAchievements.isNotEmpty) ...[
+                        const SizedBox(height: 12),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            vertical: 8,
+                            horizontal: 14,
+                          ),
+                          decoration: BoxDecoration(
+                            color: palette.gold.withValues(alpha: 0.12),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color: palette.gold.withValues(alpha: 0.35),
                             ),
                           ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: FilledButton.icon(
-                              onPressed: () {
-                                Navigator.of(context).pop();
-                                widget.onNextLevel!();
-                              },
-                              icon: const Icon(
-                                PhosphorIconsFill.play,
-                                size: 16,
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                PhosphorIconsFill.trophy,
+                                size: 20,
+                                color: palette.gold,
                               ),
-                              label: Text(t.victory.btnNext),
-                              style: FilledButton.styleFrom(
-                                backgroundColor: palette.brand,
-                                foregroundColor: palette.surface,
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(14),
+                              const SizedBox(width: 8),
+                              Flexible(
+                                child: Text(
+                                  '${t.victory.newAchievements(count: widget.newAchievements.length)}: ${widget.newAchievements.map((a) => a.localizedTitle).join(", ")}',
+                                  style: styles.caption.copyWith(
+                                    fontWeight: FontWeight.bold,
+                                    color: palette.brand,
+                                  ),
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
                                 ),
-                                padding: const EdgeInsets.symmetric(
-                                  vertical: 12,
-                                ),
-                                elevation: 2,
                               ),
-                            ),
+                            ],
                           ),
-                        ] else ...[
-                          Expanded(
-                            child: FilledButton.icon(
-                              onPressed: () {
-                                Navigator.of(context).pop();
-                                if (widget.onExit != null) {
-                                  widget.onExit!();
-                                }
-                              },
-                              icon: const Icon(
-                                PhosphorIconsBold.check,
-                                size: 16,
-                              ),
-                              label: Text(t.victory.btnExit),
-                              style: FilledButton.styleFrom(
-                                backgroundColor: palette.brand,
-                                foregroundColor: palette.surface,
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(14),
-                                ),
-                                padding: const EdgeInsets.symmetric(
-                                  vertical: 12,
-                                ),
-                                elevation: 2,
-                              ),
-                            ),
-                          ),
-                        ],
+                        ),
                       ],
-                    ),
-                    const SizedBox(height: 10),
+                      const SizedBox(height: 20),
 
-                    // 2. Secondary Utility Buttons
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Expanded(
-                          child: OutlinedButton.icon(
-                            onPressed:
-                                widget.onSaveWallpaper ?? _defaultSaveWallpaper,
-                            icon: const Icon(
-                              PhosphorIconsRegular.image,
-                              size: 15,
-                            ),
-                            label: Text(t.victory.btnSaveWallpaper),
-                            style: OutlinedButton.styleFrom(
-                              foregroundColor: palette.secondaryText,
-                              side: BorderSide(
-                                color: palette.divider.withValues(alpha: 0.6),
+                      // 1. Primary Action Buttons
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          if (widget.onNextLevel != null) ...[
+                            Expanded(
+                              child: OutlinedButton.icon(
+                                onPressed: () {
+                                  Navigator.of(context).pop();
+                                  if (widget.onExit != null) {
+                                    widget.onExit!();
+                                  }
+                                },
+                                icon: const Icon(
+                                  PhosphorIconsBold.arrowLeft,
+                                  size: 16,
+                                ),
+                                label: Text(t.victory.btnExit),
+                                style: OutlinedButton.styleFrom(
+                                  foregroundColor: palette.primaryText,
+                                  side: BorderSide(
+                                    color: palette.divider,
+                                    width: 1.2,
+                                  ),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(14),
+                                  ),
+                                  padding: const EdgeInsets.symmetric(
+                                    vertical: 12,
+                                  ),
+                                ),
                               ),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              padding: const EdgeInsets.symmetric(vertical: 9),
                             ),
-                          ),
-                        ),
-                        if (widget.onShare != null) ...[
-                          const SizedBox(width: 8),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: FilledButton.icon(
+                                onPressed: () {
+                                  Navigator.of(context).pop();
+                                  widget.onNextLevel!();
+                                },
+                                icon: const Icon(
+                                  PhosphorIconsFill.play,
+                                  size: 16,
+                                ),
+                                label: Text(t.victory.btnNext),
+                                style: FilledButton.styleFrom(
+                                  backgroundColor: palette.brand,
+                                  foregroundColor: palette.surface,
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(14),
+                                  ),
+                                  padding: const EdgeInsets.symmetric(
+                                    vertical: 12,
+                                  ),
+                                  elevation: 2,
+                                ),
+                              ),
+                            ),
+                          ] else ...[
+                            Expanded(
+                              child: FilledButton.icon(
+                                onPressed: () {
+                                  Navigator.of(context).pop();
+                                  if (widget.onExit != null) {
+                                    widget.onExit!();
+                                  }
+                                },
+                                icon: const Icon(
+                                  PhosphorIconsBold.check,
+                                  size: 16,
+                                ),
+                                label: Text(t.victory.btnExit),
+                                style: FilledButton.styleFrom(
+                                  backgroundColor: palette.brand,
+                                  foregroundColor: palette.surface,
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(14),
+                                  ),
+                                  padding: const EdgeInsets.symmetric(
+                                    vertical: 12,
+                                  ),
+                                  elevation: 2,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                      const SizedBox(height: 10),
+
+                      // 2. Secondary Utility Buttons
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
                           Expanded(
                             child: OutlinedButton.icon(
-                              onPressed: widget.onShare,
+                              onPressed:
+                                  widget.onSaveWallpaper ??
+                                  _defaultSaveWallpaper,
                               icon: const Icon(
-                                PhosphorIconsBold.shareNetwork,
+                                PhosphorIconsRegular.image,
                                 size: 15,
                               ),
-                              label: Text(t.victory.btnShare),
+                              label: Text(t.victory.btnSaveWallpaper),
                               style: OutlinedButton.styleFrom(
                                 foregroundColor: palette.secondaryText,
                                 side: BorderSide(
@@ -663,35 +642,62 @@ class _VictoryDialogState extends State<VictoryDialog>
                               ),
                             ),
                           ),
+                          if (widget.onShare != null) ...[
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: OutlinedButton.icon(
+                                onPressed: widget.onShare,
+                                icon: const Icon(
+                                  PhosphorIconsBold.shareNetwork,
+                                  size: 15,
+                                ),
+                                label: Text(t.victory.btnShare),
+                                style: OutlinedButton.styleFrom(
+                                  foregroundColor: palette.secondaryText,
+                                  side: BorderSide(
+                                    color: palette.divider.withValues(
+                                      alpha: 0.6,
+                                    ),
+                                  ),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  padding: const EdgeInsets.symmetric(
+                                    vertical: 9,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
                         ],
-                      ],
-                    ),
-                    const SizedBox(height: 4),
+                      ),
+                      const SizedBox(height: 4),
 
-                    // 3. View puzzle in board
-                    TextButton.icon(
-                      onPressed: () {
-                        Navigator.of(context).pop();
-                        if (widget.onViewPuzzle != null) {
-                          widget.onViewPuzzle!();
-                        }
-                      },
-                      icon: const Icon(PhosphorIconsBold.eye, size: 15),
-                      label: Text(
-                        widget.onViewPuzzle != null
-                            ? t.victory.btnView
-                            : t.victory.btnExit,
+                      // 3. View puzzle in board
+                      TextButton.icon(
+                        onPressed: () {
+                          Navigator.of(context).pop();
+                          if (widget.onViewPuzzle != null) {
+                            widget.onViewPuzzle!();
+                          }
+                        },
+                        icon: const Icon(PhosphorIconsBold.eye, size: 15),
+                        label: Text(
+                          widget.onViewPuzzle != null
+                              ? t.victory.btnView
+                              : t.victory.btnExit,
+                        ),
+                        style: TextButton.styleFrom(
+                          foregroundColor: palette.secondaryText,
+                          visualDensity: VisualDensity.compact,
+                        ),
                       ),
-                      style: TextButton.styleFrom(
-                        foregroundColor: palette.secondaryText,
-                        visualDensity: VisualDensity.compact,
-                      ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -706,20 +712,31 @@ class _VictoryDialogState extends State<VictoryDialog>
     required AppTextStyles styles,
   }) {
     final c = color ?? palette.primaryText;
-    return Column(
-      children: [
-        Icon(icon, size: 18, color: c),
-        const SizedBox(height: 4),
-        Text(
-          value,
-          style: styles.monoSmall.copyWith(fontSize: 18, color: c),
-          textAlign: TextAlign.center,
-        ),
-        if (label.isNotEmpty) ...[
-          const SizedBox(height: 2),
-          Text(label, style: styles.caption.copyWith(fontSize: 11)),
+    return Expanded(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 20, color: c),
+          const SizedBox(height: 4),
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Text(
+              value,
+              style: styles.monoSmall.copyWith(
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+                color: c,
+              ),
+              textAlign: TextAlign.center,
+              maxLines: 1,
+            ),
+          ),
+          if (label.isNotEmpty) ...[
+            const SizedBox(height: 2),
+            Text(label, style: styles.caption.copyWith(fontSize: 11)),
+          ],
         ],
-      ],
+      ),
     );
   }
 }

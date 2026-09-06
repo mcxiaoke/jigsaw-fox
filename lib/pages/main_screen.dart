@@ -157,6 +157,7 @@ class _TrophyButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final tr = LocaleSettings.instance.currentTranslations;
     return IconButton(
+      key: const Key('main_trophy_button'),
       icon: Icon(PhosphorIconsBold.trophy, color: palette.brand, size: 22),
       tooltip: tr.nav.tooltipAchievements,
       onPressed: () async {
@@ -175,6 +176,7 @@ class _SettingsButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final tr = LocaleSettings.instance.currentTranslations;
     return IconButton(
+      key: const Key('main_settings_button'),
       icon: Icon(PhosphorIconsBold.gear, color: palette.brand, size: 22),
       tooltip: tr.nav.tooltipSettings,
       onPressed: () async {
@@ -224,11 +226,12 @@ class _GameBottomNav extends StatelessWidget {
               final isActive = i == currentIndex;
               return Expanded(
                 child: InkWell(
+                  key: Key('main_tab_$i'),
                   onTap: () => onTap(i),
                   child: Container(
                     padding: const EdgeInsets.symmetric(
-                      vertical: 8,
-                      horizontal: 4,
+                      vertical: 6,
+                      horizontal: 2,
                     ),
                     decoration: isActive
                         ? BoxDecoration(
@@ -241,28 +244,32 @@ class _GameBottomNav extends StatelessWidget {
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         AnimatedScale(
-                          scale: isActive ? 1.1 : 1.0,
+                          scale: isActive ? 1.08 : 1.0,
                           duration: const Duration(milliseconds: 200),
                           curve: Curves.easeOutBack,
                           child: Icon(
                             item.icon,
-                            size: 24,
+                            size: 22,
                             color: isActive
                                 ? palette.brand
                                 : palette.secondaryText,
                           ),
                         ),
-                        const SizedBox(height: 4),
-                        Text(
-                          item.label,
-                          style: TextStyle(
-                            fontSize: 11,
-                            fontWeight: isActive
-                                ? FontWeight.w600
-                                : FontWeight.w500,
-                            color: isActive
-                                ? palette.brand
-                                : palette.disabledText,
+                        const SizedBox(height: 3),
+                        FittedBox(
+                          fit: BoxFit.scaleDown,
+                          child: Text(
+                            item.label,
+                            maxLines: 1,
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: isActive
+                                  ? FontWeight.w600
+                                  : FontWeight.w500,
+                              color: isActive
+                                  ? palette.brand
+                                  : palette.disabledText,
+                            ),
                           ),
                         ),
                       ],

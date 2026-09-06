@@ -155,19 +155,22 @@ class _AchievementsPageState extends State<AchievementsPage> {
         foregroundColor: palette.primaryText,
         elevation: 0.5,
         scrolledUnderElevation: 0.5,
-        centerTitle: false,
         title: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(PhosphorIconsFill.trophy, color: palette.brand, size: 24),
+            Icon(PhosphorIconsFill.trophy, color: palette.brand, size: 22),
             const SizedBox(width: 8),
-            Text(
-              LocaleSettings
-                  .instance
-                  .currentTranslations
-                  .achievementsPage
-                  .title,
-              style: styles.h3.copyWith(fontSize: 19),
+            Flexible(
+              child: Text(
+                LocaleSettings
+                    .instance
+                    .currentTranslations
+                    .achievementsPage
+                    .title,
+                style: styles.h3.copyWith(fontSize: 18),
+                overflow: TextOverflow.ellipsis,
+                maxLines: 1,
+              ),
             ),
           ],
         ),
@@ -180,13 +183,24 @@ class _AchievementsPageState extends State<AchievementsPage> {
               borderRadius: BorderRadius.circular(12),
               border: Border.all(color: palette.brand.withValues(alpha: 0.35)),
             ),
-            child: Text(
-              '$unlockedCount / ${allDefs.length} ${t.achievementsPage.unlocked}',
-              style: TextStyle(
-                fontWeight: FontWeight.w700,
-                color: palette.brand,
-                fontSize: 12.5,
-              ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  PhosphorIconsBold.checkCircle,
+                  color: palette.brand,
+                  size: 14,
+                ),
+                const SizedBox(width: 4),
+                Text(
+                  '$unlockedCount / ${allDefs.length}',
+                  style: TextStyle(
+                    fontWeight: FontWeight.w700,
+                    color: palette.brand,
+                    fontSize: 12.5,
+                  ),
+                ),
+              ],
             ),
           ),
         ],
@@ -278,11 +292,14 @@ class _AchievementsPageState extends State<AchievementsPage> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  _SectionHeader(
-                    title: t.achievementsPage.wall,
-                    palette: palette,
-                    styles: styles,
+                  Expanded(
+                    child: _SectionHeader(
+                      title: t.achievementsPage.wall,
+                      palette: palette,
+                      styles: styles,
+                    ),
                   ),
+                  const SizedBox(width: 8),
                   Text(
                     t.achievementsPage.wallCount(count: allDefs.length),
                     style: styles.caption,
@@ -334,6 +351,8 @@ class _SectionHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     return Text(
       title,
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
       style: styles.captionBold.copyWith(
         color: palette.secondaryText,
         letterSpacing: 0.5,
@@ -390,7 +409,7 @@ class _StatGroupCard extends StatelessWidget {
               for (int i = 0; i < items.length; i++) ...[
                 if (i > 0)
                   Container(
-                    height: 28,
+                    height: 42,
                     width: 1,
                     color: palette.divider.withValues(alpha: 0.8),
                   ),
@@ -424,41 +443,36 @@ class _StatMetricItem extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 2),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(icon, size: 14, color: color),
-              const SizedBox(width: 4),
-              Flexible(
-                child: Text(
-                  label,
-                  style: styles.caption.copyWith(
-                    fontSize: 12,
-                    color: palette.secondaryText,
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 6),
+          Icon(icon, size: 20, color: color),
+          const SizedBox(height: 5),
           FittedBox(
             fit: BoxFit.scaleDown,
             child: Text(
               value,
               style: styles.monoSmall.copyWith(
-                fontSize: 20,
-                fontWeight: FontWeight.w700,
+                fontSize: 18,
+                fontWeight: FontWeight.w800,
                 color: color,
               ),
               maxLines: 1,
             ),
+          ),
+          const SizedBox(height: 3),
+          Text(
+            label,
+            style: styles.caption.copyWith(
+              fontSize: 11,
+              color: palette.secondaryText,
+              fontWeight: FontWeight.w500,
+              height: 1.2,
+            ),
+            textAlign: TextAlign.center,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
           ),
         ],
       ),

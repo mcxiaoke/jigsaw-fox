@@ -219,14 +219,14 @@ class Translations$settings$en {
 	/// en: 'Show jigsaw cut lines on difficulty preview'
 	String get gridPreviewDesc => 'Show jigsaw cut lines on difficulty preview';
 
-	/// en: 'Initial Scatter Mode'
-	String get scatterModeTitle => 'Initial Scatter Mode';
+	/// en: 'Scatter Mode'
+	String get scatterModeTitle => 'Scatter Mode';
 
-	/// en: 'Tray (default, phone-friendly)'
-	String get scatterModeDescTray => 'Tray (default, phone-friendly)';
+	/// en: 'Pieces kept in bottom tray'
+	String get scatterModeDescTray => 'Pieces kept in bottom tray';
 
-	/// en: 'Tabletop scatter (wide screens)'
-	String get scatterModeDescTabletop => 'Tabletop scatter (wide screens)';
+	/// en: 'Pieces scattered around board'
+	String get scatterModeDescTabletop => 'Pieces scattered around board';
 
 	/// en: 'Tray'
 	String get scatterTray => 'Tray';
@@ -1139,8 +1139,11 @@ class Translations$victory$en {
 	/// en: 'Puzzle Complete!'
 	String get title => 'Puzzle Complete!';
 
-	/// en: '{count} Stars'
-	String stars({required Object count}) => '${count} Stars';
+	/// en: '(one) {1 Star} (other) {{count} Stars}'
+	String stars({required num count}) => (_root.$meta.cardinalResolver ?? PluralResolvers.cardinal('en'))(count,
+		one: '1 Star',
+		other: '${count} Stars',
+	);
 
 	/// en: 'Time: {time}'
 	String time({required Object time}) => 'Time: ${time}';
@@ -1319,17 +1322,17 @@ class Translations$achievementsPage$en {
 	/// en: 'Total Stars'
 	String get totalStars => 'Total Stars';
 
-	/// en: 'Puzzles Solved'
-	String get totalSolved => 'Puzzles Solved';
+	/// en: 'Solved'
+	String get totalSolved => 'Solved';
 
-	/// en: 'Pieces Snapped'
-	String get totalSnaps => 'Pieces Snapped';
+	/// en: 'Snaps'
+	String get totalSnaps => 'Snaps';
 
-	/// en: 'Total Play Time'
-	String get totalTime => 'Total Play Time';
+	/// en: 'Play Time'
+	String get totalTime => 'Play Time';
 
-	/// en: '3-Star Puzzles'
-	String get threeStarCount => '3-Star Puzzles';
+	/// en: '3-Star Clears'
+	String get threeStarCount => '3-Star Clears';
 
 	/// en: 'Coins'
 	String get coinsOwned => 'Coins';
@@ -1934,14 +1937,14 @@ class Translations$myCenter$tabs$en {
 
 	// Translations
 
-	/// en: 'In Progress ({count})'
-	String inProgress({required Object count}) => 'In Progress (${count})';
+	/// en: 'Active ({count})'
+	String inProgress({required Object count}) => 'Active (${count})';
 
-	/// en: 'Favorites ({count})'
-	String favorites({required Object count}) => 'Favorites (${count})';
+	/// en: 'Saved ({count})'
+	String favorites({required Object count}) => 'Saved (${count})';
 
-	/// en: 'Completed ({count})'
-	String completed({required Object count}) => 'Completed (${count})';
+	/// en: 'Done ({count})'
+	String completed({required Object count}) => 'Done (${count})';
 
 	/// en: 'Custom ({count})'
 	String custom({required Object count}) => 'Custom (${count})';
@@ -2124,9 +2127,9 @@ extension on Translations {
 			'settings.hapticDesc' => 'Subtle vibration on snap and interactions',
 			'settings.gridPreviewTitle' => 'Grid Preview on Difficulty',
 			'settings.gridPreviewDesc' => 'Show jigsaw cut lines on difficulty preview',
-			'settings.scatterModeTitle' => 'Initial Scatter Mode',
-			'settings.scatterModeDescTray' => 'Tray (default, phone-friendly)',
-			'settings.scatterModeDescTabletop' => 'Tabletop scatter (wide screens)',
+			'settings.scatterModeTitle' => 'Scatter Mode',
+			'settings.scatterModeDescTray' => 'Pieces kept in bottom tray',
+			'settings.scatterModeDescTabletop' => 'Pieces scattered around board',
 			'settings.scatterTray' => 'Tray',
 			'settings.scatterTabletop' => 'Tabletop',
 			'settings.appearanceBgTitle' => 'Background',
@@ -2436,7 +2439,7 @@ extension on Translations {
 			'game.zoomReset' => 'Reset',
 			'game.progress' => ({required Object percent}) => '${percent}%',
 			'victory.title' => 'Puzzle Complete!',
-			'victory.stars' => ({required Object count}) => '${count} Stars',
+			'victory.stars' => ({required num count}) => (_root.$meta.cardinalResolver ?? PluralResolvers.cardinal('en'))(count, one: '1 Star', other: '${count} Stars', ), 
 			'victory.time' => ({required Object time}) => 'Time: ${time}',
 			'victory.pieces' => ({required Object count}) => '${count} pieces',
 			'victory.coinsReward' => ({required Object coins}) => '+${coins} coins',
@@ -2487,10 +2490,10 @@ extension on Translations {
 			'achievementsPage.groupClears' => 'Clears & Stars',
 			'achievementsPage.groupAssets' => 'Journey & Assets',
 			'achievementsPage.totalStars' => 'Total Stars',
-			'achievementsPage.totalSolved' => 'Puzzles Solved',
-			'achievementsPage.totalSnaps' => 'Pieces Snapped',
-			'achievementsPage.totalTime' => 'Total Play Time',
-			'achievementsPage.threeStarCount' => '3-Star Puzzles',
+			'achievementsPage.totalSolved' => 'Solved',
+			'achievementsPage.totalSnaps' => 'Snaps',
+			'achievementsPage.totalTime' => 'Play Time',
+			'achievementsPage.threeStarCount' => '3-Star Clears',
 			'achievementsPage.coinsOwned' => 'Coins',
 			'achievementsPage.wall' => 'Achievement Wall',
 			'achievementsPage.wallCount' => ({required Object count}) => '${count} achievements total',
@@ -2499,9 +2502,9 @@ extension on Translations {
 			'achievementsPage.claim' => 'Claim',
 			'achievementsPage.claimed' => 'Claimed',
 			'achievementsPage.coins' => ({required Object count}) => '${count} coins',
-			'myCenter.tabs.inProgress' => ({required Object count}) => 'In Progress (${count})',
-			'myCenter.tabs.favorites' => ({required Object count}) => 'Favorites (${count})',
-			'myCenter.tabs.completed' => ({required Object count}) => 'Completed (${count})',
+			'myCenter.tabs.inProgress' => ({required Object count}) => 'Active (${count})',
+			'myCenter.tabs.favorites' => ({required Object count}) => 'Saved (${count})',
+			'myCenter.tabs.completed' => ({required Object count}) => 'Done (${count})',
 			'myCenter.tabs.custom' => ({required Object count}) => 'Custom (${count})',
 			'myCenter.topActions.gallery' => 'Gallery',
 			'myCenter.topActions.gallerySub' => 'Custom',

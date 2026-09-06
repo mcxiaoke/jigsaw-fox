@@ -502,17 +502,27 @@ class _DailyTabViewState extends State<DailyTabView> {
                                   ),
                                 ),
                                 const SizedBox(width: 6),
-                                Text(
-                                  '${now.month} 月 ${now.day} 日',
-                                  style: styles.caption.copyWith(
-                                    color: palette.secondaryText,
+                                Expanded(
+                                  child: Text(
+                                    t.daily.dateCaption(
+                                      month: now.month,
+                                      day: now.day,
+                                    ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: styles.caption.copyWith(
+                                      color: palette.secondaryText,
+                                    ),
                                   ),
                                 ),
                               ],
                             ),
                             const SizedBox(height: 8),
                             Text(
-                              '${now.month}月${now.day}日 · 今日挑战',
+                              t.daily.todayTitle(
+                                month: now.month,
+                                day: now.day,
+                              ),
                               style: styles.h2.copyWith(
                                 color: palette.primaryText,
                               ),
@@ -535,10 +545,10 @@ class _DailyTabViewState extends State<DailyTabView> {
                                   ),
                                   label: Text(
                                     prog.isCompleted
-                                        ? '已通关 (重玩)'
+                                        ? t.daily.btnClearedReplay
                                         : (prog.progressPercent > 0
-                                              ? '继续挑战'
-                                              : '开始挑战'),
+                                              ? t.daily.btnResume
+                                              : t.daily.btnStart),
                                     style: const TextStyle(
                                       fontWeight: FontWeight.bold,
                                     ),
@@ -600,22 +610,32 @@ class _DailyTabViewState extends State<DailyTabView> {
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Row(
-                      children: [
-                        Icon(
-                          PhosphorIconsFill.trophy,
-                          color: palette.brand,
-                          size: 20,
-                        ),
-                        const SizedBox(width: 6),
-                        Text(
-                          totalVisibleCount > 0
-                              ? '每日总进度: $totalCompletedCount/$totalVisibleCount'
-                              : '每日挑战',
-                          style: styles.bodyBold,
-                        ),
-                      ],
+                    Expanded(
+                      child: Row(
+                        children: [
+                          Icon(
+                            PhosphorIconsFill.trophy,
+                            color: palette.brand,
+                            size: 20,
+                          ),
+                          const SizedBox(width: 6),
+                          Flexible(
+                            child: Text(
+                              totalVisibleCount > 0
+                                  ? t.daily.totalProgress(
+                                      done: totalCompletedCount,
+                                      total: totalVisibleCount,
+                                    )
+                                  : t.daily.todayFallback,
+                              style: styles.bodyBold,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
+                    const SizedBox(width: 8),
                     Container(
                       padding: const EdgeInsets.symmetric(
                         horizontal: 10,
@@ -708,7 +728,7 @@ class _DailyTabViewState extends State<DailyTabView> {
                     ),
                     const SizedBox(height: 12),
                     Text(
-                      '正在加载 $monthKey 挑战关卡...',
+                      t.daily.loadingMonth(month: monthKey),
                       style: TextStyle(
                         color: palette.secondaryText,
                         fontSize: 13,
@@ -729,8 +749,8 @@ class _DailyTabViewState extends State<DailyTabView> {
                   children: [
                     Text(
                       isFailed
-                          ? '加载 $monthKey 关卡失败，请检查网络后重试'
-                          : '暂未下载 $monthKey 关卡数据',
+                          ? t.daily.loadMonthFailed(month: monthKey)
+                          : t.daily.emptyMonth(month: monthKey),
                       style: TextStyle(
                         color: palette.secondaryText,
                         fontSize: 13,
@@ -743,7 +763,7 @@ class _DailyTabViewState extends State<DailyTabView> {
                         PhosphorIconsBold.downloadSimple,
                         size: 16,
                       ),
-                      label: const Text('下载本月关卡'),
+                      label: Text(t.daily.downloadMonth),
                       style: FilledButton.styleFrom(
                         visualDensity: VisualDensity.compact,
                       ),
@@ -843,7 +863,10 @@ class _DailyTabViewState extends State<DailyTabView> {
                       border: Border.all(color: palette.divider, width: 0.8),
                     ),
                     child: Text(
-                      '已完成 $completedCount/${monthItems.length}',
+                      t.daily.monthCompleted(
+                        done: completedCount,
+                        total: monthItems.length,
+                      ),
                       style: TextStyle(
                         fontSize: 11.5,
                         fontWeight: FontWeight.w600,

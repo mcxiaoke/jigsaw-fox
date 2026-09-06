@@ -62,7 +62,7 @@ class _CollectionsTabViewState extends State<CollectionsTabView> {
           GameToast.show(
             context,
             icon: PhosphorIconsFill.checkCircle,
-            message: '「${item.title}」下载就绪，可离线畅玩',
+            message: t.collections.toastReady(title: item.title),
             type: GameToastType.success,
           );
         } else {
@@ -72,7 +72,7 @@ class _CollectionsTabViewState extends State<CollectionsTabView> {
           GameToast.show(
             context,
             icon: PhosphorIconsRegular.warning,
-            message: '下载失败，请检查网络后重试',
+            message: t.collections.toastFailed,
             type: GameToastType.error,
           );
         }
@@ -87,7 +87,7 @@ class _CollectionsTabViewState extends State<CollectionsTabView> {
         GameToast.show(
           context,
           icon: PhosphorIconsRegular.warning,
-          message: '下载异常: $e',
+          message: t.collections.toastError(error: '$e'),
           type: GameToastType.error,
         );
       }
@@ -317,15 +317,17 @@ class _CollectionsTabViewState extends State<CollectionsTabView> {
                 GameToast.show(
                   context,
                   icon: PhosphorIconsRegular.downloadSimple,
-                  message:
-                      '「${col.title}」正在下载中 (${(downloadProgress * 100).toInt()}%)，请稍候...',
+                  message: t.collections.downloading(
+                    title: col.title,
+                    percent: (downloadProgress * 100).toInt(),
+                  ),
                   type: GameToastType.info,
                 );
               } else {
                 GameToast.show(
                   context,
                   icon: PhosphorIconsRegular.downloadSimple,
-                  message: '开始下载「${col.title}」...',
+                  message: t.collections.startDownload(title: col.title),
                   type: GameToastType.info,
                 );
                 _startDownload(col);
@@ -415,7 +417,7 @@ class _CollectionsTabViewState extends State<CollectionsTabView> {
                       if (effectiveCount > 0) ...[
                         const SizedBox(width: 4),
                         Text(
-                          '$effectiveCount关',
+                          t.collections.levelCount(count: effectiveCount),
                           style: TextStyle(
                             color: Colors.white.withValues(alpha: 0.85),
                             fontSize: 11,

@@ -434,15 +434,18 @@ class _MyCenterTabViewState extends State<MyCenterTabView> {
               pinned: true,
               delegate: _PinnedTabBarDelegate(
                 tabBar: TabBar(
+                  isScrollable: true,
+                  tabAlignment: TabAlignment.center,
+                  labelPadding: const EdgeInsets.symmetric(horizontal: 10),
                   labelColor: palette.brand,
                   unselectedLabelColor: palette.secondaryText,
                   indicatorColor: palette.brand,
                   indicatorWeight: 2.5,
                   labelStyle: styles.bodyBold.copyWith(
-                    fontSize: 14,
+                    fontSize: 13,
                     fontWeight: FontWeight.bold,
                   ),
-                  unselectedLabelStyle: styles.body.copyWith(fontSize: 14),
+                  unselectedLabelStyle: styles.body.copyWith(fontSize: 13),
                   tabs: [
                     Tab(
                       text: tr.myCenter.tabs.inProgress(
@@ -668,24 +671,28 @@ class _MyCenterTabViewState extends State<MyCenterTabView> {
               children: [
                 Icon(icon, size: 20, color: iconColor),
                 const SizedBox(height: 3),
-                Text(
-                  title,
-                  style: styles.bodyBold.copyWith(
-                    fontSize: 12,
-                    color: isPrimary ? palette.brand : palette.primaryText,
+                FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text(
+                    title,
+                    style: styles.bodyBold.copyWith(
+                      fontSize: 12,
+                      color: isPrimary ? palette.brand : palette.primaryText,
+                    ),
+                    maxLines: 1,
                   ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
                 ),
                 const SizedBox(height: 1),
-                Text(
-                  subtitle,
-                  style: styles.caption.copyWith(
-                    fontSize: 10,
-                    color: palette.secondaryText,
+                FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text(
+                    subtitle,
+                    style: styles.caption.copyWith(
+                      fontSize: 10,
+                      color: palette.secondaryText,
+                    ),
+                    maxLines: 1,
                   ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
                 ),
               ],
             ),

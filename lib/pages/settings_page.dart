@@ -223,34 +223,13 @@ class _SettingsPageState extends State<SettingsPage> {
                         : t.settings.scatterModeDescTray,
                     style: styles.caption,
                   ),
-                ),
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-                  child: Align(
-                    alignment: Alignment.centerLeft,
-                    child: SegmentedButton<String>(
-                      showSelectedIcon: false,
-                      segments: [
-                        ButtonSegment(
-                          value: 'tray',
-                          label: Text(
-                            t.settings.scatterTray,
-                            style: const TextStyle(fontSize: 12),
-                          ),
-                        ),
-                        ButtonSegment(
-                          value: 'tabletop',
-                          label: Text(
-                            t.settings.scatterTabletop,
-                            style: const TextStyle(fontSize: 12),
-                          ),
-                        ),
-                      ],
-                      selected: {_repo.pieceScatterMode},
-                      onSelectionChanged: (set) {
-                        setState(() => _repo.pieceScatterMode = set.first);
-                      },
-                    ),
+                  trailing: _CompactModeToggle(
+                    value: _repo.pieceScatterMode,
+                    onChanged: (mode) =>
+                        setState(() => _repo.pieceScatterMode = mode),
+                    trayLabel: t.settings.scatterTray,
+                    tabletopLabel: t.settings.scatterTabletop,
+                    palette: palette,
                   ),
                 ),
               ], palette),
@@ -306,51 +285,36 @@ class _SettingsPageState extends State<SettingsPage> {
                     t.settings.languageDesc,
                     style: styles.caption,
                   ),
-                ),
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-                  child: AnimatedBuilder(
+                  trailing: AnimatedBuilder(
                     animation: LocaleService.instance,
                     builder: (context, _) {
                       final lang = LocaleService.instance.language;
-                      return FittedBox(
-                        fit: BoxFit.scaleDown,
-                        alignment: Alignment.centerLeft,
-                        child: SegmentedButton<AppLanguage>(
-                          showSelectedIcon: false,
-                          segments: [
-                            ButtonSegment(
-                              value: AppLanguage.system,
-                              label: Text(
-                                t.settings.languageSystem,
-                                style: const TextStyle(fontSize: 12),
-                              ),
+                      final name = switch (lang) {
+                        AppLanguage.system => t.settings.languageSystem,
+                        AppLanguage.zh => t.settings.languageZh,
+                        AppLanguage.en => t.settings.languageEn,
+                      };
+                      return Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            name,
+                            style: styles.captionBold.copyWith(
+                              color: palette.brand,
                             ),
-                            ButtonSegment(
-                              value: AppLanguage.zh,
-                              label: Text(
-                                t.settings.languageZh,
-                                style: const TextStyle(fontSize: 12),
-                              ),
-                            ),
-                            ButtonSegment(
-                              value: AppLanguage.en,
-                              label: Text(
-                                t.settings.languageEn,
-                                style: const TextStyle(fontSize: 12),
-                              ),
-                            ),
-                          ],
-                          selected: {lang},
-                          onSelectionChanged: (set) async {
-                            final selected = set.first;
-                            await LocaleService.instance.setLanguage(selected);
-                            if (context.mounted) setState(() {});
-                          },
-                        ),
+                          ),
+                          const SizedBox(width: 4),
+                          Icon(
+                            PhosphorIconsBold.caretRight,
+                            size: 16,
+                            color: palette.secondaryText,
+                          ),
+                        ],
                       );
                     },
                   ),
+                  onTap: () =>
+                      _showLanguageSelectionSheet(context, palette, styles),
                 ),
               ], palette),
 
@@ -653,6 +617,247 @@ class _SettingsPageState extends State<SettingsPage> {
           Text(
             value,
             style: styles.captionBold.copyWith(color: color, fontSize: 12),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showLanguageSelectionSheet(
+    BuildContext context,
+    AppPalette palette,
+    AppTextStyles styles,
+  ) {
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: palette.surfaceContainer,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (sheetContext) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 16),
+            child: AnimatedBuilder(
+              animation: LocaleService.instance,
+              builder: (ctx, _) {
+                final current = LocaleService.instance.language;
+                return Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      width: 36,
+                      height: 4,
+                      margin: const EdgeInsets.only(bottom: 16),
+                      decoration: BoxDecoration(
+                        color: palette.divider,
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 20,
+                        vertical: 4,
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(
+                            PhosphorIconsBold.translate,
+                            color: palette.brand,
+                            size: 20,
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            t.settings.languageTitle,
+                            style: styles.h3.copyWith(
+                              color: palette.primaryText,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    _buildLanguageOption(
+                      title: t.settings.languageSystem,
+                      icon: PhosphorIconsRegular.globe,
+                      selected: current == AppLanguage.system,
+                      palette: palette,
+                      styles: styles,
+                      onTap: () async {
+                        await LocaleService.instance.setLanguage(
+                          AppLanguage.system,
+                        );
+                        if (sheetContext.mounted) Navigator.pop(sheetContext);
+                        if (mounted) setState(() {});
+                      },
+                    ),
+                    _buildLanguageOption(
+                      title: t.settings.languageZh,
+                      icon: PhosphorIconsRegular.textT,
+                      selected: current == AppLanguage.zh,
+                      palette: palette,
+                      styles: styles,
+                      onTap: () async {
+                        await LocaleService.instance.setLanguage(
+                          AppLanguage.zh,
+                        );
+                        if (sheetContext.mounted) Navigator.pop(sheetContext);
+                        if (mounted) setState(() {});
+                      },
+                    ),
+                    _buildLanguageOption(
+                      title: t.settings.languageEn,
+                      icon: PhosphorIconsRegular.textT,
+                      selected: current == AppLanguage.en,
+                      palette: palette,
+                      styles: styles,
+                      onTap: () async {
+                        await LocaleService.instance.setLanguage(
+                          AppLanguage.en,
+                        );
+                        if (sheetContext.mounted) Navigator.pop(sheetContext);
+                        if (mounted) setState(() {});
+                      },
+                    ),
+                  ],
+                );
+              },
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildLanguageOption({
+    required String title,
+    required IconData icon,
+    required bool selected,
+    required AppPalette palette,
+    required AppTextStyles styles,
+    required VoidCallback onTap,
+  }) {
+    return ListTile(
+      leading: Icon(
+        icon,
+        color: selected ? palette.brand : palette.secondaryText,
+      ),
+      title: Text(
+        title,
+        style: selected
+            ? styles.bodyBold.copyWith(color: palette.brand)
+            : styles.body.copyWith(color: palette.primaryText),
+      ),
+      trailing: selected
+          ? Icon(PhosphorIconsBold.check, color: palette.brand, size: 20)
+          : null,
+      onTap: onTap,
+    );
+  }
+}
+
+class _CompactModeToggle extends StatelessWidget {
+  const _CompactModeToggle({
+    required this.value,
+    required this.onChanged,
+    required this.trayLabel,
+    required this.tabletopLabel,
+    required this.palette,
+  });
+
+  final String value;
+  final ValueChanged<String> onChanged;
+  final String trayLabel;
+  final String tabletopLabel;
+  final AppPalette palette;
+
+  @override
+  Widget build(BuildContext context) {
+    final isTabletop = value == 'tabletop';
+    return Container(
+      width: 128,
+      height: 32,
+      padding: const EdgeInsets.all(2),
+      decoration: BoxDecoration(
+        color: palette.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: palette.divider, width: 1),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: () => onChanged('tray'),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 200),
+                curve: Curves.easeOut,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: !isTabletop ? palette.brand : Colors.transparent,
+                  borderRadius: BorderRadius.circular(14),
+                  boxShadow: !isTabletop
+                      ? [
+                          BoxShadow(
+                            color: palette.brand.withValues(alpha: 0.3),
+                            blurRadius: 4,
+                            offset: const Offset(0, 1),
+                          ),
+                        ]
+                      : null,
+                ),
+                child: Text(
+                  trayLabel,
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: !isTabletop
+                        ? FontWeight.bold
+                        : FontWeight.normal,
+                    color: !isTabletop
+                        ? palette.surface
+                        : palette.secondaryText,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ),
+          ),
+          Expanded(
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: () => onChanged('tabletop'),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 200),
+                curve: Curves.easeOut,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: isTabletop ? palette.brand : Colors.transparent,
+                  borderRadius: BorderRadius.circular(14),
+                  boxShadow: isTabletop
+                      ? [
+                          BoxShadow(
+                            color: palette.brand.withValues(alpha: 0.3),
+                            blurRadius: 4,
+                            offset: const Offset(0, 1),
+                          ),
+                        ]
+                      : null,
+                ),
+                child: Text(
+                  tabletopLabel,
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: isTabletop
+                        ? FontWeight.bold
+                        : FontWeight.normal,
+                    color: isTabletop ? palette.surface : palette.secondaryText,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ),
           ),
         ],
       ),

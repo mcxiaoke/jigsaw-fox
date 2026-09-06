@@ -142,9 +142,9 @@ class _Translations$settings$zh extends Translations$settings$en {
 	@override String get hapticDesc => '拼图吸附与操作时的触觉微震';
 	@override String get gridPreviewTitle => '选关切图网格预览';
 	@override String get gridPreviewDesc => '在难度选择预览图上叠加异形切线';
-	@override String get scatterModeTitle => '碎片初始排布模式';
-	@override String get scatterModeDescTray => '底部托盘收纳（默认/推荐手机）';
-	@override String get scatterModeDescTabletop => '桌面环形散落（推荐宽屏/平板）';
+	@override String get scatterModeTitle => '棋盘模式';
+	@override String get scatterModeDescTray => '散落碎片收纳在底部托盘';
+	@override String get scatterModeDescTabletop => '散落碎片分布在棋盘周围';
 	@override String get scatterTray => '托盘';
 	@override String get scatterTabletop => '桌面';
 	@override String get appearanceBgTitle => '默认壁纸背景';
@@ -603,7 +603,9 @@ class _Translations$victory$zh extends Translations$victory$en {
 
 	// Translations
 	@override String get title => '拼图完成！';
-	@override String stars({required Object count}) => '${count} 星';
+	@override String stars({required num count}) => (_root.$meta.cardinalResolver ?? PluralResolvers.cardinal('zh'))(count,
+		other: '${count} 星',
+	);
 	@override String time({required Object time}) => '用时：${time}';
 	@override String pieces({required Object count}) => '${count} 块';
 	@override String coinsReward({required Object coins}) => '+${coins} 金币';
@@ -680,11 +682,11 @@ class _Translations$achievementsPage$zh extends Translations$achievementsPage$en
 	@override String get stats => '数据统计看板';
 	@override String get groupClears => '通关与星级表现';
 	@override String get groupAssets => '游玩历程与资产';
-	@override String get totalStars => '关卡累积星星';
-	@override String get totalSolved => '已通关图数';
-	@override String get totalSnaps => '已拼碎片';
-	@override String get totalTime => '总游玩时长';
-	@override String get threeStarCount => '3星拼图数';
+	@override String get totalStars => '总星数';
+	@override String get totalSolved => '已通关';
+	@override String get totalSnaps => '吸附碎片';
+	@override String get totalTime => '游玩时长';
+	@override String get threeStarCount => '满星通关';
 	@override String get coinsOwned => '拥有金币';
 	@override String get wall => '成就勋章墙';
 	@override String wallCount({required Object count}) => '共 ${count} 项成就';
@@ -1231,9 +1233,9 @@ extension on TranslationsZh {
 			'settings.hapticDesc' => '拼图吸附与操作时的触觉微震',
 			'settings.gridPreviewTitle' => '选关切图网格预览',
 			'settings.gridPreviewDesc' => '在难度选择预览图上叠加异形切线',
-			'settings.scatterModeTitle' => '碎片初始排布模式',
-			'settings.scatterModeDescTray' => '底部托盘收纳（默认/推荐手机）',
-			'settings.scatterModeDescTabletop' => '桌面环形散落（推荐宽屏/平板）',
+			'settings.scatterModeTitle' => '棋盘模式',
+			'settings.scatterModeDescTray' => '散落碎片收纳在底部托盘',
+			'settings.scatterModeDescTabletop' => '散落碎片分布在棋盘周围',
 			'settings.scatterTray' => '托盘',
 			'settings.scatterTabletop' => '桌面',
 			'settings.appearanceBgTitle' => '默认壁纸背景',
@@ -1543,7 +1545,7 @@ extension on TranslationsZh {
 			'game.zoomReset' => '重置',
 			'game.progress' => ({required Object percent}) => '${percent}%',
 			'victory.title' => '拼图完成！',
-			'victory.stars' => ({required Object count}) => '${count} 星',
+			'victory.stars' => ({required num count}) => (_root.$meta.cardinalResolver ?? PluralResolvers.cardinal('zh'))(count, other: '${count} 星', ), 
 			'victory.time' => ({required Object time}) => '用时：${time}',
 			'victory.pieces' => ({required Object count}) => '${count} 块',
 			'victory.coinsReward' => ({required Object coins}) => '+${coins} 金币',
@@ -1593,11 +1595,11 @@ extension on TranslationsZh {
 			'achievementsPage.stats' => '数据统计看板',
 			'achievementsPage.groupClears' => '通关与星级表现',
 			'achievementsPage.groupAssets' => '游玩历程与资产',
-			'achievementsPage.totalStars' => '关卡累积星星',
-			'achievementsPage.totalSolved' => '已通关图数',
-			'achievementsPage.totalSnaps' => '已拼碎片',
-			'achievementsPage.totalTime' => '总游玩时长',
-			'achievementsPage.threeStarCount' => '3星拼图数',
+			'achievementsPage.totalStars' => '总星数',
+			'achievementsPage.totalSolved' => '已通关',
+			'achievementsPage.totalSnaps' => '吸附碎片',
+			'achievementsPage.totalTime' => '游玩时长',
+			'achievementsPage.threeStarCount' => '满星通关',
 			'achievementsPage.coinsOwned' => '拥有金币',
 			'achievementsPage.wall' => '成就勋章墙',
 			'achievementsPage.wallCount' => ({required Object count}) => '共 ${count} 项成就',

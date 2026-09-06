@@ -43,9 +43,9 @@
     "hapticDesc": "Subtle vibration on snap and interactions",
     "gridPreviewTitle": "Grid Preview on Difficulty",
     "gridPreviewDesc": "Show jigsaw cut lines on difficulty preview",
-    "scatterModeTitle": "Initial Scatter Mode",
-    "scatterModeDescTray": "Tray (default, phone-friendly)",
-    "scatterModeDescTabletop": "Tabletop scatter (wide screens)",
+    "scatterModeTitle": "Scatter Mode",
+    "scatterModeDescTray": "Pieces kept in bottom tray",
+    "scatterModeDescTabletop": "Pieces scattered around board",
     "scatterTray": "Tray",
     "scatterTabletop": "Tabletop",
     "appearanceBgTitle": "Background",
@@ -449,7 +449,10 @@
   },
   "victory": {
     "title": "Puzzle Complete!",
-    "stars": "{count} Stars",
+    "stars(plural, param=count)": {
+      "one": "1 Star",
+      "other": "{count} Stars"
+    },
     "time": "Time: {time}",
     "pieces": "{count} pieces",
     "coinsReward": "+{coins} coins",
@@ -506,10 +509,10 @@
     "groupClears": "Clears & Stars",
     "groupAssets": "Journey & Assets",
     "totalStars": "Total Stars",
-    "totalSolved": "Puzzles Solved",
-    "totalSnaps": "Pieces Snapped",
-    "totalTime": "Total Play Time",
-    "threeStarCount": "3-Star Puzzles",
+    "totalSolved": "Solved",
+    "totalSnaps": "Snaps",
+    "totalTime": "Play Time",
+    "threeStarCount": "3-Star Clears",
     "coinsOwned": "Coins",
     "wall": "Achievement Wall",
     "wallCount": "{count} achievements total",
@@ -521,9 +524,9 @@
   },
   "myCenter": {
     "tabs": {
-      "inProgress": "In Progress ({count})",
-      "favorites": "Favorites ({count})",
-      "completed": "Completed ({count})",
+      "inProgress": "Active ({count})",
+      "favorites": "Saved ({count})",
+      "completed": "Done ({count})",
       "custom": "Custom ({count})"
     },
     "topActions": {

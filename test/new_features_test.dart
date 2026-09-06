@@ -158,10 +158,10 @@ void main() {
 
         expect(find.text('成就与统计'), findsOneWidget);
         expect(find.text('数据统计看板'), findsOneWidget);
-        expect(find.text('关卡累积星星'), findsOneWidget);
-        expect(find.text('已通关图数'), findsOneWidget);
-        expect(find.text('已拼碎片'), findsOneWidget);
-        expect(find.text('总游玩时长'), findsOneWidget);
+        expect(find.text('总星数'), findsOneWidget);
+        expect(find.text('已通关'), findsOneWidget);
+        expect(find.text('吸附碎片'), findsOneWidget);
+        expect(find.text('游玩时长'), findsOneWidget);
         expect(find.text('成就勋章墙'), findsOneWidget);
         expect(find.text('初露锋芒'), findsOneWidget);
         expect(find.text('熟能生巧'), findsOneWidget);
@@ -183,7 +183,7 @@ void main() {
       expect(find.text('拼图吸附音效'), findsOneWidget);
       expect(find.text('触感震动反馈'), findsOneWidget);
       expect(find.text('选关切图网格预览'), findsOneWidget);
-      expect(find.text('碎片初始排布模式'), findsOneWidget);
+      expect(find.text('棋盘模式'), findsOneWidget);
 
       await tester.scrollUntilVisible(find.text('玩法技巧与操作指引'), 200);
       expect(find.text('玩法与帮助'), findsOneWidget);
