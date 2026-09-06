@@ -7,6 +7,7 @@ import 'package:flutter/services.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:phosphoricons_flutter/phosphoricons_flutter.dart';
 
+import '../l10n/gen/strings.g.dart';
 import '../services/achievement_service.dart';
 import '../services/app_logger.dart';
 import '../services/sound_service.dart';
@@ -22,7 +23,7 @@ import 'game_toast.dart';
 /// - Center: completed image, 4px brand border, scale-in (0.8→1.0, elasticOut, 500ms)
 /// - Stars: 3 stars light up sequentially (400ms interval)
 /// - Stats: time, moves/pieces, reward with number roll animation (0→target, 800ms)
-/// - Buttons: "保存壁纸"(ghost), "分享成绩"(brand), "下一关"(brand, most prominent)
+/// - Buttons: "Save Wallpaper"(ghost), "Share"(brand), "Next Level"(brand, most prominent)
 class VictoryDialog extends StatefulWidget {
   const VictoryDialog({
     super.key,
@@ -48,19 +49,19 @@ class VictoryDialog extends StatefulWidget {
   final int rewardCoins;
   final List<AchievementDefinition> newAchievements;
 
-  /// Called when user taps "下一关". If null, primary button shows "返回列表".
+  /// Called when user taps "Next Level". If null, primary button shows "Exit".
   final VoidCallback? onNextLevel;
 
-  /// Called when user taps "分享成绩".
+  /// Called when user taps "Share".
   final VoidCallback? onShare;
 
-  /// Called when user taps "保存壁纸".
+  /// Called when user taps "Save Wallpaper".
   final VoidCallback? onSaveWallpaper;
 
   /// Called when user wants to close dialog and view the completed puzzle in board.
   final VoidCallback? onViewPuzzle;
 
-  /// Called when user taps "返回列表" (when onNextLevel is null).
+  /// Called when user taps "Exit" (when onNextLevel is null).
   final VoidCallback? onExit;
 
   static Future<void> show({
@@ -220,7 +221,7 @@ class _VictoryDialogState extends State<VictoryDialog>
       if (mounted) {
         GameToast.show(
           context,
-          message: '壁纸已保存到本地',
+          message: t.victory.toastWallpaperSaved,
           type: GameToastType.success,
           icon: PhosphorIconsFill.checkCircle,
         );
@@ -228,7 +229,11 @@ class _VictoryDialogState extends State<VictoryDialog>
     } catch (e, st) {
       AppLogger.ui.warning('VictoryDialog save wallpaper failed', e, st);
       if (mounted) {
-        GameToast.show(context, message: '保存失败: $e', type: GameToastType.error);
+        GameToast.show(
+          context,
+          message: t.victory.toastSaveWallpaperFailed(error: '$e'),
+          type: GameToastType.error,
+        );
       }
     }
   }
@@ -288,7 +293,7 @@ class _VictoryDialogState extends State<VictoryDialog>
                       size: 20,
                       color: palette.primaryText,
                     ),
-                    tooltip: '关闭弹窗 (Esc)',
+                    tooltip: t.victory.btnClose,
                     onPressed: () {
                       Navigator.of(context).pop();
                       if (widget.onViewPuzzle != null) {
@@ -302,19 +307,37 @@ class _VictoryDialogState extends State<VictoryDialog>
 
             // Main content
             Center(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 24),
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 24,
+                  vertical: 20,
+                ),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    // Title
+                    // Title - uses perfect/great/title based on stars
                     Text(
-                      '拼图完成！',
+                      widget.stars >= 3
+                          ? t.victory.perfect
+                          : widget.stars == 2
+                          ? t.victory.great
+                          : t.victory.title,
                       style: styles.h1.copyWith(
                         fontSize: 24,
                         color: palette.brand,
                       ),
                     ),
+                    // Subtitle shows full victory title when perfect/great is shown
+                    if (widget.stars >= 2) ...[
+                      const SizedBox(height: 4),
+                      Text(
+                        t.victory.title,
+                        style: styles.caption.copyWith(
+                          fontSize: 12,
+                          color: palette.secondaryText,
+                        ),
+                      ),
+                    ],
                     const SizedBox(height: 16),
 
                     // Completed image with brand border
@@ -378,6 +401,28 @@ class _VictoryDialogState extends State<VictoryDialog>
                         );
                       }),
                     ),
+                    const SizedBox(height: 6),
+                    // Stars count text
+                    Text(
+                      t.victory.stars(count: widget.stars),
+                      style: styles.caption.copyWith(
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                        color: palette.gold,
+                      ),
+                    ),
+                    // Perfect / Great badge below stars count
+                    if (widget.stars >= 2) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        widget.stars >= 3 ? t.victory.perfect : t.victory.great,
+                        style: styles.caption.copyWith(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                          color: palette.brand,
+                        ),
+                      ),
+                    ],
                     const SizedBox(height: 18),
 
                     // Stats row
@@ -396,8 +441,10 @@ class _VictoryDialogState extends State<VictoryDialog>
                         children: [
                           _buildStat(
                             icon: PhosphorIconsRegular.clock,
-                            label: '用时',
-                            value: _formatTime(_displayedTime),
+                            label: '',
+                            value: t.victory.time(
+                              time: _formatTime(_displayedTime),
+                            ),
                             palette: palette,
                             styles: styles,
                           ),
@@ -408,10 +455,10 @@ class _VictoryDialogState extends State<VictoryDialog>
                           ),
                           _buildStat(
                             icon: PhosphorIconsRegular.puzzlePiece,
-                            label: '规格',
+                            label: '',
                             value: widget.pieceCount != null
-                                ? '${widget.pieceCount} 块'
-                                : '$_displayedMoves 步',
+                                ? t.victory.pieces(count: widget.pieceCount!)
+                                : t.victory.pieces(count: _displayedMoves),
                             palette: palette,
                             styles: styles,
                           ),
@@ -423,8 +470,10 @@ class _VictoryDialogState extends State<VictoryDialog>
                             ),
                             _buildStat(
                               icon: PhosphorIconsFill.coins,
-                              label: '奖励',
-                              value: '+$_displayedCoins',
+                              label: '',
+                              value: t.victory.coinsReward(
+                                coins: _displayedCoins,
+                              ),
                               color: palette.gold,
                               palette: palette,
                               styles: styles,
@@ -460,7 +509,7 @@ class _VictoryDialogState extends State<VictoryDialog>
                             const SizedBox(width: 8),
                             Flexible(
                               child: Text(
-                                '解锁成就: ${widget.newAchievements.map((a) => a.title).join("、")}',
+                                '${t.victory.newAchievements(count: widget.newAchievements.length)}: ${widget.newAchievements.map((a) => a.title).join(", ")}',
                                 style: styles.caption.copyWith(
                                   fontWeight: FontWeight.bold,
                                   color: palette.brand,
@@ -475,7 +524,7 @@ class _VictoryDialogState extends State<VictoryDialog>
                     ],
                     const SizedBox(height: 20),
 
-                    // 1. 核心行动栏（Primary Action Buttons）
+                    // 1. Primary Action Buttons
                     Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
@@ -492,7 +541,7 @@ class _VictoryDialogState extends State<VictoryDialog>
                                 PhosphorIconsBold.arrowLeft,
                                 size: 16,
                               ),
-                              label: const Text('返回列表'),
+                              label: Text(t.victory.btnExit),
                               style: OutlinedButton.styleFrom(
                                 foregroundColor: palette.primaryText,
                                 side: BorderSide(
@@ -519,7 +568,7 @@ class _VictoryDialogState extends State<VictoryDialog>
                                 PhosphorIconsFill.play,
                                 size: 16,
                               ),
-                              label: const Text('下一关'),
+                              label: Text(t.victory.btnNext),
                               style: FilledButton.styleFrom(
                                 backgroundColor: palette.brand,
                                 foregroundColor: palette.surface,
@@ -546,7 +595,7 @@ class _VictoryDialogState extends State<VictoryDialog>
                                 PhosphorIconsBold.check,
                                 size: 16,
                               ),
-                              label: const Text('返回列表'),
+                              label: Text(t.victory.btnExit),
                               style: FilledButton.styleFrom(
                                 backgroundColor: palette.brand,
                                 foregroundColor: palette.surface,
@@ -565,7 +614,7 @@ class _VictoryDialogState extends State<VictoryDialog>
                     ),
                     const SizedBox(height: 10),
 
-                    // 2. 辅助功能栏（Secondary Utility Buttons）
+                    // 2. Secondary Utility Buttons
                     Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
@@ -577,7 +626,7 @@ class _VictoryDialogState extends State<VictoryDialog>
                               PhosphorIconsRegular.image,
                               size: 15,
                             ),
-                            label: const Text('保存壁纸'),
+                            label: Text(t.victory.btnSaveWallpaper),
                             style: OutlinedButton.styleFrom(
                               foregroundColor: palette.secondaryText,
                               side: BorderSide(
@@ -599,7 +648,7 @@ class _VictoryDialogState extends State<VictoryDialog>
                                 PhosphorIconsBold.shareNetwork,
                                 size: 15,
                               ),
-                              label: const Text('分享成绩'),
+                              label: Text(t.victory.btnShare),
                               style: OutlinedButton.styleFrom(
                                 foregroundColor: palette.secondaryText,
                                 side: BorderSide(
@@ -619,7 +668,7 @@ class _VictoryDialogState extends State<VictoryDialog>
                     ),
                     const SizedBox(height: 4),
 
-                    // 3. 留在棋盘查看大图
+                    // 3. View puzzle in board
                     TextButton.icon(
                       onPressed: () {
                         Navigator.of(context).pop();
@@ -629,7 +678,9 @@ class _VictoryDialogState extends State<VictoryDialog>
                       },
                       icon: const Icon(PhosphorIconsBold.eye, size: 15),
                       label: Text(
-                        widget.onViewPuzzle != null ? '留在棋盘欣赏完整拼图' : '返回',
+                        widget.onViewPuzzle != null
+                            ? t.victory.btnView
+                            : t.victory.btnExit,
                       ),
                       style: TextButton.styleFrom(
                         foregroundColor: palette.secondaryText,
@@ -659,9 +710,15 @@ class _VictoryDialogState extends State<VictoryDialog>
       children: [
         Icon(icon, size: 18, color: c),
         const SizedBox(height: 4),
-        Text(value, style: styles.monoSmall.copyWith(fontSize: 18, color: c)),
-        const SizedBox(height: 2),
-        Text(label, style: styles.caption.copyWith(fontSize: 11)),
+        Text(
+          value,
+          style: styles.monoSmall.copyWith(fontSize: 18, color: c),
+          textAlign: TextAlign.center,
+        ),
+        if (label.isNotEmpty) ...[
+          const SizedBox(height: 2),
+          Text(label, style: styles.caption.copyWith(fontSize: 11)),
+        ],
       ],
     );
   }

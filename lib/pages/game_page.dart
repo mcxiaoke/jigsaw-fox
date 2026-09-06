@@ -19,6 +19,7 @@ import '../services/achievement_service.dart';
 import '../services/app_logger.dart';
 import '../services/economy_service.dart';
 import '../services/sound_service.dart';
+import '../l10n/gen/strings.g.dart';
 import '../widgets/choose_background_sheet.dart';
 import '../widgets/game_toast.dart';
 import '../widgets/share_card_generator.dart';
@@ -221,7 +222,11 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
         // 坏图容错：避免永久转圈，提示并返回
         GameToast.show(
           context,
-          message: '图片解码失败，请重试',
+          message: LocaleSettings
+              .instance
+              .currentTranslations
+              .game
+              .imageDecodeFailed,
           type: GameToastType.error,
         );
       }
@@ -248,7 +253,8 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
           effectiveDiff = PuzzleDifficulty.presets.firstWhere(
             (d) => d.rows == r && d.cols == c,
             orElse: () => PuzzleDifficulty(
-              label: '$c × $r (${r * c} 块)',
+              label: LocaleSettings.instance.currentTranslations.difficulty
+                  .pieceCount(cols: c, rows: r, count: r * c),
               rows: r,
               cols: c,
             ),
@@ -647,8 +653,11 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
         GameToast.show(
           context,
           icon: PhosphorIconsRegular.coins,
-          message:
-              '金币不足（当前难度提示需 $price 金币，当前拥有 ${EconomyService.instance.coins}）',
+          message: LocaleSettings.instance.currentTranslations.game
+              .hintNotEnoughCoins(
+                price: price,
+                coins: EconomyService.instance.coins,
+              ),
           type: GameToastType.warning,
         );
       }
@@ -662,15 +671,16 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
   }
 
   String get _pageTitle {
+    final tr = LocaleSettings.instance.currentTranslations;
     if (widget.packTitle != null && widget.packTitle!.isNotEmpty) {
       return widget.packTitle!;
     }
     if (widget.levelIndex != null) {
-      return '第 ${widget.levelIndex} 关';
+      return tr.game.titleLevel(index: widget.levelIndex!);
     } else if (widget.dailyDateStr != null) {
-      return '${widget.dailyDateStr} 每日挑战';
+      return tr.game.titleDaily(date: widget.dailyDateStr!);
     } else {
-      return '自制拼图';
+      return tr.game.titleCustom;
     }
   }
 
@@ -899,6 +909,7 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
   AppBar _buildAppBar() {
     final ghostOpacity = _game?.boardGhostOpacity ?? 0.0;
     final isBorderActive = _game?.isBorderFilterActive ?? false;
+    final tr = LocaleSettings.instance.currentTranslations;
     return AppBar(
       backgroundColor: _headerBarColor,
       elevation: 2,
@@ -908,7 +919,7 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
       automaticallyImplyLeading: false,
       leading: IconButton(
         icon: Icon(PhosphorIconsBold.arrowLeft, color: _headerIconColor),
-        tooltip: '返回',
+        tooltip: tr.game.tooltipBack,
         onPressed: () async {
           if (_isPopping) return;
           _isPopping = true;
@@ -939,7 +950,9 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
             size: 21,
             color: isBorderActive ? const Color(0xFF2E7D32) : _headerIconColor,
           ),
-          tooltip: isBorderActive ? '显示全部碎片' : '仅显示边缘碎片',
+          tooltip: isBorderActive
+              ? tr.game.tooltipEdgesAll
+              : tr.game.tooltipEdges,
           onPressed: () {
             _game?.toggleBorderFilter();
             final active = _game?.isBorderFilterActive ?? false;
@@ -957,7 +970,7 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
             size: 21,
             color: Colors.amber,
           ),
-          tooltip: '智能提示',
+          tooltip: tr.game.tooltipHint,
           onPressed: _onHintPressed,
         ),
         // 3. 显示遮罩（底图透视 0%/20%/45%）
@@ -1002,7 +1015,9 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
                 ),
             ],
           ),
-          tooltip: '底图透视参考 (0%/20%/45%)',
+          tooltip: ghostOpacity > 0.01
+              ? tr.game.tooltipGhost(opacity: (ghostOpacity * 100).toInt())
+              : tr.game.tooltipGhostOff,
           onPressed: () {
             _game?.toggleGhostOpacity();
             SoundService.I.play(Sfx.preview);
@@ -1021,7 +1036,7 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
                 ? const Color(0xFF0288D1)
                 : _headerIconColor,
           ),
-          tooltip: '查看原图',
+          tooltip: tr.game.tooltipPreview,
           onPressed: () {
             SoundService.I.play(Sfx.preview);
             setState(() {
@@ -1040,7 +1055,7 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
             size: 21,
             color: _headerIconColor,
           ),
-          tooltip: '一键整理托盘',
+          tooltip: tr.game.tooltipOrganize,
           onPressed: () {
             _game?.organizeTray();
             SoundService.I.play(Sfx.tap);
@@ -1056,7 +1071,7 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
             size: 21,
             color: Color(0xFF2E7D32),
           ),
-          tooltip: '更换壁纸背景',
+          tooltip: tr.game.tooltipChangeBg,
           onPressed: _openBackgroundSelector,
         ),
         const SizedBox(width: 4),
@@ -1076,6 +1091,7 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
 
   @override
   Widget build(BuildContext context) {
+    final tr = LocaleSettings.instance.currentTranslations;
     return PopScope(
       canPop: false,
       onPopInvokedWithResult: (didPop, result) async {
@@ -1209,9 +1225,9 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
                               color: Colors.black54,
                               borderRadius: BorderRadius.circular(20),
                             ),
-                            child: const Text(
-                              '点击任意处返回拼图',
-                              style: TextStyle(
+                            child: Text(
+                              tr.game.tapToReturn,
+                              style: const TextStyle(
                                 color: Colors.white,
                                 fontSize: 13,
                                 fontWeight: FontWeight.w500,
@@ -1265,9 +1281,9 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
                                 ),
                               ),
                               const SizedBox(width: 6),
-                              const Text(
-                                '重置',
-                                style: TextStyle(
+                              Text(
+                                tr.game.zoomReset,
+                                style: const TextStyle(
                                   color: Colors.amberAccent,
                                   fontSize: 12,
                                   fontWeight: FontWeight.bold,

@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:phosphoricons_flutter/phosphoricons_flutter.dart';
 
+import '../l10n/gen/strings.g.dart';
 import '../logic/models/puzzle_state.dart';
 import '../theme/app_palette.dart';
 import '../theme/app_text_styles.dart';
@@ -149,7 +150,10 @@ class ContinueDialog extends StatelessWidget {
                       Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text('已拼进度', style: styles.caption),
+                          Text(
+                            t.continueDialog.progressLabel,
+                            style: styles.caption,
+                          ),
                           const SizedBox(height: 2),
                           Text(
                             '$progressPercent%  $progressPercent/100',
@@ -163,7 +167,10 @@ class ContinueDialog extends StatelessWidget {
                       Column(
                         crossAxisAlignment: CrossAxisAlignment.end,
                         children: [
-                          Text('已用时间', style: styles.caption),
+                          Text(
+                            t.continueDialog.timeLabel,
+                            style: styles.caption,
+                          ),
                           const SizedBox(height: 2),
                           Text(
                             _timeString(elapsed),
@@ -188,11 +195,18 @@ class ContinueDialog extends StatelessWidget {
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Text(
-                        '规格 $difficultyKey  ${total > 0 ? "($total块)" : ""}',
+                        total > 0
+                            ? t.continueDialog.specPieces(
+                                key: difficultyKey,
+                                count: total,
+                              )
+                            : t.continueDialog.spec(key: difficultyKey),
                         style: styles.caption,
                       ),
                       Text(
-                        '碎片 ${snapshot.pieces.length}',
+                        t.continueDialog.piecesCount(
+                          count: snapshot.pieces.length,
+                        ),
                         style: styles.caption.copyWith(
                           color: palette.disabledText,
                         ),
@@ -223,7 +237,7 @@ class ContinueDialog extends StatelessWidget {
                   const SizedBox(width: 6),
                   Expanded(
                     child: Text(
-                      '小狐狸在等你完成这幅拼图呢',
+                      t.continueDialog.foxHint,
                       style: styles.caption.copyWith(
                         fontSize: 11.5,
                         color: palette.warning,
@@ -249,18 +263,18 @@ class ContinueDialog extends StatelessWidget {
                     borderRadius: BorderRadius.circular(20),
                   ),
                   title: Text(
-                    '重新开始？',
+                    t.continueDialog.restartTitle,
                     style: styles.h3.copyWith(color: palette.primaryText),
                   ),
                   content: Text(
-                    '将清除该难度的存档进度，不可恢复，确定重新开始吗？',
+                    t.continueDialog.restartDesc,
                     style: styles.body.copyWith(color: palette.secondaryText),
                   ),
                   actions: [
                     TextButton(
                       onPressed: () => Navigator.pop(c, false),
                       child: Text(
-                        '取消',
+                        t.common.cancel,
                         style: TextStyle(color: palette.secondaryText),
                       ),
                     ),
@@ -269,7 +283,7 @@ class ContinueDialog extends StatelessWidget {
                         backgroundColor: palette.warning,
                       ),
                       onPressed: () => Navigator.pop(c, true),
-                      child: const Text('确定重开'),
+                      child: Text(t.continueDialog.restartConfirm),
                     ),
                   ],
                 );
@@ -277,12 +291,15 @@ class ContinueDialog extends StatelessWidget {
             );
             if (ok == true) onRestart(difficultyKey);
           },
-          child: Text('重新开始', style: TextStyle(color: palette.warning)),
+          child: Text(
+            t.continueDialog.btnRestart,
+            style: TextStyle(color: palette.warning),
+          ),
         ),
         FilledButton.icon(
           onPressed: () => onContinue(difficultyKey),
           icon: const Icon(PhosphorIconsFill.play, size: 16),
-          label: const Text('继续挑战'),
+          label: Text(t.continueDialog.btnResume),
           style: FilledButton.styleFrom(
             backgroundColor: palette.brand,
             shape: RoundedRectangleBorder(
