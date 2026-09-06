@@ -63,7 +63,7 @@ class _MyPuzzlesTabViewState extends State<MyPuzzlesTabView> {
           context,
           bytes,
           sourceType: 'gallery',
-          sourcePlatform: '本地相册',
+          sourcePlatform: 'album',
           sourceUrl: item.sourceUrl,
         );
         if (result != null && mounted) {
@@ -459,7 +459,7 @@ class _MyPuzzlesTabViewState extends State<MyPuzzlesTabView> {
     AppPalette palette,
     AppTextStyles styles,
   ) {
-    final isNetwork = item.displaySource == '网络';
+    final isNetwork = item.isOnlineSource;
     return InkWell(
       onTap: () => _openCustom(item),
       borderRadius: BorderRadius.circular(18),

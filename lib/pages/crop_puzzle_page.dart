@@ -48,7 +48,7 @@ class CropPuzzlePage extends StatefulWidget {
     super.key,
     required this.rawBytes,
     this.sourceType = 'gallery',
-    this.sourcePlatform = '本地相册',
+    this.sourcePlatform = 'album',
     this.sourceUrl,
   });
 
@@ -107,7 +107,7 @@ class CropPuzzlePage extends StatefulWidget {
     BuildContext context,
     Uint8List bytes, {
     String sourceType = 'gallery',
-    String sourcePlatform = '本地相册',
+    String sourcePlatform = 'album',
     String? sourceUrl,
   }) {
     return Navigator.of(context).push<CustomPuzzleItem>(

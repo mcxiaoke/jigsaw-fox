@@ -276,6 +276,24 @@
     "loading": "日志加载中…",
     "close": "关闭"
   },
+  "source": {
+    "main": "主线",
+    "daily": "每日",
+    "custom": "自制",
+    "pack": "扩展包",
+    "album": "相册",
+    "online": "网络",
+    "preset": "官方",
+    "official": "官方图集",
+    "event": "限时活动"
+  },
+  "downloads": {
+    "q4k": "4K 超清",
+    "q2k": "2K 2.5K",
+    "q1080": "FHD 全高清",
+    "q720": "HD 高清",
+    "qsd": "标清"
+  },
   "achievements": {
     "first_win": {
       "title": "初露锋芒",

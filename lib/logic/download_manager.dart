@@ -147,7 +147,7 @@ class DownloadManager {
           id: id,
           sourceUrl: file.path,
           localPath: targetPath,
-          sourcePlatform: '本地相册',
+          sourcePlatform: 'album',
           width: width,
           height: height,
           downloadedAt: DateTime.now(),

@@ -1,5 +1,6 @@
 import '../data/game_repository.dart';
 import '../data/snapshot_store.dart';
+import '../l10n/gen/strings.g.dart';
 import '../services/app_logger.dart';
 import 'content/app_content.dart';
 import 'content/models/canonical_id.dart';
@@ -70,6 +71,7 @@ class UnifiedCatalogIndex {
     final sw = Stopwatch()..start();
     final map = <String, CatalogEntry>{};
     final repo = GameRepository.instance;
+    final tr = LocaleSettings.instance.currentTranslations;
 
     // 1. 主线关卡 (main:NNN)
     for (final level in repo.levels) {
@@ -79,18 +81,18 @@ class UnifiedCatalogIndex {
         title: level.title,
         imagePathOrUrl: level.assetPath,
         isLocalFile: true,
-        sourceLabel: '主线',
+        sourceLabel: 'main',
         sourceModule: CanonicalId.prefixMain,
         aspectRatio: PuzzleAspectRatio.fromSize(
           level.difficulty.cols.toDouble(),
           level.difficulty.rows.toDouble(),
         ),
-        author: '官方精选',
+        author: tr.source.official,
         tags: level.tags,
         addedAt: level.addedAt,
         recommendedDifficulty: SnapshotStore.difficultyKeyFor(level.difficulty),
         contextId: level.index.toString(),
-        displaySubtitle: '第 ${level.index} 关',
+        displaySubtitle: tr.game.titleLevel(index: level.index),
       );
     }
 
@@ -117,10 +119,10 @@ class UnifiedCatalogIndex {
               title: lvl.displayTitle,
               imagePathOrUrl: lvl.imagePathOrUrl,
               isLocalFile: lvl.isLocalFile,
-              sourceLabel: '每日',
+              sourceLabel: 'daily',
               sourceModule: CanonicalId.prefixDaily,
               aspectRatio: PuzzleAspectRatio.square1x1,
-              author: '每日挑战',
+              author: tr.nav.titleDaily,
               tags: const ['每日挑战'],
               addedAt: lvl.dailyDate != null && lvl.dailyDate!.length == 8
                   ? DateTime.tryParse(
@@ -131,8 +133,11 @@ class UnifiedCatalogIndex {
               contextId: lvl.dailyDate ?? '',
               displaySubtitle:
                   lvl.dailyDate != null && lvl.dailyDate!.length == 8
-                  ? '${lvl.dailyDate!.substring(0, 4)}-${lvl.dailyDate!.substring(4, 6)}-${lvl.dailyDate!.substring(6, 8)} 挑战'
-                  : '${lvl.dailyDate} 挑战',
+                  ? tr.game.titleDaily(
+                      date:
+                          '${lvl.dailyDate!.substring(0, 4)}-${lvl.dailyDate!.substring(4, 6)}-${lvl.dailyDate!.substring(6, 8)}',
+                    )
+                  : tr.game.titleDaily(date: '${lvl.dailyDate}'),
             );
           }
         }
@@ -149,7 +154,7 @@ class UnifiedCatalogIndex {
         title: custom.title,
         imagePathOrUrl: custom.imagePathOrUrl,
         isLocalFile: custom.isLocalFile,
-        sourceLabel: '自制',
+        sourceLabel: 'custom',
         sourceModule: CanonicalId.prefixUgc,
         aspectRatio: PuzzleAspectRatio.fromSize(
           custom.difficulty.cols.toDouble(),
@@ -162,7 +167,7 @@ class UnifiedCatalogIndex {
           custom.difficulty,
         ),
         contextId: custom.id,
-        displaySubtitle: '自制拼图 · ${custom.displaySource}',
+        displaySubtitle: '${tr.game.titleCustom} · ${custom.displaySource}',
       );
     }
 
@@ -180,7 +185,7 @@ class UnifiedCatalogIndex {
               title: lvl.displayTitle,
               imagePathOrUrl: lvl.imagePathOrUrl,
               isLocalFile: lvl.isLocalFile,
-              sourceLabel: '扩展包',
+              sourceLabel: 'pack',
               sourceModule: CanonicalId.prefixPack,
               aspectRatio: PuzzleAspectRatio.square1x1,
               author: pack.author.isNotEmpty ? pack.author : pack.title,
@@ -209,7 +214,7 @@ class UnifiedCatalogIndex {
               title: lvl.displayTitle,
               imagePathOrUrl: lvl.imagePathOrUrl,
               isLocalFile: lvl.isLocalFile,
-              sourceLabel: '活动',
+              sourceLabel: 'event',
               sourceModule: CanonicalId.prefixEvent,
               aspectRatio: PuzzleAspectRatio.square1x1,
               author: event.displayTitle,
@@ -239,7 +244,7 @@ class UnifiedCatalogIndex {
               title: lvl.displayTitle,
               imagePathOrUrl: lvl.imagePathOrUrl,
               isLocalFile: lvl.isLocalFile,
-              sourceLabel: col.displayTypeLabel,
+              sourceLabel: col.isEvent ? 'event' : 'official',
               sourceModule: CanonicalId.prefixCollection,
               aspectRatio: PuzzleAspectRatio.square1x1,
               author: col.displayTitle,

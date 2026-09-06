@@ -1,4 +1,5 @@
 import '../../logic/puzzle_model.dart';
+import '../../l10n/gen/strings.g.dart';
 
 /// Represents a user-generated custom puzzle item (or preset sample).
 class CustomPuzzleItem {
@@ -15,7 +16,7 @@ class CustomPuzzleItem {
     this.savedSnapshotJson,
     this.completedPieceCounts = const [],
     this.sourceType = 'gallery',
-    this.sourcePlatform = '本地相册',
+    this.sourcePlatform = 'album',
     this.sourceUrl,
   });
 
@@ -40,16 +41,19 @@ class CustomPuzzleItem {
   /// Original image URL or local source path
   final String? sourceUrl;
 
-  /// 规范合规的来源显示：仅输出 '相册' 或 '网络' (杜绝具体第三方网站名称防侵权)
+  /// 规范合规的来源显示（本地化）：仅输出「相册/网络/官方」类别，杜绝第三方网站名
   String get displaySource {
-    if (sourceType == 'gallery' ||
-        sourceType == 'local' ||
-        sourcePlatform == '相册' ||
-        sourcePlatform == '本地相册') {
-      return '相册';
-    }
-    return '网络';
+    final tr = LocaleSettings.instance.currentTranslations.source;
+    return switch (sourceType) {
+      'gallery' || 'local' => tr.album,
+      'preset' => tr.preset,
+      _ => tr.online,
+    };
   }
+
+  /// 是否网络图源（等值判断用稳定 key/sourceType，不依赖中文）
+  bool get isOnlineSource =>
+      sourceType == 'online' || sourcePlatform == 'online';
 
   CustomPuzzleItem copyWith({
     String? id,
@@ -152,16 +156,16 @@ class CustomPuzzleItem {
     if (derivedSourceType.isEmpty) {
       if (imagePathOrUrl.startsWith('assets/')) {
         derivedSourceType = 'preset';
-        derivedSourcePlatform = '官方预置';
+        derivedSourcePlatform = 'preset';
       } else {
         derivedSourceType = 'gallery';
-        derivedSourcePlatform = '本地相册';
+        derivedSourcePlatform = 'album';
       }
     }
     if (derivedSourcePlatform.isEmpty) {
       derivedSourcePlatform = derivedSourceType == 'preset'
-          ? '官方预置'
-          : (derivedSourceType == 'online' ? '网络图库' : '本地相册');
+          ? 'preset'
+          : (derivedSourceType == 'online' ? 'online' : 'album');
     }
 
     return CustomPuzzleItem(

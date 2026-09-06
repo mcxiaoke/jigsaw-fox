@@ -61,6 +61,8 @@ class Translations with BaseTranslations<AppLocale, Translations> {
 	late final Translations$background$en background = Translations$background$en.internal(_root);
 	late final Translations$howTo$en howTo = Translations$howTo$en.internal(_root);
 	late final Translations$logs$en logs = Translations$logs$en.internal(_root);
+	late final Translations$source$en source = Translations$source$en.internal(_root);
+	late final Translations$downloads$en downloads = Translations$downloads$en.internal(_root);
 	late final Translations$achievements$en achievements = Translations$achievements$en.internal(_root);
 	late final Translations$difficulty$en difficulty = Translations$difficulty$en.internal(_root);
 	late final Translations$game$en game = Translations$game$en.internal(_root);
@@ -949,6 +951,66 @@ class Translations$logs$en {
 
 	/// en: 'Close'
 	String get close => 'Close';
+}
+
+// Path: source
+class Translations$source$en {
+	Translations$source$en.internal(this._root);
+
+	final Translations _root; // ignore: unused_field
+
+	// Translations
+
+	/// en: 'Main'
+	String get main => 'Main';
+
+	/// en: 'Daily'
+	String get daily => 'Daily';
+
+	/// en: 'Custom'
+	String get custom => 'Custom';
+
+	/// en: 'Pack'
+	String get pack => 'Pack';
+
+	/// en: 'Gallery'
+	String get album => 'Gallery';
+
+	/// en: 'Online'
+	String get online => 'Online';
+
+	/// en: 'Official'
+	String get preset => 'Official';
+
+	/// en: 'Official Collection'
+	String get official => 'Official Collection';
+
+	/// en: 'Limited-time'
+	String get event => 'Limited-time';
+}
+
+// Path: downloads
+class Translations$downloads$en {
+	Translations$downloads$en.internal(this._root);
+
+	final Translations _root; // ignore: unused_field
+
+	// Translations
+
+	/// en: '4K Ultra HD'
+	String get q4k => '4K Ultra HD';
+
+	/// en: '2K QHD'
+	String get q2k => '2K QHD';
+
+	/// en: 'FHD 1080p'
+	String get q1080 => 'FHD 1080p';
+
+	/// en: 'HD 720p'
+	String get q720 => 'HD 720p';
+
+	/// en: 'SD'
+	String get qsd => 'SD';
 }
 
 // Path: achievements
@@ -2268,6 +2330,20 @@ extension on Translations {
 			'logs.emptyFiltered' => 'No logs under the current filter',
 			'logs.loading' => 'Loading logs...',
 			'logs.close' => 'Close',
+			'source.main' => 'Main',
+			'source.daily' => 'Daily',
+			'source.custom' => 'Custom',
+			'source.pack' => 'Pack',
+			'source.album' => 'Gallery',
+			'source.online' => 'Online',
+			'source.preset' => 'Official',
+			'source.official' => 'Official Collection',
+			'source.event' => 'Limited-time',
+			'downloads.q4k' => '4K Ultra HD',
+			'downloads.q2k' => '2K QHD',
+			'downloads.q1080' => 'FHD 1080p',
+			'downloads.q720' => 'HD 720p',
+			'downloads.qsd' => 'SD',
 			'achievements.first_win.title' => 'First Win',
 			'achievements.first_win.desc' => 'Complete your first puzzle',
 			'achievements.win_10.title' => 'Practice Makes Perfect',

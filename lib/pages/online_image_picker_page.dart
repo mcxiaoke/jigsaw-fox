@@ -379,7 +379,7 @@ class _OnlineImagePickerPageState extends State<OnlineImagePickerPage> {
       // 2. Save and strictly validate via DownloadManager
       final item = await DownloadManager.instance.saveOrDownloadImage(
         sourceUrl: targetUrl,
-        sourcePlatform: '网络',
+        sourcePlatform: 'online',
         refererUrl: currentWebUrl,
         directBytes: fetchedBytes,
       );

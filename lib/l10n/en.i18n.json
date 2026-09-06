@@ -276,6 +276,24 @@
     "loading": "Loading logs...",
     "close": "Close"
   },
+  "source": {
+    "main": "Main",
+    "daily": "Daily",
+    "custom": "Custom",
+    "pack": "Pack",
+    "album": "Gallery",
+    "online": "Online",
+    "preset": "Official",
+    "official": "Official Collection",
+    "event": "Limited-time"
+  },
+  "downloads": {
+    "q4k": "4K Ultra HD",
+    "q2k": "2K QHD",
+    "q1080": "FHD 1080p",
+    "q720": "HD 720p",
+    "qsd": "SD"
+  },
   "achievements": {
     "first_win": {
       "title": "First Win",

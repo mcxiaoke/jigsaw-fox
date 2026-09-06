@@ -4,6 +4,7 @@ import '../data/favorite_store.dart';
 import '../data/progress_store.dart';
 import 'catalog_index.dart';
 import 'puzzle_model.dart';
+import 'source_tag.dart';
 
 /// 统一卡片视图模型（供给“我的”Tab 渲染与交互）
 class UnifiedPuzzleCardData {
@@ -88,23 +89,8 @@ class UnifiedPuzzleResolver {
 
   final UnifiedCatalogIndex index;
 
-  /// 来源分类主题色
-  static Color getSourceColor(String label) {
-    switch (label) {
-      case '主线':
-        return const Color(0xFF4A90E2);
-      case '每日':
-        return const Color(0xFFFF9500);
-      case '自制':
-        return const Color(0xFF9C27B0);
-      case '扩展包':
-        return const Color(0xFF00B894);
-      case '活动':
-        return const Color(0xFFFF5252);
-      default:
-        return const Color(0xFFD4963C);
-    }
-  }
+  /// 来源分类主题色（key 词表）
+  static Color getSourceColor(String label) => SourceTag.colorFor(label);
 
   /// 根据 canonicalId 与已批量加载的进度，同步装配卡片数据（支持源被删的孤儿卡兜底）
   UnifiedPuzzleCardData resolve({
@@ -159,7 +145,7 @@ class UnifiedPuzzleResolver {
     // 孤儿卡兜底（源已被删除或下架）
     final fallbackTitle = favoriteEntry?.titleSnapshot ?? canonicalId;
     final fallbackImage = favoriteEntry?.imageSnapshot ?? '';
-    final fallbackLabel = favoriteEntry?.sourceLabelSnapshot ?? '已失效';
+    final fallbackLabel = favoriteEntry?.sourceLabelSnapshot ?? '';
     final fallbackLocal = favoriteEntry?.isLocalFileSnapshot ?? false;
     final fallbackAspect = PuzzleAspectRatio.values.firstWhere(
       (a) => a.name == favoriteEntry?.aspectRatioLabel,
@@ -194,7 +180,7 @@ class UnifiedPuzzleResolver {
       favoritedAt: favoriteEntry?.favoritedAt,
       isFavorite: isFav,
       isOrphan: true,
-      displaySubtitle: '关卡源已失效或下架',
+      displaySubtitle: '',
     );
   }
 }

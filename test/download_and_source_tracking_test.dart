@@ -12,11 +12,11 @@ void main() {
   });
 
   group('DownloadedImageItem Model Tests', () {
-    test('qualityTag and fileSizeLabel format correctly', () {
+    test('qualityTier and fileSizeLabel format correctly', () {
       final item4K = DownloadedImageItem(
         id: 'dl_1',
         localPath: '/tmp/test.jpg',
-        sourcePlatform: 'Unsplash',
+        sourcePlatform: 'online',
         sourceUrl: 'https://images.unsplash.com/photo-1',
         width: 3840,
         height: 2160,
@@ -24,7 +24,7 @@ void main() {
         downloadedAt: DateTime.now(),
       );
 
-      expect(item4K.qualityTag, '4K 超清');
+      expect(item4K.qualityTier, DownloadedQuality.q4k);
       expect(item4K.resolutionLabel, '3840 × 2160');
       expect(item4K.fileSizeLabel, '3.5 MB');
 
@@ -33,7 +33,7 @@ void main() {
         height: 1080,
         fileSizeBytes: 800 * 1024,
       );
-      expect(itemFHD.qualityTag, 'FHD 全高清');
+      expect(itemFHD.qualityTier, DownloadedQuality.q1080);
       expect(itemFHD.fileSizeLabel, '800.0 KB');
     });
 
@@ -99,7 +99,7 @@ void main() {
 
       final restored = CustomPuzzleItem.fromJson(legacyGalleryJson);
       expect(restored.sourceType, 'gallery');
-      expect(restored.sourcePlatform, '本地相册');
+      expect(restored.sourcePlatform, 'album');
 
       final legacyPresetJson = {
         'id': 'preset_old',
@@ -112,7 +112,7 @@ void main() {
 
       final restoredPreset = CustomPuzzleItem.fromJson(legacyPresetJson);
       expect(restoredPreset.sourceType, 'preset');
-      expect(restoredPreset.sourcePlatform, '官方预置');
+      expect(restoredPreset.sourcePlatform, 'preset');
     });
   });
 }

@@ -18,6 +18,7 @@ import '../../logic/catalog_index.dart';
 import '../../logic/content/app_content.dart';
 import '../../logic/download_manager.dart';
 import '../../logic/puzzle_model.dart';
+import '../../logic/source_tag.dart';
 import '../../logic/unified_puzzle_resolver.dart';
 import '../../services/app_logger.dart';
 import '../../services/sound_service.dart';
@@ -384,7 +385,7 @@ class _MyCenterTabViewState extends State<MyCenterTabView> {
           context,
           bytes,
           sourceType: 'gallery',
-          sourcePlatform: '本地相册',
+          sourcePlatform: 'album',
           sourceUrl: item.sourceUrl,
         );
         if (result != null && mounted) {
@@ -857,7 +858,9 @@ class _MyCenterTabViewState extends State<MyCenterTabView> {
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Text(
-                    card.sourceLabel,
+                    card.isOrphan
+                        ? t.myCenter.card.orphan
+                        : SourceTag.localize(card.sourceLabel),
                     style: const TextStyle(
                       color: Colors.white,
                       fontSize: 10,

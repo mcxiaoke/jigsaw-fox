@@ -1,4 +1,28 @@
+import '../../l10n/gen/strings.g.dart';
+
 /// Represents an image downloaded from online image sources (Pixabay, Unsplash, Pexels, etc.)
+enum DownloadedQuality {
+  q4k,
+  q2k,
+  q1080,
+  q720,
+  sd;
+
+  String get key => name;
+
+  /// 画质档展示文案（按当前语言）
+  String localizedLabel() {
+    final tr = LocaleSettings.instance.currentTranslations.downloads;
+    return switch (this) {
+      DownloadedQuality.q4k => tr.q4k,
+      DownloadedQuality.q2k => tr.q2k,
+      DownloadedQuality.q1080 => tr.q1080,
+      DownloadedQuality.q720 => tr.q720,
+      DownloadedQuality.sd => tr.qsd,
+    };
+  }
+}
+
 class DownloadedImageItem {
   const DownloadedImageItem({
     required this.id,
@@ -22,12 +46,13 @@ class DownloadedImageItem {
 
   String get resolutionLabel => '$width × $height';
 
-  String get qualityTag {
-    if (width >= 3840 || height >= 2160) return '4K 超清';
-    if (width >= 2560 || height >= 1440) return '2K 2.5K';
-    if (width >= 1920 || height >= 1080) return 'FHD 全高清';
-    if (width >= 1280 || height >= 720) return 'HD 高清';
-    return '标清';
+  /// 画质档位（阈值逻辑不变，文案改由 UI 层按语言渲染）
+  DownloadedQuality get qualityTier {
+    if (width >= 3840 || height >= 2160) return DownloadedQuality.q4k;
+    if (width >= 2560 || height >= 1440) return DownloadedQuality.q2k;
+    if (width >= 1920 || height >= 1080) return DownloadedQuality.q1080;
+    if (width >= 1280 || height >= 720) return DownloadedQuality.q720;
+    return DownloadedQuality.sd;
   }
 
   String get fileSizeLabel {
@@ -79,7 +104,7 @@ class DownloadedImageItem {
           json['id'] as String? ??
           'img_${DateTime.now().millisecondsSinceEpoch}',
       localPath: json['localPath'] as String? ?? '',
-      sourcePlatform: json['sourcePlatform'] as String? ?? '网络图库',
+      sourcePlatform: json['sourcePlatform'] as String? ?? 'online',
       sourceUrl: json['sourceUrl'] as String? ?? '',
       width: json['width'] as int? ?? 1080,
       height: json['height'] as int? ?? 1080,

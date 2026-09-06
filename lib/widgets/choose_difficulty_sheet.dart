@@ -12,6 +12,7 @@ import '../logic/content/models/canonical_id.dart';
 import '../logic/geometry/edge_layout.dart';
 import '../logic/geometry/piece_shape.dart';
 import '../logic/puzzle_model.dart';
+import '../logic/source_tag.dart';
 import '../services/sound_service.dart';
 import '../services/unlock_service.dart';
 import '../theme/app_palette.dart';
@@ -448,7 +449,7 @@ class _ChooseDifficultySheetState extends State<ChooseDifficultySheet> {
                       ),
                     ),
                     child: Text(
-                      widget.sourcePlatform!,
+                      SourceTag.localize(widget.sourcePlatform),
                       style: TextStyle(
                         fontSize: 10,
                         fontWeight: FontWeight.bold,
@@ -497,15 +498,25 @@ class _ChooseDifficultySheetState extends State<ChooseDifficultySheet> {
                             effectiveDiff.cols.toDouble(),
                             effectiveDiff.rows.toDouble(),
                           ).name;
-                    final source =
-                        widget.sourcePlatform ??
-                        (cid.startsWith(CanonicalId.prefixDaily)
-                            ? '每日'
-                            : (cid.startsWith(CanonicalId.prefixUgc)
-                                  ? '自制'
-                                  : (cid.startsWith(CanonicalId.prefixPack)
-                                        ? '扩展包'
-                                        : '主线')));
+                    final c = cid.toLowerCase();
+                    final String source;
+                    if (c.startsWith(CanonicalId.prefixDaily)) {
+                      source = 'daily';
+                    } else if (c.startsWith(CanonicalId.prefixUgc)) {
+                      source = 'custom';
+                    } else if (c.startsWith(CanonicalId.prefixPack)) {
+                      source = 'pack';
+                    } else if (c.startsWith(CanonicalId.prefixEvent)) {
+                      source = 'event';
+                    } else if (c.startsWith(CanonicalId.prefixCollection)) {
+                      source = widget.sourcePlatform != null
+                          ? SourceTag.keyOf(widget.sourcePlatform)
+                          : 'official';
+                    } else {
+                      source = widget.sourcePlatform != null
+                          ? SourceTag.keyOf(widget.sourcePlatform)
+                          : 'main';
+                    }
                     await FavoriteStore.instance.toggleFavorite(
                       cid,
                       title: widget.title,

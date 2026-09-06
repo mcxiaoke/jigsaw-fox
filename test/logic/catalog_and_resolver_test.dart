@@ -35,14 +35,14 @@ void main() {
         final cidLevel1 = GameRepository.canonicalForLevel(1);
         final entry1 = index.get(cidLevel1);
         expect(entry1, isNotNull);
-        expect(entry1!.sourceLabel, equals('主线'));
+        expect(entry1!.sourceLabel, equals('main'));
         expect(entry1.aspectRatio, equals(PuzzleAspectRatio.square1x1));
 
         // 每日挑战支持按 canonicalId 检索
         final cidDaily = GameRepository.canonicalForDaily('20260901');
         final entryDaily = index.get(cidDaily);
         if (entryDaily != null) {
-          expect(entryDaily.sourceLabel, equals('每日'));
+          expect(entryDaily.sourceLabel, equals('daily'));
         }
       },
     );

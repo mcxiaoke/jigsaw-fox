@@ -59,6 +59,8 @@ class TranslationsZh extends Translations with BaseTranslations<AppLocale, Trans
 	@override late final _Translations$background$zh background = _Translations$background$zh._(_root);
 	@override late final _Translations$howTo$zh howTo = _Translations$howTo$zh._(_root);
 	@override late final _Translations$logs$zh logs = _Translations$logs$zh._(_root);
+	@override late final _Translations$source$zh source = _Translations$source$zh._(_root);
+	@override late final _Translations$downloads$zh downloads = _Translations$downloads$zh._(_root);
 	@override late final _Translations$achievements$zh achievements = _Translations$achievements$zh._(_root);
 	@override late final _Translations$difficulty$zh difficulty = _Translations$difficulty$zh._(_root);
 	@override late final _Translations$game$zh game = _Translations$game$zh._(_root);
@@ -484,6 +486,38 @@ class _Translations$logs$zh extends Translations$logs$en {
 	@override String get emptyFiltered => '当前过滤条件下暂无日志';
 	@override String get loading => '日志加载中…';
 	@override String get close => '关闭';
+}
+
+// Path: source
+class _Translations$source$zh extends Translations$source$en {
+	_Translations$source$zh._(TranslationsZh root) : this._root = root, super.internal(root);
+
+	final TranslationsZh _root; // ignore: unused_field
+
+	// Translations
+	@override String get main => '主线';
+	@override String get daily => '每日';
+	@override String get custom => '自制';
+	@override String get pack => '扩展包';
+	@override String get album => '相册';
+	@override String get online => '网络';
+	@override String get preset => '官方';
+	@override String get official => '官方图集';
+	@override String get event => '限时活动';
+}
+
+// Path: downloads
+class _Translations$downloads$zh extends Translations$downloads$en {
+	_Translations$downloads$zh._(TranslationsZh root) : this._root = root, super.internal(root);
+
+	final TranslationsZh _root; // ignore: unused_field
+
+	// Translations
+	@override String get q4k => '4K 超清';
+	@override String get q2k => '2K 2.5K';
+	@override String get q1080 => 'FHD 全高清';
+	@override String get q720 => 'HD 高清';
+	@override String get qsd => '标清';
 }
 
 // Path: achievements
@@ -1403,6 +1437,20 @@ extension on TranslationsZh {
 			'logs.emptyFiltered' => '当前过滤条件下暂无日志',
 			'logs.loading' => '日志加载中…',
 			'logs.close' => '关闭',
+			'source.main' => '主线',
+			'source.daily' => '每日',
+			'source.custom' => '自制',
+			'source.pack' => '扩展包',
+			'source.album' => '相册',
+			'source.online' => '网络',
+			'source.preset' => '官方',
+			'source.official' => '官方图集',
+			'source.event' => '限时活动',
+			'downloads.q4k' => '4K 超清',
+			'downloads.q2k' => '2K 2.5K',
+			'downloads.q1080' => 'FHD 全高清',
+			'downloads.q720' => 'HD 高清',
+			'downloads.qsd' => '标清',
 			'achievements.first_win.title' => '初露锋芒',
 			'achievements.first_win.desc' => '通关首张拼图',
 			'achievements.win_10.title' => '熟能生巧',

@@ -6,6 +6,7 @@ import 'package:phosphoricons_flutter/phosphoricons_flutter.dart';
 import '../data/models/downloaded_image_item.dart';
 import '../l10n/gen/strings.g.dart';
 import '../logic/download_manager.dart';
+import '../logic/source_tag.dart';
 import '../pages/crop_puzzle_page.dart';
 import '../theme/app_palette.dart';
 import '../theme/app_text_styles.dart';
@@ -46,7 +47,7 @@ class DownloadedDrawerSheet extends StatelessWidget {
 
     Navigator.of(context).pop(); // Close bottom sheet
 
-    final isLocalGallery = item.sourcePlatform == '本地相册';
+    final isLocalGallery = SourceTag.isAlbum(item.sourcePlatform);
     await CropPuzzlePage.push(
       context,
       bytes,
@@ -323,10 +324,9 @@ class DownloadedDrawerSheet extends StatelessWidget {
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: Text(
-                      item.sourcePlatform == '本地相册' ||
-                              item.sourcePlatform == '相册'
-                          ? '相册'
-                          : '网络',
+                      SourceTag.isAlbum(item.sourcePlatform)
+                          ? SourceTag.localize('album')
+                          : SourceTag.localize('online'),
                       style: const TextStyle(
                         color: Colors.white,
                         fontSize: 10.5,
@@ -349,7 +349,7 @@ class DownloadedDrawerSheet extends StatelessWidget {
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: Text(
-                      item.qualityTag,
+                      item.qualityTier.localizedLabel(),
                       style: const TextStyle(
                         color: Colors.white,
                         fontSize: 10,
