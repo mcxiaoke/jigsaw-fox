@@ -280,7 +280,10 @@ class TestCoreAndExporters(unittest.TestCase):
             exp_type="event",
             data={
                 "eventId": "test_event_2026",
-                "title": "测试节日活动",
+                "title": "Spooky Halloween",
+                "titleZh": "万圣节狂欢",
+                "description": "Halloween puzzles",
+                "descZh": "万圣节精彩拼图挑战",
                 "outputMode": "zip",
                 "format": "webp" if HAS_PIL else "original",
                 "rename": "none",
@@ -303,6 +306,10 @@ class TestCoreAndExporters(unittest.TestCase):
         self.assertIn("items", ev_data)
         self.assertEqual(len(ev_data["items"]), 1)
         self.assertEqual(ev_data["items"][0]["id"], "test_event_2026")
+        self.assertEqual(ev_data["items"][0]["title"], "Spooky Halloween")
+        self.assertEqual(ev_data["items"][0]["titleZh"], "万圣节狂欢")
+        self.assertEqual(ev_data["items"][0]["desc"], "Halloween puzzles")
+        self.assertEqual(ev_data["items"][0]["descZh"], "万圣节精彩拼图挑战")
         self.assertEqual(ev_data["items"][0]["totalCount"], 3)
         self.assertIn("updatedAt", ev_data["items"][0])
 
@@ -312,7 +319,10 @@ class TestCoreAndExporters(unittest.TestCase):
             exp_type="collection",
             data={
                 "collectionId": "test_col_2026",
-                "title": "测试官方合集",
+                "title": "Masterpieces Vol 1",
+                "titleZh": "名画系列第一辑",
+                "desc": "Classic masterpieces collection",
+                "descZh": "精选传世名画合集",
                 "outputMode": "zip",
                 "format": "webp" if HAS_PIL else "original",
                 "rename": "none",
@@ -335,8 +345,29 @@ class TestCoreAndExporters(unittest.TestCase):
         self.assertIn("items", col_data)
         self.assertEqual(len(col_data["items"]), 1)
         self.assertEqual(col_data["items"][0]["id"], "test_col_2026")
+        self.assertEqual(col_data["items"][0]["title"], "Masterpieces Vol 1")
+        self.assertEqual(col_data["items"][0]["titleZh"], "名画系列第一辑")
+        self.assertEqual(col_data["items"][0]["desc"], "Classic masterpieces collection")
+        self.assertEqual(col_data["items"][0]["descZh"], "精选传世名画合集")
         self.assertEqual(col_data["items"][0]["totalCount"], 3)
         self.assertIn("updatedAt", col_data["items"][0])
+
+    def test_pack_exporter_title_validation(self):
+        # 验证未提供 title 或 title 为空时 validate() 抛出异常
+        exporter = get_exporter(
+            exp_type="collection",
+            data={
+                "collectionId": "test_col_no_title",
+                "outputMode": "zip",
+            },
+            src_p=self.src_dir,
+            out_p=self.out_dir,
+            http_base="http://test.local/data",
+            log_fn=lambda msg, lvl="info": None,
+        )
+        with self.assertRaises(ValueError) as ctx:
+            exporter.validate()
+        self.assertIn("必须填写标题", str(ctx.exception))
 
 
 class TestExportTracker(unittest.TestCase):

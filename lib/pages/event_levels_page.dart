@@ -147,7 +147,7 @@ class _EventLevelsPageState extends State<EventLevelsPage> {
         elevation: 0.5,
         scrolledUnderElevation: 0.5,
         title: Text(
-          _currentEvent.title,
+          _currentEvent.displayTitle,
           style: styles.h3.copyWith(fontSize: 17),
         ),
       ),

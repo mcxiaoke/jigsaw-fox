@@ -110,8 +110,8 @@ class _CollectionsTabViewState extends State<CollectionsTabView> {
     final heroItems = visibleEvents.map((ev) {
       return HeroBannerItem(
         id: ev.id,
-        title: ev.title,
-        subtitle: ev.desc.isNotEmpty ? ev.desc : '限时活动挑战',
+        title: ev.displayTitle,
+        subtitle: ev.displayDesc.isNotEmpty ? ev.displayDesc : '限时活动挑战',
         imagePathOrUrl:
             ev.coverUrl ?? (ev.levels.isNotEmpty ? ev.levels.first : ''),
         badgeText: '限时活动',
@@ -391,7 +391,7 @@ class _CollectionsTabViewState extends State<CollectionsTabView> {
                     children: [
                       Expanded(
                         child: Text(
-                          col.title,
+                          col.displayTitle,
                           style: const TextStyle(
                             color: Colors.white,
                             fontSize: 13.5,

@@ -21,6 +21,7 @@ import '../event_levels_page.dart';
 import '../game_page.dart';
 
 import '../../data/constants/puzzle_tags.dart';
+import '../../utils/locale_helper.dart';
 
 // 热门N个（横滑常驻，末位固定入口之后展开全部 18 个黄金矩阵标签）
 const List<String> kHotTagIds = [
@@ -59,11 +60,20 @@ class _HomeTabViewState extends State<HomeTabView> {
 
   List<LevelItem> _getFilteredLevels(List<LevelItem> all) {
     if (_selectedTag == 'all') return all;
+    final selLower = _selectedTag.toLowerCase();
     return all
         .where(
           (l) => l.tags.isNotEmpty
-              ? l.tags.any((t) => t.toLowerCase() == _selectedTag.toLowerCase())
-              : _resolveTag(l).toLowerCase() == _selectedTag.toLowerCase(),
+              ? l.tags.any((t) {
+                  final tLower = t.toLowerCase();
+                  if (tLower == selLower) return true;
+                  final mappedEn = kTagZhToId[t]?.toLowerCase();
+                  if (mappedEn != null && mappedEn == selLower) return true;
+                  final mappedZh = kTagIdToZh[t]?.toLowerCase();
+                  if (mappedZh != null && mappedZh == selLower) return true;
+                  return false;
+                })
+              : _resolveTag(l).toLowerCase() == selLower,
         )
         .toList();
   }
@@ -478,7 +488,7 @@ class _TagBarDelegate extends SliverPersistentHeaderDelegate {
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
-                    for (final entry in kHomeTags) ...[
+                    for (final entry in getLocalizedHomeTags()) ...[
                       Container(
                         key: tagKeys[entry['id']],
                         child: _TagChip(
@@ -643,7 +653,7 @@ class _AllTagsSheet extends StatelessWidget {
               padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
               mainAxisSpacing: 8,
               crossAxisSpacing: 8,
-              children: kHomeTags.map((e) {
+              children: getLocalizedHomeTags().map((e) {
                 final id = e['id']!;
                 final label = e['label']!;
                 final isActive = selectedTag.toLowerCase() == id.toLowerCase();

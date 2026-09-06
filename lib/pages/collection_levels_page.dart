@@ -77,7 +77,7 @@ class _CollectionLevelsPageState extends State<CollectionLevelsPage> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text('清理「${_currentCollection.title}」'),
+        title: Text('清理「${_currentCollection.displayTitle}」'),
         content: Text(
           '确定要清理已下载的本地资源吗？\n清理后可释放 ${_currentCollection.displayFileSize} 磁盘空间。您随时可以重新下载。',
         ),
@@ -278,7 +278,7 @@ class _CollectionLevelsPageState extends State<CollectionLevelsPage> {
         elevation: 0.5,
         scrolledUnderElevation: 0.5,
         title: Text(
-          _currentCollection.title,
+          _currentCollection.displayTitle,
           style: styles.h3.copyWith(fontSize: 17),
         ),
         actions: [

@@ -502,9 +502,26 @@
               </div>
             </div>
 
-            <div class="field-group">
-              <label>标题 (Title)</label>
-              <input class="field-input" type="text" v-model="exportConfig.title" placeholder="万圣狂欢节" />
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 8px;">
+              <div class="field-group">
+                <label>英文标题 (Title) <span style="color: #dc2626;">*必填</span></label>
+                <input class="field-input" type="text" v-model="exportConfig.title" placeholder="e.g. Spooky Halloween" />
+              </div>
+              <div class="field-group">
+                <label>中文标题 (Title Zh) <span style="color: #6b7280; font-size: 11px;">(选填)</span></label>
+                <input class="field-input" type="text" v-model="exportConfig.titleZh" placeholder="例如：万圣狂欢节" />
+              </div>
+            </div>
+
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 8px;">
+              <div class="field-group">
+                <label>英文描述 (Desc) <span style="color: #6b7280; font-size: 11px;">(选填)</span></label>
+                <input class="field-input" type="text" v-model="exportConfig.description" placeholder="e.g. Explore pumpkin puzzles" />
+              </div>
+              <div class="field-group">
+                <label>中文描述 (Desc Zh) <span style="color: #6b7280; font-size: 11px;">(选填)</span></label>
+                <input class="field-input" type="text" v-model="exportConfig.descZh" placeholder="例如：探索神秘南瓜灯" />
+              </div>
             </div>
           </div>
 

@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'package:jigsawpuzzle/utils/locale_helper.dart';
 
 /// 图集下载状态枚举
 enum CollectionDownloadStatus { notDownloaded, downloading, downloaded, error }
@@ -10,7 +11,9 @@ class PuzzleCollectionItem {
   const PuzzleCollectionItem({
     required this.id,
     required this.title,
+    this.titleZh,
     this.desc = '',
+    this.descZh,
     this.type = 'zip',
     this.collectionType = 'official',
     this.coverUrl,
@@ -32,11 +35,17 @@ class PuzzleCollectionItem {
   /// 图集唯一标识符 (如 "classic_art_vol1", "nature_wonders")
   final String id;
 
-  /// 图集展示标题
+  /// 图集展示标题 (默认英文)
   final String title;
 
-  /// 图集详细介绍
+  /// 图集中文标题 (可选)
+  final String? titleZh;
+
+  /// 图集详细介绍 (默认英文)
   final String desc;
+
+  /// 图集中文介绍 (可选)
+  final String? descZh;
 
   /// 载荷类型 ('zip' | 'array')
   final String type;
@@ -114,10 +123,38 @@ class PuzzleCollectionItem {
     }
   }
 
+  /// 根据语言环境获取本地化标题
+  /// 中文语言优先返回非空的 [titleZh]，若无则回退至默认英文 [title]；其它语言返回默认英文 [title]
+  String localizedTitle([String? languageCode]) {
+    if (LocaleHelper.isChinese(languageCode)) {
+      final zh = titleZh?.trim();
+      if (zh != null && zh.isNotEmpty) return zh;
+    }
+    return title;
+  }
+
+  /// 根据语言环境获取本地化描述
+  /// 中文语言优先返回非空的 [descZh]，若无则回退至默认英文 [desc]；其它语言返回默认英文 [desc]
+  String localizedDesc([String? languageCode]) {
+    if (LocaleHelper.isChinese(languageCode)) {
+      final zh = descZh?.trim();
+      if (zh != null && zh.isNotEmpty) return zh;
+    }
+    return desc;
+  }
+
+  /// 便捷 getter：根据当前系统语言展示标题
+  String get displayTitle => localizedTitle();
+
+  /// 便捷 getter：根据当前系统语言展示描述
+  String get displayDesc => localizedDesc();
+
   PuzzleCollectionItem copyWith({
     String? id,
     String? title,
+    String? titleZh,
     String? desc,
+    String? descZh,
     String? type,
     String? collectionType,
     String? coverUrl,
@@ -138,7 +175,9 @@ class PuzzleCollectionItem {
     return PuzzleCollectionItem(
       id: id ?? this.id,
       title: title ?? this.title,
+      titleZh: titleZh ?? this.titleZh,
       desc: desc ?? this.desc,
+      descZh: descZh ?? this.descZh,
       type: type ?? this.type,
       collectionType: collectionType ?? this.collectionType,
       coverUrl: coverUrl ?? this.coverUrl,
@@ -182,7 +221,9 @@ class PuzzleCollectionItem {
     return PuzzleCollectionItem(
       id: json['id']?.toString() ?? 'unknown_collection',
       title: json['title']?.toString() ?? '未命名图集',
+      titleZh: json['titleZh']?.toString(),
       desc: json['desc']?.toString() ?? '',
+      descZh: json['descZh']?.toString(),
       type: rawType,
       collectionType: rawColType,
       coverUrl: json['coverUrl']?.toString(),
@@ -207,7 +248,9 @@ class PuzzleCollectionItem {
     return {
       'id': id,
       'title': title,
+      if (titleZh != null) 'titleZh': titleZh,
       'desc': desc,
+      if (descZh != null) 'descZh': descZh,
       'type': type,
       'collectionType': collectionType,
       'coverUrl': coverUrl,

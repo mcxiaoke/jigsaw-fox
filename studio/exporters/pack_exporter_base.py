@@ -33,6 +33,9 @@ class PackExporterBase(BaseExporter):
         pack_id = (self.data.get("id") or self.data.get(self.id_field) or "").strip()
         if not pack_id:
             raise ValueError(f"必须指定唯一标识 ID (id 或 {self.id_field})")
+        title = (self.data.get("title") or "").strip()
+        if not title:
+            raise ValueError("必须填写标题 (title)")
         if not self.src_p.exists() or not self.src_p.is_dir():
             raise ValueError(f"源目录不存在: {self.src_p}")
 
@@ -43,8 +46,10 @@ class PackExporterBase(BaseExporter):
 
     def execute(self) -> ExportResult:
         pack_id = (self.data.get("id") or self.data.get(self.id_field) or "").strip()
-        title = self.data.get("title") or pack_id
-        desc = self.data.get("description", "")
+        title = (self.data.get("title") or "").strip() or pack_id
+        desc = (self.data.get("description") or self.data.get("desc") or "").strip()
+        title_zh = (self.data.get("titleZh") or "").strip()
+        desc_zh = (self.data.get("descZh") or "").strip()
         status = self.data.get("status", "active")
         display_order = int(self.data.get("displayOrder", 1))
 
@@ -233,6 +238,10 @@ class PackExporterBase(BaseExporter):
             "updatedAt": now_str,
             **self.build_item_extra(),
         }
+        if title_zh:
+            item_entry["titleZh"] = title_zh
+        if desc_zh:
+            item_entry["descZh"] = desc_zh
 
         # 查找替换或追加
         found = False

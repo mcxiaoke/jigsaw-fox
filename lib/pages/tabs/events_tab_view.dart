@@ -230,7 +230,7 @@ class _EventsTabViewState extends State<EventsTabView> {
                   right: 14,
                   bottom: 12,
                   child: Text(
-                    event.title,
+                    event.displayTitle,
                     style: const TextStyle(
                       color: Colors.white,
                       fontSize: 18,
@@ -255,7 +255,9 @@ class _EventsTabViewState extends State<EventsTabView> {
                   children: [
                     Expanded(
                       child: Text(
-                        event.desc.isNotEmpty ? event.desc : '精彩专题拼图挑战',
+                        event.displayDesc.isNotEmpty
+                            ? event.displayDesc
+                            : '精彩专题拼图挑战',
                         style: styles.caption.copyWith(height: 1.3),
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,

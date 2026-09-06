@@ -212,12 +212,12 @@ class UnifiedCatalogIndex {
               sourceLabel: '活动',
               sourceModule: CanonicalId.prefixEvent,
               aspectRatio: PuzzleAspectRatio.square1x1,
-              author: event.title,
+              author: event.displayTitle,
               tags: const ['活动'],
               addedAt: event.startTime,
               recommendedDifficulty: '6x6',
               contextId: event.id,
-              displaySubtitle: event.title,
+              displaySubtitle: event.displayTitle,
             );
           }
         }
@@ -242,12 +242,12 @@ class UnifiedCatalogIndex {
               sourceLabel: col.displayTypeLabel,
               sourceModule: CanonicalId.prefixCollection,
               aspectRatio: PuzzleAspectRatio.square1x1,
-              author: col.title,
-              tags: [col.displayTypeLabel, col.title],
+              author: col.displayTitle,
+              tags: [col.displayTypeLabel, col.displayTitle],
               addedAt: col.startTime,
               recommendedDifficulty: '6x6',
               contextId: col.id,
-              displaySubtitle: col.title,
+              displaySubtitle: col.displayTitle,
             );
           }
         }

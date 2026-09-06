@@ -301,9 +301,17 @@
 
 ---
 
-### 3.4 Events & Collections 共享架构与 Schema
+### 3.4 Events & Collections 共享架构与双语 Schema
 
-由共享引擎 `PackExporterBase` 驱动生成，结构高度对称：
+由共享引擎 `PackExporterBase` 驱动生成，结构高度对称。支持**中英文双语**元数据：
+* **`title`**：默认标题，**英文必填**（如 `"Halloween Mystery"`）；
+* **`desc`**：默认描述，**英文选填**（如 `"Explore pumpkins and spooky puzzles."`）；
+* **`titleZh`**：中文标题，**选填**（如 `"万圣节奇妙夜"`）；
+* **`descZh`**：中文描述，**选填**（如 `"探索南瓜灯与糖果的神秘拼图世界"`）；
+* **客户端本地化降级规则**：
+  - 中文语言环境（`zh-CN` / `zh-*`）：优先使用 `titleZh` / `descZh`，若未提供或为空则平滑回退至英文 `title` / `desc`；
+  - 其它语言环境：统一使用默认英文 `title` / `desc`；
+  - 仅限 `events` 与 `collections` 模块，主线与每日挑战不包含此字段。
 
 #### A. `out/events/index.json`
 ```json
@@ -315,8 +323,10 @@
     {
       "id": "halloween2026",
       "eventId": "halloween2026",
-      "title": "万圣节奇妙夜",
-      "desc": "探索南瓜灯与糖果的神秘拼图世界",
+      "title": "Halloween Mystery",
+      "desc": "Explore pumpkins and spooky puzzles",
+      "titleZh": "万圣节奇妙夜",
+      "descZh": "探索南瓜灯与糖果的神秘拼图世界",
       "status": "active",
       "displayOrder": 1,
       "startTime": "2026-10-25T00:00:00Z",
@@ -342,8 +352,10 @@
     {
       "id": "masterpieces_v1",
       "collectionId": "masterpieces_v1",
-      "title": "世界名画经典",
-      "desc": "收录梵高、莫奈等大师传世经典",
+      "title": "World Masterpieces",
+      "desc": "Classic paintings from Van Gogh, Monet and more",
+      "titleZh": "世界名画经典",
+      "descZh": "收录梵高、莫奈等大师传世经典",
       "status": "active",
       "displayOrder": 1,
       "category": "art",

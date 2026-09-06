@@ -1,11 +1,15 @@
+import 'package:jigsawpuzzle/utils/locale_helper.dart';
+
 /// 活动列表项模型
 class PuzzleEventItem {
   const PuzzleEventItem({
     required this.id,
     required this.title,
+    this.titleZh,
     required this.status,
     required this.type,
     this.desc = '',
+    this.descZh,
     this.coverUrl,
     this.zipUrl,
     this.zipSha256,
@@ -21,8 +25,11 @@ class PuzzleEventItem {
   /// 活动唯一标识符 (如 "cyberpunk_2026")
   final String id;
 
-  /// 活动展示标题
+  /// 活动展示标题 (默认英文)
   final String title;
+
+  /// 活动中文标题 (可选)
+  final String? titleZh;
 
   /// 活动状态 ('upcoming' | 'active' | 'outdated' | 'disabled')
   final String status;
@@ -30,8 +37,11 @@ class PuzzleEventItem {
   /// 载荷类型 ('zip' | 'array')
   final String type;
 
-  /// 活动详情描述
+  /// 活动详情描述 (默认英文)
   final String desc;
+
+  /// 活动中文描述 (可选)
+  final String? descZh;
 
   /// 封面图 URL
   final String? coverUrl;
@@ -79,12 +89,40 @@ class PuzzleEventItem {
     return '${(fileSizeBytes / (1024 * 1024)).toStringAsFixed(1)} MB';
   }
 
+  /// 根据语言环境获取本地化标题
+  /// 中文语言优先返回非空的 [titleZh]，若无则回退至默认英文 [title]；其它语言返回默认英文 [title]
+  String localizedTitle([String? languageCode]) {
+    if (LocaleHelper.isChinese(languageCode)) {
+      final zh = titleZh?.trim();
+      if (zh != null && zh.isNotEmpty) return zh;
+    }
+    return title;
+  }
+
+  /// 根据语言环境获取本地化描述
+  /// 中文语言优先返回非空的 [descZh]，若无则回退至默认英文 [desc]；其它语言返回默认英文 [desc]
+  String localizedDesc([String? languageCode]) {
+    if (LocaleHelper.isChinese(languageCode)) {
+      final zh = descZh?.trim();
+      if (zh != null && zh.isNotEmpty) return zh;
+    }
+    return desc;
+  }
+
+  /// 便捷 getter：根据当前系统语言展示标题
+  String get displayTitle => localizedTitle();
+
+  /// 便捷 getter：根据当前系统语言展示描述
+  String get displayDesc => localizedDesc();
+
   PuzzleEventItem copyWith({
     String? id,
     String? title,
+    String? titleZh,
     String? status,
     String? type,
     String? desc,
+    String? descZh,
     String? coverUrl,
     String? zipUrl,
     String? zipSha256,
@@ -99,9 +137,11 @@ class PuzzleEventItem {
     return PuzzleEventItem(
       id: id ?? this.id,
       title: title ?? this.title,
+      titleZh: titleZh ?? this.titleZh,
       status: status ?? this.status,
       type: type ?? this.type,
       desc: desc ?? this.desc,
+      descZh: descZh ?? this.descZh,
       coverUrl: coverUrl ?? this.coverUrl,
       zipUrl: zipUrl ?? this.zipUrl,
       zipSha256: zipSha256 ?? this.zipSha256,
@@ -128,9 +168,11 @@ class PuzzleEventItem {
     return PuzzleEventItem(
       id: json['id']?.toString() ?? 'unknown_event',
       title: json['title']?.toString() ?? '',
+      titleZh: json['titleZh']?.toString(),
       status: json['status']?.toString().toLowerCase() ?? 'active',
       type: json['type']?.toString().toLowerCase() ?? 'zip',
       desc: json['desc']?.toString() ?? '',
+      descZh: json['descZh']?.toString(),
       coverUrl: json['coverUrl']?.toString(),
       zipUrl: json['zipUrl']?.toString(),
       zipSha256: json['zipSha256']?.toString(),
@@ -155,9 +197,11 @@ class PuzzleEventItem {
     return {
       'id': id,
       'title': title,
+      if (titleZh != null) 'titleZh': titleZh,
       'status': status,
       'type': type,
       'desc': desc,
+      if (descZh != null) 'descZh': descZh,
       'coverUrl': coverUrl,
       'zipUrl': zipUrl,
       'zipSha256': zipSha256,

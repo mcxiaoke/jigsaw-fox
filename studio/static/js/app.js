@@ -136,7 +136,9 @@ const app = createApp({
       eventId: "",
       collectionId: "",
       title: "",
+      titleZh: "",
       description: "",
+      descZh: "",
       displayOrder: 1,
       status: "active",
       outputMode: "zip",
@@ -737,6 +739,10 @@ const app = createApp({
         showToast("请填写源目录和输出目录");
         return;
       }
+      if ((exportType.value === "event" || exportType.value === "collection") && !exportConfig.value.title.trim()) {
+        showToast("请填写英文标题 (Title)");
+        return;
+      }
       persistConfig();
       isExporting.value = true;
       exportLogs.value = [];
@@ -754,8 +760,10 @@ const app = createApp({
         month: exportConfig.value.month,
         eventId: exportConfig.value.eventId,
         collectionId: exportConfig.value.collectionId,
-        title: exportConfig.value.title,
-        description: exportConfig.value.description,
+        title: exportConfig.value.title.trim(),
+        titleZh: exportConfig.value.titleZh.trim(),
+        description: exportConfig.value.description.trim(),
+        descZh: exportConfig.value.descZh.trim(),
         displayOrder: exportConfig.value.displayOrder,
         status: exportConfig.value.status,
         outputMode: exportConfig.value.outputMode,

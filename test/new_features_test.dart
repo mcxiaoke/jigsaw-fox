@@ -215,8 +215,16 @@ void main() {
     testWidgets('HomeTabView renders category filters and reacts to taps', (
       tester,
     ) async {
+      tester.platformDispatcher.localesTestValue = const [Locale('zh', 'CN')];
+      tester.platformDispatcher.localeTestValue = const Locale('zh', 'CN');
+      addTearDown(() {
+        tester.platformDispatcher.clearLocalesTestValue();
+        tester.platformDispatcher.clearLocaleTestValue();
+      });
+
       await tester.pumpWidget(
         MaterialApp(
+          locale: const Locale('zh', 'CN'),
           home: Scaffold(body: HomeTabView(onSwitchToDaily: () {})),
         ),
       );
@@ -232,6 +240,30 @@ void main() {
 
       expect(find.textContaining('每日挑战'), findsOneWidget);
     });
+
+    testWidgets(
+      'HomeTabView renders English category filters in English locale',
+      (tester) async {
+        tester.platformDispatcher.localesTestValue = const [Locale('en', 'US')];
+        tester.platformDispatcher.localeTestValue = const Locale('en', 'US');
+        addTearDown(() {
+          tester.platformDispatcher.clearLocalesTestValue();
+          tester.platformDispatcher.clearLocaleTestValue();
+        });
+
+        await tester.pumpWidget(
+          MaterialApp(
+            locale: const Locale('en', 'US'),
+            home: Scaffold(body: HomeTabView(onSwitchToDaily: () {})),
+          ),
+        );
+
+        expect(find.text('All'), findsOneWidget);
+        expect(find.text('Pets'), findsOneWidget);
+        expect(find.text('Animals'), findsOneWidget);
+        expect(find.text('Nature'), findsOneWidget);
+      },
+    );
 
     testWidgets('DailyTabView renders streak stats and header', (tester) async {
       await tester.pumpWidget(
