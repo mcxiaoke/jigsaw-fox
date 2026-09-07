@@ -83,7 +83,13 @@ class LevelImageResolver {
             File(existing.first.localPath!).existsSync()) {
           return existing.first.localPath!;
         }
-      } catch (_) {}
+      } catch (e, st) {
+        AppLogger.content.fine(
+          'LevelImageResolver main-cache probe failed id=${level.id}',
+          e,
+          st,
+        );
+      }
 
       // 3. 通用网络关卡落地（懒下载，幂等）
       try {
@@ -96,8 +102,14 @@ class LevelImageResolver {
                 File(ensured.localPath!).existsSync()) {
               return ensured.localPath!;
             }
-          } catch (_) {
+          } catch (e, st) {
             // 回退通用目录
+            AppLogger.content.warning(
+              'LevelImageResolver ensureMainLevelDownloaded failed, '
+              'fallback to generic dir id=${level.id}',
+              e,
+              st,
+            );
           }
         }
 

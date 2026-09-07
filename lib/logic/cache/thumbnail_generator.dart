@@ -129,6 +129,10 @@ class ThumbnailGenerator {
   }
 
   /// 后台 Isolate 核心运算例程：返回缩略图 JPEG 字节
+  ///
+  /// ⚠️ 错误一律以 [StateError] 抛出（而非返回 null 吞掉），由主 Isolate 侧
+  /// [generateThumbnailBytes] / [generateThumbnailFromBytes] 的 catch 记录日志。
+  /// 历史版本在此吞错误导致“缩略图生成失败但零日志、封面永久裂图”无从排查。
   static Uint8List? _processThumbnailToBytesIsolate(
     ThumbnailTaskParams params,
   ) {
@@ -136,18 +140,36 @@ class ThumbnailGenerator {
       var rawBytes = params.rawBytes;
       if (rawBytes == null && params.sourceFilePath != null) {
         final sourceFile = File(params.sourceFilePath!);
-        if (!sourceFile.existsSync()) return null;
+        if (!sourceFile.existsSync()) {
+          throw StateError(
+            'thumbnail source not found: ${params.sourceFilePath}',
+          );
+        }
         rawBytes = sourceFile.readAsBytesSync();
       }
 
-      if (rawBytes == null || rawBytes.isEmpty) return null;
+      if (rawBytes == null || rawBytes.isEmpty) {
+        throw StateError(
+          'thumbnail source empty: path=${params.sourceFilePath} '
+          'hasBytes=${params.rawBytes != null}',
+        );
+      }
 
       final original = img.decodeImage(rawBytes);
-      if (original == null) return null;
+      if (original == null) {
+        throw StateError(
+          'decodeImage returned null: path=${params.sourceFilePath} '
+          'bytes=${rawBytes.length} first4=${rawBytes.take(4).toList()}',
+        );
+      }
 
       final srcW = original.width;
       final srcH = original.height;
-      if (srcW <= 0 || srcH <= 0) return null;
+      if (srcW <= 0 || srcH <= 0) {
+        throw StateError(
+          'invalid source dimensions ${srcW}x$srcH path=${params.sourceFilePath}',
+        );
+      }
 
       final targetDim = params.targetDimension;
       int dstW;
@@ -170,9 +192,16 @@ class ThumbnailGenerator {
       );
 
       final jpgBytes = img.encodeJpg(resized, quality: params.quality);
+      if (jpgBytes.isEmpty) {
+        throw StateError(
+          'encodeJpg returned empty: path=${params.sourceFilePath}',
+        );
+      }
       return Uint8List.fromList(jpgBytes);
     } catch (e) {
-      return null;
+      // 错误向上抛出，compute() 会在主 Isolate 重新抛出并保留错误消息与堆栈
+      if (e is StateError) rethrow;
+      throw StateError('thumbnail isolate failed: $e');
     }
   }
 
@@ -195,7 +224,7 @@ class ThumbnailGenerator {
       targetFile.writeAsBytesSync(jpgBytes, flush: true);
       return true;
     } catch (e) {
-      return false;
+      rethrow;
     }
   }
 
@@ -232,13 +261,21 @@ class ThumbnailGenerator {
   /// 后台 Isolate 核心运算例程：智能/居中裁剪并返回 JPEG 字节。
   /// 默认使用 [findSmartCropRect] 进行主体显著性能量寻优；
   /// 标准比例图（损失 ≤ 1%）直接返回原始字节，避免无谓重编码。
+  /// ⚠️ 错误一律抛出（不吞 null），由主 Isolate 的 catch 记录日志。
   static Uint8List? _processCropToBytesIsolate(CropTaskParams params) {
     try {
       final original = img.decodeImage(params.rawBytes);
-      if (original == null) return null;
+      if (original == null) {
+        throw StateError(
+          'crop decodeImage returned null: bytes=${params.rawBytes.length} '
+          'first4=${params.rawBytes.take(4).toList()}',
+        );
+      }
       final srcW = original.width;
       final srcH = original.height;
-      if (srcW <= 0 || srcH <= 0) return null;
+      if (srcW <= 0 || srcH <= 0) {
+        throw StateError('crop invalid source dimensions ${srcW}x$srcH');
+      }
 
       final srcRatio = srcW / srcH;
       final target =
@@ -276,7 +313,11 @@ class ThumbnailGenerator {
         }
       }
 
-      if (cropW <= 0 || cropH <= 0 || dx < 0 || dy < 0) return null;
+      if (cropW <= 0 || cropH <= 0 || dx < 0 || dy < 0) {
+        throw StateError(
+          'crop invalid rect ${cropW}x$cropH @($dx,$dy) src=${srcW}x$srcH',
+        );
+      }
 
       final cropped = img.copyCrop(
         original,
@@ -286,9 +327,13 @@ class ThumbnailGenerator {
         height: cropH,
       );
       final jpgBytes = img.encodeJpg(cropped, quality: params.quality);
+      if (jpgBytes.isEmpty) {
+        throw StateError('crop encodeJpg returned empty');
+      }
       return Uint8List.fromList(jpgBytes);
     } catch (e) {
-      return null;
+      if (e is StateError) rethrow;
+      throw StateError('crop isolate failed: $e');
     }
   }
 }

@@ -242,7 +242,15 @@ class PackContentPipeline {
           try {
             final str = utf8.decode(file.content as List<int>);
             manifestJson = jsonDecode(str) as Map<String, dynamic>;
-          } catch (_) {}
+          } catch (e, st) {
+            // 元数据损坏时降级为默认标题继续导入（图片仍可玩），但必须留痕
+            AppLogger.pack.warning(
+              '_processZipBytes invalid metadata $baseName in $sourceOrigin, '
+              'fallback to default title',
+              e,
+              st,
+            );
+          }
           continue;
         }
 

@@ -242,7 +242,15 @@ class ImageCacheManager {
           quality: quality,
         );
 
-        if (generatedBytes != null && generatedBytes.isNotEmpty) {
+        if (generatedBytes == null || generatedBytes.isEmpty) {
+          AppLogger.imageCache.warning(
+            'Thumbnail generate empty src=${AppLogger.sanitizePath(sourcePath)} '
+            'dim=${dimension.pixels}',
+          );
+          return null;
+        }
+
+        {
           // 异步写入 L2 磁盘
           try {
             final targetFile = File(targetPath);
@@ -264,8 +272,6 @@ class ImageCacheManager {
           _memoryCache.put(cacheKey, generatedBytes);
           return generatedBytes;
         }
-
-        return null;
       },
     );
   }
@@ -439,6 +445,10 @@ class ImageCacheManager {
           }
           final tmpFile = File(tmpPath);
           if (!await tmpFile.exists() || await tmpFile.length() == 0) {
+            AppLogger.imageCache.warning(
+              'Network thumbnail download empty result '
+              'url=${AppLogger.sanitizeUrl(url)} tmp=$tmpPath',
+            );
             return null;
           }
           const maxNetBytes = 20 * 1024 * 1024;
@@ -461,7 +471,13 @@ class ImageCacheManager {
           try {
             await tmpFile.delete();
           } catch (_) {}
-          if (generatedBytes == null || generatedBytes.isEmpty) return null;
+          if (generatedBytes == null || generatedBytes.isEmpty) {
+            AppLogger.imageCache.warning(
+              'Network thumbnail generate empty '
+              'url=${AppLogger.sanitizeUrl(url)} dim=${dimension.pixels}',
+            );
+            return null;
+          }
 
           try {
             final targetPath = getThumbnailFilePath(url, dimension: dimension);

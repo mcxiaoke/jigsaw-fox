@@ -179,7 +179,13 @@ class MainContentPipeline {
 
     try {
       final json = await _httpClient.fetchJson(remoteUrl);
-      if (json is! Map<String, dynamic>) return false;
+      if (json is! Map<String, dynamic>) {
+        AppLogger.mainPipe.warning(
+          'syncWithRemote index unexpected type ${json.runtimeType} '
+          'url=${AppLogger.sanitizeUrl(remoteUrl)}',
+        );
+        return false;
+      }
 
       final newVersion = (json['version'] as num?)?.toInt() ?? remoteVersion;
       var hasNewItems = false;
@@ -211,11 +217,23 @@ class MainContentPipeline {
         for (final batch in missingBatches) {
           final batchUrl = ContentHttpClient.resolveUrl(remoteUrl, batch.url);
           final batchJson = await _httpClient.fetchJson(batchUrl);
-          if (batchJson is! Map<String, dynamic>) continue;
+          if (batchJson is! Map<String, dynamic>) {
+            AppLogger.mainPipe.warning(
+              'syncWithRemote batch ${batch.batchId} unexpected type '
+              '${batchJson.runtimeType} url=${AppLogger.sanitizeUrl(batchUrl)}',
+            );
+            continue;
+          }
 
           final rawLevels = batchJson['items'] as List<dynamic>? ?? [];
           for (final raw in rawLevels) {
-            if (raw is! Map<String, dynamic>) continue;
+            if (raw is! Map<String, dynamic>) {
+              AppLogger.mainPipe.warning(
+                'syncWithRemote batch ${batch.batchId} skip malformed item '
+                'type=${raw.runtimeType}',
+              );
+              continue;
+            }
             // 将相对路径图片 URL 递归解析为绝对 URL (RFC 3986)
             final rawUrl = raw['url']?.toString() ?? '';
             if (rawUrl.isNotEmpty) {
@@ -223,7 +241,13 @@ class MainContentPipeline {
             }
 
             final level = _parseLevelItem(raw);
-            if (level == null) continue;
+            if (level == null) {
+              AppLogger.mainPipe.warning(
+                'syncWithRemote batch ${batch.batchId} item missing url, skip '
+                'rawKeys=${raw.keys.take(6).toList()}',
+              );
+              continue;
+            }
 
             final existing = _levelsMap[level.id];
             if (existing != null) {
