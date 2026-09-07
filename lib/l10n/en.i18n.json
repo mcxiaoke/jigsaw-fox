@@ -272,6 +272,11 @@
     "nothingToCopy": "No logs to copy",
     "copiedFiltered": "Copied {count} logs from current view",
     "copiedAll": "Copied all {count} logs",
+    "clearTooltip": "Clear logs",
+    "clearConfirmTitle": "Clear all logs?",
+    "clearConfirmDesc": "Deletes log files on disk and clears the in-memory records. This cannot be undone.\nLogging restarts from scratch, so future copies will be much smaller.",
+    "clearConfirmBtn": "Clear logs",
+    "clearedToast": "Logs cleared, recording restarted from scratch",
     "emptyFiltered": "No logs under the current filter",
     "loading": "Loading logs...",
     "close": "Close"

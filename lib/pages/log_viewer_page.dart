@@ -13,7 +13,7 @@ import 'package:phosphoricons_flutter/phosphoricons_flutter.dart';
 ///
 /// - 数据源：进程内最近 3000 条（内存环形缓冲）+ 当天磁盘日志历史 + 实时订阅
 /// - 布局：时间线式（最新日志置顶，向下滚动查看更早）
-/// - 能力：实时更新、按等级过滤（全部 / INFO+ / WARN+ / ERROR+）、复制日志、回顶部
+/// - 能力：实时更新、按等级过滤（全部 / INFO+ / WARN+ / ERROR+）、复制日志、回顶部、清除日志（磁盘文件 + 内存缓存）
 class LogViewerPage extends StatefulWidget {
   const LogViewerPage({super.key});
 
@@ -67,6 +67,9 @@ class _LogViewerPageState extends State<LogViewerPage> {
   LogViewFilter _filter = LogViewFilter.all;
   bool _historyLoaded = false;
   final ScrollController _scrollController = ScrollController();
+
+  /// 清除代数：每次清除日志 +1，用于丢弃清除前已发起的异步历史加载结果
+  int _clearEpoch = 0;
 
   static const int _maxAllEntries = 20000;
   static const int _maxHistoryFileLines = 15000;
@@ -225,6 +228,7 @@ class _LogViewerPageState extends State<LogViewerPage> {
   // ---- 历史文件加载 ----
 
   Future<void> _loadHistory() async {
+    final epoch = _clearEpoch;
     var lines = const <String>[];
     try {
       lines = await AppLogger.readTodayLogLines();
@@ -232,6 +236,11 @@ class _LogViewerPageState extends State<LogViewerPage> {
       lines = const [];
     }
     if (!mounted) return;
+    // 期间发生过清除：丢弃此次读取到的旧日志，避免清除后又被回填
+    if (epoch != _clearEpoch) {
+      setState(() => _historyLoaded = true);
+      return;
+    }
     // 文件行可能极大，仅保留最新 [_maxHistoryFileLines] 行用于展示
     if (lines.length > _maxHistoryFileLines) {
       lines = lines.sublist(lines.length - _maxHistoryFileLines);
@@ -324,6 +333,53 @@ class _LogViewerPageState extends State<LogViewerPage> {
         ),
       );
     }
+  }
+
+  // ---- 清除 ----
+
+  /// 清除全部日志（磁盘文件 + 内存缓存），需二次确认
+  Future<void> _confirmClearLogs() async {
+    final palette = AppPalette.of(context);
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Text(t.logs.clearConfirmTitle),
+        content: Text(t.logs.clearConfirmDesc),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text(t.common.cancel),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: FilledButton.styleFrom(backgroundColor: palette.error),
+            child: Text(t.logs.clearConfirmBtn),
+          ),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+    // 置代数使在途历史加载失效
+    _clearEpoch++;
+    try {
+      await AppLogger.clearAll();
+    } catch (_) {
+      // clearAll 内部已兜底，失败不阻断视图清空
+    }
+    if (!mounted) return;
+    setState(() {
+      _all.clear();
+      _shown.clear();
+      _historyLoaded = true;
+    });
+    _jumpToTop();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(t.logs.clearedToast),
+        duration: const Duration(seconds: 2),
+      ),
+    );
   }
 
   // ---- UI ----
@@ -424,6 +480,15 @@ class _LogViewerPageState extends State<LogViewerPage> {
                 ),
               ),
             ],
+          ),
+          IconButton(
+            tooltip: t.logs.clearTooltip,
+            icon: Icon(
+              PhosphorIconsBold.trashSimple,
+              color: palette.error,
+              size: 22,
+            ),
+            onPressed: _confirmClearLogs,
           ),
           const SizedBox(width: 8),
         ],

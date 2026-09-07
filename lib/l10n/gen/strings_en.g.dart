@@ -944,6 +944,21 @@ class Translations$logs$en {
 	/// en: 'Copied all {count} logs'
 	String copiedAll({required Object count}) => 'Copied all ${count} logs';
 
+	/// en: 'Clear logs'
+	String get clearTooltip => 'Clear logs';
+
+	/// en: 'Clear all logs?'
+	String get clearConfirmTitle => 'Clear all logs?';
+
+	/// en: 'Deletes log files on disk and clears the in-memory records. This cannot be undone. Logging restarts from scratch, so future copies will be much smaller.'
+	String get clearConfirmDesc => 'Deletes log files on disk and clears the in-memory records. This cannot be undone.\nLogging restarts from scratch, so future copies will be much smaller.';
+
+	/// en: 'Clear logs'
+	String get clearConfirmBtn => 'Clear logs';
+
+	/// en: 'Logs cleared, recording restarted from scratch'
+	String get clearedToast => 'Logs cleared, recording restarted from scratch';
+
 	/// en: 'No logs under the current filter'
 	String get emptyFiltered => 'No logs under the current filter';
 
@@ -2355,6 +2370,11 @@ extension on Translations {
 			'logs.nothingToCopy' => 'No logs to copy',
 			'logs.copiedFiltered' => ({required Object count}) => 'Copied ${count} logs from current view',
 			'logs.copiedAll' => ({required Object count}) => 'Copied all ${count} logs',
+			'logs.clearTooltip' => 'Clear logs',
+			'logs.clearConfirmTitle' => 'Clear all logs?',
+			'logs.clearConfirmDesc' => 'Deletes log files on disk and clears the in-memory records. This cannot be undone.\nLogging restarts from scratch, so future copies will be much smaller.',
+			'logs.clearConfirmBtn' => 'Clear logs',
+			'logs.clearedToast' => 'Logs cleared, recording restarted from scratch',
 			'logs.emptyFiltered' => 'No logs under the current filter',
 			'logs.loading' => 'Loading logs...',
 			'logs.close' => 'Close',

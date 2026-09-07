@@ -484,6 +484,11 @@ class _Translations$logs$zh extends Translations$logs$en {
 	@override String get nothingToCopy => '暂无可复制的日志';
 	@override String copiedFiltered({required Object count}) => '已复制当前视图 ${count} 条日志';
 	@override String copiedAll({required Object count}) => '已复制全部 ${count} 条日志';
+	@override String get clearTooltip => '清除日志';
+	@override String get clearConfirmTitle => '清除全部日志？';
+	@override String get clearConfirmDesc => '将删除磁盘上的日志文件，并清空内存中的日志记录，此操作不可恢复。\n清除后日志会从头重新记录，下次复制时内容将大幅减少。';
+	@override String get clearConfirmBtn => '清除日志';
+	@override String get clearedToast => '日志已清除，正在从空白重新记录';
 	@override String get emptyFiltered => '当前过滤条件下暂无日志';
 	@override String get loading => '日志加载中…';
 	@override String get close => '关闭';
@@ -1451,6 +1456,11 @@ extension on TranslationsZh {
 			'logs.nothingToCopy' => '暂无可复制的日志',
 			'logs.copiedFiltered' => ({required Object count}) => '已复制当前视图 ${count} 条日志',
 			'logs.copiedAll' => ({required Object count}) => '已复制全部 ${count} 条日志',
+			'logs.clearTooltip' => '清除日志',
+			'logs.clearConfirmTitle' => '清除全部日志？',
+			'logs.clearConfirmDesc' => '将删除磁盘上的日志文件，并清空内存中的日志记录，此操作不可恢复。\n清除后日志会从头重新记录，下次复制时内容将大幅减少。',
+			'logs.clearConfirmBtn' => '清除日志',
+			'logs.clearedToast' => '日志已清除，正在从空白重新记录',
 			'logs.emptyFiltered' => '当前过滤条件下暂无日志',
 			'logs.loading' => '日志加载中…',
 			'logs.close' => '关闭',

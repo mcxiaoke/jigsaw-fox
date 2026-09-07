@@ -272,6 +272,11 @@
     "nothingToCopy": "暂无可复制的日志",
     "copiedFiltered": "已复制当前视图 {count} 条日志",
     "copiedAll": "已复制全部 {count} 条日志",
+    "clearTooltip": "清除日志",
+    "clearConfirmTitle": "清除全部日志？",
+    "clearConfirmDesc": "将删除磁盘上的日志文件，并清空内存中的日志记录，此操作不可恢复。\n清除后日志会从头重新记录，下次复制时内容将大幅减少。",
+    "clearConfirmBtn": "清除日志",
+    "clearedToast": "日志已清除，正在从空白重新记录",
     "emptyFiltered": "当前过滤条件下暂无日志",
     "loading": "日志加载中…",
     "close": "关闭"
