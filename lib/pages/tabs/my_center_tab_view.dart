@@ -21,6 +21,7 @@ import '../../logic/puzzle_model.dart';
 import '../../logic/source_tag.dart';
 import '../../logic/unified_puzzle_resolver.dart';
 import '../../services/app_logger.dart';
+import '../../services/locale_service.dart';
 import '../../services/sound_service.dart';
 import '../../services/webview_service.dart';
 import '../../theme/app_palette.dart';
@@ -67,6 +68,13 @@ class _MyCenterTabViewState extends State<MyCenterTabView> {
       _onContentChanged,
     );
     AppContent.instance.contentUpdateNotifier.addListener(_onContentChanged);
+    LocaleService.instance.addListener(_onLocaleChanged);
+  }
+
+  void _onLocaleChanged() {
+    UnifiedCatalogIndex.invalidate();
+    _loadAllData();
+    if (mounted) setState(() {});
   }
 
   void _onContentChanged() {
@@ -85,6 +93,7 @@ class _MyCenterTabViewState extends State<MyCenterTabView> {
   @override
   void dispose() {
     _debounceTimer?.cancel();
+    LocaleService.instance.removeListener(_onLocaleChanged);
     ProgressStore.instance.progressNotifier.removeListener(_onExternalChanged);
     FavoriteStore.instance.idsNotifier.removeListener(_onExternalChanged);
     GameRepository.instance.customPuzzlesNotifier.removeListener(

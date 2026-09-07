@@ -22,6 +22,7 @@ import '../game_page.dart';
 
 import '../../data/constants/puzzle_tags.dart';
 import '../../l10n/gen/strings.g.dart';
+import '../../services/locale_service.dart';
 import '../../utils/locale_helper.dart';
 
 // 热门N个（横滑常驻，末位固定入口之后展开全部 18 个黄金矩阵标签）
@@ -51,6 +52,16 @@ class _HomeTabViewState extends State<HomeTabView> {
   final Map<String, GlobalKey> _tagKeys = {
     for (final t in kHomeTags) t['id']!: GlobalKey(),
   };
+
+  @override
+  void initState() {
+    super.initState();
+    LocaleService.instance.addListener(_onLocaleChanged);
+  }
+
+  void _onLocaleChanged() {
+    if (mounted) setState(() {});
+  }
 
   // 标签解析：优先使用素材自身 tags，若为空则按 index 轮转兜底
   String _resolveTag(LevelItem l) {
@@ -244,6 +255,7 @@ class _HomeTabViewState extends State<HomeTabView> {
 
   @override
   void dispose() {
+    LocaleService.instance.removeListener(_onLocaleChanged);
     _scrollController.dispose();
     _tagScrollController.dispose();
     super.dispose();
@@ -304,7 +316,7 @@ class _HomeTabViewState extends State<HomeTabView> {
                       const Text('🦊', style: TextStyle(fontSize: 44)),
                       const SizedBox(height: 8),
                       Text(
-                        '小狐狸没找到该分类的关卡',
+                        t.home.emptyCategory,
                         style: styles.caption.copyWith(fontSize: 14),
                       ),
                       const SizedBox(height: 12),
@@ -313,7 +325,7 @@ class _HomeTabViewState extends State<HomeTabView> {
                         style: FilledButton.styleFrom(
                           backgroundColor: palette.brand,
                         ),
-                        child: const Text('查看全部'),
+                        child: Text(t.home.viewAll),
                       ),
                     ],
                   ),
@@ -415,8 +427,10 @@ class _HeaderCarouselState extends State<_HeaderCarousel> {
       for (final ev in events)
         HeroBannerItem(
           id: ev.id,
-          title: ev.title,
-          subtitle: ev.desc.isNotEmpty ? ev.desc : t.events.subFallback,
+          title: ev.displayTitle,
+          subtitle: ev.displayDesc.isNotEmpty
+              ? ev.displayDesc
+              : t.events.subFallback,
           imagePathOrUrl:
               ev.coverUrl ?? (ev.levels.isNotEmpty ? ev.levels.first : ''),
           badgeText: t.events.badgeLimited,
@@ -566,8 +580,7 @@ class _TagBarDelegate extends SliverPersistentHeaderDelegate {
   }
 
   @override
-  bool shouldRebuild(covariant _TagBarDelegate oldDelegate) =>
-      oldDelegate.selectedTag != selectedTag || oldDelegate.palette != palette;
+  bool shouldRebuild(covariant _TagBarDelegate oldDelegate) => true;
 }
 
 class _TagChip extends StatelessWidget {

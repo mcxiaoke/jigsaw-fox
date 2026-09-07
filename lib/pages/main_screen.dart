@@ -3,6 +3,7 @@ import 'package:phosphoricons_flutter/phosphoricons_flutter.dart';
 
 import '../l10n/gen/strings.g.dart';
 import '../services/app_logger.dart';
+import '../services/locale_service.dart';
 import '../services/sound_service.dart';
 import '../theme/app_palette.dart';
 import '../theme/app_text_styles.dart';
@@ -24,6 +25,22 @@ class MainScreen extends StatefulWidget {
 
 class _MainScreenState extends State<MainScreen> {
   int _currentIndex = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    LocaleService.instance.addListener(_onLocaleChanged);
+  }
+
+  @override
+  void dispose() {
+    LocaleService.instance.removeListener(_onLocaleChanged);
+    super.dispose();
+  }
+
+  void _onLocaleChanged() {
+    if (mounted) setState(() {});
+  }
 
   String _appBarTitle(BuildContext context) {
     final tr = LocaleSettings.instance.currentTranslations;
@@ -80,8 +97,8 @@ class _MainScreenState extends State<MainScreen> {
               setState(() => _currentIndex = 1);
             },
           ),
-          const DailyTabView(),
-          const CollectionsTabView(),
+          DailyTabView(),
+          CollectionsTabView(),
           MyCenterTabView(
             isActive: _currentIndex == 3,
             onGoExplore: () {

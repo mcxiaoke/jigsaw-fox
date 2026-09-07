@@ -2,6 +2,7 @@ import '../data/game_repository.dart';
 import '../data/snapshot_store.dart';
 import '../l10n/gen/strings.g.dart';
 import '../services/app_logger.dart';
+import '../services/locale_service.dart';
 import 'content/app_content.dart';
 import 'content/models/canonical_id.dart';
 import 'puzzle_model.dart';
@@ -51,6 +52,17 @@ class UnifiedCatalogIndex {
   static UnifiedCatalogIndex? _cached;
   static bool _dirty = true;
 
+  static bool _localeListenerRegistered = false;
+
+  static void _ensureLocaleListener() {
+    if (!_localeListenerRegistered) {
+      _localeListenerRegistered = true;
+      LocaleService.instance.addListener(() {
+        invalidate();
+      });
+    }
+  }
+
   /// 标记目录脏状态（在自制拼图变动或包/活动内容更新时调用）
   static void invalidate() {
     _dirty = true;
@@ -58,6 +70,7 @@ class UnifiedCatalogIndex {
 
   /// 获取当前统一目录索引（优先读取内存缓存，避免重复全量扫描）
   static Future<UnifiedCatalogIndex> current() async {
+    _ensureLocaleListener();
     if (_cached != null && !_dirty) {
       return _cached!;
     }

@@ -6,6 +6,7 @@ import '../../logic/content/app_content.dart';
 import '../../logic/content/models/puzzle_collection_item.dart';
 import '../../logic/content/models/puzzle_event_item.dart';
 import '../../services/app_logger.dart';
+import '../../services/locale_service.dart';
 import '../../services/sound_service.dart';
 import '../../l10n/gen/strings.g.dart';
 import '../../theme/app_palette.dart';
@@ -36,10 +37,12 @@ class _CollectionsTabViewState extends State<CollectionsTabView> {
     super.initState();
     _content.contentUpdateNotifier.addListener(_onUpdated);
     _content.collections.updateNotifier.addListener(_onUpdated);
+    LocaleService.instance.addListener(_onUpdated);
   }
 
   @override
   void dispose() {
+    LocaleService.instance.removeListener(_onUpdated);
     _content.contentUpdateNotifier.removeListener(_onUpdated);
     _content.collections.updateNotifier.removeListener(_onUpdated);
     super.dispose();
@@ -112,10 +115,12 @@ class _CollectionsTabViewState extends State<CollectionsTabView> {
       return HeroBannerItem(
         id: ev.id,
         title: ev.displayTitle,
-        subtitle: ev.displayDesc.isNotEmpty ? ev.displayDesc : '限时活动挑战',
+        subtitle: ev.displayDesc.isNotEmpty
+            ? ev.displayDesc
+            : t.events.subFallback,
         imagePathOrUrl:
             ev.coverUrl ?? (ev.levels.isNotEmpty ? ev.levels.first : ''),
-        badgeText: '限时活动',
+        badgeText: t.events.badgeLimited,
         badgeEmoji: '🔥',
         badgeColor: const Color(0xFFD97706),
         onTap: () {
@@ -220,18 +225,18 @@ class _CollectionsTabViewState extends State<CollectionsTabView> {
                     const Text('🦊', style: TextStyle(fontSize: 48)),
                     const SizedBox(height: 10),
                     Text(
-                      '暂无图集内容',
+                      t.collections.emptyAll,
                       style: styles.body.copyWith(color: palette.secondaryText),
                     ),
                     const SizedBox(height: 6),
-                    Text('下拉刷新同步官方资源', style: styles.caption),
+                    Text(t.collections.emptyHint, style: styles.caption),
                     const SizedBox(height: 14),
                     ElevatedButton.icon(
                       icon: const Icon(
                         PhosphorIconsRegular.arrowClockwise,
                         size: 16,
                       ),
-                      label: const Text('刷新同步'),
+                      label: Text(t.common.sync),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: palette.brand,
                         foregroundColor: palette.surface,
@@ -255,7 +260,10 @@ class _CollectionsTabViewState extends State<CollectionsTabView> {
                         color: palette.disabledText,
                       ),
                       const SizedBox(height: 8),
-                      Text('暂无图集', style: styles.caption),
+                      Text(
+                        t.collections.emptyCollections,
+                        style: styles.caption,
+                      ),
                     ],
                   ),
                 ),

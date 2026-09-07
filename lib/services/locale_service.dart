@@ -98,6 +98,10 @@ class LocaleService extends ChangeNotifier {
     _initialized = false;
     _language = AppLanguage.system;
     _overrideLanguageCode = null;
+    try {
+      LocaleSettings.setLocaleSync(effectiveLocale);
+    } catch (_) {}
+    notifyListeners();
   }
 
   /// 测试注入：覆盖语言代码（'zh'/'en'/'zh-CN'），null 清除（生产可用，供 LocaleHelper 兼容）

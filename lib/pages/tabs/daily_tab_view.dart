@@ -16,6 +16,7 @@ import '../../logic/image_source.dart';
 import '../../logic/puzzle_model.dart';
 import '../../l10n/gen/strings.g.dart';
 import '../../services/app_logger.dart';
+import '../../services/locale_service.dart';
 import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
 import '../../widgets/app_cached_image.dart';
@@ -43,12 +44,18 @@ class _DailyTabViewState extends State<DailyTabView> {
     _expandedMonthKeys.add(curMonth);
     _loadFoldPrefs();
     AppContent.instance.contentUpdateNotifier.addListener(_onContentUpdate);
+    LocaleService.instance.addListener(_onLocaleChanged);
   }
 
   @override
   void dispose() {
+    LocaleService.instance.removeListener(_onLocaleChanged);
     AppContent.instance.contentUpdateNotifier.removeListener(_onContentUpdate);
     super.dispose();
+  }
+
+  void _onLocaleChanged() {
+    if (mounted) setState(() {});
   }
 
   void _onContentUpdate() {
