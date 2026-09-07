@@ -31,7 +31,7 @@ void main() {
       () async {
         debugDefaultTargetPlatformOverride = TargetPlatform.windows;
 
-        bool creatorCalled = false;
+        var creatorCalled = false;
         await WebViewService.init(
           versionChecker: () async => '128.0.2739.42',
           appSupportDirFinder: () async => Directory.systemTemp,

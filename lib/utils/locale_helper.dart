@@ -10,7 +10,6 @@ class LocaleHelper {
   /// 用于测试或手动覆盖的语言代码（已废弃，请用 LocaleService.instance.setOverrideForTest）
   @Deprecated('Use LocaleService.instance.setOverrideForTest instead')
   static String? get overrideLanguageCode =>
-      // ignore: deprecated_member_use_from_same_package
       _legacyOverride;
   @Deprecated('Use LocaleService.instance.setOverrideForTest instead')
   static set overrideLanguageCode(String? v) {

@@ -6,10 +6,9 @@ import 'package:flame/events.dart';
 import 'package:flutter/animation.dart';
 import 'package:flutter/painting.dart'
     show BlurStyle, Color, MaskFilter, Paint, PaintingStyle;
-
-import '../logic/geometry/piece_shape.dart';
-import '../logic/rendering/linen_texture_manager.dart';
-import 'jigsaw_puzzle_game.dart';
+import 'package:jigsawpuzzle/game/jigsaw_puzzle_game.dart';
+import 'package:jigsawpuzzle/logic/geometry/piece_shape.dart';
+import 'package:jigsawpuzzle/logic/rendering/linen_texture_manager.dart';
 
 /// 拼图碎片渲染与交互组件（基于 Flame 游戏引擎）。
 ///
@@ -124,7 +123,7 @@ class PuzzlePieceComponent extends PositionComponent
   /// - 模拟碎片被玩家手指拾起并悬浮在棋盘上方时的真实光学向右下方扩散的深层软投影。
   static final Paint _dragShadowPaint = Paint()
     ..color = const Color(0x40000000)
-    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 7.0)
+    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 7)
     ..isAntiAlias = true;
 
   /// 纸板物理厚度截面填充画笔（方案 2）：
@@ -209,10 +208,10 @@ class PuzzlePieceComponent extends PositionComponent
     // 1. 第一层：根据当前物理状态绘制 3D 软阴影（在剪裁外部）
     canvas.save();
     if (isElevated) {
-      canvas.translate(2.0, 6.0);
+      canvas.translate(2, 6);
       canvas.drawPath(shape.path, _dragShadowPaint);
     } else {
-      canvas.translate(0.0, 0.8);
+      canvas.translate(0, 0.8);
       canvas.drawPath(shape.path, _contactShadowPaint);
     }
     canvas.restore();
@@ -343,8 +342,8 @@ class PuzzlePieceComponent extends PositionComponent
       // 阈值定义（经权衡：大部分手势应判定为左右滑动托盘）：
       // - 向上拖出需同时满足：向上位移 >= 12px 且 垂直分量 > 水平 * 1.7（约 >59° 偏离水平，接近垂直）
       // - 其余所有情况（横向为主、斜向、下移、微小上移）均判为托盘滚动
-      const double upThreshold = 12.0;
-      const double angleFactor = 1.7; // tan(59.5°) ≈1.7，角度陡峭才视为拖出
+      const upThreshold = 12;
+      const angleFactor = 1.7; // tan(59.5°) ≈1.7，角度陡峭才视为拖出
 
       if (ady < -upThreshold && ady.abs() > adx * angleFactor) {
         // 确认为向上拖出：正式进入持有拖拽状态，集群整体跟随光标

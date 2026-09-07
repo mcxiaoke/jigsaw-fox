@@ -1,7 +1,8 @@
 import 'dart:math';
 import 'dart:ui' show Offset, Path, Rect;
 
-import 'edge_layout.dart';
+import 'package:jigsawpuzzle/logic/geometry/edge_curve.dart';
+import 'package:jigsawpuzzle/logic/geometry/edge_layout.dart';
 
 /// 碎片四周向外延展的凸出比例包围盒（Overhang）。
 ///
@@ -24,6 +25,22 @@ class Overhang {
     this.bottom = 0.0,
   });
 
+  /// 根据碎片的四条边属性计算四周的 Overhang
+  factory Overhang.fromEdges(PieceEdges edges, {double? tip}) {
+    double ratioFor(EdgeCurveDescriptor edge) {
+      if (edge.isFlat) return 0;
+      if (edge.isTab) return tip ?? standardTabRatio;
+      return standardBlankRatio;
+    }
+
+    return Overhang(
+      top: ratioFor(edges.top),
+      right: ratioFor(edges.right),
+      bottom: ratioFor(edges.bottom),
+      left: ratioFor(edges.left),
+    );
+  }
+
   /// 左侧向外延展比例（占碎片宽度的比例）
   final double left;
 
@@ -41,22 +58,6 @@ class Overhang {
 
   /// 凹槽（Blank）根部安全外扩采样裕量比例（15%）
   static const double standardBlankRatio = 0.15;
-
-  /// 根据碎片的四条边属性计算四周的 Overhang
-  factory Overhang.fromEdges(PieceEdges edges, {double? tip}) {
-    double ratioFor(dynamic edge) {
-      if (edge.isFlat) return 0.0;
-      if (edge.isTab) return tip ?? standardTabRatio;
-      return standardBlankRatio;
-    }
-
-    return Overhang(
-      top: ratioFor(edges.top),
-      right: ratioFor(edges.right),
-      bottom: ratioFor(edges.bottom),
-      left: ratioFor(edges.left),
-    );
-  }
 
   @override
   String toString() =>
@@ -148,7 +149,6 @@ class PieceShape {
       start: const Offset(0, 0),
       end: Offset(width, 0),
       normal: const Offset(0, -1),
-      reverse: false,
     );
 
     // 2. Right 边：(width, 0) -> (width, height)
@@ -157,7 +157,6 @@ class PieceShape {
       start: Offset(width, 0),
       end: Offset(width, height),
       normal: const Offset(1, 0),
-      reverse: false,
     );
 
     // 3. Bottom 边：标准定义为 (0, height) -> (width, height)，逆向倒回 (0, height)
@@ -200,7 +199,6 @@ class PieceShape {
       start: const Offset(0, 0),
       end: Offset(width, 0),
       normal: const Offset(0, -1),
-      reverse: false,
     );
     return p;
   }
@@ -215,7 +213,6 @@ class PieceShape {
       start: Offset(width, 0),
       end: Offset(width, height),
       normal: const Offset(1, 0),
-      reverse: false,
     );
     // 2. Bottom 边：(width, height) -> (0, height)
     edges.bottom.appendToPath(

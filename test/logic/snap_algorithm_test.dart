@@ -66,9 +66,9 @@ void main() {
 
     test('Solved detection when all pieces are correctly aligned', () {
       final solvedPieces = [
-        const PieceState(id: 0, r: 0, c: 0, nx: 0.0, ny: 0.0, clusterId: 0),
-        const PieceState(id: 1, r: 0, c: 1, nx: 0.5, ny: 0.0, clusterId: 0),
-        const PieceState(id: 2, r: 1, c: 0, nx: 0.0, ny: 0.5, clusterId: 0),
+        const PieceState(id: 0, r: 0, c: 0, nx: 0, ny: 0, clusterId: 0),
+        const PieceState(id: 1, r: 0, c: 1, nx: 0.5, ny: 0, clusterId: 0),
+        const PieceState(id: 2, r: 1, c: 0, nx: 0, ny: 0.5, clusterId: 0),
         const PieceState(id: 3, r: 1, c: 1, nx: 0.5, ny: 0.5, clusterId: 0),
       ];
 
@@ -162,7 +162,8 @@ void main() {
       // → 整体“空中岛屿”，必须保持可拖动（即便相互拼合成自由集群也不锁定）。
       final far = <PieceState>[];
       for (var id = 0; id < 16; id++) {
-        final r = id ~/ 4, c = id % 4;
+        final r = id ~/ 4;
+        final c = id % 4;
         far.add(
           PieceState(
             id: id,
@@ -232,7 +233,7 @@ void main() {
       // id=1 是 3x3 上边中央 (r=0,c=1) 已就位；id=4 是内部碎片 (r=1,c=1) 正与其相邻。
       // 装配体 {(0,1),(1,1)} 连通到边缘，故 id=4 具备锚定，可被吸附。
       final pieces = <PieceState>[
-        const PieceState(id: 1, r: 0, c: 1, nx: 1 / 3, ny: 0.0, clusterId: 1),
+        const PieceState(id: 1, r: 0, c: 1, nx: 1 / 3, ny: 0, clusterId: 1),
         const PieceState(id: 4, r: 1, c: 1, nx: 1 / 3, ny: 1 / 3, clusterId: 4),
         const PieceState(id: 0, r: 0, c: 0, nx: -0.9, ny: -0.9, clusterId: 0),
         const PieceState(id: 2, r: 0, c: 2, nx: 1.9, ny: 1.9, clusterId: 2),

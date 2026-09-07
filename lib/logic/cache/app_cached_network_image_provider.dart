@@ -4,9 +4,8 @@ import 'dart:ui' as ui;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/painting.dart';
-
-import '../../services/app_logger.dart';
-import 'image_cache_manager.dart';
+import 'package:jigsawpuzzle/logic/cache/image_cache_manager.dart';
+import 'package:jigsawpuzzle/services/app_logger.dart';
 
 /// 网络图片的 ImageProvider，复用与本地文件相同的三级缓存体系
 ///
@@ -86,7 +85,7 @@ class AppCachedNetworkImageProvider extends ImageProvider<AppNetworkImageKey> {
   ) async {
     try {
       // 优先走三级缓存（L1→L2→L3 下载+生成）
-      Uint8List? bytes = await ImageCacheManager.instance
+      final bytes = await ImageCacheManager.instance
           .getNetworkThumbnailBytes(key.url, dimension: key.dimension);
 
       if (bytes == null || bytes.isEmpty) {

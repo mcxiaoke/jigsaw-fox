@@ -2,22 +2,21 @@ import 'dart:typed_data';
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
+import 'package:jigsawpuzzle/data/favorite_store.dart';
+import 'package:jigsawpuzzle/data/game_repository.dart';
+import 'package:jigsawpuzzle/data/snapshot_store.dart';
+import 'package:jigsawpuzzle/l10n/gen/strings.g.dart';
+import 'package:jigsawpuzzle/logic/content/models/canonical_id.dart';
+import 'package:jigsawpuzzle/logic/geometry/edge_layout.dart';
+import 'package:jigsawpuzzle/logic/geometry/piece_shape.dart';
+import 'package:jigsawpuzzle/logic/puzzle_model.dart';
+import 'package:jigsawpuzzle/logic/source_tag.dart';
+import 'package:jigsawpuzzle/services/sound_service.dart';
+import 'package:jigsawpuzzle/services/unlock_service.dart';
+import 'package:jigsawpuzzle/theme/app_palette.dart';
+import 'package:jigsawpuzzle/theme/app_text_styles.dart';
+import 'package:jigsawpuzzle/widgets/game_toast.dart';
 import 'package:phosphoricons_flutter/phosphoricons_flutter.dart';
-import '../l10n/gen/strings.g.dart';
-
-import '../data/favorite_store.dart';
-import '../data/game_repository.dart';
-import '../data/snapshot_store.dart';
-import '../logic/content/models/canonical_id.dart';
-import '../logic/geometry/edge_layout.dart';
-import '../logic/geometry/piece_shape.dart';
-import '../logic/puzzle_model.dart';
-import '../logic/source_tag.dart';
-import '../services/sound_service.dart';
-import '../services/unlock_service.dart';
-import '../theme/app_palette.dart';
-import '../theme/app_text_styles.dart';
-import 'game_toast.dart';
 
 /// Custom painter rendering dynamic jigsaw grid preview lines over selected puzzle image.
 class _JigsawOverlayPainter extends CustomPainter {
@@ -98,11 +97,7 @@ class _JigsawOverlayPainter extends CustomPainter {
 /// A bottom sheet dialog matching the commercial jigsaw piece selection UI.
 class ChooseDifficultySheet extends StatefulWidget {
   const ChooseDifficultySheet({
-    super.key,
-    required this.imageBytes,
-    required this.initialDifficulty,
-    required this.title,
-    required this.onStart,
+    required this.imageBytes, required this.initialDifficulty, required this.title, required this.onStart, super.key,
     this.canonicalId,
     this.completedPieceCounts = const {},
     this.isUnlocked = true,
@@ -178,11 +173,11 @@ class ChooseDifficultySheet extends StatefulWidget {
 }
 
 class _ChooseDifficultySheetState extends State<ChooseDifficultySheet> {
-  final _repo = GameRepository.instance;
-  final _unlockService = UnlockService.instance;
+  final GameRepository _repo = GameRepository.instance;
+  final UnlockService _unlockService = UnlockService.instance;
   late PuzzleDifficulty _selectedDifficulty;
-  double _imageWidth = 1.0;
-  double _imageHeight = 1.0;
+  double _imageWidth = 1;
+  double _imageHeight = 1;
   bool _imageLoaded = false;
   late bool _showGridOverlay;
 
@@ -646,7 +641,6 @@ class _ChooseDifficultySheetState extends State<ChooseDifficultySheet> {
               if (!widget.isUnlocked)
                 Padding(
                   padding: const EdgeInsets.symmetric(
-                    horizontal: 0,
                     vertical: 4,
                   ),
                   child: Container(
@@ -691,7 +685,6 @@ class _ChooseDifficultySheetState extends State<ChooseDifficultySheet> {
               else if (!isTierUnlocked && unlockStatus != null)
                 Padding(
                   padding: const EdgeInsets.symmetric(
-                    horizontal: 0,
                     vertical: 4,
                   ),
                   child: Container(
@@ -733,7 +726,7 @@ class _ChooseDifficultySheetState extends State<ChooseDifficultySheet> {
 
               // Difficulty & Aspect Ratio Info Header
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 0),
+                padding: const EdgeInsets.symmetric(),
                 child: Wrap(
                   alignment: WrapAlignment.center,
                   crossAxisAlignment: WrapCrossAlignment.center,
@@ -842,7 +835,7 @@ class _ChooseDifficultySheetState extends State<ChooseDifficultySheet> {
               // Horizontal scroll of 7 difficulty tiers
               SingleChildScrollView(
                 scrollDirection: Axis.horizontal,
-                padding: const EdgeInsets.symmetric(horizontal: 0),
+                padding: const EdgeInsets.symmetric(),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
@@ -1072,7 +1065,7 @@ class _ChooseDifficultySheetState extends State<ChooseDifficultySheet> {
       textColor = palette.surface;
     } else if (isLocked) {
       bgColor = palette.surfaceContainer;
-      border = Border.all(color: palette.divider, width: 1);
+      border = Border.all(color: palette.divider);
       shadows = null;
       iconColor = palette.disabledText;
       textColor = palette.secondaryText;
@@ -1087,7 +1080,7 @@ class _ChooseDifficultySheetState extends State<ChooseDifficultySheet> {
       textColor = palette.success;
     } else {
       bgColor = palette.surfaceContainer;
-      border = Border.all(color: palette.divider, width: 1);
+      border = Border.all(color: palette.divider);
       shadows = null;
       iconColor = palette.secondaryText;
       textColor = palette.primaryText;
@@ -1157,7 +1150,7 @@ class _ChooseDifficultySheetState extends State<ChooseDifficultySheet> {
                 Text(
                   tier.localizedTag,
                   style: TextStyle(
-                    fontSize: 9.0,
+                    fontSize: 9,
                     color: isSelected
                         ? palette.surface.withValues(alpha: 0.7)
                         : palette.disabledText,
@@ -1176,7 +1169,7 @@ class _ChooseDifficultySheetState extends State<ChooseDifficultySheet> {
                           .chooseDifficulty
                           .recommended,
                       style: TextStyle(
-                        fontSize: 8.0,
+                        fontSize: 8,
                         color: isSelected
                             ? palette.surface.withValues(alpha: 0.9)
                             : palette.brand,

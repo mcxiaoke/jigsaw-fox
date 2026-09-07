@@ -1,9 +1,9 @@
 import 'dart:convert';
 import 'dart:io';
-import '../models/canonical_id.dart';
-import '../models/puzzle_level_item.dart';
-import '../network/content_http_client.dart';
-import '../../../services/app_logger.dart';
+import 'package:jigsawpuzzle/logic/content/models/canonical_id.dart';
+import 'package:jigsawpuzzle/logic/content/models/puzzle_level_item.dart';
+import 'package:jigsawpuzzle/logic/content/network/content_http_client.dart';
+import 'package:jigsawpuzzle/services/app_logger.dart';
 
 /// 主线不可变分卷信息模型
 class MainBatchInfo {
@@ -17,15 +17,6 @@ class MainBatchInfo {
     this.isPatch = false,
     this.levelsAffected = const [],
   });
-
-  final String batchId;
-  final int version;
-  final String url;
-  final int count;
-  final int startOrder;
-  final int endOrder;
-  final bool isPatch;
-  final List<int> levelsAffected;
 
   factory MainBatchInfo.fromJson(Map<String, dynamic> json) {
     return MainBatchInfo(
@@ -43,6 +34,15 @@ class MainBatchInfo {
           const [],
     );
   }
+
+  final String batchId;
+  final int version;
+  final String url;
+  final int count;
+  final int startOrder;
+  final int endOrder;
+  final bool isPatch;
+  final List<int> levelsAffected;
 }
 
 /// 首页主线关卡管线 (不可变批次差集同步 + 显式ID契约 + 纯异步热更修图 + 按需懒加载)
@@ -164,7 +164,7 @@ class MainContentPipeline {
       if (json is! Map<String, dynamic>) return false;
 
       final newVersion = (json['version'] as num?)?.toInt() ?? remoteVersion;
-      bool hasNewItems = false;
+      var hasNewItems = false;
 
       // 1. 统一分卷架构 (items / batches)
       // 统一分卷架构 (items)
@@ -338,7 +338,7 @@ class MainContentPipeline {
             pathOrUrl: url,
           );
 
-    int order = (raw['order'] as num?)?.toInt() ?? 0;
+    var order = (raw['order'] as num?)?.toInt() ?? 0;
     if (order == 0) {
       final namePart = canonicalId.split(':').last;
       final numMatch = RegExp(r'(\d+)').firstMatch(namePart);
@@ -359,7 +359,6 @@ class MainContentPipeline {
       isLocalFile: false,
       order: order,
       tags: tags,
-      sourceModule: CanonicalId.prefixMain,
       addedAt: addedAt,
       unlockCoins: (raw['unlockCoins'] as num?)?.toInt(),
       unlockCode: raw['unlockCode']?.toString(),
@@ -369,7 +368,7 @@ class MainContentPipeline {
   /// 本地图片存储路径生成 (根据 URL 真实扩展名动态生成后缀)
   String _getLocalImagePath(String canonicalId, [String? url]) {
     final sanitized = canonicalId.replaceAll(':', '_');
-    String ext = '.webp';
+    var ext = '.webp';
     if (url != null && url.isNotEmpty) {
       final lastDot = url.lastIndexOf('.');
       if (lastDot != -1 && lastDot > url.lastIndexOf('/')) {

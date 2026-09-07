@@ -2,21 +2,20 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
+import 'package:jigsawpuzzle/data/favorite_store.dart';
+import 'package:jigsawpuzzle/data/models/custom_puzzle_item.dart';
+import 'package:jigsawpuzzle/data/models/level_item.dart';
+import 'package:jigsawpuzzle/data/progress_store.dart';
+import 'package:jigsawpuzzle/data/snapshot_store.dart';
+import 'package:jigsawpuzzle/data/storage_manager.dart';
+import 'package:jigsawpuzzle/logic/download_manager.dart';
+import 'package:jigsawpuzzle/logic/image_source.dart';
+import 'package:jigsawpuzzle/logic/models/puzzle_state.dart';
+import 'package:jigsawpuzzle/logic/puzzle_model.dart';
+import 'package:jigsawpuzzle/services/achievement_store.dart';
+import 'package:jigsawpuzzle/services/app_logger.dart';
+import 'package:jigsawpuzzle/services/economy_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-
-import '../logic/image_source.dart';
-import '../logic/models/puzzle_state.dart';
-import '../logic/puzzle_model.dart';
-import '../services/achievement_store.dart';
-import '../services/app_logger.dart';
-import '../services/economy_service.dart';
-import '../logic/download_manager.dart';
-import 'favorite_store.dart';
-import 'models/custom_puzzle_item.dart';
-import 'models/level_item.dart';
-import 'progress_store.dart';
-import 'snapshot_store.dart';
-import 'storage_manager.dart';
 
 /// Central game data repository managing main levels, daily challenges, UGC custom puzzles, and persistent state.
 class GameRepository {
@@ -393,7 +392,7 @@ class GameRepository {
       'updateLevelProgress level=$levelIndex progress=$progressPercent% completed=$isCompleted pieceCount=$completedPieceCount stars=$stars time=${timeSeconds}s',
     );
 
-    var current = _levels[idx];
+    final current = _levels[idx];
     final newStars = isCompleted
         ? (stars > current.stars ? stars : current.stars)
         : current.stars;
@@ -418,7 +417,6 @@ class GameRepository {
           updatedCompletedCounts.isNotEmpty,
       stars: newStars,
       bestTimeSeconds: newBestTime,
-      savedSnapshotJson: null,
       clearSnapshot: true,
       completedPieceCounts: updatedCompletedCounts.toList(),
     );
@@ -598,7 +596,7 @@ class GameRepository {
       return;
     }
 
-    var current = _customPuzzles[idx];
+    final current = _customPuzzles[idx];
     final newBestTime = isCompleted
         ? (current.bestTimeSeconds == 0 || timeSeconds < current.bestTimeSeconds
               ? timeSeconds
@@ -619,7 +617,6 @@ class GameRepository {
           current.isCompleted ||
           updatedCompletedCounts.isNotEmpty,
       bestTimeSeconds: newBestTime,
-      savedSnapshotJson: null,
       clearSnapshot: true,
       completedPieceCounts: updatedCompletedCounts.toList(),
     );

@@ -1,13 +1,12 @@
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:jigsawpuzzle/l10n/gen/strings.g.dart';
+import 'package:jigsawpuzzle/logic/content/app_content.dart';
+import 'package:jigsawpuzzle/logic/content/models/puzzle_pack_item.dart';
+import 'package:jigsawpuzzle/theme/app_palette.dart';
+import 'package:jigsawpuzzle/theme/app_text_styles.dart';
+import 'package:jigsawpuzzle/widgets/game_toast.dart';
 import 'package:phosphoricons_flutter/phosphoricons_flutter.dart';
-
-import '../logic/content/app_content.dart';
-import '../logic/content/models/puzzle_pack_item.dart';
-import '../l10n/gen/strings.g.dart';
-import '../theme/app_palette.dart';
-import '../theme/app_text_styles.dart';
-import '../widgets/game_toast.dart';
 
 /// Fullscreen extended puzzle pack import page (supports local file selection and network URL download).
 class ImportPackPage extends StatefulWidget {
@@ -251,7 +250,7 @@ class _ImportPackPageState extends State<ImportPackPage> {
                           color: palette.secondaryText,
                         ),
                         onPressed: () =>
-                            setState(() => _networkUrlController.clear()),
+                            setState(_networkUrlController.clear),
                       )
                     : null,
                 border: OutlineInputBorder(

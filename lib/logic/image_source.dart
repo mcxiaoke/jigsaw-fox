@@ -4,9 +4,9 @@ import 'package:dio/dio.dart';
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:image_picker/image_picker.dart';
 
-import '../services/app_logger.dart';
+import 'package:jigsawpuzzle/services/app_logger.dart';
 
-const assetSamples = [
+const assetSamples = <String>[
   'assets/images/sample_01.jpg',
   'assets/images/sample_02.jpg',
   'assets/images/sample_03.jpg',

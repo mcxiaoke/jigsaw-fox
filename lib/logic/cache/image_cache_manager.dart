@@ -4,12 +4,11 @@ import 'dart:io';
 
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
+import 'package:jigsawpuzzle/logic/cache/engine_task_queue.dart';
+import 'package:jigsawpuzzle/logic/cache/memory_cache.dart';
+import 'package:jigsawpuzzle/logic/cache/thumbnail_generator.dart';
+import 'package:jigsawpuzzle/services/app_logger.dart';
 import 'package:path_provider/path_provider.dart';
-
-import '../../services/app_logger.dart';
-import 'engine_task_queue.dart';
-import 'memory_cache.dart';
-import 'thumbnail_generator.dart';
 
 /// 缩略图档位（类型安全：调用方只能从预定义档位中选择，
 /// 杜绝传 360/500/600/720 等零散尺寸导致同一张源图在磁盘上生成多份缩略图）。
@@ -222,7 +221,7 @@ class ImageCacheManager {
     }
 
     // 3. L3 未命中：进入并发调度引擎排队生成 (支持 Single Flight 单飞去重)
-    return await _taskQueue.schedule<Uint8List?>(
+    return _taskQueue.schedule<Uint8List?>(
       key: cacheKey,
       task: () async {
         // 二次双检，防止在排队期间已被其他任务生成
@@ -371,7 +370,7 @@ class ImageCacheManager {
     }
 
     // 3. L3 未命中：排队下载 + 后台生成（Single-Flight 去重）
-    return await _taskQueue.schedule<Uint8List?>(
+    return _taskQueue.schedule<Uint8List?>(
       key: cacheKey,
       task: () async {
         final doubleCheckMem = _memoryCache.get(cacheKey);

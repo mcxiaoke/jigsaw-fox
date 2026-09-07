@@ -1,27 +1,27 @@
 import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:jigsawpuzzle/data/game_repository.dart';
+import 'package:jigsawpuzzle/data/progress_store.dart';
+import 'package:jigsawpuzzle/data/resume_helper.dart';
+import 'package:jigsawpuzzle/data/snapshot_store.dart';
+import 'package:jigsawpuzzle/l10n/gen/strings.g.dart';
+import 'package:jigsawpuzzle/logic/content/app_content.dart';
+import 'package:jigsawpuzzle/logic/content/models/canonical_id.dart';
+import 'package:jigsawpuzzle/logic/content/models/puzzle_level_item.dart';
+import 'package:jigsawpuzzle/logic/image_source.dart';
+import 'package:jigsawpuzzle/logic/puzzle_model.dart';
+import 'package:jigsawpuzzle/pages/game_page.dart';
+import 'package:jigsawpuzzle/services/app_logger.dart';
+import 'package:jigsawpuzzle/services/locale_service.dart';
+import 'package:jigsawpuzzle/theme/app_palette.dart';
+import 'package:jigsawpuzzle/theme/app_text_styles.dart';
+import 'package:jigsawpuzzle/widgets/app_cached_image.dart';
+import 'package:jigsawpuzzle/widgets/choose_difficulty_sheet.dart';
 import 'package:path/path.dart' as p;
 import 'package:phosphoricons_flutter/phosphoricons_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-
-import '../../data/game_repository.dart';
-import '../../data/progress_store.dart';
-import '../../data/resume_helper.dart';
-import '../../data/snapshot_store.dart';
-import '../../logic/content/app_content.dart';
-import '../../logic/content/models/canonical_id.dart';
-import '../../logic/content/models/puzzle_level_item.dart';
-import '../../logic/image_source.dart';
-import '../../logic/puzzle_model.dart';
-import '../../l10n/gen/strings.g.dart';
-import '../../services/app_logger.dart';
-import '../../services/locale_service.dart';
-import '../../theme/app_palette.dart';
-import '../../theme/app_text_styles.dart';
-import '../../widgets/app_cached_image.dart';
-import '../../widgets/choose_difficulty_sheet.dart';
-import '../game_page.dart';
 
 class DailyTabView extends StatefulWidget {
   const DailyTabView({super.key});
@@ -189,7 +189,7 @@ class _DailyTabViewState extends State<DailyTabView> {
     final monthSet = <String>{nowMm};
     // 默认展示近3个月（当月及前2个月）
     for (var i = 1; i <= 2; i++) {
-      final prevDate = DateTime(now.year, now.month - i, 1);
+      final prevDate = DateTime(now.year, now.month - i);
       final prevMm =
           '${prevDate.year}${prevDate.month.toString().padLeft(2, '0')}';
       monthSet.add(prevMm);
@@ -286,7 +286,6 @@ class _DailyTabViewState extends State<DailyTabView> {
       onClearRepo: (k) => GameRepository.instance.updateGenericProgress(
         canonicalId: canonicalId,
         progressPercent: 0,
-        snapshotJson: null,
       ),
       onPushGame: (diff, jsonStr) async {
         if (!mounted) return;
@@ -336,7 +335,6 @@ class _DailyTabViewState extends State<DailyTabView> {
         await GameRepository.instance.updateGenericProgress(
           canonicalId: canonicalId,
           progressPercent: 0,
-          snapshotJson: null,
         );
         if (!mounted) return;
         await Navigator.of(context).push(
@@ -346,7 +344,6 @@ class _DailyTabViewState extends State<DailyTabView> {
               difficulty: fallbackDifficulty,
               canonicalId: canonicalId,
               dailyDateStr: level.dailyDate,
-              initialSnapshotJson: null,
             ),
           ),
         );
@@ -402,7 +399,7 @@ class _DailyTabViewState extends State<DailyTabView> {
     final now = DateTime.now();
 
     final availableMonths = _getAvailableMonths();
-    final Map<String, List<PuzzleLevelItem>> monthGroups = {};
+    final monthGroups = <String, List<PuzzleLevelItem>>{};
 
     PuzzleLevelItem? todayItem;
     if (AppContent.instance.isInitialized) {
@@ -417,7 +414,6 @@ class _DailyTabViewState extends State<DailyTabView> {
           dailyDate: todayStr,
           localPath: assetSamples[0],
           isLocalFile: true,
-          isTimeLocked: false,
         );
 
     var totalCompletedCount = 0;
@@ -425,7 +421,7 @@ class _DailyTabViewState extends State<DailyTabView> {
 
     for (final monthMm in availableMonths) {
       final monthKey = _formatMonthKey(monthMm);
-      List<PuzzleLevelItem> levels = [];
+      var levels = <PuzzleLevelItem>[];
       if (AppContent.instance.isInitialized) {
         levels = AppContent.instance.manager
             .getDailyLevelsForMonth(monthMm)
@@ -467,7 +463,6 @@ class _DailyTabViewState extends State<DailyTabView> {
                   borderRadius: BorderRadius.circular(22),
                   border: Border.all(
                     color: palette.brand.withValues(alpha: 0.2),
-                    width: 1,
                   ),
                   boxShadow: [
                     BoxShadow(
@@ -585,7 +580,6 @@ class _DailyTabViewState extends State<DailyTabView> {
                           height: 120,
                           child: AppCachedImage(
                             imagePathOrUrl: effectiveTodayItem.displayPath,
-                            fit: BoxFit.cover,
                             errorWidget: Image.asset(
                               assetSamples[0],
                               fit: BoxFit.cover,
@@ -612,7 +606,7 @@ class _DailyTabViewState extends State<DailyTabView> {
                 decoration: BoxDecoration(
                   color: palette.surfaceContainer,
                   borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: palette.divider, width: 1),
+                  border: Border.all(color: palette.divider),
                 ),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -788,7 +782,6 @@ class _DailyTabViewState extends State<DailyTabView> {
                 maxCrossAxisExtent: 220,
                 crossAxisSpacing: 14,
                 mainAxisSpacing: 14,
-                childAspectRatio: 1.0,
               ),
               delegate: SliverChildBuilderDelegate((context, index) {
                 final item = levels[index];
@@ -914,7 +907,7 @@ class _DailyTabViewState extends State<DailyTabView> {
       child: Container(
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: palette.divider, width: 1),
+          border: Border.all(color: palette.divider),
         ),
         clipBehavior: Clip.antiAlias,
         child: Stack(
@@ -922,7 +915,6 @@ class _DailyTabViewState extends State<DailyTabView> {
           children: [
             AppCachedImage(
               imagePathOrUrl: item.displayPath,
-              fit: BoxFit.cover,
               errorWidget: Image.asset(assetSamples[0], fit: BoxFit.cover),
             ),
             Container(

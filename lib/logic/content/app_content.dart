@@ -1,9 +1,9 @@
 import 'package:flutter/foundation.dart';
+import 'package:jigsawpuzzle/logic/content/content_manager.dart';
+import 'package:jigsawpuzzle/logic/content/pipelines/collections_content_pipeline.dart';
+import 'package:jigsawpuzzle/logic/content/pipelines/pack_content_pipeline.dart';
+import 'package:jigsawpuzzle/services/app_logger.dart';
 import 'package:path_provider/path_provider.dart';
-import '../../services/app_logger.dart';
-import 'content_manager.dart';
-import 'pipelines/collections_content_pipeline.dart';
-import 'pipelines/pack_content_pipeline.dart';
 
 /// 全局内容与扩展系统门面单例
 class AppContent {

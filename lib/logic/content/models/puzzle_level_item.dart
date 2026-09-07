@@ -1,4 +1,4 @@
-import 'canonical_id.dart';
+import 'package:jigsawpuzzle/logic/content/models/canonical_id.dart';
 
 /// 统一关卡运行时模型
 class PuzzleLevelItem {
@@ -7,7 +7,7 @@ class PuzzleLevelItem {
     this.url = '',
     this.localPath,
     this.hash,
-    bool? isLocalFile,
+    this._isLocalFile,
     this.title,
     this.order = 0,
     this.tags = const [],
@@ -23,7 +23,31 @@ class PuzzleLevelItem {
     this.addedAt,
     this.unlockCoins,
     this.unlockCode,
-  }) : _isLocalFile = isLocalFile; // ignore: prefer_initializing_formals
+  });
+
+  factory PuzzleLevelItem.fromJson(Map<String, dynamic> json) {
+    return PuzzleLevelItem(
+      id: json['id'] as String? ?? 'unknown',
+      url: json['url'] as String? ?? '',
+      localPath: json['localPath'] as String?,
+      isLocalFile: json['isLocalFile'] as bool?,
+      hash: json['hash'] as String?,
+      title: json['title'] as String?,
+      order: json['order'] as int? ?? 0,
+      tags:
+          (json['tags'] as List<dynamic>?)?.map((e) => e.toString()).toList() ??
+          const [],
+      sourceModule: json['sourceModule'] as String? ?? CanonicalId.prefixMain,
+      eventId: json['eventId'] as String?,
+      dailyDate: json['dailyDate'] as String?,
+      isTimeLocked: json['isTimeLocked'] as bool? ?? false,
+      addedAt: json['addedAt'] != null
+          ? DateTime.tryParse(json['addedAt'] as String)
+          : null,
+      unlockCoins: json['unlockCoins'] as int?,
+      unlockCode: json['unlockCode'] as String?,
+    );
+  }
 
   /// 全局唯一 Canonical ID (如 "main:101", "daily:20260827", "event:cyberpunk:01")
   final String id;
@@ -181,30 +205,6 @@ class PuzzleLevelItem {
       if (unlockCoins != null) 'unlockCoins': unlockCoins,
       if (unlockCode != null) 'unlockCode': unlockCode,
     };
-  }
-
-  factory PuzzleLevelItem.fromJson(Map<String, dynamic> json) {
-    return PuzzleLevelItem(
-      id: json['id'] as String? ?? 'unknown',
-      url: json['url'] as String? ?? '',
-      localPath: json['localPath'] as String?,
-      isLocalFile: json['isLocalFile'] as bool?,
-      hash: json['hash'] as String?,
-      title: json['title'] as String?,
-      order: json['order'] as int? ?? 0,
-      tags:
-          (json['tags'] as List<dynamic>?)?.map((e) => e.toString()).toList() ??
-          const [],
-      sourceModule: json['sourceModule'] as String? ?? CanonicalId.prefixMain,
-      eventId: json['eventId'] as String?,
-      dailyDate: json['dailyDate'] as String?,
-      isTimeLocked: json['isTimeLocked'] as bool? ?? false,
-      addedAt: json['addedAt'] != null
-          ? DateTime.tryParse(json['addedAt'] as String)
-          : null,
-      unlockCoins: json['unlockCoins'] as int?,
-      unlockCode: json['unlockCode'] as String?,
-    );
   }
 
   @override

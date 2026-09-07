@@ -1,17 +1,14 @@
 import 'package:flutter/material.dart';
+import 'package:jigsawpuzzle/data/game_repository.dart';
+import 'package:jigsawpuzzle/l10n/gen/strings.g.dart';
+import 'package:jigsawpuzzle/theme/app_palette.dart';
+import 'package:jigsawpuzzle/theme/app_text_styles.dart';
 import 'package:phosphoricons_flutter/phosphoricons_flutter.dart';
-
-import '../data/game_repository.dart';
-import '../l10n/gen/strings.g.dart';
-import '../theme/app_palette.dart';
-import '../theme/app_text_styles.dart';
 
 /// A bottom sheet modal for choosing full-screen background wallpaper in puzzle gameplay.
 class ChooseBackgroundSheet extends StatelessWidget {
   const ChooseBackgroundSheet({
-    super.key,
-    required this.selectedBackground,
-    required this.onBackgroundSelected,
+    required this.selectedBackground, required this.onBackgroundSelected, super.key,
   });
 
   final String selectedBackground;
@@ -38,7 +35,7 @@ class ChooseBackgroundSheet extends StatelessWidget {
     final palette = AppPalette.of(context);
     final styles = AppTextStyles.of(context);
     final size = MediaQuery.sizeOf(context);
-    final bgList = GameRepository.kBackgroundAssets;
+    const bgList = GameRepository.kBackgroundAssets;
 
     return Container(
       height: size.height * 0.65,
@@ -86,7 +83,6 @@ class ChooseBackgroundSheet extends StatelessWidget {
                 crossAxisCount: 3,
                 crossAxisSpacing: 12,
                 mainAxisSpacing: 12,
-                childAspectRatio: 1.0, // Square tile aspect ratio
               ),
               itemCount: bgList.length,
               itemBuilder: (context, index) {
@@ -124,7 +120,7 @@ class ChooseBackgroundSheet extends StatelessWidget {
                         Image.asset(
                           bgPath,
                           repeat: ImageRepeat.repeat,
-                          errorBuilder: (ctx, err, stack) => Container(
+                          errorBuilder: (ctx, err, stack) => ColoredBox(
                             color: palette.surfaceContainerLow,
                             child: Center(
                               child: Icon(

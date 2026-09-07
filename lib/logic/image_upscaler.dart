@@ -2,7 +2,7 @@ import 'dart:isolate';
 import 'dart:math' as math;
 import 'dart:typed_data';
 import 'package:image/image.dart' as img;
-import '../services/app_logger.dart';
+import 'package:jigsawpuzzle/services/app_logger.dart';
 
 /// 高性能非 AI 图像保边降噪、空间插值与自适应超分辨率引擎
 class ImageUpscaler {
@@ -99,7 +99,7 @@ class ImageUpscaler {
     bool adaptiveSharpness = true,
   }) {
     // 1. 保边降噪：只抹除杂色与微弱底噪，保护发丝与轮廓
-    img.Image denoised = src;
+    var denoised = src;
     if (enableDenoise && denoiseStrength > 0.001) {
       denoised = applyGentleGuidedFilter(src, strength: denoiseStrength);
     }
@@ -116,7 +116,7 @@ class ImageUpscaler {
 
     // 3. 对比度自适应锐化 (CAS)
     if (enableSharpen && sharpness > 0.001) {
-      double effectiveSharpness = sharpness;
+      var effectiveSharpness = sharpness;
       if (adaptiveSharpness) {
         final minSide = math.min(src.width, src.height);
         final factor = (minSide / 800.0).clamp(0.55, 1.0);
@@ -154,9 +154,9 @@ class ImageUpscaler {
     final gChannel = Float64List(numPixels);
     final bChannel = Float64List(numPixels);
 
-    int idx = 0;
-    for (int y = 0; y < height; y++) {
-      for (int x = 0; x < width; x++) {
+    var idx = 0;
+    for (var y = 0; y < height; y++) {
+      for (var x = 0; x < width; x++) {
         final p = src.getPixel(x, y);
         rChannel[idx] = p.r.toDouble();
         gChannel[idx] = p.g.toDouble();
@@ -177,8 +177,8 @@ class ImageUpscaler {
     final blend = strength.clamp(0.0, 1.0);
 
     idx = 0;
-    for (int y = 0; y < height; y++) {
-      for (int x = 0; x < width; x++) {
+    for (var y = 0; y < height; y++) {
+      for (var x = 0; x < width; x++) {
         final origPixel = src.getPixel(x, y);
         final dstPixel = dst.getPixel(x, y);
 
@@ -210,15 +210,15 @@ class ImageUpscaler {
     final meanP = _boxFilter(p, w, h, r);
 
     final pSq = Float64List(n);
-    for (int i = 0; i < n; i++) {
+    for (var i = 0; i < n; i++) {
       pSq[i] = p[i] * p[i];
     }
     final meanPSq = _boxFilter(pSq, w, h, r);
 
     final a = Float64List(n);
     final b = Float64List(n);
-    for (int i = 0; i < n; i++) {
-      final varVal = math.max(0.0, meanPSq[i] - meanP[i] * meanP[i]);
+    for (var i = 0; i < n; i++) {
+      final varVal = math.max(0, meanPSq[i] - meanP[i] * meanP[i]);
       final aVal = varVal / (varVal + eps);
       a[i] = aVal;
       b[i] = meanP[i] - aVal * meanP[i];
@@ -228,7 +228,7 @@ class ImageUpscaler {
     final meanB = _boxFilter(b, w, h, r);
 
     final q = Float64List(n);
-    for (int i = 0; i < n; i++) {
+    for (var i = 0; i < n; i++) {
       q[i] = meanA[i] * p[i] + meanB[i];
     }
 
@@ -240,19 +240,19 @@ class ImageUpscaler {
     final temp = Float64List(n);
     final dst = Float64List(n);
 
-    for (int y = 0; y < h; y++) {
+    for (var y = 0; y < h; y++) {
       final rowOffset = y * w;
-      double sum = 0.0;
-      int count = 0;
+      var sum = 0.0;
+      var count = 0;
 
-      for (int x = -r; x <= r; x++) {
+      for (var x = -r; x <= r; x++) {
         final clampedX = x.clamp(0, w - 1);
         sum += src[rowOffset + clampedX];
         count++;
       }
       temp[rowOffset] = sum / count;
 
-      for (int x = 1; x < w; x++) {
+      for (var x = 1; x < w; x++) {
         final addX = (x + r).clamp(0, w - 1);
         final removeX = (x - r - 1).clamp(0, w - 1);
         sum += src[rowOffset + addX] - src[rowOffset + removeX];
@@ -260,18 +260,18 @@ class ImageUpscaler {
       }
     }
 
-    for (int x = 0; x < w; x++) {
-      double sum = 0.0;
-      int count = 0;
+    for (var x = 0; x < w; x++) {
+      var sum = 0.0;
+      var count = 0;
 
-      for (int y = -r; y <= r; y++) {
+      for (var y = -r; y <= r; y++) {
         final clampedY = y.clamp(0, h - 1);
         sum += temp[clampedY * w + x];
         count++;
       }
       dst[x] = sum / count;
 
-      for (int y = 1; y < h; y++) {
+      for (var y = 1; y < h; y++) {
         final addY = (y + r).clamp(0, h - 1);
         final removeY = (y - r - 1).clamp(0, h - 1);
         sum += temp[addY * w + x] - temp[removeY * w + x];
@@ -294,11 +294,11 @@ class ImageUpscaler {
 
     final peak = -0.05 - (sharpness.clamp(0.0, 1.0) * 0.11);
 
-    for (int y = 0; y < height; y++) {
+    for (var y = 0; y < height; y++) {
       final yPrev = math.max(0, y - 1);
       final yNext = math.min(height - 1, y + 1);
 
-      for (int x = 0; x < width; x++) {
+      for (var x = 0; x < width; x++) {
         final xPrev = math.max(0, x - 1);
         final xNext = math.min(width - 1, x + 1);
 
@@ -394,11 +394,11 @@ class ImageUpscaler {
     final basePeak = -0.05 - (sharpness.clamp(0.0, 1.0) * 0.11);
     final gateRange = math.max(0.001, noiseThresholdHigh - noiseThresholdLow);
 
-    for (int y = 0; y < height; y++) {
+    for (var y = 0; y < height; y++) {
       final yPrev = math.max(0, y - 1);
       final yNext = math.min(height - 1, y + 1);
 
-      for (int x = 0; x < width; x++) {
+      for (var x = 0; x < width; x++) {
         final xPrev = math.max(0, x - 1);
         final xNext = math.min(width - 1, x + 1);
 

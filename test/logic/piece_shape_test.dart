@@ -16,8 +16,8 @@ void main() {
 
       final shape = PieceShape(
         edges: edges,
-        width: 100.0,
-        height: 80.0,
+        width: 100,
+        height: 80,
         tipRatio: 0.25,
       );
 
@@ -37,8 +37,8 @@ void main() {
 
       final shape = PieceShape(
         edges: edges,
-        width: 100.0,
-        height: 100.0,
+        width: 100,
+        height: 100,
         tipRatio: 0.2,
       );
 
@@ -59,16 +59,16 @@ void main() {
 
       final shape = PieceShape(
         edges: edges,
-        width: 100.0,
-        height: 80.0,
+        width: 100,
+        height: 80,
         tipRatio: 0.2,
       );
 
       final src = shape.srcRect(
         row: 2,
         col: 3,
-        srcWidthPerCol: 200.0,
-        srcHeightPerRow: 160.0,
+        srcWidthPerCol: 200,
+        srcHeightPerRow: 160,
       );
 
       // col = 3, overhang.left = 0.0 (flat) -> left = 3 * 200 = 600
@@ -89,7 +89,7 @@ void main() {
         left: EdgeCurveDescriptor(edgeType: EdgeType.flat),
       );
 
-      final shape = PieceShape(edges: edges, width: 100.0, height: 100.0);
+      final shape = PieceShape(edges: edges, width: 100, height: 100);
 
       // Center of base cell should always be inside
       expect(shape.containsLocalPoint(const Offset(50, 50), 0), isTrue);
@@ -106,7 +106,7 @@ void main() {
         left: EdgeCurveDescriptor(edgeType: EdgeType.flat),
       );
 
-      final shape = PieceShape(edges: edges, width: 100.0, height: 100.0);
+      final shape = PieceShape(edges: edges, width: 100, height: 100);
 
       expect(shape.path, isNotNull);
     });

@@ -2,12 +2,11 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hive_ce/hive_ce.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-
 import 'package:jigsawpuzzle/data/favorite_store.dart';
 import 'package:jigsawpuzzle/data/progress_store.dart';
 import 'package:jigsawpuzzle/data/storage_manager.dart';
 import 'package:jigsawpuzzle/logic/download_manager.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 /// 每个测试独立目录 + mock 单例（设计 §10.2）。
 ///

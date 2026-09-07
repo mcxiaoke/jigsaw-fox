@@ -7,21 +7,21 @@ void main() {
     test('Basic Undo and Redo flow', () {
       final manager = UndoManager(maxHistory: 5);
 
-      final state1 = const PuzzleBoardState(
+      const state1 = PuzzleBoardState(
         rows: 2,
         cols: 2,
         seed: 1,
         pieces: [PieceState(id: 0, r: 0, c: 0, nx: 0.1, ny: 0.1, clusterId: 0)],
       );
 
-      final state2 = const PuzzleBoardState(
+      const state2 = PuzzleBoardState(
         rows: 2,
         cols: 2,
         seed: 1,
         pieces: [PieceState(id: 0, r: 0, c: 0, nx: 0.2, ny: 0.2, clusterId: 0)],
       );
 
-      final state3 = const PuzzleBoardState(
+      const state3 = PuzzleBoardState(
         rows: 2,
         cols: 2,
         seed: 1,

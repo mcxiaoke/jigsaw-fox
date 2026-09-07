@@ -1,7 +1,8 @@
 import 'dart:math';
 import 'dart:ui' show Offset, Path;
 
-import 'edge_type.dart';
+import 'package:jigsawpuzzle/logic/geometry/edge_type.dart';
+import 'package:jigsawpuzzle/logic/geometry/piece_shape.dart' show Overhang;
 
 /// 经典拼图凸头（Tab）形状枚举，对应 Jigsaw Explorer 预设的四大经典几何模具。
 enum EdgeShapeType {
@@ -70,7 +71,7 @@ class JigexCurves {
     CurvePoint(0.515151515151515, -0.0795454545454545), // Ctrl 4 (颈部内凹引导)
     CurvePoint(0.761363636363636, -0.0189393939393939), // Anchor 4
     CurvePoint(0.905303030303030, 0.0113636363636364), // Ctrl 5
-    CurvePoint(1.000000000000000, 0.0000000000000000), // Anchor 5 (终点)
+    CurvePoint(1, 0), // Anchor 5 (终点)
   ];
 
   /// 宽矮粗壮形 (Stub) 12 点矩阵：峰顶深度约 +23.48%
@@ -86,7 +87,7 @@ class JigexCurves {
     CurvePoint(0.518939393939082, -0.181818181818111),
     CurvePoint(0.837121212121097, -0.0303030303030032),
     CurvePoint(0.909090909090105, 0.0037878787878711),
-    CurvePoint(1.000000000000000, 0.0000000000000000),
+    CurvePoint(1, 0),
   ];
 
   /// 短袜俏皮歪形 (Sock) 12 点矩阵：峰顶偏向 0.5416，最大深度 +34.46%
@@ -102,12 +103,12 @@ class JigexCurves {
     CurvePoint(0.515151515151515, -0.0795454545454545),
     CurvePoint(0.761363636363636, -0.0189393939393939),
     CurvePoint(0.905303030303030, 0.0113636363636364),
-    CurvePoint(1.000000000000000, 0.0000000000000000),
+    CurvePoint(1, 0),
   ];
 
   /// 修长手指形 (Finger) 12 点矩阵：峰顶偏向 0.4734，最大深度 +34.46%
   static const List<CurvePoint> finger = [
-    CurvePoint(0.0492424242424242, 0.0000000000000000),
+    CurvePoint(0.0492424242424242, 0),
     CurvePoint(0.159090909090909, -0.0227272727272727),
     CurvePoint(0.545454545454545, -0.0681818181818182),
     CurvePoint(0.412878787878788, 0.1250000000000000),
@@ -118,7 +119,7 @@ class JigexCurves {
     CurvePoint(0.500000000000000, -0.109848484848485),
     CurvePoint(0.761363636363636, -0.0189393939393939),
     CurvePoint(0.905303030303030, 0.0113636363636364),
-    CurvePoint(1.000000000000000, 0.0000000000000000),
+    CurvePoint(1, 0),
   ];
 
   /// 根据形状枚举获取对应的 12 个原始二次贝塞尔控制点
@@ -304,7 +305,7 @@ class EdgeCurveDescriptor {
   /// 计算该边向外凸出的最大包围盒裕量比例（占该边长度的比例）。
   /// 用于动态计算贴图采样裁剪区域 [Overhang]。
   double get maxOverhangRatio {
-    if (isFlat || isBlank) return 0.0;
+    if (isFlat || isBlank) return 0;
     return max(0.22, 0.35 * depthScale);
   }
 

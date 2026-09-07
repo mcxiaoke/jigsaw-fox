@@ -1,6 +1,6 @@
-import '../data/game_repository.dart';
-import '../data/progress_store.dart';
-import '../l10n/gen/strings.g.dart';
+import 'package:jigsawpuzzle/data/game_repository.dart';
+import 'package:jigsawpuzzle/data/progress_store.dart';
+import 'package:jigsawpuzzle/l10n/gen/strings.g.dart';
 
 /// 解锁状态详细信息
 class UnlockStatus {

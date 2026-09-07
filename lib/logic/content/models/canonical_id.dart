@@ -56,7 +56,7 @@ class CanonicalId {
     required String pathOrUrl,
     String? contextId,
   }) {
-    final filename = pathOrUrl.split('/').last.split('\\').last;
+    final filename = pathOrUrl.split('/').last.split(r'\').last;
     switch (sourceModule) {
       case prefixMain:
         return forMain(filename);
@@ -102,8 +102,8 @@ class CanonicalId {
       str = str.split('?').first;
     }
     // 仅保留文件名本身
-    if (str.contains('/') || str.contains('\\')) {
-      str = str.split('/').last.split('\\').last;
+    if (str.contains('/') || str.contains(r'\')) {
+      str = str.split('/').last.split(r'\').last;
     }
     // 去除扩展名
     final dotIndex = str.lastIndexOf('.');

@@ -5,9 +5,7 @@ class PuzzleEventItem {
   const PuzzleEventItem({
     required this.id,
     required this.title,
-    this.titleZh,
-    required this.status,
-    required this.type,
+    required this.status, required this.type, this.titleZh,
     this.desc = '',
     this.descZh,
     this.coverUrl,
@@ -21,6 +19,44 @@ class PuzzleEventItem {
     this.fileSizeBytes = 0,
     this.isLocalDownloaded = false,
   });
+
+  factory PuzzleEventItem.fromJson(Map<String, dynamic> json) {
+    DateTime? parseDate(dynamic v) {
+      if (v == null) return null;
+      try {
+        return DateTime.parse(v.toString());
+      } catch (_) {
+        return null;
+      }
+    }
+
+    return PuzzleEventItem(
+      id: json['id']?.toString() ?? 'unknown_event',
+      title: json['title']?.toString() ?? '',
+      titleZh: json['titleZh']?.toString(),
+      status: json['status']?.toString().toLowerCase() ?? 'active',
+      type: json['type']?.toString().toLowerCase() ?? 'zip',
+      desc: json['desc']?.toString() ?? '',
+      descZh: json['descZh']?.toString(),
+      coverUrl: json['coverUrl']?.toString(),
+      zipUrl: json['zipUrl']?.toString(),
+      zipSha256: json['zipSha256']?.toString(),
+      levels:
+          (json['levels'] as List<dynamic>?)
+              ?.map((e) => e.toString())
+              .toList() ??
+          const [],
+      startTime: parseDate(json['startTime']),
+      endTime: parseDate(json['endTime']),
+      displayOrder: (json['displayOrder'] as num?)?.toInt() ?? 0,
+      totalCount:
+          (json['totalCount'] as num?)?.toInt() ??
+          (json['count'] as num?)?.toInt() ??
+          0,
+      fileSizeBytes: (json['fileSizeBytes'] as num?)?.toInt() ?? 0,
+      isLocalDownloaded: json['isLocalDownloaded'] as bool? ?? false,
+    );
+  }
 
   /// 活动唯一标识符 (如 "cyberpunk_2026")
   final String id;
@@ -152,44 +188,6 @@ class PuzzleEventItem {
       totalCount: totalCount ?? this.totalCount,
       fileSizeBytes: fileSizeBytes ?? this.fileSizeBytes,
       isLocalDownloaded: isLocalDownloaded ?? this.isLocalDownloaded,
-    );
-  }
-
-  factory PuzzleEventItem.fromJson(Map<String, dynamic> json) {
-    DateTime? parseDate(dynamic v) {
-      if (v == null) return null;
-      try {
-        return DateTime.parse(v.toString());
-      } catch (_) {
-        return null;
-      }
-    }
-
-    return PuzzleEventItem(
-      id: json['id']?.toString() ?? 'unknown_event',
-      title: json['title']?.toString() ?? '',
-      titleZh: json['titleZh']?.toString(),
-      status: json['status']?.toString().toLowerCase() ?? 'active',
-      type: json['type']?.toString().toLowerCase() ?? 'zip',
-      desc: json['desc']?.toString() ?? '',
-      descZh: json['descZh']?.toString(),
-      coverUrl: json['coverUrl']?.toString(),
-      zipUrl: json['zipUrl']?.toString(),
-      zipSha256: json['zipSha256']?.toString(),
-      levels:
-          (json['levels'] as List<dynamic>?)
-              ?.map((e) => e.toString())
-              .toList() ??
-          const [],
-      startTime: parseDate(json['startTime']),
-      endTime: parseDate(json['endTime']),
-      displayOrder: (json['displayOrder'] as num?)?.toInt() ?? 0,
-      totalCount:
-          (json['totalCount'] as num?)?.toInt() ??
-          (json['count'] as num?)?.toInt() ??
-          0,
-      fileSizeBytes: (json['fileSizeBytes'] as num?)?.toInt() ?? 0,
-      isLocalDownloaded: json['isLocalDownloaded'] as bool? ?? false,
     );
   }
 

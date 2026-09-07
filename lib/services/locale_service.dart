@@ -1,10 +1,9 @@
 import 'dart:ui' as ui;
 
 import 'package:flutter/widgets.dart';
+import 'package:jigsawpuzzle/l10n/gen/strings.g.dart';
+import 'package:jigsawpuzzle/services/app_logger.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-
-import '../l10n/gen/strings.g.dart';
-import 'app_logger.dart';
 
 /// 语言偏好枚举，持久化到 SharedPreferences
 enum AppLanguage { system, zh, en }

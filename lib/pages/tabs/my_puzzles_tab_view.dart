@@ -3,29 +3,28 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:jigsawpuzzle/data/game_repository.dart';
+import 'package:jigsawpuzzle/data/models/custom_puzzle_item.dart';
+import 'package:jigsawpuzzle/data/resume_helper.dart';
+import 'package:jigsawpuzzle/data/snapshot_store.dart';
+import 'package:jigsawpuzzle/l10n/gen/strings.g.dart';
+import 'package:jigsawpuzzle/logic/content/app_content.dart';
+import 'package:jigsawpuzzle/logic/content/models/puzzle_pack_item.dart';
+import 'package:jigsawpuzzle/logic/download_manager.dart';
+import 'package:jigsawpuzzle/logic/image_source.dart';
+import 'package:jigsawpuzzle/pages/crop_puzzle_page.dart';
+import 'package:jigsawpuzzle/pages/game_page.dart';
+import 'package:jigsawpuzzle/pages/import_pack_page.dart';
+import 'package:jigsawpuzzle/pages/online_image_picker_page.dart';
+import 'package:jigsawpuzzle/pages/pack_levels_page.dart';
+import 'package:jigsawpuzzle/services/webview_service.dart';
+import 'package:jigsawpuzzle/theme/app_palette.dart';
+import 'package:jigsawpuzzle/theme/app_text_styles.dart';
+import 'package:jigsawpuzzle/widgets/app_cached_image.dart';
+import 'package:jigsawpuzzle/widgets/choose_difficulty_sheet.dart';
+import 'package:jigsawpuzzle/widgets/downloaded_drawer_sheet.dart';
+import 'package:jigsawpuzzle/widgets/game_toast.dart';
 import 'package:phosphoricons_flutter/phosphoricons_flutter.dart';
-
-import '../../data/game_repository.dart';
-import '../../data/models/custom_puzzle_item.dart';
-import '../../data/resume_helper.dart';
-import '../../data/snapshot_store.dart';
-import '../../logic/content/app_content.dart';
-import '../../logic/content/models/puzzle_pack_item.dart';
-import '../../logic/download_manager.dart';
-import '../../logic/image_source.dart';
-import '../../l10n/gen/strings.g.dart';
-import '../../services/webview_service.dart';
-import '../../theme/app_palette.dart';
-import '../../theme/app_text_styles.dart';
-import '../../widgets/app_cached_image.dart';
-import '../../widgets/choose_difficulty_sheet.dart';
-import '../../widgets/downloaded_drawer_sheet.dart';
-import '../../widgets/game_toast.dart';
-import '../crop_puzzle_page.dart';
-import '../game_page.dart';
-import '../import_pack_page.dart';
-import '../online_image_picker_page.dart';
-import '../pack_levels_page.dart';
 
 class MyPuzzlesTabView extends StatefulWidget {
   const MyPuzzlesTabView({super.key});
@@ -35,7 +34,7 @@ class MyPuzzlesTabView extends StatefulWidget {
 }
 
 class _MyPuzzlesTabViewState extends State<MyPuzzlesTabView> {
-  final _repo = GameRepository.instance;
+  final GameRepository _repo = GameRepository.instance;
   bool _loading = false;
 
   @override
@@ -62,8 +61,6 @@ class _MyPuzzlesTabViewState extends State<MyPuzzlesTabView> {
         final result = await CropPuzzlePage.push(
           context,
           bytes,
-          sourceType: 'gallery',
-          sourcePlatform: 'album',
           sourceUrl: item.sourceUrl,
         );
         if (result != null && mounted) {
@@ -122,7 +119,6 @@ class _MyPuzzlesTabViewState extends State<MyPuzzlesTabView> {
       onClearRepo: (k) => _repo.updateCustomProgress(
         id: item.id,
         progressPercent: 0,
-        snapshotJson: null,
       ),
       onPushGame: (diff, jsonStr) async {
         if (!mounted) return;
@@ -178,7 +174,6 @@ class _MyPuzzlesTabViewState extends State<MyPuzzlesTabView> {
         await _repo.updateCustomProgress(
           id: item.id,
           progressPercent: 0,
-          snapshotJson: null,
         );
         if (!mounted) return;
         await Navigator.of(context).push(
@@ -187,7 +182,6 @@ class _MyPuzzlesTabViewState extends State<MyPuzzlesTabView> {
               imageBytes: bytes,
               difficulty: item.difficulty,
               customId: item.id,
-              initialSnapshotJson: null,
             ),
           ),
         );
@@ -438,7 +432,6 @@ class _MyPuzzlesTabViewState extends State<MyPuzzlesTabView> {
                           maxCrossAxisExtent: 220,
                           crossAxisSpacing: 14,
                           mainAxisSpacing: 14,
-                          childAspectRatio: 1.0,
                         ),
                     delegate: SliverChildBuilderDelegate((context, index) {
                       final item = customList[index];
@@ -466,7 +459,7 @@ class _MyPuzzlesTabViewState extends State<MyPuzzlesTabView> {
       child: Container(
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: palette.divider, width: 1),
+          border: Border.all(color: palette.divider),
         ),
         clipBehavior: Clip.antiAlias,
         child: Stack(
@@ -639,7 +632,6 @@ class _MyPuzzlesTabViewState extends State<MyPuzzlesTabView> {
   Widget _buildThumbnail(CustomPuzzleItem item) {
     return AppCachedImage(
       imagePathOrUrl: item.imagePathOrUrl,
-      fit: BoxFit.cover,
       errorWidget: Image.asset(assetSamples[0], fit: BoxFit.cover),
     );
   }
@@ -659,7 +651,7 @@ class _MyPuzzlesTabViewState extends State<MyPuzzlesTabView> {
       decoration: BoxDecoration(
         color: palette.surfaceContainer,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: palette.divider, width: 1),
+        border: Border.all(color: palette.divider),
       ),
       clipBehavior: Clip.antiAlias,
       child: Column(
@@ -674,7 +666,6 @@ class _MyPuzzlesTabViewState extends State<MyPuzzlesTabView> {
                 width: double.infinity,
                 child: AppCachedImage(
                   imagePathOrUrl: pack.coverPath,
-                  fit: BoxFit.cover,
                 ),
               ),
               Positioned.fill(
@@ -688,7 +679,7 @@ class _MyPuzzlesTabViewState extends State<MyPuzzlesTabView> {
                       ],
                       begin: Alignment.topCenter,
                       end: Alignment.bottomCenter,
-                      stops: [0.0, 0.45, 1.0],
+                      stops: const [0.0, 0.45, 1.0],
                     ),
                   ),
                 ),
@@ -846,7 +837,7 @@ class _MyPuzzlesTabViewState extends State<MyPuzzlesTabView> {
           decoration: BoxDecoration(
             color: palette.surfaceContainer,
             borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: palette.divider, width: 1),
+            border: Border.all(color: palette.divider),
           ),
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
           child: Row(

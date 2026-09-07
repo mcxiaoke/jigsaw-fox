@@ -5,23 +5,22 @@ import 'dart:ui' as ui;
 
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:jigsawpuzzle/data/game_repository.dart';
+import 'package:jigsawpuzzle/data/models/custom_puzzle_item.dart';
+import 'package:jigsawpuzzle/l10n/gen/strings.g.dart';
+import 'package:jigsawpuzzle/logic/cache/image_cache_manager.dart';
+import 'package:jigsawpuzzle/logic/image_upscaler.dart';
+import 'package:jigsawpuzzle/logic/puzzle_model.dart';
+import 'package:jigsawpuzzle/theme/app_palette.dart';
+import 'package:jigsawpuzzle/widgets/game_toast.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:phosphoricons_flutter/phosphoricons_flutter.dart';
 
-import '../data/game_repository.dart';
-import '../data/models/custom_puzzle_item.dart';
-import '../logic/cache/image_cache_manager.dart';
-import '../logic/image_upscaler.dart';
-import '../logic/puzzle_model.dart';
-import '../l10n/gen/strings.g.dart';
-import '../theme/app_palette.dart';
-import '../widgets/game_toast.dart';
-
 /// Dynamic crop ratio option derived from [PuzzleAspectRatio] (Plug & Play architecture).
 class CropRatioOption {
-  final PuzzleAspectRatio aspectRatio;
 
   const CropRatioOption(this.aspectRatio);
+  final PuzzleAspectRatio aspectRatio;
 
   String get label => '${aspectRatio.aspectCols}:${aspectRatio.aspectRows}';
   double get ratio => aspectRatio.ratio;
@@ -45,8 +44,7 @@ final List<CropRatioOption> supportedCropOptions = List.unmodifiable(
 /// Interactive photo cropping & puzzle creation page with large adaptive viewport and 5 standard aspect ratios.
 class CropPuzzlePage extends StatefulWidget {
   const CropPuzzlePage({
-    super.key,
-    required this.rawBytes,
+    required this.rawBytes, super.key,
     this.sourceType = 'gallery',
     this.sourcePlatform = 'album',
     this.sourceUrl,
@@ -58,14 +56,14 @@ class CropPuzzlePage extends StatefulWidget {
   final String? sourceUrl;
 
   /// 拼图素材裁切短边物理基准像素（参考选图标准 docs/puzzle-image-selection-standard.md 及格线 1080px）
-  static const double kMinOriginalCropPixels = 1080.0;
+  static const double kMinOriginalCropPixels = 1080;
 
   /// 计算最大允许缩放倍率，严格基于原图与视口的真实物理像素几何映射：
   /// 1. 保证裁切区域短边像素 min(boxW, boxH) / (baseScale * scale) >= 1080px；
   /// 2. 原图较小（物理尺寸不足以支撑 1080px 短边）时，严格锁定为 1.0x（仅允许平移选区，禁止数码拉伸糊图）；
   /// 3. 彻底消除原先 1.0 / baseScale 导致的大图放大至 900%+ 破坏构图的缺陷。
   static double calculateMaxCropScale(Size viewportSize, ui.Image? image) {
-    if (image == null) return 1.0;
+    if (image == null) return 1;
     return calculateMaxCropScaleFromDimensions(
       viewportSize: viewportSize,
       imageWidth: image.width.toDouble(),
@@ -86,18 +84,18 @@ class CropPuzzlePage extends StatefulWidget {
     final imgH = imageHeight;
 
     if (boxW <= 0 || boxH <= 0 || imgW <= 0 || imgH <= 0) {
-      return 1.0;
+      return 1;
     }
 
     final baseScale = max(boxW / imgW, boxH / imgH);
-    if (baseScale <= 0) return 1.0;
+    if (baseScale <= 0) return 1;
 
     // 真实导出短边像素: min(realCropW, realCropH) = min(boxW, boxH) / (baseScale * scale)
     // 约束 min(realCropW, realCropH) >= kMinOriginalCropPixels
     // 得 scale <= min(boxW, boxH) / (baseScale * kMinOriginalCropPixels)
     final physMax = min(boxW, boxH) / (baseScale * kMinOriginalCropPixels);
     if (physMax <= 1.0) {
-      return 1.0;
+      return 1;
     }
 
     return physMax;
@@ -217,7 +215,7 @@ class _CropPuzzlePageState extends State<CropPuzzlePage> {
     final baseSize = _calculateBaseSize(viewportSize, image);
     final initTx = (viewportSize.width - baseSize.width) / 2.0;
     final initTy = (viewportSize.height - baseSize.height) / 2.0;
-    return Matrix4.identity()..setTranslationRaw(initTx, initTy, 0.0);
+    return Matrix4.identity()..setTranslationRaw(initTx, initTy, 0);
   }
 
   void _onRatioChanged(CropRatioOption ratio) {
@@ -280,8 +278,8 @@ class _CropPuzzlePageState extends State<CropPuzzlePage> {
     final clampedTx = newTx.clamp(minTx, maxTx);
     final clampedTy = newTy.clamp(minTy, maxTy);
 
-    final newMatrix = Matrix4.diagonal3Values(targetScale, targetScale, 1.0)
-      ..setTranslationRaw(clampedTx, clampedTy, 0.0);
+    final newMatrix = Matrix4.diagonal3Values(targetScale, targetScale, 1)
+      ..setTranslationRaw(clampedTx, clampedTy, 0);
 
     _transformController.value = newMatrix;
   }
@@ -308,8 +306,8 @@ class _CropPuzzlePageState extends State<CropPuzzlePage> {
       // 3. 短边最大 2160 上限限制 (4K 视网膜安全线，防止超大图引起显存暴涨)
       const maxShortSide = 2160.0;
       final shortSide = min(realCropW, realCropH);
-      double targetW = realCropW;
-      double targetH = realCropH;
+      var targetW = realCropW;
+      var targetH = realCropH;
 
       if (shortSide > maxShortSide) {
         final factor = maxShortSide / shortSide;
@@ -375,11 +373,6 @@ class _CropPuzzlePageState extends State<CropPuzzlePage> {
       )) {
         pngBytes = await ImageUpscaler.upscaleBytes(
           bytes: pngBytes,
-          scale: 2.0,
-          enableDenoise: true,
-          denoiseStrength: 0.25,
-          enableSharpen: true,
-          sharpness: 0.45,
         );
       }
 
@@ -494,7 +487,8 @@ class _CropPuzzlePageState extends State<CropPuzzlePage> {
                     final maxW = max(50.0, constraints.maxWidth - 32);
                     final maxH = max(50.0, constraints.maxHeight - 72);
 
-                    double boxW, boxH;
+                    double boxW;
+                    double boxH;
                     if (targetRatio >= maxW / maxH) {
                       boxW = maxW;
                       boxH = boxW / targetRatio;
@@ -568,7 +562,6 @@ class _CropPuzzlePageState extends State<CropPuzzlePage> {
                                     borderRadius: BorderRadius.circular(12),
                                     border: Border.all(
                                       color: Colors.white12,
-                                      width: 1,
                                     ),
                                   ),
                                   child: Text(
@@ -624,9 +617,8 @@ class _CropPuzzlePageState extends State<CropPuzzlePage> {
                                               ),
                                               transformationController:
                                                   _transformController,
-                                              minScale: 1.0,
+                                              minScale: 1,
                                               maxScale: maxAllowedScale,
-                                              boundaryMargin: EdgeInsets.zero,
                                               clipBehavior: Clip.none,
                                               constrained: false,
                                               child: SizedBox(
@@ -783,7 +775,7 @@ class _CropPuzzlePageState extends State<CropPuzzlePage> {
                               const SizedBox(width: 5),
                               Text(
                                 t.crop.gestureHint,
-                                style: TextStyle(
+                                style: const TextStyle(
                                   color: Colors.white54,
                                   fontSize: 11.5,
                                 ),
@@ -834,7 +826,7 @@ class _CropPuzzlePageState extends State<CropPuzzlePage> {
           ),
           if (_isSaving)
             Positioned.fill(
-              child: Container(
+              child: ColoredBox(
                 color: Colors.black.withValues(alpha: 0.65),
                 child: Center(
                   child: Column(
@@ -844,10 +836,10 @@ class _CropPuzzlePageState extends State<CropPuzzlePage> {
                         color: palette.brandLight,
                         strokeWidth: 3,
                       ),
-                      SizedBox(height: 16),
+                      const SizedBox(height: 16),
                       Text(
                         t.crop.optimizing,
-                        style: TextStyle(
+                        style: const TextStyle(
                           color: Colors.white,
                           fontSize: 14.5,
                           fontWeight: FontWeight.w600,

@@ -5,14 +5,6 @@ import 'package:flutter/foundation.dart';
 
 @immutable
 class PuzzleTagItem {
-  final String id;
-  final String name;
-  final String zh;
-  final String icon;
-  final String categoryType;
-  final String description;
-  final int gridRow;
-  final int order;
 
   const PuzzleTagItem({
     required this.id,
@@ -24,6 +16,14 @@ class PuzzleTagItem {
     required this.gridRow,
     required this.order,
   });
+  final String id;
+  final String name;
+  final String zh;
+  final String icon;
+  final String categoryType;
+  final String description;
+  final int gridRow;
+  final int order;
 }
 
 // 17 个独立静态常量（供代码中防手误引用）

@@ -3,9 +3,8 @@ import 'dart:math';
 
 import 'package:flutter/foundation.dart';
 import 'package:image/image.dart' as img;
-
-import '../../services/app_logger.dart';
-import '../image_crop.dart';
+import 'package:jigsawpuzzle/logic/image_crop.dart';
+import 'package:jigsawpuzzle/services/app_logger.dart';
 
 /// 传递至后台 Isolate 的缩略图处理参数负载
 class ThumbnailTaskParams {
@@ -134,7 +133,7 @@ class ThumbnailGenerator {
     ThumbnailTaskParams params,
   ) {
     try {
-      Uint8List? rawBytes = params.rawBytes;
+      var rawBytes = params.rawBytes;
       if (rawBytes == null && params.sourceFilePath != null) {
         final sourceFile = File(params.sourceFilePath!);
         if (!sourceFile.existsSync()) return null;
@@ -151,7 +150,8 @@ class ThumbnailGenerator {
       if (srcW <= 0 || srcH <= 0) return null;
 
       final targetDim = params.targetDimension;
-      int dstW, dstH;
+      int dstW;
+      int dstH;
       if (srcW <= targetDim && srcH <= targetDim) {
         dstW = srcW;
         dstH = srcH;
@@ -250,7 +250,10 @@ class ThumbnailGenerator {
         return params.rawBytes;
       }
 
-      int cropW, cropH, dx, dy;
+      int cropW;
+      int cropH;
+      int dx;
+      int dy;
       if (params.smartCrop) {
         final rect = findSmartCropRect(original, targetRatio: target);
         cropW = rect.width.round();

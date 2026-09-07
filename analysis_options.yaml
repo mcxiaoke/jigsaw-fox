@@ -1,14 +1,26 @@
 # This file configures the analyzer, which statically analyzes Dart code to
 # check for errors, warnings, and lints.
+#
+# Uses very_good_analysis (10.3.0) — a comprehensive lint ruleset maintained
+# by Very Good Ventures, covering Dart/Flutter best practices.
 
-include: package:flutter_lints/flutter.yaml
+include: package:very_good_analysis/analysis_options.yaml
 
 analyzer:
   exclude:
     - "temp/**"
     - "build/**"
+    - "lib/l10n/gen/**"          # slang 生成代码
+    - "**/*.g.dart"              # 通用生成代码
+    - "**/*.freezed.dart"        # freezed 生成代码
+  language:
+    strict-casts: true           # 禁止隐式类型转换
+    strict-raw-types: true       # 泛型必须显式指定
+    strict-inference: true       # 强制类型推断一致性
 
 linter:
   rules:
-    # avoid_print: false
-    # prefer_single_quotes: true
+    # --- 游戏项目按需放宽的规则 ---
+    public_member_api_docs: false       # 不强制公开 API 文档注释
+    lines_longer_than_80_chars: false   # Flutter 代码行普遍较长
+    flutter_style_todos: false          # 不强制 TODO 格式

@@ -5,9 +5,8 @@ import 'dart:ui' as ui;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/painting.dart';
-
-import '../../services/app_logger.dart';
-import 'image_cache_manager.dart';
+import 'package:jigsawpuzzle/logic/cache/image_cache_manager.dart';
+import 'package:jigsawpuzzle/services/app_logger.dart';
 
 @immutable
 class AppImageKey {
@@ -82,7 +81,7 @@ class AppCachedImageProvider extends ImageProvider<AppImageKey> {
   ) async {
     try {
       // 1. 通过分级缓存系统获取缩略图字节 (L1 内存 -> L2 磁盘 -> L3 调度生成)
-      Uint8List? bytes = await ImageCacheManager.instance.getThumbnailBytes(
+      var bytes = await ImageCacheManager.instance.getThumbnailBytes(
         key.filePath,
         dimension: key.dimension,
       );
@@ -108,7 +107,7 @@ class AppCachedImageProvider extends ImageProvider<AppImageKey> {
           }
           final targetDim = key.dimension.pixels;
           if (intrinsicWidth > targetDim || intrinsicHeight > targetDim) {
-            final double ratio =
+            final ratio =
                 targetDim /
                 (intrinsicWidth > intrinsicHeight
                     ? intrinsicWidth

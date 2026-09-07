@@ -1,27 +1,28 @@
 import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:jigsawpuzzle/data/resume_helper.dart';
+import 'package:jigsawpuzzle/data/snapshot_store.dart';
+import 'package:jigsawpuzzle/l10n/gen/strings.g.dart';
+import 'package:jigsawpuzzle/logic/cache/level_image_resolver.dart';
+import 'package:jigsawpuzzle/logic/content/app_content.dart';
+import 'package:jigsawpuzzle/logic/content/content_manager.dart';
+import 'package:jigsawpuzzle/logic/content/models/puzzle_collection_item.dart';
+import 'package:jigsawpuzzle/logic/content/models/puzzle_level_item.dart';
+import 'package:jigsawpuzzle/logic/puzzle_model.dart';
+import 'package:jigsawpuzzle/pages/game_page.dart';
+import 'package:jigsawpuzzle/services/app_logger.dart';
+import 'package:jigsawpuzzle/theme/app_palette.dart';
+import 'package:jigsawpuzzle/theme/app_text_styles.dart';
+import 'package:jigsawpuzzle/widgets/choose_difficulty_sheet.dart';
+import 'package:jigsawpuzzle/widgets/game_toast.dart';
+import 'package:jigsawpuzzle/widgets/lazy_level_image.dart';
 import 'package:phosphoricons_flutter/phosphoricons_flutter.dart';
-
-import '../data/resume_helper.dart';
-import '../data/snapshot_store.dart';
-import '../logic/cache/level_image_resolver.dart';
-import '../logic/content/app_content.dart';
-import '../logic/content/models/puzzle_collection_item.dart';
-import '../logic/content/models/puzzle_level_item.dart';
-import '../logic/puzzle_model.dart';
-import '../l10n/gen/strings.g.dart';
-import '../services/app_logger.dart';
-import '../theme/app_palette.dart';
-import '../theme/app_text_styles.dart';
-import '../widgets/choose_difficulty_sheet.dart';
-import '../widgets/game_toast.dart';
-import '../widgets/lazy_level_image.dart';
-import 'game_page.dart';
 
 /// 图集详情关卡列表页面 (展示图集内所有关卡纯图 Card Grid，无 tag 过滤)
 class CollectionLevelsPage extends StatefulWidget {
-  const CollectionLevelsPage({super.key, required this.collection});
+  const CollectionLevelsPage({required this.collection, super.key});
 
   final PuzzleCollectionItem collection;
 
@@ -41,7 +42,7 @@ class CollectionLevelsPage extends StatefulWidget {
 }
 
 class _CollectionLevelsPageState extends State<CollectionLevelsPage> {
-  final _content = AppContent.instance.manager;
+  final ContentManager _content = AppContent.instance.manager;
   bool _isLoading = false;
   late PuzzleCollectionItem _currentCollection;
   List<PuzzleLevelItem> _levels = [];
@@ -224,7 +225,6 @@ class _CollectionLevelsPageState extends State<CollectionLevelsPage> {
       initialDifficulty: fallbackDiff,
       completedPieceCounts: progress.completedPieceCounts.toSet(),
       canonicalId: canonicalId,
-      isUnlocked: true,
       title: '${_currentCollection.title} · 第 $index 关',
       sourcePlatform: _currentCollection.displayTypeLabel,
       savedProgressPercent: progress.hasSnapshot
@@ -245,7 +245,6 @@ class _CollectionLevelsPageState extends State<CollectionLevelsPage> {
               difficulty: fallbackDiff,
               canonicalId: canonicalId,
               packTitle: _currentCollection.title,
-              initialSnapshotJson: null,
             ),
           ),
         );
@@ -347,7 +346,7 @@ class _CollectionLevelsPageState extends State<CollectionLevelsPage> {
                       decoration: BoxDecoration(
                         color: palette.surfaceContainer,
                         borderRadius: BorderRadius.circular(14),
-                        border: Border.all(color: palette.divider, width: 1),
+                        border: Border.all(color: palette.divider),
                       ),
                       child: Row(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -397,7 +396,6 @@ class _CollectionLevelsPageState extends State<CollectionLevelsPage> {
                           maxCrossAxisExtent: 200,
                           crossAxisSpacing: 12,
                           mainAxisSpacing: 12,
-                          childAspectRatio: 1.0,
                         ),
                     delegate: SliverChildBuilderDelegate((context, index) {
                       final level = _levels[index];
@@ -431,7 +429,7 @@ class _CollectionLevelsPageState extends State<CollectionLevelsPage> {
             decoration: BoxDecoration(
               color: palette.surfaceContainer,
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: palette.divider, width: 1),
+              border: Border.all(color: palette.divider),
               boxShadow: [
                 BoxShadow(
                   color: Colors.black.withValues(alpha: 0.08),
@@ -444,7 +442,7 @@ class _CollectionLevelsPageState extends State<CollectionLevelsPage> {
             child: Stack(
               fit: StackFit.expand,
               children: [
-                LazyLevelImage(level: level, fit: BoxFit.cover),
+                LazyLevelImage(level: level),
                 // 渐变保护
                 Container(
                   decoration: BoxDecoration(

@@ -2,20 +2,20 @@ import 'dart:ui';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
-import 'data/favorite_store.dart';
-import 'data/game_repository.dart';
-import 'data/storage_manager.dart';
-import 'l10n/gen/strings.g.dart';
-import 'logic/cache/image_cache_manager.dart';
-import 'logic/content/app_content.dart';
-import 'logic/download_manager.dart';
-import 'pages/main_screen.dart';
-import 'services/achievement_store.dart';
-import 'services/app_logger.dart';
-import 'services/economy_service.dart';
-import 'services/locale_service.dart';
-import 'services/sound_service.dart';
-import 'services/webview_service.dart';
+import 'package:jigsawpuzzle/data/favorite_store.dart';
+import 'package:jigsawpuzzle/data/game_repository.dart';
+import 'package:jigsawpuzzle/data/storage_manager.dart';
+import 'package:jigsawpuzzle/l10n/gen/strings.g.dart';
+import 'package:jigsawpuzzle/logic/cache/image_cache_manager.dart';
+import 'package:jigsawpuzzle/logic/content/app_content.dart';
+import 'package:jigsawpuzzle/logic/download_manager.dart';
+import 'package:jigsawpuzzle/pages/main_screen.dart';
+import 'package:jigsawpuzzle/services/achievement_store.dart';
+import 'package:jigsawpuzzle/services/app_logger.dart';
+import 'package:jigsawpuzzle/services/economy_service.dart';
+import 'package:jigsawpuzzle/services/locale_service.dart';
+import 'package:jigsawpuzzle/services/sound_service.dart';
+import 'package:jigsawpuzzle/services/webview_service.dart';
 
 /// 桌面生命周期监听器（**必须顶层持有**，设计 §7.5）。
 ///
@@ -151,7 +151,6 @@ void main() async {
     }),
   ];
   // 不阻塞首帧，后台并行；首帧先出壳由 contentUpdateNotifier 刷新
-  // ignore: discarded_futures
   Future.wait(bgFutures).then((_) {
     AppLogger.system.info('Background init group done');
   });
@@ -214,7 +213,6 @@ class _JigsawPuzzleAppState extends State<JigsawPuzzleApp>
     const seed = Color(0xFFD4963C);
     final lightScheme = ColorScheme.fromSeed(
       seedColor: seed,
-      brightness: Brightness.light,
     );
     final darkScheme = ColorScheme.fromSeed(
       seedColor: seed,

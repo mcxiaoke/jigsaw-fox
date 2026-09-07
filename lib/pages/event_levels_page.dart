@@ -1,25 +1,26 @@
 import 'dart:io';
 import 'dart:typed_data';
-import 'package:flutter/material.dart';
-import 'package:phosphoricons_flutter/phosphoricons_flutter.dart';
 
-import '../logic/cache/level_image_resolver.dart';
-import '../logic/content/app_content.dart';
-import '../logic/content/models/puzzle_event_item.dart';
-import '../logic/content/models/puzzle_level_item.dart';
-import '../logic/puzzle_model.dart';
-import '../l10n/gen/strings.g.dart';
-import '../services/app_logger.dart';
-import '../theme/app_palette.dart';
-import '../theme/app_text_styles.dart';
-import '../widgets/choose_difficulty_sheet.dart';
-import '../widgets/game_toast.dart';
-import '../widgets/lazy_level_image.dart';
-import 'game_page.dart';
+import 'package:flutter/material.dart';
+import 'package:jigsawpuzzle/l10n/gen/strings.g.dart';
+import 'package:jigsawpuzzle/logic/cache/level_image_resolver.dart';
+import 'package:jigsawpuzzle/logic/content/app_content.dart';
+import 'package:jigsawpuzzle/logic/content/content_manager.dart';
+import 'package:jigsawpuzzle/logic/content/models/puzzle_event_item.dart';
+import 'package:jigsawpuzzle/logic/content/models/puzzle_level_item.dart';
+import 'package:jigsawpuzzle/logic/puzzle_model.dart';
+import 'package:jigsawpuzzle/pages/game_page.dart';
+import 'package:jigsawpuzzle/services/app_logger.dart';
+import 'package:jigsawpuzzle/theme/app_palette.dart';
+import 'package:jigsawpuzzle/theme/app_text_styles.dart';
+import 'package:jigsawpuzzle/widgets/choose_difficulty_sheet.dart';
+import 'package:jigsawpuzzle/widgets/game_toast.dart';
+import 'package:jigsawpuzzle/widgets/lazy_level_image.dart';
+import 'package:phosphoricons_flutter/phosphoricons_flutter.dart';
 
 /// 活动内关卡 Grid 页面
 class EventLevelsPage extends StatefulWidget {
-  const EventLevelsPage({super.key, required this.event});
+  const EventLevelsPage({required this.event, super.key});
 
   final PuzzleEventItem event;
 
@@ -34,7 +35,7 @@ class EventLevelsPage extends StatefulWidget {
 }
 
 class _EventLevelsPageState extends State<EventLevelsPage> {
-  final _content = AppContent.instance.manager;
+  final ContentManager _content = AppContent.instance.manager;
   bool _isLoading = false;
   late PuzzleEventItem _currentEvent;
   List<PuzzleLevelItem> _levels = [];
@@ -69,7 +70,7 @@ class _EventLevelsPageState extends State<EventLevelsPage> {
 
   Future<void> _openLevel(PuzzleLevelItem level, int index) async {
     Uint8List? imgBytes;
-    String localPath = '';
+    var localPath = '';
     try {
       // 统一经 LevelImageResolver 落原图，保证与卡片缩略同文件，见缩略必可玩
       localPath = await LevelImageResolver.instance.resolveLevelLocalPath(
@@ -130,9 +131,7 @@ class _EventLevelsPageState extends State<EventLevelsPage> {
       context: context,
       imageBytes: imgBytes,
       initialDifficulty: defaultDiff,
-      completedPieceCounts: const {},
       canonicalId: level.id,
-      isUnlocked: true,
       title: t.levels.titleOf(title: _currentEvent.displayTitle, index: index),
       onStart: (diff) async {
         await Navigator.of(context).push(
@@ -205,7 +204,7 @@ class _EventLevelsPageState extends State<EventLevelsPage> {
                       decoration: BoxDecoration(
                         color: palette.surfaceContainer,
                         borderRadius: BorderRadius.circular(14),
-                        border: Border.all(color: palette.divider, width: 1),
+                        border: Border.all(color: palette.divider),
                       ),
                       child: Text(
                         _currentEvent.desc,
@@ -224,7 +223,6 @@ class _EventLevelsPageState extends State<EventLevelsPage> {
                           maxCrossAxisExtent: 200,
                           crossAxisSpacing: 14,
                           mainAxisSpacing: 14,
-                          childAspectRatio: 1.0,
                         ),
                     delegate: SliverChildBuilderDelegate((context, index) {
                       final level = _levels[index];
@@ -245,13 +243,13 @@ class _EventLevelsPageState extends State<EventLevelsPage> {
       child: Container(
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: palette.divider, width: 1),
+          border: Border.all(color: palette.divider),
         ),
         clipBehavior: Clip.antiAlias,
         child: Stack(
           fit: StackFit.expand,
           children: [
-            LazyLevelImage(level: level, fit: BoxFit.cover),
+            LazyLevelImage(level: level),
             Container(
               decoration: BoxDecoration(
                 gradient: LinearGradient(

@@ -1,8 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:hive_ce/hive_ce.dart';
-
-import '../services/app_logger.dart';
-import 'storage_manager.dart';
+import 'package:jigsawpuzzle/data/storage_manager.dart';
+import 'package:jigsawpuzzle/services/app_logger.dart';
 
 /// 单条收藏条目模型（支持源被删后的孤儿卡优雅兜底展示）
 class FavoriteEntry {
@@ -20,6 +19,45 @@ class FavoriteEntry {
     this.sortOrder = 0,
     this.extra = const {},
   });
+
+  factory FavoriteEntry.fromJson(Map<String, dynamic> json) {
+    const known = {
+      'canonicalId',
+      'favoritedAt',
+      'titleSnapshot',
+      'imageSnapshot',
+      'sourceLabelSnapshot',
+      'isLocalFileSnapshot',
+      'aspectRatioLabel',
+      'author',
+      'tags',
+      'preferredDifficultyKey',
+      'sortOrder',
+    };
+    final extra = <String, dynamic>{};
+    for (final e in json.entries) {
+      if (!known.contains(e.key)) extra[e.key] = e.value;
+    }
+
+    return FavoriteEntry(
+      canonicalId: json['canonicalId'] as String? ?? '',
+      favoritedAt: json['favoritedAt'] != null
+          ? (DateTime.tryParse(json['favoritedAt'] as String) ?? DateTime.now())
+          : DateTime.now(),
+      titleSnapshot: json['titleSnapshot'] as String?,
+      imageSnapshot: json['imageSnapshot'] as String?,
+      sourceLabelSnapshot: json['sourceLabelSnapshot'] as String? ?? 'main',
+      isLocalFileSnapshot: (json['isLocalFileSnapshot'] as bool?) ?? false,
+      aspectRatioLabel: json['aspectRatioLabel'] as String? ?? 'square1x1',
+      author: json['author'] as String?,
+      tags:
+          (json['tags'] as List<dynamic>?)?.map((e) => e.toString()).toList() ??
+          const [],
+      preferredDifficultyKey: json['preferredDifficultyKey'] as String?,
+      sortOrder: (json['sortOrder'] as int?) ?? 0,
+      extra: extra,
+    );
+  }
 
   /// 全局规范主键 (如 "main:001", "daily:20260902", "ugc:1787548651000")
   final String canonicalId;
@@ -108,45 +146,6 @@ class FavoriteEntry {
       if (!m.containsKey(k)) m[k] = v;
     });
     return m;
-  }
-
-  factory FavoriteEntry.fromJson(Map<String, dynamic> json) {
-    const known = {
-      'canonicalId',
-      'favoritedAt',
-      'titleSnapshot',
-      'imageSnapshot',
-      'sourceLabelSnapshot',
-      'isLocalFileSnapshot',
-      'aspectRatioLabel',
-      'author',
-      'tags',
-      'preferredDifficultyKey',
-      'sortOrder',
-    };
-    final extra = <String, dynamic>{};
-    for (final e in json.entries) {
-      if (!known.contains(e.key)) extra[e.key] = e.value;
-    }
-
-    return FavoriteEntry(
-      canonicalId: json['canonicalId'] as String? ?? '',
-      favoritedAt: json['favoritedAt'] != null
-          ? (DateTime.tryParse(json['favoritedAt'] as String) ?? DateTime.now())
-          : DateTime.now(),
-      titleSnapshot: json['titleSnapshot'] as String?,
-      imageSnapshot: json['imageSnapshot'] as String?,
-      sourceLabelSnapshot: json['sourceLabelSnapshot'] as String? ?? 'main',
-      isLocalFileSnapshot: (json['isLocalFileSnapshot'] as bool?) ?? false,
-      aspectRatioLabel: json['aspectRatioLabel'] as String? ?? 'square1x1',
-      author: json['author'] as String?,
-      tags:
-          (json['tags'] as List<dynamic>?)?.map((e) => e.toString()).toList() ??
-          const [],
-      preferredDifficultyKey: json['preferredDifficultyKey'] as String?,
-      sortOrder: (json['sortOrder'] as int?) ?? 0,
-      extra: extra,
-    );
   }
 }
 

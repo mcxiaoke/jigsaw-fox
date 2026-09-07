@@ -2,7 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:dio/dio.dart';
 
-import '../../../services/app_logger.dart';
+import 'package:jigsawpuzzle/services/app_logger.dart';
 
 /// 健壮的内容网络请求客户端 (带临时文件原子重命名与自动清理容错)
 class ContentHttpClient {

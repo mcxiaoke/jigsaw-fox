@@ -295,7 +295,7 @@ void main() {
         // 获取 2 月份关卡，应该严格自动过滤掉 29, 30, 31 号，只保留 28 天
         final febLevels = dailyPipeline.getLevelsForMonth(
           '202602',
-          overrideToday: DateTime(2026, 3, 1),
+          overrideToday: DateTime(2026, 3),
         );
         expect(febLevels.length, equals(28));
         expect(febLevels.last.dailyDate, equals('20260228'));
@@ -312,7 +312,7 @@ void main() {
         // 获取 9 月份关卡，自适应展示 25 个关卡
         final sepLevels = dailyPipeline.getLevelsForMonth(
           '202609',
-          overrideToday: DateTime(2026, 10, 1),
+          overrideToday: DateTime(2026, 10),
         );
         expect(sepLevels.length, equals(25));
         expect(sepLevels.last.dailyDate, equals('20260925'));

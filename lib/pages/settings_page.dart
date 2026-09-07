@@ -1,20 +1,19 @@
 import 'package:flutter/material.dart';
+import 'package:jigsawpuzzle/data/game_repository.dart';
+import 'package:jigsawpuzzle/data/progress_store.dart';
+import 'package:jigsawpuzzle/l10n/gen/strings.g.dart';
+import 'package:jigsawpuzzle/logic/cache/image_cache_manager.dart';
+import 'package:jigsawpuzzle/pages/how_to_play_page.dart';
+import 'package:jigsawpuzzle/pages/log_viewer_page.dart';
+import 'package:jigsawpuzzle/services/app_logger.dart';
+import 'package:jigsawpuzzle/services/economy_service.dart';
+import 'package:jigsawpuzzle/services/locale_service.dart';
+import 'package:jigsawpuzzle/services/sound_service.dart';
+import 'package:jigsawpuzzle/theme/app_palette.dart';
+import 'package:jigsawpuzzle/theme/app_text_styles.dart';
+import 'package:jigsawpuzzle/widgets/choose_background_sheet.dart';
+import 'package:jigsawpuzzle/widgets/game_toast.dart';
 import 'package:phosphoricons_flutter/phosphoricons_flutter.dart';
-
-import '../data/game_repository.dart';
-import '../data/progress_store.dart';
-import '../l10n/gen/strings.g.dart';
-import '../logic/cache/image_cache_manager.dart';
-import '../services/app_logger.dart';
-import '../services/economy_service.dart';
-import '../services/locale_service.dart';
-import '../services/sound_service.dart';
-import '../theme/app_palette.dart';
-import '../theme/app_text_styles.dart';
-import '../widgets/choose_background_sheet.dart';
-import '../widgets/game_toast.dart';
-import 'how_to_play_page.dart';
-import 'log_viewer_page.dart';
 
 /// Full-screen Game Settings page with grouped settings cards.
 class SettingsPage extends StatefulWidget {
@@ -31,7 +30,7 @@ class SettingsPage extends StatefulWidget {
 }
 
 class _SettingsPageState extends State<SettingsPage> {
-  final _repo = GameRepository.instance;
+  final GameRepository _repo = GameRepository.instance;
   int _totalSolved = 0;
   int _totalStars = 0;
   int _coins = 0;
@@ -365,7 +364,7 @@ class _SettingsPageState extends State<SettingsPage> {
                         )
                       : TextButton.icon(
                           onPressed: _clearThumbnailCache,
-                          icon: Icon(PhosphorIconsBold.broom, size: 16),
+                          icon: const Icon(PhosphorIconsBold.broom, size: 16),
                           label: Text(t.settings.dataClear),
                         ),
                 ),
@@ -495,7 +494,7 @@ class _SettingsPageState extends State<SettingsPage> {
       clipBehavior: Clip.antiAlias,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(16),
-        side: BorderSide(color: palette.divider, width: 1),
+        side: BorderSide(color: palette.divider),
       ),
       child: Column(children: children),
     );
@@ -607,7 +606,7 @@ class _SettingsPageState extends State<SettingsPage> {
       decoration: BoxDecoration(
         color: color.withValues(alpha: 0.12),
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: color.withValues(alpha: 0.25), width: 1),
+        border: Border.all(color: color.withValues(alpha: 0.25)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -781,7 +780,7 @@ class _CompactModeToggle extends StatelessWidget {
       decoration: BoxDecoration(
         color: palette.surfaceContainerLow,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: palette.divider, width: 1),
+        border: Border.all(color: palette.divider),
       ),
       child: Row(
         children: [

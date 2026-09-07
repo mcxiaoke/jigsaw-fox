@@ -16,7 +16,7 @@ import 'dart:typed_data';
 import 'dart:ui' show Rect;
 import 'package:image/image.dart' as img;
 
-import 'puzzle_model.dart';
+import 'package:jigsawpuzzle/logic/puzzle_model.dart';
 
 /// 支持的标准几何画幅比例（单一数据源代理 PuzzleAspectRatio）
 List<double> get kStandardRatios =>
@@ -28,7 +28,7 @@ double cropLossFor(double imageRatio, double targetRatio) =>
 
 /// 选取标准几何画幅中面积损失最小的目标比例（单一数据源代理 PuzzleAspectRatio.fromSize）
 double nearestStandardRatio({required int width, required int height}) {
-  if (width <= 0 || height <= 0) return 1.0;
+  if (width <= 0 || height <= 0) return 1;
   return PuzzleAspectRatio.fromSize(width.toDouble(), height.toDouble()).ratio;
 }
 
@@ -56,7 +56,10 @@ Rect centerCropRect({
   final h = imageHeight.toDouble();
   final srcRatio = w / h;
 
-  double cropW, cropH, dx, dy;
+  double cropW;
+  double cropH;
+  double dx;
+  double dy;
   if (srcRatio > targetRatio) {
     // 太宽：裁宽，高度不变
     cropH = h;
@@ -156,7 +159,7 @@ Rect findSmartCropRect(
       sat[row + x] = maxC - minC;
 
       // 暖色/肤色加权 (R > G && G > B && R - B > 20 && R > 50)
-      final isWarm = (r > g && g > b && (r - b) > 20.0 && r > 50.0);
+      final isWarm = r > g && g > b && (r - b) > 20.0 && r > 50.0;
       warm[row + x] = isWarm ? 1.4 : 1.0;
     }
   }

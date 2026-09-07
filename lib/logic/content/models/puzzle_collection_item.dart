@@ -32,6 +32,53 @@ class PuzzleCollectionItem {
     this.endTime,
   });
 
+  factory PuzzleCollectionItem.fromJson(Map<String, dynamic> json) {
+    DateTime? parseDate(dynamic v) {
+      if (v == null) return null;
+      try {
+        return DateTime.parse(v.toString());
+      } catch (_) {
+        return null;
+      }
+    }
+
+    final rawLevels =
+        (json['levels'] as List<dynamic>?)?.map((e) => e.toString()).toList() ??
+        const [];
+
+    final rawType = json['type']?.toString().toLowerCase() ?? 'zip';
+    final rawColType =
+        json['collectionType']?.toString().toLowerCase() ??
+        (json['category']?.toString().toLowerCase() ?? 'official');
+
+    final isDownloaded = json['isLocalDownloaded'] as bool? ?? false;
+
+    return PuzzleCollectionItem(
+      id: json['id']?.toString() ?? 'unknown_collection',
+      title: json['title']?.toString() ?? '未命名图集',
+      titleZh: json['titleZh']?.toString(),
+      desc: json['desc']?.toString() ?? '',
+      descZh: json['descZh']?.toString(),
+      type: rawType,
+      collectionType: rawColType,
+      coverUrl: json['coverUrl']?.toString(),
+      zipUrl: json['zipUrl']?.toString(),
+      zipSha256: json['zipSha256']?.toString(),
+      levels: rawLevels,
+      totalCount: (json['totalCount'] as num?)?.toInt() ?? rawLevels.length,
+      fileSizeBytes: (json['fileSizeBytes'] as num?)?.toInt() ?? 0,
+      unlockCoins: (json['unlockCoins'] as num?)?.toInt() ?? 0,
+      displayOrder: (json['displayOrder'] as num?)?.toInt() ?? 0,
+      status: json['status']?.toString().toLowerCase() ?? 'active',
+      isLocalDownloaded: isDownloaded,
+      downloadStatus: isDownloaded
+          ? CollectionDownloadStatus.downloaded
+          : CollectionDownloadStatus.notDownloaded,
+      startTime: parseDate(json['startTime']),
+      endTime: parseDate(json['endTime']),
+    );
+  }
+
   /// 图集唯一标识符 (如 "classic_art_vol1", "nature_wonders")
   final String id;
 
@@ -194,53 +241,6 @@ class PuzzleCollectionItem {
       downloadStatus: downloadStatus ?? this.downloadStatus,
       startTime: startTime ?? this.startTime,
       endTime: endTime ?? this.endTime,
-    );
-  }
-
-  factory PuzzleCollectionItem.fromJson(Map<String, dynamic> json) {
-    DateTime? parseDate(dynamic v) {
-      if (v == null) return null;
-      try {
-        return DateTime.parse(v.toString());
-      } catch (_) {
-        return null;
-      }
-    }
-
-    final rawLevels =
-        (json['levels'] as List<dynamic>?)?.map((e) => e.toString()).toList() ??
-        const [];
-
-    final rawType = json['type']?.toString().toLowerCase() ?? 'zip';
-    final rawColType =
-        json['collectionType']?.toString().toLowerCase() ??
-        (json['category']?.toString().toLowerCase() ?? 'official');
-
-    final isDownloaded = json['isLocalDownloaded'] as bool? ?? false;
-
-    return PuzzleCollectionItem(
-      id: json['id']?.toString() ?? 'unknown_collection',
-      title: json['title']?.toString() ?? '未命名图集',
-      titleZh: json['titleZh']?.toString(),
-      desc: json['desc']?.toString() ?? '',
-      descZh: json['descZh']?.toString(),
-      type: rawType,
-      collectionType: rawColType,
-      coverUrl: json['coverUrl']?.toString(),
-      zipUrl: json['zipUrl']?.toString(),
-      zipSha256: json['zipSha256']?.toString(),
-      levels: rawLevels,
-      totalCount: (json['totalCount'] as num?)?.toInt() ?? rawLevels.length,
-      fileSizeBytes: (json['fileSizeBytes'] as num?)?.toInt() ?? 0,
-      unlockCoins: (json['unlockCoins'] as num?)?.toInt() ?? 0,
-      displayOrder: (json['displayOrder'] as num?)?.toInt() ?? 0,
-      status: json['status']?.toString().toLowerCase() ?? 'active',
-      isLocalDownloaded: isDownloaded,
-      downloadStatus: isDownloaded
-          ? CollectionDownloadStatus.downloaded
-          : CollectionDownloadStatus.notDownloaded,
-      startTime: parseDate(json['startTime']),
-      endTime: parseDate(json['endTime']),
     );
   }
 

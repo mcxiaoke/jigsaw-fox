@@ -1,9 +1,8 @@
 import 'dart:math' as math;
 
 import 'package:hive_ce/hive_ce.dart';
-
-import 'app_logger.dart';
-import '../data/storage_manager.dart';
+import 'package:jigsawpuzzle/data/storage_manager.dart';
+import 'package:jigsawpuzzle/services/app_logger.dart';
 
 /// 经济与奖励结算结果
 class SettlementRewardResult {

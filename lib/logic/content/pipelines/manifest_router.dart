@@ -1,8 +1,9 @@
 import 'dart:convert';
 import 'dart:io';
-import '../../../services/app_logger.dart';
-import '../models/root_manifest.dart';
-import '../network/content_http_client.dart';
+
+import 'package:jigsawpuzzle/logic/content/models/root_manifest.dart';
+import 'package:jigsawpuzzle/logic/content/network/content_http_client.dart';
+import 'package:jigsawpuzzle/services/app_logger.dart';
 
 /// 根清单发现与路由管理器 (主备轮询容灾 + 本地缓存 + 优雅回退)
 class ManifestRouter {
@@ -166,8 +167,6 @@ class ManifestRouter {
       mainModule: const MainModuleConfig(url: '', version: 0),
       dailyModule: const DailyModuleConfig(
         currentMonth: '',
-        zipUrlPattern: '',
-        listUrlPattern: '',
         version: 0,
       ),
       eventsModule: const EventsModuleConfig(url: '', version: 0),

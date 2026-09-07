@@ -1,7 +1,7 @@
 import 'dart:math';
 
-import 'edge_curve.dart';
-import 'edge_type.dart';
+import 'package:jigsawpuzzle/logic/geometry/edge_curve.dart';
+import 'package:jigsawpuzzle/logic/geometry/edge_type.dart';
 
 /// 单个拼图碎片四条边缘几何描述的结构体集合。
 class PieceEdges {

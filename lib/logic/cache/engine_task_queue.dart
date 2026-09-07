@@ -2,7 +2,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
-import '../../services/app_logger.dart';
+import 'package:jigsawpuzzle/services/app_logger.dart';
 
 /// 任务调度引擎与并发限流器 (Engine Task Queue)
 ///

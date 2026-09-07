@@ -1,5 +1,5 @@
 import 'dart:convert';
-import 'dart:math' show min, max;
+import 'dart:math' show max, min;
 import 'dart:ui' as ui;
 
 import 'package:flame/components.dart';
@@ -191,7 +191,7 @@ void main() {
     // 连续提示也不应崩溃
     for (var i = 0; i < 5; i++) {
       expect(
-        () => game.hint(),
+        game.hint,
         returnsNormally,
         reason: '第 ${i + 1} 次 hint 不应崩溃',
       );
@@ -354,7 +354,8 @@ void main() {
     final b = game.children.whereType<PuzzlePieceComponent>().firstWhere(
       (p) => p.id == 1,
     );
-    const anX = 0.50, anY = 0.55;
+    const anX = 0.50;
+    const anY = 0.55;
     const bnX = anX + 1 / 3; // cols=3 → 1/cols = 1/3，保持网格对齐
     const bnY = anY;
 
@@ -1174,7 +1175,7 @@ void main() {
 
     // 2. 将 piece0 从棋盘拖回托盘右侧位置（比如 X = 450，靠近后半部分槽位）放开
     game.startHoldingPiece(piece0, 0.5, 0.5);
-    final dropX = 450.0;
+    const dropX = 450.0;
     final dropY = game.trayPosition.y + 20.0;
     game.updateHoldingPiecePosition(Vector2(dropX, dropY));
     game.dropHoldingPiece();
@@ -1209,7 +1210,7 @@ void main() {
     );
 
     // 2. 尝试过度放大，必须被 clamp 在 maxZoom
-    game.zoomAt(Vector2(400, 300), 20.0);
+    game.zoomAt(Vector2(400, 300), 20);
     expect(
       game.zoom,
       closeTo(game.maxZoom, 0.01),
@@ -1250,7 +1251,7 @@ void main() {
     expect(game.zoom, closeTo(game.maxZoom, 0.01));
 
     // 2. 模拟多次连续平移拖动画布
-    for (int i = 0; i < 5; i++) {
+    for (var i = 0; i < 5; i++) {
       game.panBy(Vector2(15, 20));
       // 模拟 Flutter 构建触发 onGameResize（窗口尺寸未改变）
       game.onGameResize(Vector2(1000, 800));
@@ -1293,13 +1294,13 @@ void main() {
     game.panBy(Vector2(-1000, -1000));
 
     // 验证棋盘右下角（nx=1.0, ny=1.0）成功进入屏幕视口内部（X < 1000, Y < trayPosition.y）
-    final bottomRightScreenPos = game.normalizedToScreen(1.0, 1.0);
+    final bottomRightScreenPos = game.normalizedToScreen(1, 1);
     expect(bottomRightScreenPos.x, lessThanOrEqualTo(1000.0));
     expect(bottomRightScreenPos.y, lessThanOrEqualTo(game.trayPosition.y));
 
     // 3. 向右下方深度拖动，查看棋盘左上角
     game.panBy(Vector2(2000, 2000));
-    final topLeftScreenPos = game.normalizedToScreen(0.0, 0.0);
+    final topLeftScreenPos = game.normalizedToScreen(0, 0);
     expect(topLeftScreenPos.x, greaterThanOrEqualTo(0.0));
     expect(topLeftScreenPos.y, greaterThanOrEqualTo(0.0));
   });
@@ -1316,19 +1317,19 @@ void main() {
     await game.onLoad();
 
     // 1. 放大到 2.0x
-    game.zoomAt(Vector2(200, 300), 1.0);
+    game.zoomAt(Vector2(200, 300), 1);
     expect(game.zoom, closeTo(2.0, 0.01));
 
     // 2. 尝试将棋盘向右拖拽极远（试图让左边缘离开视口露出空白底色）
     game.panBy(Vector2(500, 0));
     // 棋盘左侧边缘 (nx=0) 不允许向内脱离 viewLeft (8.0)
-    final leftPos = game.normalizedToScreen(0.0, 0.0);
+    final leftPos = game.normalizedToScreen(0, 0);
     expect(leftPos.x, closeTo(8.0, 0.01), reason: '棋盘左侧边缘必须精确贴止于视口左边距 8.0');
 
     // 3. 尝试将棋盘向左拖拽极远（试图让右边缘离开视口露出空白底色）
     game.panBy(Vector2(-1000, 0));
     // 棋盘右侧边缘 (nx=1.0) 不允许向内脱离 viewRight (400 - 8.0 = 392.0)
-    final rightPos = game.normalizedToScreen(1.0, 0.0);
+    final rightPos = game.normalizedToScreen(1, 0);
     expect(
       rightPos.x,
       closeTo(392.0, 0.01),
@@ -1352,7 +1353,7 @@ void main() {
       reason: '1.01x 时允许偏移已被压缩到 4px 以内',
     );
 
-    game.setZoomAndPan(1.0, Vector2(-100, 0));
+    game.setZoomAndPan(1, Vector2(-100, 0));
     expect(game.panOffset.x, equals(0.0), reason: '1.0x 连续归零，无 setZero 断崖弹跳');
   });
 
@@ -1369,14 +1370,14 @@ void main() {
     await game.onLoad();
 
     // 1. 放大至 2.0x
-    game.zoomAt(Vector2(300, 450), 1.0);
+    game.zoomAt(Vector2(300, 450), 1);
     expect(game.zoom, closeTo(2.0, 0.01));
 
     // 2. 向上大幅拖拽棋盘
     game.panBy(Vector2(0, 1000));
     // 大桌面顶边缘（动态自适应 normMinY）严密对齐 viewTop = _topToolbarHeight (8.0)，杜绝钻入 AppBar
     final normMinY = (8.0 - game.boardTopLeft.y) / game.boardSize.y;
-    final screenTop = game.normalizedToScreen(0.0, normMinY);
+    final screenTop = game.normalizedToScreen(0, normMinY);
     expect(
       screenTop.y,
       closeTo(8.0, 0.01),
@@ -1384,7 +1385,7 @@ void main() {
     );
 
     // 3. 缩小至 1.0x：由几何约束平滑自恰收敛，无断崖
-    game.setZoomAndPan(1.0, Vector2.zero());
+    game.setZoomAndPan(1, Vector2.zero());
     expect(game.zoom, closeTo(1.0, 0.001));
   });
 
@@ -1454,7 +1455,7 @@ void main() {
     await game.onLoad();
 
     // 1. 放大至 2.0x
-    game.zoomAt(Vector2(196, 400), 1.0);
+    game.zoomAt(Vector2(196, 400), 1);
     expect(game.zoom, closeTo(2.0, 0.01));
 
     // 2. 向下大幅平移视口（查看顶部边缘碎片槽位）
@@ -1484,7 +1485,7 @@ void main() {
     await game.onLoad();
 
     // 1. 放大至 2.0x
-    game.zoomAt(Vector2(200, 400), 1.0);
+    game.zoomAt(Vector2(200, 400), 1);
     expect(game.zoom, closeTo(2.0, 0.01));
 
     // 2. 点击扫把 (organizeTray)
@@ -1557,7 +1558,7 @@ void main() {
     // 模拟拖出托盘到棋盘
     piece0.isInTray = false;
     piece0.position.setValues(150, 150);
-    piece0.scale.setAll(1.0);
+    piece0.scale.setAll(1);
 
     // 第 1 次点击扫把
     game.organizeTray();
@@ -1592,7 +1593,7 @@ void main() {
       await game.onLoad();
 
       final piece = game.children.whereType<PuzzlePieceComponent>().first;
-      game.startHoldingPiece(piece, 50.0, 50.0);
+      game.startHoldingPiece(piece, 50, 50);
       expect(game.holdingPiece, equals(piece));
       expect(piece.isDragging, isTrue);
 
@@ -1615,7 +1616,7 @@ void main() {
     await game.onLoad();
 
     final piece = game.children.whereType<PuzzlePieceComponent>().first;
-    game.startHoldingPiece(piece, 50.0, 50.0);
+    game.startHoldingPiece(piece, 50, 50);
     expect(game.holdingPiece, equals(piece));
 
     game.resetCurrentGame();
@@ -1658,20 +1659,19 @@ void main() {
   });
 
   test('PieceState pieceById 安全防御与 pieceByIdOrNull', () {
-    final state = PuzzleBoardState(
+    const state = PuzzleBoardState(
       rows: 2,
       cols: 2,
       seed: 42,
       pieces: [
-        const PieceState(id: 0, r: 0, c: 0, nx: 0, ny: 0, clusterId: 0, rot: 0),
-        const PieceState(
+        PieceState(id: 0, r: 0, c: 0, nx: 0, ny: 0, clusterId: 0),
+        PieceState(
           id: 1,
           r: 0,
           c: 1,
           nx: 0.5,
           ny: 0,
           clusterId: 1,
-          rot: 0,
         ),
       ],
     );
@@ -1767,7 +1767,7 @@ void main() {
     expect(pieces.every((p) => !p.isInTray), isTrue);
 
     // 放大至 2.0x
-    game2.zoomAt(Vector2(300, 400), 1.0);
+    game2.zoomAt(Vector2(300, 400), 1);
     expect(game2.zoom, closeTo(2.0, 0.01));
 
     // 验证全场所有碎片（包括未移动碎片）的 scale 均跟随变为 2.0x
@@ -1804,7 +1804,6 @@ void main() {
       image: img,
       rows: 3,
       cols: 3,
-      scatterMode: 'tray',
       initialSnapshotJson: snapshot,
       onSolved: () {},
     );
@@ -1835,7 +1834,6 @@ void main() {
       image: img,
       rows: 3,
       cols: 3,
-      scatterMode: 'tray',
       onSolved: () {},
     );
     gameTray.onGameResize(Vector2(600, 800));
@@ -1878,7 +1876,7 @@ void main() {
     }
 
     // 4. 放大至 2.0x，全场所有碎片跟随缩放
-    gameTabletop.zoomAt(Vector2(300, 400), 1.0);
+    gameTabletop.zoomAt(Vector2(300, 400), 1);
     expect(gameTabletop.zoom, closeTo(2.0, 0.01));
     for (final p in pieces) {
       expect(p.scale.x, closeTo(2.0, 0.01));
@@ -1891,7 +1889,6 @@ void main() {
       image: img,
       rows: 2,
       cols: 2,
-      scatterMode: 'tray',
       onSolved: () {},
     );
     game.onGameResize(Vector2(400, 800));
@@ -1928,7 +1925,6 @@ void main() {
       image: img,
       rows: 2,
       cols: 2,
-      scatterMode: 'tray',
       initialSnapshotJson: jsonEncode(map),
       onSolved: () {},
     );

@@ -1,17 +1,17 @@
 import 'dart:convert';
 import 'dart:io';
+
 import 'package:archive/archive.dart';
 import 'package:flutter/foundation.dart';
+import 'package:jigsawpuzzle/logic/content/models/canonical_id.dart';
+import 'package:jigsawpuzzle/logic/content/models/puzzle_collection_item.dart';
+import 'package:jigsawpuzzle/logic/content/models/puzzle_level_item.dart';
+import 'package:jigsawpuzzle/logic/content/network/content_http_client.dart';
+import 'package:jigsawpuzzle/services/app_logger.dart';
 import 'package:path/path.dart' as p;
 
-import '../../../services/app_logger.dart';
-import '../models/canonical_id.dart';
-import '../models/puzzle_collection_item.dart';
-import '../models/puzzle_level_item.dart';
-import '../network/content_http_client.dart';
-
 List<ArchiveFile> _decodeZipIsolate(List<int> bytes) {
-  final archive = ZipDecoder().decodeBytes(bytes, verify: false);
+  final archive = ZipDecoder().decodeBytes(bytes);
   return archive.files;
 }
 
@@ -222,7 +222,7 @@ class CollectionsContentPipeline {
       // 更新状态为下载中
       _updateDownloadState(
         collection.id,
-        0.0,
+        0,
         CollectionDownloadStatus.downloading,
       );
 
@@ -273,7 +273,7 @@ class CollectionsContentPipeline {
         }
         tempExtractDir.createSync(recursive: true);
 
-        int imageCount = 0;
+        var imageCount = 0;
         for (final file in archive) {
           final filename = p.basename(file.name);
           if (file.isFile && _imageFileRegex.hasMatch(filename)) {
@@ -298,13 +298,13 @@ class CollectionsContentPipeline {
         final updated = collection.copyWith(
           isLocalDownloaded: true,
           totalCount: imageCount > 0 ? imageCount : collection.totalCount,
-          downloadProgress: 1.0,
+          downloadProgress: 1,
           downloadStatus: CollectionDownloadStatus.downloaded,
         );
         _collectionsMap[collection.id] = updated;
         _updateDownloadState(
           collection.id,
-          1.0,
+          1,
           CollectionDownloadStatus.downloaded,
         );
         await _persistToCache();
@@ -321,7 +321,7 @@ class CollectionsContentPipeline {
         );
         _updateDownloadState(
           collection.id,
-          0.0,
+          0,
           CollectionDownloadStatus.error,
         );
         if (tempExtractDir.existsSync()) {
@@ -356,7 +356,7 @@ class CollectionsContentPipeline {
       }
       _collectionsMap[collectionId] = item.copyWith(
         isLocalDownloaded: false,
-        downloadProgress: 0.0,
+        downloadProgress: 0,
         downloadStatus: CollectionDownloadStatus.notDownloaded,
       );
       final currentMap = Map<String, double>.from(progressNotifier.value);
@@ -397,7 +397,7 @@ class CollectionsContentPipeline {
           .toList();
       files.sort((a, b) => p.basename(a.path).compareTo(p.basename(b.path)));
 
-      int seq = 1;
+      var seq = 1;
       for (final file in files) {
         final filename = p.basename(file.path);
         final canonicalId = CanonicalId.forCollection(collection.id, filename);
@@ -413,7 +413,7 @@ class CollectionsContentPipeline {
         );
       }
     } else if (collection.isArrayType) {
-      int seq = 1;
+      var seq = 1;
       for (final url in collection.levels) {
         final filename = url.split('/').last.split('?').first;
         final canonicalId = CanonicalId.forCollection(collection.id, filename);

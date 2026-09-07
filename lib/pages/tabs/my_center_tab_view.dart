@@ -5,35 +5,34 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:jigsawpuzzle/data/favorite_store.dart';
+import 'package:jigsawpuzzle/data/game_repository.dart';
+import 'package:jigsawpuzzle/data/models/downloaded_image_item.dart';
+import 'package:jigsawpuzzle/data/progress_store.dart';
+import 'package:jigsawpuzzle/data/resume_helper.dart';
+import 'package:jigsawpuzzle/data/snapshot_store.dart';
+import 'package:jigsawpuzzle/l10n/gen/strings.g.dart';
+import 'package:jigsawpuzzle/logic/catalog_index.dart';
+import 'package:jigsawpuzzle/logic/content/app_content.dart';
+import 'package:jigsawpuzzle/logic/download_manager.dart';
+import 'package:jigsawpuzzle/logic/puzzle_model.dart';
+import 'package:jigsawpuzzle/logic/source_tag.dart';
+import 'package:jigsawpuzzle/logic/unified_puzzle_resolver.dart';
+import 'package:jigsawpuzzle/pages/crop_puzzle_page.dart';
+import 'package:jigsawpuzzle/pages/game_page.dart';
+import 'package:jigsawpuzzle/pages/import_pack_page.dart';
+import 'package:jigsawpuzzle/pages/online_image_picker_page.dart';
+import 'package:jigsawpuzzle/services/app_logger.dart';
+import 'package:jigsawpuzzle/services/locale_service.dart';
+import 'package:jigsawpuzzle/services/sound_service.dart';
+import 'package:jigsawpuzzle/services/webview_service.dart';
+import 'package:jigsawpuzzle/theme/app_palette.dart';
+import 'package:jigsawpuzzle/theme/app_text_styles.dart';
+import 'package:jigsawpuzzle/widgets/app_cached_image.dart';
+import 'package:jigsawpuzzle/widgets/choose_difficulty_sheet.dart';
+import 'package:jigsawpuzzle/widgets/downloaded_drawer_sheet.dart';
+import 'package:jigsawpuzzle/widgets/game_toast.dart';
 import 'package:phosphoricons_flutter/phosphoricons_flutter.dart';
-
-import '../../l10n/gen/strings.g.dart';
-import '../../data/favorite_store.dart';
-import '../../data/game_repository.dart';
-import '../../data/models/downloaded_image_item.dart';
-import '../../data/progress_store.dart';
-import '../../data/resume_helper.dart';
-import '../../data/snapshot_store.dart';
-import '../../logic/catalog_index.dart';
-import '../../logic/content/app_content.dart';
-import '../../logic/download_manager.dart';
-import '../../logic/puzzle_model.dart';
-import '../../logic/source_tag.dart';
-import '../../logic/unified_puzzle_resolver.dart';
-import '../../services/app_logger.dart';
-import '../../services/locale_service.dart';
-import '../../services/sound_service.dart';
-import '../../services/webview_service.dart';
-import '../../theme/app_palette.dart';
-import '../../theme/app_text_styles.dart';
-import '../../widgets/app_cached_image.dart';
-import '../../widgets/choose_difficulty_sheet.dart';
-import '../../widgets/downloaded_drawer_sheet.dart';
-import '../../widgets/game_toast.dart';
-import '../crop_puzzle_page.dart';
-import '../game_page.dart';
-import '../import_pack_page.dart';
-import '../online_image_picker_page.dart';
 
 /// My Center Tab view (aggregates In Progress, Favorites, Completed and Custom puzzles)
 class MyCenterTabView extends StatefulWidget {
@@ -393,8 +392,6 @@ class _MyCenterTabViewState extends State<MyCenterTabView> {
         final result = await CropPuzzlePage.push(
           context,
           bytes,
-          sourceType: 'gallery',
-          sourcePlatform: 'album',
           sourceUrl: item.sourceUrl,
         );
         if (result != null && mounted) {
@@ -716,11 +713,8 @@ class _MyCenterTabViewState extends State<MyCenterTabView> {
     required String emptyEmoji,
     required String emptyTitle,
     required String emptySub,
-    String? actionButtonText,
+    required AppPalette palette, required AppTextStyles styles, required _MyTabType tabType, String? actionButtonText,
     VoidCallback? onAction,
-    required AppPalette palette,
-    required AppTextStyles styles,
-    required _MyTabType tabType,
   }) {
     if (items.isEmpty) {
       return RefreshIndicator(
@@ -828,7 +822,6 @@ class _MyCenterTabViewState extends State<MyCenterTabView> {
               color: card.isOrphan
                   ? palette.divider
                   : palette.divider.withValues(alpha: 0.6),
-              width: 1,
             ),
             boxShadow: [
               BoxShadow(
@@ -962,10 +955,9 @@ class _MyCenterTabViewState extends State<MyCenterTabView> {
     if (card.imagePathOrUrl.isNotEmpty) {
       return AppCachedImage(
         imagePathOrUrl: card.imagePathOrUrl,
-        fit: BoxFit.cover,
       );
     }
-    return Container(
+    return ColoredBox(
       color: Colors.grey.shade300,
       child: const Center(
         child: Icon(PhosphorIconsRegular.image, size: 28, color: Colors.grey),
@@ -1211,7 +1203,7 @@ class _PinnedTabBarDelegate extends SliverPersistentHeaderDelegate {
     double shrinkOffset,
     bool overlapsContent,
   ) {
-    return Container(
+    return ColoredBox(
       color: backgroundColor,
       child: Column(
         mainAxisSize: MainAxisSize.min,

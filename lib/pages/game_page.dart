@@ -7,31 +7,28 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
+import 'package:jigsawpuzzle/data/game_repository.dart';
+import 'package:jigsawpuzzle/data/progress_store.dart';
+import 'package:jigsawpuzzle/data/snapshot_store.dart';
+import 'package:jigsawpuzzle/game/jigsaw_puzzle_game.dart';
+import 'package:jigsawpuzzle/l10n/gen/strings.g.dart';
+import 'package:jigsawpuzzle/logic/models/puzzle_state.dart';
+import 'package:jigsawpuzzle/logic/puzzle_model.dart';
+import 'package:jigsawpuzzle/logic/star_calculator.dart';
+import 'package:jigsawpuzzle/services/achievement_service.dart';
+import 'package:jigsawpuzzle/services/app_logger.dart';
+import 'package:jigsawpuzzle/services/economy_service.dart';
+import 'package:jigsawpuzzle/services/sound_service.dart';
+import 'package:jigsawpuzzle/widgets/choose_background_sheet.dart';
+import 'package:jigsawpuzzle/widgets/game_toast.dart';
+import 'package:jigsawpuzzle/widgets/share_card_generator.dart';
+import 'package:jigsawpuzzle/widgets/victory_dialog.dart';
 import 'package:phosphoricons_flutter/phosphoricons_flutter.dart';
-
-import '../data/game_repository.dart';
-import '../data/progress_store.dart';
-import '../data/snapshot_store.dart';
-import '../game/jigsaw_puzzle_game.dart';
-import '../logic/models/puzzle_state.dart';
-import '../logic/puzzle_model.dart';
-import '../logic/star_calculator.dart';
-import '../services/achievement_service.dart';
-import '../services/app_logger.dart';
-import '../services/economy_service.dart';
-import '../services/sound_service.dart';
-import '../l10n/gen/strings.g.dart';
-import '../widgets/choose_background_sheet.dart';
-import '../widgets/game_toast.dart';
-import '../widgets/share_card_generator.dart';
-import '../widgets/victory_dialog.dart';
 
 /// Full-screen in-game puzzle page matching commercial Jigsaw experience.
 class GamePage extends StatefulWidget {
   const GamePage({
-    super.key,
-    required this.imageBytes,
-    required this.difficulty,
+    required this.imageBytes, required this.difficulty, super.key,
     this.levelIndex,
     this.dailyDateStr,
     this.customId,
@@ -56,7 +53,7 @@ class GamePage extends StatefulWidget {
 }
 
 class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
-  final _repo = GameRepository.instance;
+  final GameRepository _repo = GameRepository.instance;
   JigsawPuzzleGame? _game;
   ui.Image? _gameImage;
   bool _gameFadeIn = false;
@@ -84,8 +81,8 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
 
   // Multi-touch tracking for pinch-to-zoom & two-finger pan
   final Map<int, Offset> _pointerPositions = {};
-  double _baseDistance = 0.0;
-  double _baseZoom = 1.0;
+  double _baseDistance = 0;
+  double _baseZoom = 1;
   Offset _baseFocalPoint = Offset.zero;
   Vector2 _basePan = Vector2.zero();
   final FocusNode _focusNode = FocusNode();
@@ -150,7 +147,7 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
       final w = image.width;
       final h = image.height;
       final pixelData = await image.toByteData(
-        format: ui.ImageByteFormat.rawRgba,
+        
       );
       image.dispose();
       if (pixelData == null) return;
@@ -160,7 +157,9 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
       );
       final pixelCount = w * h;
       if (pixelCount <= 0) return;
-      var r = 0, g = 0, b = 0;
+      var r = 0;
+      var g = 0;
+      var b = 0;
       for (var i = 0; i < bytes.length; i += 4) {
         r += bytes[i];
         g += bytes[i + 1];
@@ -294,13 +293,12 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
       cols: effectiveDiff.cols,
       scatterMode: _repo.pieceScatterMode,
       initialSnapshotJson: widget.initialSnapshotJson,
-      initialGhostOpacity: 0.0,
       onSolved: _handleSolved,
       onPieceSnapped: _onPieceSnapped,
       onProgressChanged: (count) {
         _solvedPieces = count;
         _markNeedsUIUpdate();
-        _scheduleSave(immediate: false);
+        _scheduleSave();
       },
       onStateUpdated: () {
         if (_game != null) {
@@ -308,7 +306,7 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
         }
         // 自由摆放等非吸附位移也需要保存
         _markNeedsUIUpdate();
-        _scheduleSave(immediate: false);
+        _scheduleSave();
       },
     );
 
@@ -337,7 +335,7 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
     if (_repo.hapticEnabled) {
       HapticFeedback.lightImpact();
     }
-    _repo.recordSnapStats(pieceCount: 1);
+    _repo.recordSnapStats();
   }
 
   /// 将 onProgressChanged / onStateUpdated 的 UI 刷新合并为一次 postFrameCallback，
@@ -427,7 +425,7 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
     if (_isSaving) {
       // 若正在保存，稍后重试（但 dispose 已取消 debounce，不会逃逸）
       _saveDebounce?.cancel();
-      _saveDebounce = Timer(const Duration(milliseconds: 300), () => _doSave());
+      _saveDebounce = Timer(const Duration(milliseconds: 300), _doSave);
       return;
     }
     _isSaving = true;
@@ -1014,7 +1012,6 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
                   child: Container(
                     padding: const EdgeInsets.symmetric(
                       horizontal: 2,
-                      vertical: 0,
                     ),
                     decoration: BoxDecoration(
                       color: const Color(0xFF2E7D32),
@@ -1100,7 +1097,7 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
     final total = _totalPieces;
     return LinearProgressIndicator(
       value: total > 0 ? _solvedPieces / total : 0.0,
-      minHeight: 2.0,
+      minHeight: 2,
       backgroundColor: Colors.black12,
       valueColor: const AlwaysStoppedAnimation<Color>(Color(0xFF2E7D32)),
     );
@@ -1145,7 +1142,6 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
             // Keep as non-positioned SafeArea so Stack fills screen, while canvas avoids bottom gesture bar
             SafeArea(
               top: false,
-              bottom: true,
               child: Column(
                 children: [
                   _buildProgressLine(),

@@ -1,12 +1,11 @@
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import 'package:jigsawpuzzle/l10n/gen/strings.g.dart';
+import 'package:jigsawpuzzle/logic/models/puzzle_state.dart';
+import 'package:jigsawpuzzle/theme/app_palette.dart';
+import 'package:jigsawpuzzle/theme/app_text_styles.dart';
 import 'package:phosphoricons_flutter/phosphoricons_flutter.dart';
-
-import '../l10n/gen/strings.g.dart';
-import '../logic/models/puzzle_state.dart';
-import '../theme/app_palette.dart';
-import '../theme/app_text_styles.dart';
 
 /// Continue-or-restart dialog with brand identity.
 ///
@@ -14,14 +13,7 @@ import '../theme/app_text_styles.dart';
 /// Two-button weight differentiation: "继续挑战" (brand solid) vs "退出" (ghost).
 class ContinueDialog extends StatelessWidget {
   const ContinueDialog({
-    super.key,
-    required this.title,
-    required this.imageBytes,
-    required this.difficultyKey,
-    required this.snapshot,
-    required this.progressPercent,
-    required this.onContinue,
-    required this.onRestart,
+    required this.title, required this.imageBytes, required this.difficultyKey, required this.snapshot, required this.progressPercent, required this.onContinue, required this.onRestart, super.key,
   });
 
   final String title;
@@ -42,7 +34,6 @@ class ContinueDialog extends StatelessWidget {
   }) {
     return showDialog<String>(
       context: context,
-      barrierDismissible: true,
       builder: (ctx) => ContinueDialog(
         title: title,
         imageBytes: imageBytes,
@@ -122,7 +113,7 @@ class ContinueDialog extends StatelessWidget {
                   // 解码期降采样：内容区宽 360px × 3 倍 DPR 足够清晰，
                   // 避免按原图分辨率全量解码（超分图可达数十 MB）
                   cacheWidth: 1080,
-                  errorBuilder: (_, _, _) => Container(
+                  errorBuilder: (_, _, _) => ColoredBox(
                     color: palette.surfaceContainerLow,
                     child: Icon(
                       PhosphorIconsRegular.image,

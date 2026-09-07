@@ -71,7 +71,7 @@ void main() {
           stars: 3,
           bestTimeSeconds: 45,
           records: {
-            '5x5': DifficultyRecord(
+            '5x5': const DifficultyRecord(
               bestStars: 3,
               bestTimeSeconds: 45,
               isCompleted: true,
@@ -91,8 +91,8 @@ void main() {
     );
 
     test('UnifiedPuzzleResolver handles orphan card gracefully', () {
-      final emptyIndex = const UnifiedCatalogIndex({});
-      final resolver = UnifiedPuzzleResolver(emptyIndex);
+      const emptyIndex = UnifiedCatalogIndex({});
+      const resolver = UnifiedPuzzleResolver(emptyIndex);
       const orphanCid = 'ugc:deleted_123';
 
       final favSnapshot = FavoriteEntry(

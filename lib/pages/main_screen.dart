@@ -1,18 +1,17 @@
 import 'package:flutter/material.dart';
+import 'package:jigsawpuzzle/l10n/gen/strings.g.dart';
+import 'package:jigsawpuzzle/pages/achievements_page.dart';
+import 'package:jigsawpuzzle/pages/settings_page.dart';
+import 'package:jigsawpuzzle/pages/tabs/collections_tab_view.dart';
+import 'package:jigsawpuzzle/pages/tabs/daily_tab_view.dart';
+import 'package:jigsawpuzzle/pages/tabs/home_tab_view.dart';
+import 'package:jigsawpuzzle/pages/tabs/my_center_tab_view.dart';
+import 'package:jigsawpuzzle/services/app_logger.dart';
+import 'package:jigsawpuzzle/services/locale_service.dart';
+import 'package:jigsawpuzzle/services/sound_service.dart';
+import 'package:jigsawpuzzle/theme/app_palette.dart';
+import 'package:jigsawpuzzle/theme/app_text_styles.dart';
 import 'package:phosphoricons_flutter/phosphoricons_flutter.dart';
-
-import '../l10n/gen/strings.g.dart';
-import '../services/app_logger.dart';
-import '../services/locale_service.dart';
-import '../services/sound_service.dart';
-import '../theme/app_palette.dart';
-import '../theme/app_text_styles.dart';
-import 'achievements_page.dart';
-import 'settings_page.dart';
-import 'tabs/collections_tab_view.dart';
-import 'tabs/daily_tab_view.dart';
-import 'tabs/home_tab_view.dart';
-import 'tabs/my_center_tab_view.dart';
 
 /// Main screen featuring the 4-tab bottom navigation (Home / Daily / Collections / My)
 /// with game-styled bottom nav: filled icons + amber gold active state glow.
@@ -97,8 +96,8 @@ class _MainScreenState extends State<MainScreen> {
               setState(() => _currentIndex = 1);
             },
           ),
-          DailyTabView(),
-          CollectionsTabView(),
+          const DailyTabView(),
+          const CollectionsTabView(),
           MyCenterTabView(
             isActive: _currentIndex == 3,
             onGoExplore: () {

@@ -1,25 +1,26 @@
 import 'dart:io';
+
 import 'package:flutter/material.dart';
+import 'package:jigsawpuzzle/data/game_repository.dart';
+import 'package:jigsawpuzzle/data/resume_helper.dart';
+import 'package:jigsawpuzzle/data/snapshot_store.dart';
+import 'package:jigsawpuzzle/l10n/gen/strings.g.dart';
+import 'package:jigsawpuzzle/logic/content/app_content.dart';
+import 'package:jigsawpuzzle/logic/content/models/puzzle_level_item.dart';
+import 'package:jigsawpuzzle/logic/content/models/puzzle_pack_item.dart';
+import 'package:jigsawpuzzle/logic/puzzle_model.dart';
+import 'package:jigsawpuzzle/pages/game_page.dart';
+import 'package:jigsawpuzzle/theme/app_palette.dart';
+import 'package:jigsawpuzzle/theme/app_text_styles.dart';
+import 'package:jigsawpuzzle/widgets/app_cached_image.dart';
+import 'package:jigsawpuzzle/widgets/choose_difficulty_sheet.dart';
+import 'package:jigsawpuzzle/widgets/game_toast.dart';
+import 'package:jigsawpuzzle/widgets/lazy_level_image.dart';
 import 'package:phosphoricons_flutter/phosphoricons_flutter.dart';
-import '../data/game_repository.dart';
-import '../data/resume_helper.dart';
-import '../data/snapshot_store.dart';
-import '../logic/content/app_content.dart';
-import '../logic/content/models/puzzle_level_item.dart';
-import '../logic/content/models/puzzle_pack_item.dart';
-import '../logic/puzzle_model.dart';
-import '../l10n/gen/strings.g.dart';
-import '../theme/app_palette.dart';
-import '../theme/app_text_styles.dart';
-import '../widgets/app_cached_image.dart';
-import '../widgets/choose_difficulty_sheet.dart';
-import '../widgets/game_toast.dart';
-import '../widgets/lazy_level_image.dart';
-import 'game_page.dart';
 
 /// 图包专属关卡列表页 (展示图包封面信息、关卡网格与一键物理删除)
 class PackLevelsPage extends StatefulWidget {
-  const PackLevelsPage({super.key, required this.pack});
+  const PackLevelsPage({required this.pack, super.key});
 
   final PuzzlePackItem pack;
 
@@ -128,7 +129,6 @@ class _PackLevelsPageState extends State<PackLevelsPage> {
       context: context,
       canonicalId: canonicalId,
       fallbackDifficulty: _defaultDiff,
-      isCompleted: false,
       title: '${widget.pack.title} · 第 ${level.order} 关',
       imageBytes: bytes,
     );
@@ -176,7 +176,6 @@ class _PackLevelsPageState extends State<PackLevelsPage> {
                 title: widget.pack.title,
                 index: level.order,
               ),
-              initialSnapshotJson: null,
             ),
           ),
         );
@@ -193,7 +192,6 @@ class _PackLevelsPageState extends State<PackLevelsPage> {
       initialDifficulty: _defaultDiff,
       completedPieceCounts: progress.completedPieceCounts.toSet(),
       canonicalId: canonicalId,
-      isUnlocked: true,
       title: t.levels.titleOf(title: widget.pack.title, index: level.order),
       sourcePlatform: _packSourceLabel(),
       savedProgressPercent: progress.hasSnapshot
@@ -207,7 +205,6 @@ class _PackLevelsPageState extends State<PackLevelsPage> {
         await GameRepository.instance.updateGenericProgress(
           canonicalId: canonicalId,
           progressPercent: 0,
-          snapshotJson: null,
         );
         if (!mounted) return;
         await Navigator.of(context).push(
@@ -220,7 +217,6 @@ class _PackLevelsPageState extends State<PackLevelsPage> {
                 title: widget.pack.title,
                 index: level.order,
               ),
-              initialSnapshotJson: null,
             ),
           ),
         );
@@ -285,7 +281,7 @@ class _PackLevelsPageState extends State<PackLevelsPage> {
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(18),
                   color: palette.surfaceContainer,
-                  border: Border.all(color: palette.divider, width: 1),
+                  border: Border.all(color: palette.divider),
                 ),
                 padding: const EdgeInsets.all(14),
                 child: Row(
@@ -298,7 +294,6 @@ class _PackLevelsPageState extends State<PackLevelsPage> {
                         // 默认 card 档位（360），与「我的拼图」图包大卡共用同一份缩略图
                         child: AppCachedImage(
                           imagePathOrUrl: pack.coverPath,
-                          fit: BoxFit.cover,
                         ),
                       ),
                     ),
@@ -385,7 +380,6 @@ class _PackLevelsPageState extends State<PackLevelsPage> {
                   maxCrossAxisExtent: 220,
                   crossAxisSpacing: 14,
                   mainAxisSpacing: 14,
-                  childAspectRatio: 1.0,
                 ),
                 delegate: SliverChildBuilderDelegate((context, index) {
                   final level = _levels[index];
@@ -409,13 +403,13 @@ class _PackLevelsPageState extends State<PackLevelsPage> {
       child: Container(
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: palette.divider, width: 1),
+          border: Border.all(color: palette.divider),
         ),
         clipBehavior: Clip.antiAlias,
         child: Stack(
           fit: StackFit.expand,
           children: [
-            LazyLevelImage(level: level, fit: BoxFit.cover),
+            LazyLevelImage(level: level),
             Container(
               decoration: BoxDecoration(
                 gradient: LinearGradient(

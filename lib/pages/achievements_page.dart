@@ -1,18 +1,17 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:jigsawpuzzle/data/game_repository.dart';
+import 'package:jigsawpuzzle/data/progress_store.dart';
+import 'package:jigsawpuzzle/l10n/gen/strings.g.dart';
+import 'package:jigsawpuzzle/services/achievement_service.dart';
+import 'package:jigsawpuzzle/services/achievement_store.dart';
+import 'package:jigsawpuzzle/services/economy_service.dart';
+import 'package:jigsawpuzzle/services/sound_service.dart';
+import 'package:jigsawpuzzle/theme/app_palette.dart';
+import 'package:jigsawpuzzle/theme/app_text_styles.dart';
+import 'package:jigsawpuzzle/widgets/game_toast.dart';
 import 'package:phosphoricons_flutter/phosphoricons_flutter.dart';
-
-import '../data/game_repository.dart';
-import '../data/progress_store.dart';
-import '../l10n/gen/strings.g.dart';
-import '../services/achievement_service.dart';
-import '../services/achievement_store.dart';
-import '../services/economy_service.dart';
-import '../services/sound_service.dart';
-import '../theme/app_palette.dart';
-import '../theme/app_text_styles.dart';
-import '../widgets/game_toast.dart';
 
 /// Full-screen achievements & stats page (branded redesign)
 class AchievementsPage extends StatefulWidget {
@@ -29,10 +28,10 @@ class AchievementsPage extends StatefulWidget {
 }
 
 class _AchievementsPageState extends State<AchievementsPage> {
-  final _repo = GameRepository.instance;
-  final _store = AchievementStore.instance;
-  final _eco = EconomyService.instance;
-  final _achService = AchievementService.instance;
+  final GameRepository _repo = GameRepository.instance;
+  final AchievementStore _store = AchievementStore.instance;
+  final EconomyService _eco = EconomyService.instance;
+  final AchievementService _achService = AchievementService.instance;
 
   StreamSubscription<AchievementDefinition>? _unlockSub;
   int _distinct3Star = 0;
@@ -145,7 +144,7 @@ class _AchievementsPageState extends State<AchievementsPage> {
     final timeSec = _repo.totalPlayTimeSeconds;
     final coins = _eco.coins;
 
-    final allDefs = AchievementService.allAchievements;
+    const allDefs = AchievementService.allAchievements;
     final unlockedCount = allDefs.where((a) => _store.isUnlocked(a.id)).length;
 
     return Scaffold(
@@ -384,7 +383,7 @@ class _StatGroupCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: palette.surfaceContainer,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: palette.divider, width: 1),
+        border: Border.all(color: palette.divider),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -631,7 +630,7 @@ class _AchievementCard extends StatelessWidget {
                             const SizedBox(width: 6),
                             Text(
                               def.metricKey == 'play_seconds'
-                                  ? '${(current ~/ 60)}/${(def.target ~/ 60)}'
+                                  ? '${current ~/ 60}/${def.target ~/ 60}'
                                   : '$current/${def.target}',
                               style: styles.caption.copyWith(
                                 color: palette.disabledText,

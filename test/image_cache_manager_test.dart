@@ -35,7 +35,7 @@ void main() {
 
     const channel = MethodChannel('plugins.flutter.io/path_provider');
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-        .setMockMethodCallHandler(channel, (MethodCall methodCall) async {
+        .setMockMethodCallHandler(channel, (methodCall) async {
           return testTempDir.path;
         });
 
@@ -101,14 +101,14 @@ void main() {
           if (activeWorkers > peakConcurrency) {
             peakConcurrency = activeWorkers;
           }
-          await Future.delayed(const Duration(milliseconds: 30));
+          await Future<void>.delayed(const Duration(milliseconds: 30));
           activeWorkers--;
           completedCount++;
           return id;
         }
 
         final futures = <Future<int>>[];
-        for (int i = 0; i < 8; i++) {
+        for (var i = 0; i < 8; i++) {
           futures.add(
             queue.schedule(key: 'task_$i', task: () => mockWorker(i)),
           );
@@ -131,7 +131,7 @@ void main() {
         var executionCount = 0;
         Future<String> heavyJob() async {
           executionCount++;
-          await Future.delayed(const Duration(milliseconds: 20));
+          await Future<void>.delayed(const Duration(milliseconds: 20));
           return 'job_done';
         }
 
@@ -159,7 +159,6 @@ void main() {
         final thumbBytes = await ThumbnailGenerator.generateThumbnailFromBytes(
           rawBytes: rawPng,
           targetDimension: 300,
-          quality: 80,
         );
 
         expect(thumbBytes, isNotNull);
@@ -191,7 +190,6 @@ void main() {
         // Fetch bytes through tiered pipeline (generates & populates L2 disk + L1 memory)
         final bytes = await manager.getThumbnailBytes(
           testImgFile.path,
-          dimension: ThumbnailDimension.card,
         );
         expect(bytes, isNotNull);
         expect(bytes!.isNotEmpty, isTrue);
@@ -216,7 +214,6 @@ void main() {
         // Fetching again reads from L2 disk into L1 memory
         final bytesFromDisk = await manager.getThumbnailBytes(
           testImgFile.path,
-          dimension: ThumbnailDimension.card,
         );
         expect(bytesFromDisk, isNotNull);
         expect(
@@ -238,7 +235,6 @@ void main() {
 
         await manager.getThumbnailBytes(
           testImgFile.path,
-          dimension: ThumbnailDimension.card,
         );
         expect(manager.isThumbnailCached(testImgFile.path), isTrue);
 
@@ -267,7 +263,6 @@ void main() {
 
         final cardKey = manager.getCacheKey(
           src,
-          dimension: ThumbnailDimension.card,
         );
         final coverKey = manager.getCacheKey(
           src,
@@ -286,13 +281,13 @@ void main() {
       await File(src).writeAsBytes(createTestPngBytes(800, 600));
 
       // Populate both dimension variants
-      await manager.getThumbnailBytes(src, dimension: ThumbnailDimension.card);
+      await manager.getThumbnailBytes(src);
       await manager.getThumbnailBytes(
         src,
         dimension: ThumbnailDimension.eventCover,
       );
       expect(
-        manager.isThumbnailCached(src, dimension: ThumbnailDimension.card),
+        manager.isThumbnailCached(src),
         isTrue,
       );
       expect(
@@ -372,7 +367,6 @@ void main() {
           home: Scaffold(
             body: AppCachedImage(
               imagePathOrUrl: 'assets/images/sample_01.jpg',
-              targetDimension: ThumbnailDimension.card,
             ),
           ),
         ),

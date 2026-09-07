@@ -2,13 +2,12 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:jigsawpuzzle/l10n/gen/strings.g.dart';
+import 'package:jigsawpuzzle/services/app_logger.dart';
+import 'package:jigsawpuzzle/theme/app_palette.dart';
+import 'package:jigsawpuzzle/theme/app_text_styles.dart';
 import 'package:logging/logging.dart';
 import 'package:phosphoricons_flutter/phosphoricons_flutter.dart';
-
-import '../l10n/gen/strings.g.dart';
-import '../services/app_logger.dart';
-import '../theme/app_palette.dart';
-import '../theme/app_text_styles.dart';
 
 /// 日志查看页：全屏查看运行日志
 ///
@@ -73,11 +72,11 @@ class _LogViewerPageState extends State<LogViewerPage> {
   static const int _maxHistoryFileLines = 15000;
 
   /// 日志正文等宽样式（常规字重，避免 mono 主题粗体大字号观感）
-  static final TextStyle _monoBody = TextStyle(
+  static const TextStyle _monoBody = TextStyle(
     fontFamily: 'monospace',
     fontWeight: FontWeight.w400,
     height: 1.3,
-    fontFeatures: const [FontFeature.tabularFigures()],
+    fontFeatures: [FontFeature.tabularFigures()],
   );
 
   /// 等级缩写 → 单字母（徽章展示用）
@@ -226,7 +225,7 @@ class _LogViewerPageState extends State<LogViewerPage> {
   // ---- 历史文件加载 ----
 
   Future<void> _loadHistory() async {
-    List<String> lines = const [];
+    var lines = const <String>[];
     try {
       lines = await AppLogger.readTodayLogLines();
     } catch (_) {
@@ -294,7 +293,7 @@ class _LogViewerPageState extends State<LogViewerPage> {
 
   Future<void> _copyLogs({required bool filteredOnly}) async {
     // 复制按时间升序（旧 → 新），不受展示顺序影响
-    final Iterable<_LogEntry> source = filteredOnly
+    final source = filteredOnly
         ? _all.where((e) => e.levelValue >= _filter.minValue)
         : _all;
     if (source.isEmpty) {
@@ -463,7 +462,7 @@ class _LogViewerPageState extends State<LogViewerPage> {
                             : palette.primaryText,
                       ),
                       backgroundColor: palette.surface,
-                      side: BorderSide(color: palette.divider, width: 1),
+                      side: BorderSide(color: palette.divider),
                       visualDensity: VisualDensity.compact,
                     ),
                     const SizedBox(width: 6),
@@ -496,7 +495,7 @@ class _LogViewerPageState extends State<LogViewerPage> {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Text('📄', style: TextStyle(fontSize: 40)),
+          const Text('📄', style: TextStyle(fontSize: 40)),
           const SizedBox(height: 8),
           Text(
             _historyLoaded ? t.logs.emptyFiltered : t.logs.loading,
@@ -531,7 +530,6 @@ class _LogViewerPageState extends State<LogViewerPage> {
                 borderRadius: BorderRadius.circular(6),
                 border: Border.all(
                   color: levelColor.withValues(alpha: 0.35),
-                  width: 1,
                 ),
               ),
               child: Tooltip(

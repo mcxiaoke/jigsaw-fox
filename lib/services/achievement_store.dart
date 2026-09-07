@@ -2,9 +2,8 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 import 'package:hive_ce/hive_ce.dart';
-
-import 'app_logger.dart';
-import '../data/storage_manager.dart';
+import 'package:jigsawpuzzle/data/storage_manager.dart';
+import 'package:jigsawpuzzle/services/app_logger.dart';
 
 /// 成就系统持久化存储（内存缓存 + 异步后台落盘）
 ///

@@ -57,11 +57,6 @@ void main() async {
     // 2. 旧版 CAS：包含平坦区锐化噪点
     final oldCAS = ImageUpscaler.processPipeline(
       smallSrc,
-      scale: 2.0,
-      enableDenoise: true,
-      denoiseStrength: 0.25,
-      enableSharpen: true,
-      sharpness: 0.45,
       useLumaGated: false,
       adaptiveSharpness: false,
     );
@@ -69,15 +64,6 @@ void main() async {
     // 3. 新版 Luma-Gated CAS：亮度驱动 + 噪声门限自适应锐化
     final newGatedCAS = ImageUpscaler.processPipeline(
       smallSrc,
-      scale: 2.0,
-      enableDenoise: true,
-      denoiseStrength: 0.25,
-      enableSharpen: true,
-      sharpness: 0.45,
-      useLumaGated: true,
-      noiseThresholdLow: 8.0,
-      noiseThresholdHigh: 24.0,
-      adaptiveSharpness: true,
     );
 
     // 生成三联并排对比图
@@ -105,19 +91,16 @@ void main() async {
       img.copyCrop(baseline2x, x: dX, y: dY, width: detailW, height: detailH),
       width: 320,
       height: 320,
-      interpolation: img.Interpolation.nearest,
     );
     final detail2 = img.copyResize(
       img.copyCrop(oldCAS, x: dX, y: dY, width: detailW, height: detailH),
       width: 320,
       height: 320,
-      interpolation: img.Interpolation.nearest,
     );
     final detail3 = img.copyResize(
       img.copyCrop(newGatedCAS, x: dX, y: dY, width: detailW, height: detailH),
       width: 320,
       height: 320,
-      interpolation: img.Interpolation.nearest,
     );
 
     final detailComparison = _createSideBySide3(
@@ -145,8 +128,8 @@ img.Image _createSideBySide3(
   required String label2,
   required String label3,
 }) {
-  final gap = 12;
-  final headerH = 36;
+  const gap = 12;
+  const headerH = 36;
   final totalW = img1.width + img2.width + img3.width + gap * 2 + 16;
   final totalH = img1.height + headerH + 16;
 
@@ -154,7 +137,7 @@ img.Image _createSideBySide3(
   img.fill(canvas, color: img.ColorRgba8(24, 24, 26, 255)); // 深色底板
 
   // 绘制 3 张图片
-  final yOffset = headerH + 8;
+  const yOffset = headerH + 8;
   img.compositeImage(canvas, img1, dstX: 8, dstY: yOffset);
   img.compositeImage(canvas, img2, dstX: 8 + img1.width + gap, dstY: yOffset);
   img.compositeImage(

@@ -29,10 +29,10 @@ void main() {
 
     await tester.pumpWidget(
       TranslationProvider(
-        child: MaterialApp(
+        child: const MaterialApp(
           home: MediaQuery(
-            data: const MediaQueryData(size: Size(360, 640)),
-            child: const Scaffold(
+            data: MediaQueryData(size: Size(360, 640)),
+            child: Scaffold(
               body: DailyTabView(),
             ),
           ),
@@ -50,10 +50,10 @@ void main() {
 
     await tester.pumpWidget(
       TranslationProvider(
-        child: MaterialApp(
+        child: const MaterialApp(
           home: MediaQuery(
-            data: const MediaQueryData(size: Size(360, 640)),
-            child: const Scaffold(
+            data: MediaQueryData(size: Size(360, 640)),
+            child: Scaffold(
               body: DailyTabView(),
             ),
           ),
@@ -70,10 +70,10 @@ void main() {
 
     await tester.pumpWidget(
       TranslationProvider(
-        child: MaterialApp(
+        child: const MaterialApp(
           home: MediaQuery(
-            data: const MediaQueryData(size: Size(360, 640)),
-            child: const Scaffold(
+            data: MediaQueryData(size: Size(360, 640)),
+            child: Scaffold(
               body: CollectionsTabView(),
             ),
           ),

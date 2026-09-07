@@ -4,9 +4,8 @@ import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hive_ce/hive_ce.dart';
-import 'package:path/path.dart' as p;
-
 import 'package:jigsawpuzzle/data/storage_manager.dart';
+import 'package:path/path.dart' as p;
 
 import '../test_helper.dart';
 
@@ -299,7 +298,7 @@ Uint8List buildCorruptHiveFile() {
   bytes[6] = 0;
   bytes[7] = 0;
   // CRC 覆盖 [0, frameLength - 4)，即长度字段 + key + value
-  final crc = _crc32(bytes, offset: 0, length: frameLength - 4);
+  final crc = _crc32(bytes, length: frameLength - 4);
   bytes[8] = crc & 0xff;
   bytes[9] = (crc >> 8) & 0xff;
   bytes[10] = (crc >> 16) & 0xff;
@@ -398,7 +397,7 @@ void main() {
       expect(reopened.get('ach:counter:totalWins'), 7);
       expect(reopened.get('stat:totalPiecesSnapped'), 999);
       // 回归 §3.1：值不得被 {"v":...} 包装
-      expect(reopened.get('econ:coins'), isNot(isA<Map>()));
+      expect(reopened.get('econ:coins'), isNot(isA<Map<dynamic, dynamic>>()));
     });
 
     test('missing key 返回 null 而非抛异常', () async {

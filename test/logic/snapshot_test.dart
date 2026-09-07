@@ -29,7 +29,7 @@ void main() {
             r: 0,
             c: 1,
             nx: 0.25,
-            ny: 0.0,
+            ny: 0,
             clusterId: 3,
             rot: 2,
           ),

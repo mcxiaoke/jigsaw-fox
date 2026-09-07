@@ -1,15 +1,14 @@
 import 'package:flutter/material.dart';
+import 'package:jigsawpuzzle/l10n/gen/strings.g.dart';
+import 'package:jigsawpuzzle/logic/cache/image_cache_manager.dart';
+import 'package:jigsawpuzzle/logic/content/app_content.dart';
+import 'package:jigsawpuzzle/logic/content/models/puzzle_event_item.dart';
+import 'package:jigsawpuzzle/pages/event_levels_page.dart';
+import 'package:jigsawpuzzle/services/app_logger.dart';
+import 'package:jigsawpuzzle/theme/app_palette.dart';
+import 'package:jigsawpuzzle/theme/app_text_styles.dart';
+import 'package:jigsawpuzzle/widgets/app_cached_image.dart';
 import 'package:phosphoricons_flutter/phosphoricons_flutter.dart';
-
-import '../../logic/cache/image_cache_manager.dart';
-import '../../logic/content/app_content.dart';
-import '../../logic/content/models/puzzle_event_item.dart';
-import '../../services/app_logger.dart';
-import '../../l10n/gen/strings.g.dart';
-import '../../theme/app_palette.dart';
-import '../../theme/app_text_styles.dart';
-import '../../widgets/app_cached_image.dart';
-import '../event_levels_page.dart';
 
 /// 活动中心 Tab 页面 (横向大 Card 呈现各独立主题活动)
 class EventsTabView extends StatefulWidget {
@@ -20,7 +19,7 @@ class EventsTabView extends StatefulWidget {
 }
 
 class _EventsTabViewState extends State<EventsTabView> {
-  final _content = AppContent.instance;
+  final AppContent _content = AppContent.instance;
 
   @override
   void initState() {
@@ -47,7 +46,7 @@ class _EventsTabViewState extends State<EventsTabView> {
         : <PuzzleEventItem>[];
 
     return RefreshIndicator(
-      onRefresh: () async => await _content.syncAll(),
+      onRefresh: () async => _content.syncAll(),
       color: palette.brand,
       child: events.isEmpty
           ? LayoutBuilder(
@@ -80,7 +79,7 @@ class _EventsTabViewState extends State<EventsTabView> {
                             backgroundColor: palette.brand,
                             foregroundColor: palette.surface,
                           ),
-                          onPressed: () async => await _content.syncAll(),
+                          onPressed: () async => _content.syncAll(),
                         ),
                       ],
                     ),
@@ -123,7 +122,7 @@ class _EventsTabViewState extends State<EventsTabView> {
       decoration: BoxDecoration(
         color: palette.surfaceContainer,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: palette.divider, width: 1),
+        border: Border.all(color: palette.divider),
       ),
       clipBehavior: Clip.antiAlias,
       child: InkWell(
@@ -147,8 +146,6 @@ class _EventsTabViewState extends State<EventsTabView> {
                     imagePathOrUrl:
                         event.coverUrl ??
                         (event.levels.isNotEmpty ? event.levels.first : ''),
-                    fit: BoxFit.cover,
-                    alignment: Alignment.center,
                     targetDimension: ThumbnailDimension.eventCover,
                   ),
                 ),

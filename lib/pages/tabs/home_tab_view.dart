@@ -1,29 +1,28 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:jigsawpuzzle/data/constants/puzzle_tags.dart';
+import 'package:jigsawpuzzle/data/game_repository.dart';
+import 'package:jigsawpuzzle/data/models/level_item.dart';
+import 'package:jigsawpuzzle/data/resume_helper.dart';
+import 'package:jigsawpuzzle/data/snapshot_store.dart';
+import 'package:jigsawpuzzle/l10n/gen/strings.g.dart';
+import 'package:jigsawpuzzle/logic/content/app_content.dart';
+import 'package:jigsawpuzzle/logic/content/models/puzzle_event_item.dart';
+import 'package:jigsawpuzzle/logic/content/models/puzzle_level_item.dart';
+import 'package:jigsawpuzzle/logic/image_source.dart';
+import 'package:jigsawpuzzle/pages/event_levels_page.dart';
+import 'package:jigsawpuzzle/pages/game_page.dart';
+import 'package:jigsawpuzzle/services/app_logger.dart';
+import 'package:jigsawpuzzle/services/locale_service.dart';
+import 'package:jigsawpuzzle/services/sound_service.dart';
+import 'package:jigsawpuzzle/theme/app_palette.dart';
+import 'package:jigsawpuzzle/theme/app_text_styles.dart';
+import 'package:jigsawpuzzle/utils/locale_helper.dart';
+import 'package:jigsawpuzzle/widgets/adaptive_hero_banner.dart';
+import 'package:jigsawpuzzle/widgets/app_cached_image.dart';
+import 'package:jigsawpuzzle/widgets/choose_difficulty_sheet.dart';
+import 'package:jigsawpuzzle/widgets/game_toast.dart';
 import 'package:phosphoricons_flutter/phosphoricons_flutter.dart';
-
-import '../../data/game_repository.dart';
-import '../../data/models/level_item.dart';
-import '../../data/resume_helper.dart';
-import '../../data/snapshot_store.dart';
-import '../../logic/cache/image_cache_manager.dart';
-import '../../logic/content/app_content.dart';
-import '../../logic/image_source.dart';
-import '../../services/app_logger.dart';
-import '../../services/sound_service.dart';
-import '../../theme/app_palette.dart';
-import '../../theme/app_text_styles.dart';
-import '../../widgets/adaptive_hero_banner.dart';
-import '../../widgets/app_cached_image.dart';
-import '../../widgets/choose_difficulty_sheet.dart';
-import '../../widgets/game_toast.dart';
-import '../event_levels_page.dart';
-import '../game_page.dart';
-
-import '../../data/constants/puzzle_tags.dart';
-import '../../l10n/gen/strings.g.dart';
-import '../../services/locale_service.dart';
-import '../../utils/locale_helper.dart';
 
 // 热门N个（横滑常驻，末位固定入口之后展开全部 18 个黄金矩阵标签）
 const List<String> kHotTagIds = [
@@ -36,7 +35,7 @@ const List<String> kHotTagIds = [
 ];
 
 class HomeTabView extends StatefulWidget {
-  const HomeTabView({super.key, required this.onSwitchToDaily});
+  const HomeTabView({required this.onSwitchToDaily, super.key});
 
   final VoidCallback onSwitchToDaily;
 
@@ -45,7 +44,7 @@ class HomeTabView extends StatefulWidget {
 }
 
 class _HomeTabViewState extends State<HomeTabView> {
-  final _repo = GameRepository.instance;
+  final GameRepository _repo = GameRepository.instance;
   String _selectedTag = 'all';
   final ScrollController _scrollController = ScrollController();
   final ScrollController _tagScrollController = ScrollController();
@@ -165,7 +164,6 @@ class _HomeTabViewState extends State<HomeTabView> {
       onClearRepo: (k) => _repo.updateLevelProgress(
         levelIndex: level.index,
         progressPercent: 0,
-        snapshotJson: null,
       ),
       onPushGame: (diff, jsonStr) async {
         if (!mounted) return;
@@ -202,7 +200,6 @@ class _HomeTabViewState extends State<HomeTabView> {
       initialDifficulty: level.difficulty,
       completedPieceCounts: level.completedPieceCounts.toSet(),
       canonicalId: canonicalId,
-      isUnlocked: true,
       title: level.title,
       imagePathOrUrl: level.assetPath,
       savedProgressPercent: displayPercent == 0 ? null : displayPercent,
@@ -214,7 +211,6 @@ class _HomeTabViewState extends State<HomeTabView> {
         await _repo.updateLevelProgress(
           levelIndex: level.index,
           progressPercent: 0,
-          snapshotJson: null,
         );
         if (!mounted) return;
         await Navigator.of(context).push(
@@ -223,7 +219,6 @@ class _HomeTabViewState extends State<HomeTabView> {
               imageBytes: imgBytes,
               difficulty: level.difficulty,
               levelIndex: level.index,
-              initialSnapshotJson: null,
             ),
           ),
         );
@@ -340,7 +335,6 @@ class _HomeTabViewState extends State<HomeTabView> {
                   maxCrossAxisExtent: 220,
                   crossAxisSpacing: 10,
                   mainAxisSpacing: 10,
-                  childAspectRatio: 1.0,
                 ),
                 delegate: SliverChildBuilderDelegate((context, index) {
                   final level = filteredLevels[index];
@@ -372,7 +366,7 @@ class _HeaderCarousel extends StatefulWidget {
     required this.onTapDaily,
   });
 
-  final dynamic todayDaily;
+  final PuzzleLevelItem? todayDaily;
   final DateTime now;
   final AppPalette palette;
   final AppTextStyles styles;
@@ -403,7 +397,7 @@ class _HeaderCarouselState extends State<_HeaderCarousel> {
   Widget build(BuildContext context) {
     final events = AppContent.instance.isInitialized
         ? AppContent.instance.manager.getVisibleEvents().take(4).toList()
-        : [];
+        : <PuzzleEventItem>[];
 
     final bannerItems = <HeroBannerItem>[
       // 1. 每日挑战焦点卡片
@@ -447,9 +441,6 @@ class _HeaderCarouselState extends State<_HeaderCarousel> {
       padding: const EdgeInsets.only(top: 12, bottom: 8),
       child: AdaptiveHeroBanner(
         items: bannerItems,
-        cardWidth: 290,
-        cardHeight: 156,
-        padding: const EdgeInsets.symmetric(horizontal: 16),
       ),
     );
   }
@@ -504,7 +495,6 @@ class _TagBarDelegate extends SliverPersistentHeaderDelegate {
                 physics: const BouncingScrollPhysics(),
                 padding: const EdgeInsets.symmetric(horizontal: 12),
                 child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
                     for (final entry in getLocalizedHomeTags()) ...[
                       Container(
@@ -546,8 +536,6 @@ class _TagBarDelegate extends SliverPersistentHeaderDelegate {
                             palette.surface.withValues(alpha: 0),
                             palette.surface,
                           ],
-                          begin: Alignment.centerLeft,
-                          end: Alignment.centerRight,
                         ),
                       ),
                     ),
@@ -607,7 +595,6 @@ class _TagChip extends StatelessWidget {
           borderRadius: BorderRadius.circular(14),
           border: Border.all(
             color: isActive ? palette.brand : palette.divider,
-            width: 1,
           ),
           boxShadow: isActive
               ? [
@@ -750,8 +737,6 @@ class _LevelCard extends StatelessWidget {
           children: [
             AppCachedImage(
               imagePathOrUrl: level.assetPath,
-              fit: BoxFit.cover,
-              targetDimension: ThumbnailDimension.card,
             ),
             if (isNew)
               Positioned(

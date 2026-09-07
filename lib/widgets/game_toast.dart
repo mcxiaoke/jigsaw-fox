@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 
-import '../theme/app_palette.dart';
+import 'package:jigsawpuzzle/theme/app_palette.dart';
 
 /// 全局 HUD 气泡提示 — 替代原生 SnackBar。
 ///
@@ -151,7 +151,6 @@ class _GameToastWidgetState extends State<_GameToastWidget>
               borderRadius: BorderRadius.circular(24),
               border: Border.all(
                 color: p.brand.withValues(alpha: 0.25),
-                width: 1,
               ),
               boxShadow: [
                 BoxShadow(

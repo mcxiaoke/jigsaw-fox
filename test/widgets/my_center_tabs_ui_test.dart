@@ -31,10 +31,10 @@ void main() {
 
       await tester.pumpWidget(
         TranslationProvider(
-          child: MaterialApp(
+          child: const MaterialApp(
             home: MediaQuery(
-              data: const MediaQueryData(size: Size(360, 640)),
-              child: const Scaffold(body: MyCenterTabView()),
+              data: MediaQueryData(size: Size(360, 640)),
+              child: Scaffold(body: MyCenterTabView()),
             ),
           ),
         ),
@@ -56,10 +56,10 @@ void main() {
 
       await tester.pumpWidget(
         TranslationProvider(
-          child: MaterialApp(
+          child: const MaterialApp(
             home: MediaQuery(
-              data: const MediaQueryData(size: Size(360, 640)),
-              child: const Scaffold(body: MyCenterTabView()),
+              data: MediaQueryData(size: Size(360, 640)),
+              child: Scaffold(body: MyCenterTabView()),
             ),
           ),
         ),

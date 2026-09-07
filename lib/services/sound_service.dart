@@ -4,8 +4,8 @@ import 'dart:math';
 import 'package:flame_audio/flame_audio.dart';
 import 'package:flutter/widgets.dart';
 
-import '../data/game_repository.dart';
-import 'app_logger.dart';
+import 'package:jigsawpuzzle/data/game_repository.dart';
+import 'package:jigsawpuzzle/services/app_logger.dart';
 
 /// 音效事件枚举，对应 `assets/audio/*.wav` 的语义映射
 ///
@@ -218,7 +218,7 @@ class SoundService {
       final audioContext = AudioContextConfig(
         focus: AudioContextConfigFocus.mixWithOthers,
       ).build();
-      for (int i = 0; i < _kPoolSize; i++) {
+      for (var i = 0; i < _kPoolSize; i++) {
         final player = AudioPlayer();
         // 禁用每帧向原生平台查询播放进度的 FramePositionUpdater，彻底消除高频 MethodChannel 轮询与微任务开销
         player.positionUpdater = null;
@@ -301,7 +301,7 @@ class SoundService {
     if (_pool.isEmpty || _generation != requestGen) return;
 
     SoundSlot? targetSlot;
-    int currentSlotToken = 0;
+    var currentSlotToken = 0;
     final file = _resolveFile(sfx);
     final vol = volume ?? _volumeFor(sfx);
 
@@ -401,8 +401,8 @@ class SoundService {
 
     SoundSlot? oldestNonVictory;
     SoundSlot? oldestSlot;
-    int minNonVictoryTime = 0x7fffffffffffffff;
-    int minTime = 0x7fffffffffffffff;
+    var minNonVictoryTime = 0x7fffffffffffffff;
+    var minTime = 0x7fffffffffffffff;
 
     for (final slot in _pool) {
       if (slot.playedAtMs < minTime) {
@@ -463,7 +463,7 @@ class SoundService {
   @visibleForTesting
   void setupMockPool(int count) {
     _pool.clear();
-    for (int i = 0; i < count; i++) {
+    for (var i = 0; i < count; i++) {
       _pool.add(SoundSlot(i));
     }
   }
@@ -544,7 +544,7 @@ class SoundService {
         return 0.90;
       case Sfx.winBig:
       case Sfx.jingle:
-        return 1.0;
+        return 1;
       case Sfx.hint:
         return 0.85;
       case Sfx.negative:
@@ -568,6 +568,8 @@ class SoundService {
 
 /// 播放器池槽位实体，绑定单一 AudioPlayer 并管理其释放与归还生命周期
 class SoundSlot {
+
+  SoundSlot(this.id, [this.playerInstance]);
   final int id;
   final AudioPlayer? playerInstance;
   bool isBusy = false;
@@ -578,8 +580,6 @@ class SoundSlot {
   String? currentFile;
 
   AudioPlayer get player => playerInstance!;
-
-  SoundSlot(this.id, [this.playerInstance]);
 
   /// 同步清空状态与计时器，递增 token 使在途回调失效
   void resetSync() {

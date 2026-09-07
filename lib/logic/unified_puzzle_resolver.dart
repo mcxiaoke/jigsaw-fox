@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 
-import '../data/favorite_store.dart';
-import '../data/progress_store.dart';
-import 'catalog_index.dart';
-import 'puzzle_model.dart';
-import 'source_tag.dart';
+import 'package:jigsawpuzzle/data/favorite_store.dart';
+import 'package:jigsawpuzzle/data/progress_store.dart';
+import 'package:jigsawpuzzle/logic/catalog_index.dart';
+import 'package:jigsawpuzzle/logic/puzzle_model.dart';
+import 'package:jigsawpuzzle/logic/source_tag.dart';
 
 /// 统一卡片视图模型（供给“我的”Tab 渲染与交互）
 class UnifiedPuzzleCardData {
@@ -136,7 +136,6 @@ class UnifiedPuzzleResolver {
         firstPlayedAt: p.firstPlayedAt,
         favoritedAt: favoriteEntry?.favoritedAt,
         isFavorite: isFav,
-        isOrphan: false,
         contextId: entry.contextId,
         displaySubtitle: entry.displaySubtitle,
       );

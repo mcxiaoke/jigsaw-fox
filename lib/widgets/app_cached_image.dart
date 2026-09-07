@@ -2,11 +2,10 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import 'package:jigsawpuzzle/logic/cache/app_cached_image_provider.dart';
+import 'package:jigsawpuzzle/logic/cache/app_cached_network_image_provider.dart';
+import 'package:jigsawpuzzle/logic/cache/image_cache_manager.dart';
 import 'package:phosphoricons_flutter/phosphoricons_flutter.dart';
-
-import '../logic/cache/app_cached_image_provider.dart';
-import '../logic/cache/app_cached_network_image_provider.dart';
-import '../logic/cache/image_cache_manager.dart';
 
 /// Convenient, high-performance UI Widget for displaying images with built-in
 /// disk thumbnail caching, memory downsampling (`ResizeImage`), placeholder shimmer, and error fallbacks.
@@ -62,7 +61,6 @@ class AppCachedImage extends StatelessWidget {
     return ResizeImage(
       provider,
       width: targetDimension.pixels,
-      allowUpscaling: false,
     );
   }
 

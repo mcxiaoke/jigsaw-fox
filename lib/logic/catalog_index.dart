@@ -1,11 +1,11 @@
-import '../data/game_repository.dart';
-import '../data/snapshot_store.dart';
-import '../l10n/gen/strings.g.dart';
-import '../services/app_logger.dart';
-import '../services/locale_service.dart';
-import 'content/app_content.dart';
-import 'content/models/canonical_id.dart';
-import 'puzzle_model.dart';
+import 'package:jigsawpuzzle/data/game_repository.dart';
+import 'package:jigsawpuzzle/data/snapshot_store.dart';
+import 'package:jigsawpuzzle/l10n/gen/strings.g.dart';
+import 'package:jigsawpuzzle/logic/content/app_content.dart';
+import 'package:jigsawpuzzle/logic/content/models/canonical_id.dart';
+import 'package:jigsawpuzzle/logic/puzzle_model.dart';
+import 'package:jigsawpuzzle/services/app_logger.dart';
+import 'package:jigsawpuzzle/services/locale_service.dart';
 
 /// 五大来源统一后的单条关卡目录视图（只读数据）
 class CatalogEntry {
@@ -57,9 +57,7 @@ class UnifiedCatalogIndex {
   static void _ensureLocaleListener() {
     if (!_localeListenerRegistered) {
       _localeListenerRegistered = true;
-      LocaleService.instance.addListener(() {
-        invalidate();
-      });
+      LocaleService.instance.addListener(invalidate);
     }
   }
 

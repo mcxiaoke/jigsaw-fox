@@ -1,4 +1,4 @@
-import '../models/puzzle_state.dart';
+import 'package:jigsawpuzzle/logic/models/puzzle_state.dart';
 
 /// Lightweight pure snapshot stack for Undo / Redo operations.
 class UndoManager {

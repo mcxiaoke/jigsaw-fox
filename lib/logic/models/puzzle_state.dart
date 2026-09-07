@@ -1,4 +1,4 @@
-import '../../services/app_logger.dart';
+import 'package:jigsawpuzzle/services/app_logger.dart';
 
 /// Immutable state representing a single puzzle piece on the board.
 class PieceState {
@@ -12,6 +12,24 @@ class PieceState {
     this.rot = 0,
     this.extra = const {},
   });
+
+  factory PieceState.fromJson(Map<String, dynamic> json) {
+    const known = {'id', 'r', 'c', 'nx', 'ny', 'g', 'clusterId', 'rot'};
+    final extra = <String, dynamic>{};
+    for (final e in json.entries) {
+      if (!known.contains(e.key)) extra[e.key] = e.value;
+    }
+    return PieceState(
+      id: json['id'] as int,
+      r: json['r'] as int,
+      c: json['c'] as int,
+      nx: (json['nx'] as num).toDouble(),
+      ny: (json['ny'] as num).toDouble(),
+      clusterId: (json['g'] ?? json['clusterId']) as int,
+      rot: (json['rot'] ?? 0) as int,
+      extra: extra,
+    );
+  }
 
   /// Unique piece index (0 <= id < rows * cols).
   final int id;
@@ -93,24 +111,6 @@ class PieceState {
     return m;
   }
 
-  factory PieceState.fromJson(Map<String, dynamic> json) {
-    const known = {'id', 'r', 'c', 'nx', 'ny', 'g', 'clusterId', 'rot'};
-    final extra = <String, dynamic>{};
-    for (final e in json.entries) {
-      if (!known.contains(e.key)) extra[e.key] = e.value;
-    }
-    return PieceState(
-      id: json['id'] as int,
-      r: json['r'] as int,
-      c: json['c'] as int,
-      nx: (json['nx'] as num).toDouble(),
-      ny: (json['ny'] as num).toDouble(),
-      clusterId: (json['g'] ?? json['clusterId']) as int,
-      rot: (json['rot'] ?? 0) as int,
-      extra: extra,
-    );
-  }
-
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -138,15 +138,12 @@ class PieceState {
 /// 且带默认值，旧版本读新快照时未知键进入 `extra` 并在下次 `toJson` 原样回写，
 /// 做到“旧读新不丢、新读旧兼容”。
 class PuzzleBoardState {
-  static const int currentVersion = 3;
-  static const int minSupportedVersion = 2;
 
   const PuzzleBoardState({
     required this.rows,
     required this.cols,
     required this.seed,
-    this.rotationEnabled = false,
-    required this.pieces,
+    required this.pieces, this.rotationEnabled = false,
     this.elapsedSeconds = 0,
     this.hintsUsed = 0,
     this.levelId = 'default_level',
@@ -158,6 +155,86 @@ class PuzzleBoardState {
     this.updatedAt,
     this.extra = const {},
   });
+
+  factory PuzzleBoardState.fromJson(Map<String, dynamic> json) {
+    const known = {
+      'version',
+      'canonicalId',
+      'difficultyKey',
+      'levelId',
+      'seed',
+      'rows',
+      'cols',
+      'rotationEnabled',
+      'elapsedSeconds',
+      'hintsUsed',
+      'pieces',
+      'aspectLabel',
+      'createdAt',
+      'updatedAt',
+    };
+    final extra = <String, dynamic>{};
+    for (final e in json.entries) {
+      if (!known.contains(e.key)) extra[e.key] = e.value;
+    }
+    final pieceList = (json['pieces'] as List<dynamic>)
+        .map((e) => PieceState.fromJson(e as Map<String, dynamic>))
+        .toList();
+
+    final rows = json['rows'] as int;
+    final cols = json['cols'] as int;
+    if (pieceList.length != rows * cols) {
+      throw FormatException(
+        'PuzzleBoardState pieces length (${pieceList.length}) != rows*cols ($rows * $cols = ${rows * cols})',
+      );
+    }
+
+    // 兼容 v2：无 version/canonicalId/difficultyKey
+    final ver = (json['version'] as int?) ?? 2;
+    if (ver < minSupportedVersion) {
+      throw FormatException(
+        'PuzzleBoardState version ($ver) < minSupportedVersion ($minSupportedVersion)',
+      );
+    }
+    if (ver > currentVersion) {
+      AppLogger.game.warning(
+        'PuzzleBoardState version ($ver) is newer than supported ($currentVersion)',
+      );
+    }
+
+    final cid =
+        (json['canonicalId'] as String?) ??
+        (json['levelId'] as String? ?? 'default_level');
+    final dkey =
+        (json['difficultyKey'] as String?) ??
+        (json['rows'] != null && json['cols'] != null
+            ? '${json['rows']}x${json['cols']}'
+            : '');
+
+    return PuzzleBoardState(
+      rows: rows,
+      cols: cols,
+      seed: json['seed'] as int,
+      rotationEnabled: (json['rotationEnabled'] ?? false) as bool,
+      pieces: pieceList,
+      elapsedSeconds: (json['elapsedSeconds'] ?? 0) as int,
+      hintsUsed: (json['hintsUsed'] ?? 0) as int,
+      levelId: (json['levelId'] ?? cid) as String,
+      version: ver,
+      canonicalId: cid,
+      difficultyKey: dkey,
+      aspectLabel: json['aspectLabel'] as String?,
+      createdAt: json['createdAt'] != null
+          ? DateTime.tryParse(json['createdAt'] as String)
+          : null,
+      updatedAt: json['updatedAt'] != null
+          ? DateTime.tryParse(json['updatedAt'] as String)
+          : null,
+      extra: extra,
+    );
+  }
+  static const int currentVersion = 3;
+  static const int minSupportedVersion = 2;
 
   final int rows;
   final int cols;
@@ -316,83 +393,5 @@ class PuzzleBoardState {
       if (!m.containsKey(k)) m[k] = v;
     });
     return m;
-  }
-
-  factory PuzzleBoardState.fromJson(Map<String, dynamic> json) {
-    const known = {
-      'version',
-      'canonicalId',
-      'difficultyKey',
-      'levelId',
-      'seed',
-      'rows',
-      'cols',
-      'rotationEnabled',
-      'elapsedSeconds',
-      'hintsUsed',
-      'pieces',
-      'aspectLabel',
-      'createdAt',
-      'updatedAt',
-    };
-    final extra = <String, dynamic>{};
-    for (final e in json.entries) {
-      if (!known.contains(e.key)) extra[e.key] = e.value;
-    }
-    final pieceList = (json['pieces'] as List<dynamic>)
-        .map((e) => PieceState.fromJson(e as Map<String, dynamic>))
-        .toList();
-
-    final rows = json['rows'] as int;
-    final cols = json['cols'] as int;
-    if (pieceList.length != rows * cols) {
-      throw FormatException(
-        'PuzzleBoardState pieces length (${pieceList.length}) != rows*cols ($rows * $cols = ${rows * cols})',
-      );
-    }
-
-    // 兼容 v2：无 version/canonicalId/difficultyKey
-    final ver = (json['version'] as int?) ?? 2;
-    if (ver < minSupportedVersion) {
-      throw FormatException(
-        'PuzzleBoardState version ($ver) < minSupportedVersion ($minSupportedVersion)',
-      );
-    }
-    if (ver > currentVersion) {
-      AppLogger.game.warning(
-        'PuzzleBoardState version ($ver) is newer than supported ($currentVersion)',
-      );
-    }
-
-    final cid =
-        (json['canonicalId'] as String?) ??
-        (json['levelId'] as String? ?? 'default_level');
-    final dkey =
-        (json['difficultyKey'] as String?) ??
-        (json['rows'] != null && json['cols'] != null
-            ? '${json['rows']}x${json['cols']}'
-            : '');
-
-    return PuzzleBoardState(
-      rows: rows,
-      cols: cols,
-      seed: json['seed'] as int,
-      rotationEnabled: (json['rotationEnabled'] ?? false) as bool,
-      pieces: pieceList,
-      elapsedSeconds: (json['elapsedSeconds'] ?? 0) as int,
-      hintsUsed: (json['hintsUsed'] ?? 0) as int,
-      levelId: (json['levelId'] ?? cid) as String,
-      version: ver,
-      canonicalId: cid,
-      difficultyKey: dkey,
-      aspectLabel: json['aspectLabel'] as String?,
-      createdAt: json['createdAt'] != null
-          ? DateTime.tryParse(json['createdAt'] as String)
-          : null,
-      updatedAt: json['updatedAt'] != null
-          ? DateTime.tryParse(json['updatedAt'] as String)
-          : null,
-      extra: extra,
-    );
   }
 }

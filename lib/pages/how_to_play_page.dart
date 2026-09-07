@@ -1,9 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:jigsawpuzzle/l10n/gen/strings.g.dart';
+import 'package:jigsawpuzzle/theme/app_palette.dart';
+import 'package:jigsawpuzzle/theme/app_text_styles.dart';
 import 'package:phosphoricons_flutter/phosphoricons_flutter.dart';
-
-import '../l10n/gen/strings.g.dart';
-import '../theme/app_palette.dart';
-import '../theme/app_text_styles.dart';
 
 /// Full-screen Gameplay Guide & Tips Page.
 class HowToPlayPage extends StatelessWidget {
@@ -166,7 +165,7 @@ class HowToPlayPage extends StatelessWidget {
       decoration: BoxDecoration(
         color: palette.surfaceContainer,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: palette.divider, width: 1),
+        border: Border.all(color: palette.divider),
       ),
       child: Padding(
         padding: const EdgeInsets.all(16),

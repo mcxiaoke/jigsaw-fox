@@ -1,21 +1,19 @@
 import 'package:flutter/material.dart';
+import 'package:jigsawpuzzle/l10n/gen/strings.g.dart';
+import 'package:jigsawpuzzle/logic/content/app_content.dart';
+import 'package:jigsawpuzzle/logic/content/models/puzzle_collection_item.dart';
+import 'package:jigsawpuzzle/logic/content/models/puzzle_event_item.dart';
+import 'package:jigsawpuzzle/pages/collection_levels_page.dart';
+import 'package:jigsawpuzzle/pages/event_levels_page.dart';
+import 'package:jigsawpuzzle/services/app_logger.dart';
+import 'package:jigsawpuzzle/services/locale_service.dart';
+import 'package:jigsawpuzzle/services/sound_service.dart';
+import 'package:jigsawpuzzle/theme/app_palette.dart';
+import 'package:jigsawpuzzle/theme/app_text_styles.dart';
+import 'package:jigsawpuzzle/widgets/adaptive_hero_banner.dart';
+import 'package:jigsawpuzzle/widgets/app_cached_image.dart';
+import 'package:jigsawpuzzle/widgets/game_toast.dart';
 import 'package:phosphoricons_flutter/phosphoricons_flutter.dart';
-
-import '../../logic/cache/image_cache_manager.dart';
-import '../../logic/content/app_content.dart';
-import '../../logic/content/models/puzzle_collection_item.dart';
-import '../../logic/content/models/puzzle_event_item.dart';
-import '../../services/app_logger.dart';
-import '../../services/locale_service.dart';
-import '../../services/sound_service.dart';
-import '../../l10n/gen/strings.g.dart';
-import '../../theme/app_palette.dart';
-import '../../theme/app_text_styles.dart';
-import '../../widgets/adaptive_hero_banner.dart';
-import '../../widgets/app_cached_image.dart';
-import '../../widgets/game_toast.dart';
-import '../collection_levels_page.dart';
-import '../event_levels_page.dart';
 
 /// 全新“图集”中心 Tab 视图
 /// 1. 顶部 Banner：仅展示来自 events.json 的限时活动大卡片
@@ -30,7 +28,7 @@ class CollectionsTabView extends StatefulWidget {
 }
 
 class _CollectionsTabViewState extends State<CollectionsTabView> {
-  final _content = AppContent.instance;
+  final AppContent _content = AppContent.instance;
 
   @override
   void initState() {
@@ -131,7 +129,7 @@ class _CollectionsTabViewState extends State<CollectionsTabView> {
     }).toList();
 
     return RefreshIndicator(
-      onRefresh: () async => await _content.syncAll(),
+      onRefresh: () async => _content.syncAll(),
       color: palette.brand,
       child: CustomScrollView(
         physics: const AlwaysScrollableScrollPhysics(
@@ -169,7 +167,7 @@ class _CollectionsTabViewState extends State<CollectionsTabView> {
                   decoration: BoxDecoration(
                     color: palette.surfaceContainer,
                     borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: palette.divider, width: 1),
+                    border: Border.all(color: palette.divider),
                   ),
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -241,7 +239,7 @@ class _CollectionsTabViewState extends State<CollectionsTabView> {
                         backgroundColor: palette.brand,
                         foregroundColor: palette.surface,
                       ),
-                      onPressed: () async => await _content.syncAll(),
+                      onPressed: () async => _content.syncAll(),
                     ),
                   ],
                 ),
@@ -277,7 +275,6 @@ class _CollectionsTabViewState extends State<CollectionsTabView> {
                   maxCrossAxisExtent: 220,
                   crossAxisSpacing: 10,
                   mainAxisSpacing: 10,
-                  childAspectRatio: 1.0,
                 ),
                 delegate: SliverChildBuilderDelegate((context, index) {
                   final col = collections[index];
@@ -311,7 +308,7 @@ class _CollectionsTabViewState extends State<CollectionsTabView> {
         final isZipNotDownloaded = col.isZipType && !col.isLocalDownloaded;
 
         // 关卡数：优先使用元数据 totalCount，若本地已下载但 totalCount 为 0 则动态获取
-        int effectiveCount = col.totalCount;
+        var effectiveCount = col.totalCount;
         if (effectiveCount <= 0 && col.isLocalDownloaded) {
           effectiveCount = _content.manager.getCollectionLevels(col).length;
         }
@@ -329,14 +326,12 @@ class _CollectionsTabViewState extends State<CollectionsTabView> {
                     title: col.title,
                     percent: (downloadProgress * 100).toInt(),
                   ),
-                  type: GameToastType.info,
                 );
               } else {
                 GameToast.show(
                   context,
                   icon: PhosphorIconsRegular.downloadSimple,
                   message: t.collections.startDownload(title: col.title),
-                  type: GameToastType.info,
                 );
                 _startDownload(col);
               }
@@ -350,7 +345,7 @@ class _CollectionsTabViewState extends State<CollectionsTabView> {
           child: Container(
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: palette.divider, width: 1),
+              border: Border.all(color: palette.divider),
               boxShadow: [
                 BoxShadow(
                   color: Colors.black.withValues(alpha: 0.08),
@@ -368,8 +363,6 @@ class _CollectionsTabViewState extends State<CollectionsTabView> {
                   imagePathOrUrl:
                       col.coverUrl ??
                       (col.levels.isNotEmpty ? col.levels.first : ''),
-                  fit: BoxFit.cover,
-                  targetDimension: ThumbnailDimension.card,
                 ),
 
                 // 2. 底部渐变阴影 (保证标题高可读性)

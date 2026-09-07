@@ -5,13 +5,12 @@ import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:hive_ce/hive_ce.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:jigsawpuzzle/data/models/downloaded_image_item.dart';
+import 'package:jigsawpuzzle/data/storage_manager.dart';
+import 'package:jigsawpuzzle/logic/cache/image_cache_manager.dart';
+import 'package:jigsawpuzzle/services/app_logger.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
-
-import '../data/models/downloaded_image_item.dart';
-import '../data/storage_manager.dart';
-import '../services/app_logger.dart';
-import 'cache/image_cache_manager.dart';
 
 /// Singleton manager for batch downloaded and locally imported images (Material Box / 素材库)
 /// with local persistence, deduplication, and metadata parsing.
@@ -226,7 +225,7 @@ class DownloadManager {
     if (directBytes != null && directBytes.isNotEmpty) {
       rawBytes = directBytes;
       await targetFile.writeAsBytes(rawBytes);
-      if (onProgress != null) onProgress(1.0);
+      if (onProgress != null) onProgress(1);
       AppLogger.download.info(
         'DirectSave written ${rawBytes.length} bytes to ${AppLogger.sanitizePath(filePath)}',
       );

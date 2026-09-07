@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../../l10n/gen/strings.g.dart';
+import 'package:jigsawpuzzle/l10n/gen/strings.g.dart';
 
 /// 稳定来源标签 key（持久化真源；新写入一律存 key，不再落盘中文）
 abstract final class SourceKeys {

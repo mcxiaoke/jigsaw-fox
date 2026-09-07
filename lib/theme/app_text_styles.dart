@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import 'app_palette.dart';
+import 'package:jigsawpuzzle/theme/app_palette.dart';
 
 /// 全局字体层级 — 支持主题切换时自动反色。
 ///

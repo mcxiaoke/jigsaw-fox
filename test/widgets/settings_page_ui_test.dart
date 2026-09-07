@@ -30,10 +30,10 @@ void main() {
 
     await tester.pumpWidget(
       TranslationProvider(
-        child: MaterialApp(
+        child: const MaterialApp(
           home: MediaQuery(
-            data: const MediaQueryData(size: Size(360, 640)),
-            child: const SettingsPage(),
+            data: MediaQueryData(size: Size(360, 640)),
+            child: SettingsPage(),
           ),
         ),
       ),
@@ -75,10 +75,10 @@ void main() {
 
     await tester.pumpWidget(
       TranslationProvider(
-        child: MaterialApp(
+        child: const MaterialApp(
           home: MediaQuery(
-            data: const MediaQueryData(size: Size(360, 640)),
-            child: const SettingsPage(),
+            data: MediaQueryData(size: Size(360, 640)),
+            child: SettingsPage(),
           ),
         ),
       ),

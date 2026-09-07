@@ -1,15 +1,16 @@
 import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
+
 import 'package:archive/archive.dart';
 import 'package:flutter/foundation.dart';
+import 'package:jigsawpuzzle/logic/cache/thumbnail_generator.dart';
+import 'package:jigsawpuzzle/logic/content/models/canonical_id.dart';
+import 'package:jigsawpuzzle/logic/content/models/puzzle_level_item.dart';
+import 'package:jigsawpuzzle/logic/content/models/puzzle_pack_item.dart';
+import 'package:jigsawpuzzle/logic/content/network/content_http_client.dart';
+import 'package:jigsawpuzzle/services/app_logger.dart';
 import 'package:path/path.dart' as p;
-import '../../../services/app_logger.dart';
-import '../../cache/thumbnail_generator.dart';
-import '../models/canonical_id.dart';
-import '../models/puzzle_level_item.dart';
-import '../models/puzzle_pack_item.dart';
-import '../network/content_http_client.dart';
 
 /// 扩展图包内容管理管线 (支持本地 ZIP / 网络 ZIP 安全导入、零元数据推导、来源追踪与整包物理删除)
 class PackContentPipeline {
@@ -219,7 +220,7 @@ class PackContentPipeline {
 
     // 2. 解压与过滤系统垃圾文件，防御 ZipSlip
     for (final file in archive) {
-      final filename = file.name.replaceAll('\\', '/');
+      final filename = file.name.replaceAll(r'\', '/');
 
       // 防御 ZipSlip 路径穿越
       if (filename.contains('..')) continue;

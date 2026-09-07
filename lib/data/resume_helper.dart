@@ -1,13 +1,12 @@
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
-
-import '../logic/models/puzzle_state.dart';
-import '../logic/puzzle_model.dart';
-import '../services/app_logger.dart';
-import '../widgets/continue_dialog.dart';
-import 'progress_store.dart';
-import 'snapshot_store.dart';
+import 'package:jigsawpuzzle/data/progress_store.dart';
+import 'package:jigsawpuzzle/data/snapshot_store.dart';
+import 'package:jigsawpuzzle/logic/models/puzzle_state.dart';
+import 'package:jigsawpuzzle/logic/puzzle_model.dart';
+import 'package:jigsawpuzzle/services/app_logger.dart';
+import 'package:jigsawpuzzle/widgets/continue_dialog.dart';
 
 /// 存档续玩复用 Helper：抽取 Home/Daily/MyPuzzles/Pack 中重复的
 /// `final canonicalId = ...; final progress = await ProgressStore.load(...); PuzzleBoardState? snapshot ...` 逻辑
@@ -41,12 +40,12 @@ class ResumeHelper {
     final dkey = progress.activeDifficultyKey.isNotEmpty
         ? progress.activeDifficultyKey
         : SnapshotStore.difficultyKeyFor(fallbackDifficulty);
-    PuzzleBoardState? snapshot = await SnapshotStore.instance.load(
+    var snapshot = await SnapshotStore.instance.load(
       canonicalId,
       dkey,
     );
-    String usedDkey = dkey;
-    int percent = 0;
+    var usedDkey = dkey;
+    var percent = 0;
     if (snapshot != null) {
       percent = SnapshotStore.progressPercentOf(snapshot);
       usedDkey = snapshot.effectiveDifficultyKey;
@@ -95,9 +94,7 @@ class ResumeHelper {
     required BuildContext context,
     required String canonicalId,
     required PuzzleDifficulty fallbackDifficulty,
-    bool isCompleted = false,
-    required String title,
-    required Uint8List imageBytes,
+    required String title, required Uint8List imageBytes, bool isCompleted = false,
   }) async {
     final info = await fetchResume(canonicalId, fallbackDifficulty);
     if (info == null) return null;
@@ -218,13 +215,8 @@ class ResumeHelper {
     required BuildContext context,
     required String canonicalId,
     required PuzzleDifficulty fallbackDifficulty,
-    bool isCompleted = false,
-    required String title,
-    required Uint8List imageBytes,
-    required Future<void> Function(String dkey) onClearRepo,
-    required Future<void> Function(PuzzleDifficulty diff, String? jsonStr)
-    onPushGame,
-    required VoidCallback onCancelled,
+    required String title, required Uint8List imageBytes, required Future<void> Function(String dkey) onClearRepo, required Future<void> Function(PuzzleDifficulty diff, String? jsonStr)
+    onPushGame, required VoidCallback onCancelled, bool isCompleted = false,
   }) async {
     final result = await maybeShowResumeDialog(
       context: context,

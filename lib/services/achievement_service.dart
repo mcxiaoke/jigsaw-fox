@@ -1,11 +1,11 @@
 import 'dart:async';
 
-import '../data/progress_store.dart';
-import '../l10n/gen/strings.g.dart';
-import 'achievement_store.dart';
-import 'app_logger.dart';
-import 'economy_service.dart';
-import 'sound_service.dart';
+import 'package:jigsawpuzzle/data/progress_store.dart';
+import 'package:jigsawpuzzle/l10n/gen/strings.g.dart';
+import 'package:jigsawpuzzle/services/achievement_store.dart';
+import 'package:jigsawpuzzle/services/app_logger.dart';
+import 'package:jigsawpuzzle/services/economy_service.dart';
+import 'package:jigsawpuzzle/services/sound_service.dart';
 
 /// 成就类型
 enum AchievementType {
@@ -369,7 +369,7 @@ class AchievementService {
   Future<bool> _checkAndUnlock(AchievementDefinition def) async {
     if (_store.isUnlocked(def.id)) return false;
 
-    bool reached = false;
+    var reached = false;
     if (def.type == AchievementType.derived && def.id == 'master_all') {
       final unlockedCount = allAchievements
           .where((a) => a.id != 'master_all' && _store.isUnlocked(a.id))
@@ -447,28 +447,28 @@ class AchievementService {
       if (totalSolved > 0) {
         await _store.setCounter('total_solved', totalSolved);
       } else {
-        await _store.incrementCounter('total_solved', 1);
+        await _store.incrementCounter('total_solved');
       }
     } catch (_) {
-      await _store.incrementCounter('total_solved', 1);
+      await _store.incrementCounter('total_solved');
     }
 
     // 3. 3 星评级（按 canonicalId 去重：同一张图多档刷 3 星只计 1 次，设计 §8.3）
     if (stars >= 3 && canonicalId.isNotEmpty) {
       final isNew = await _store.addStarred(canonicalId);
       if (isNew) {
-        await _store.incrementCounter('three_star_count', 1);
+        await _store.incrementCounter('three_star_count');
       }
     }
 
     // 4. 自制拼图
     if (puzzleType == 'custom') {
-      await _store.incrementCounter('custom_solved', 1);
+      await _store.incrementCounter('custom_solved');
     }
 
     // 5. 每日挑战
     if (puzzleType == 'daily') {
-      await _store.incrementCounter('daily_solved', 1);
+      await _store.incrementCounter('daily_solved');
     }
 
     // 6. 吸附碎片总数累加

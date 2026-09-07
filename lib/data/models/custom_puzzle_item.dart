@@ -1,5 +1,5 @@
-import '../../logic/puzzle_model.dart';
-import '../../l10n/gen/strings.g.dart';
+import 'package:jigsawpuzzle/l10n/gen/strings.g.dart';
+import 'package:jigsawpuzzle/logic/puzzle_model.dart';
 
 /// Represents a user-generated custom puzzle item (or preset sample).
 class CustomPuzzleItem {
@@ -19,6 +19,66 @@ class CustomPuzzleItem {
     this.sourcePlatform = 'album',
     this.sourceUrl,
   });
+
+  factory CustomPuzzleItem.fromJson(Map<String, dynamic> json) {
+    final rows = json['rows'] as int? ?? 4;
+    final cols = json['cols'] as int? ?? 4;
+    final diff = PuzzleDifficulty.presets.firstWhere(
+      (d) => d.rows == rows && d.cols == cols,
+      orElse: () => PuzzleDifficulty(
+        label: '$cols × $rows (${rows * cols} 块)',
+        rows: rows,
+        cols: cols,
+      ),
+    );
+
+    final rawCompletedCounts = (json['completedPieceCounts'] as List<dynamic>?)
+        ?.map((e) => e as int)
+        .toList();
+    final isCompletedVal = json['isCompleted'] as bool? ?? false;
+    final completedCounts =
+        rawCompletedCounts ?? (isCompletedVal ? [diff.pieceCount] : <int>[]);
+
+    final imagePathOrUrl = json['imagePathOrUrl'] as String? ?? '';
+    final isLocal = json['isLocalFile'] as bool? ?? false;
+
+    // Backward-compatible source fallback
+    var derivedSourceType = json['sourceType'] as String? ?? '';
+    var derivedSourcePlatform = json['sourcePlatform'] as String? ?? '';
+    if (derivedSourceType.isEmpty) {
+      if (imagePathOrUrl.startsWith('assets/')) {
+        derivedSourceType = 'preset';
+        derivedSourcePlatform = 'preset';
+      } else {
+        derivedSourceType = 'gallery';
+        derivedSourcePlatform = 'album';
+      }
+    }
+    if (derivedSourcePlatform.isEmpty) {
+      derivedSourcePlatform = derivedSourceType == 'preset'
+          ? 'preset'
+          : (derivedSourceType == 'online' ? 'online' : 'album');
+    }
+
+    return CustomPuzzleItem(
+      id: json['id'] as String,
+      title: json['title'] as String,
+      imagePathOrUrl: imagePathOrUrl,
+      isLocalFile: isLocal,
+      difficulty: diff,
+      createdAt: json['createdAt'] != null
+          ? DateTime.tryParse(json['createdAt'] as String)
+          : null,
+      isCompleted: isCompletedVal || completedCounts.isNotEmpty,
+      progressPercent: json['progressPercent'] as int? ?? 0,
+      bestTimeSeconds: json['bestTimeSeconds'] as int? ?? 0,
+      savedSnapshotJson: json['savedSnapshotJson'] as String?,
+      completedPieceCounts: completedCounts,
+      sourceType: derivedSourceType,
+      sourcePlatform: derivedSourcePlatform,
+      sourceUrl: json['sourceUrl'] as String?,
+    );
+  }
 
   final String id;
   final String title;
@@ -127,64 +187,4 @@ class CustomPuzzleItem {
     'sourcePlatform': sourcePlatform,
     if (sourceUrl != null) 'sourceUrl': sourceUrl,
   };
-
-  factory CustomPuzzleItem.fromJson(Map<String, dynamic> json) {
-    final rows = json['rows'] as int? ?? 4;
-    final cols = json['cols'] as int? ?? 4;
-    final diff = PuzzleDifficulty.presets.firstWhere(
-      (d) => d.rows == rows && d.cols == cols,
-      orElse: () => PuzzleDifficulty(
-        label: '$cols × $rows (${rows * cols} 块)',
-        rows: rows,
-        cols: cols,
-      ),
-    );
-
-    final rawCompletedCounts = (json['completedPieceCounts'] as List<dynamic>?)
-        ?.map((e) => e as int)
-        .toList();
-    final isCompletedVal = json['isCompleted'] as bool? ?? false;
-    final completedCounts =
-        rawCompletedCounts ?? (isCompletedVal ? [diff.pieceCount] : <int>[]);
-
-    final imagePathOrUrl = json['imagePathOrUrl'] as String? ?? '';
-    final isLocal = json['isLocalFile'] as bool? ?? false;
-
-    // Backward-compatible source fallback
-    String derivedSourceType = json['sourceType'] as String? ?? '';
-    String derivedSourcePlatform = json['sourcePlatform'] as String? ?? '';
-    if (derivedSourceType.isEmpty) {
-      if (imagePathOrUrl.startsWith('assets/')) {
-        derivedSourceType = 'preset';
-        derivedSourcePlatform = 'preset';
-      } else {
-        derivedSourceType = 'gallery';
-        derivedSourcePlatform = 'album';
-      }
-    }
-    if (derivedSourcePlatform.isEmpty) {
-      derivedSourcePlatform = derivedSourceType == 'preset'
-          ? 'preset'
-          : (derivedSourceType == 'online' ? 'online' : 'album');
-    }
-
-    return CustomPuzzleItem(
-      id: json['id'] as String,
-      title: json['title'] as String,
-      imagePathOrUrl: imagePathOrUrl,
-      isLocalFile: isLocal,
-      difficulty: diff,
-      createdAt: json['createdAt'] != null
-          ? DateTime.tryParse(json['createdAt'] as String)
-          : null,
-      isCompleted: isCompletedVal || completedCounts.isNotEmpty,
-      progressPercent: json['progressPercent'] as int? ?? 0,
-      bestTimeSeconds: json['bestTimeSeconds'] as int? ?? 0,
-      savedSnapshotJson: json['savedSnapshotJson'] as String?,
-      completedPieceCounts: completedCounts,
-      sourceType: derivedSourceType,
-      sourcePlatform: derivedSourcePlatform,
-      sourceUrl: json['sourceUrl'] as String?,
-    );
-  }
 }

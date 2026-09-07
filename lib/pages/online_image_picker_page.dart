@@ -3,17 +3,16 @@ import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:phosphoricons_flutter/phosphoricons_flutter.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
-
-import '../data/models/downloaded_image_item.dart';
-import '../services/app_logger.dart';
-import '../l10n/gen/strings.g.dart';
-import '../logic/download_manager.dart';
-import '../services/webview_service.dart';
-import '../theme/app_palette.dart';
-import '../widgets/downloaded_drawer_sheet.dart';
-import '../widgets/game_toast.dart';
+import 'package:jigsawpuzzle/data/models/downloaded_image_item.dart';
+import 'package:jigsawpuzzle/l10n/gen/strings.g.dart';
+import 'package:jigsawpuzzle/logic/download_manager.dart';
+import 'package:jigsawpuzzle/services/app_logger.dart';
+import 'package:jigsawpuzzle/services/webview_service.dart';
+import 'package:jigsawpuzzle/theme/app_palette.dart';
+import 'package:jigsawpuzzle/widgets/downloaded_drawer_sheet.dart';
+import 'package:jigsawpuzzle/widgets/game_toast.dart';
+import 'package:phosphoricons_flutter/phosphoricons_flutter.dart';
 
 enum GallerySite {
   pixabay('Pixabay', 'https://pixabay.com/zh/photos/'),
@@ -63,7 +62,7 @@ class OnlineImagePickerPage extends StatefulWidget {
 class _OnlineImagePickerPageState extends State<OnlineImagePickerPage> {
   InAppWebViewController? _webViewController;
   late GallerySite _currentSite;
-  double _loadingProgress = 0.0;
+  double _loadingProgress = 0;
   bool _isExtracting = false;
 
   // Browser navigation history states
@@ -363,7 +362,6 @@ class _OnlineImagePickerPageState extends State<OnlineImagePickerPage> {
         GameToast.show(
           context,
           message: t.online.alreadyInBox,
-          type: GameToastType.info,
         );
       }
       return;
@@ -371,7 +369,7 @@ class _OnlineImagePickerPageState extends State<OnlineImagePickerPage> {
 
     try {
       // 1. Try authenticated in-webview fetch first for zero 403 error
-      Uint8List? fetchedBytes = await _fetchImageBytesInsideWebView(targetUrl);
+      var fetchedBytes = await _fetchImageBytesInsideWebView(targetUrl);
       if (fetchedBytes == null && targetUrl != rawUrl) {
         fetchedBytes = await _fetchImageBytesInsideWebView(rawUrl);
       }
@@ -575,17 +573,11 @@ class _OnlineImagePickerPageState extends State<OnlineImagePickerPage> {
               initialSettings: InAppWebViewSettings(
                 useShouldOverrideUrlLoading: true,
                 useOnDownloadStart: true,
-                javaScriptEnabled: true,
                 javaScriptCanOpenWindowsAutomatically: true,
-                supportMultipleWindows: false,
                 mediaPlaybackRequiresUserGesture: false,
                 userAgent:
                     'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
                 isInspectable: kDebugMode,
-                supportZoom: true,
-                transparentBackground: false,
-                verticalScrollBarEnabled: true,
-                horizontalScrollBarEnabled: true,
               ),
               onWebViewCreated: (controller) {
                 _webViewController = controller;
@@ -893,7 +885,7 @@ class _OnlineImagePickerPageState extends State<OnlineImagePickerPage> {
       decoration: BoxDecoration(
         color: palette.surfaceContainerLow,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: palette.divider, width: 1),
+        border: Border.all(color: palette.divider),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,

@@ -24,7 +24,7 @@ void main() {
 
     test('4:5 to 2:3 loses 16.7% - less than 1:1 20%, must pick 2:3', () {
       final loss23 = cropLossFor(4 / 5, 2 / 3);
-      final loss11 = cropLossFor(4 / 5, 1.0);
+      final loss11 = cropLossFor(4 / 5, 1);
       expect(loss23, closeTo(0.1667, 0.001));
       expect(loss23, lessThan(loss11));
     });
@@ -75,7 +75,7 @@ void main() {
       final rect = centerCropRect(
         imageWidth: 1024,
         imageHeight: 1024,
-        targetRatio: 1.0,
+        targetRatio: 1,
       );
       expect(rect.left, 0);
       expect(rect.top, 0);
@@ -150,11 +150,11 @@ void main() {
       final imgObj = img.Image(width: 1600, height: 900);
       img.fill(imgObj, color: img.ColorRgb8(200, 200, 200));
 
-      final smartRect = findSmartCropRect(imgObj, targetRatio: 1.0);
+      final smartRect = findSmartCropRect(imgObj, targetRatio: 1);
       final centerRect = centerCropRect(
         imageWidth: 1600,
         imageHeight: 900,
-        targetRatio: 1.0,
+        targetRatio: 1,
       );
 
       expect(smartRect.left, centerRect.left);
@@ -170,16 +170,16 @@ void main() {
       // 在左侧 [50, 450] 绘制高对比度细节纹理
       for (var y = 100; y < 800; y++) {
         for (var x = 50; x < 450; x++) {
-          final c = ((x * 17 + y * 31) % 200);
+          final c = (x * 17 + y * 31) % 200;
           imgObj.setPixelRgb(x, y, c, 255 - c, (c * 2) % 255);
         }
       }
 
-      final smartRect = findSmartCropRect(imgObj, targetRatio: 1.0);
+      final smartRect = findSmartCropRect(imgObj, targetRatio: 1);
       final centerRect = centerCropRect(
         imageWidth: 1600,
         imageHeight: 900,
-        targetRatio: 1.0,
+        targetRatio: 1,
       );
 
       // 普通居中会从 (1600 - 900)/2 = 350 开始，裁掉左边大部分主体
@@ -199,16 +199,16 @@ void main() {
         // 在右侧 [1150, 1550] 绘制高对比度细节纹理
         for (var y = 100; y < 800; y++) {
           for (var x = 1150; x < 1550; x++) {
-            final c = ((x * 19 + y * 23) % 200);
+            final c = (x * 19 + y * 23) % 200;
             imgObj.setPixelRgb(x, y, 255 - c, c, (c * 3) % 255);
           }
         }
 
-        final smartRect = findSmartCropRect(imgObj, targetRatio: 1.0);
+        final smartRect = findSmartCropRect(imgObj, targetRatio: 1);
         final centerRect = centerCropRect(
           imageWidth: 1600,
           imageHeight: 900,
-          targetRatio: 1.0,
+          targetRatio: 1,
         );
 
         expect(centerRect.left, 350.0);
@@ -228,16 +228,16 @@ void main() {
         // 在顶部 [50, 450] 绘制主体
         for (var y = 50; y < 450; y++) {
           for (var x = 100; x < 800; x++) {
-            final c = ((x * 13 + y * 29) % 200);
+            final c = (x * 13 + y * 29) % 200;
             imgObj.setPixelRgb(x, y, c, c, 255 - c);
           }
         }
 
-        final smartRect = findSmartCropRect(imgObj, targetRatio: 1.0);
+        final smartRect = findSmartCropRect(imgObj, targetRatio: 1);
         final centerRect = centerCropRect(
           imageWidth: 900,
           imageHeight: 1600,
-          targetRatio: 1.0,
+          targetRatio: 1,
         );
 
         // 普通居中 top = (1600 - 900) / 2 = 350
@@ -275,7 +275,7 @@ void main() {
         final croppedBytes =
             await ThumbnailGenerator.generateCroppedBytesFromBytes(
               rawBytes: rawBytes,
-              targetRatio: 1.0,
+              targetRatio: 1,
             );
         expect(croppedBytes, isNotNull);
 
@@ -293,7 +293,7 @@ void main() {
       final croppedBytes =
           await ThumbnailGenerator.generateCroppedBytesFromBytes(
             rawBytes: rawBytes,
-            targetRatio: 1.0,
+            targetRatio: 1,
             smartCrop: false,
           );
       expect(croppedBytes, isNotNull);

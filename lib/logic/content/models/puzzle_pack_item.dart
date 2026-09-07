@@ -6,16 +6,29 @@ class PuzzlePackItem {
   const PuzzlePackItem({
     required this.id,
     required this.title,
-    this.description = '',
+    required this.coverPath, required this.levelCount, required this.fileSizeBytes, required this.importedAt, required this.sourceType, required this.sourceOrigin, this.description = '',
     this.author = '',
-    required this.coverPath,
-    required this.levelCount,
-    required this.fileSizeBytes,
-    required this.importedAt,
-    required this.sourceType,
-    required this.sourceOrigin,
     this.tags = const [],
   });
+
+  factory PuzzlePackItem.fromJson(Map<String, dynamic> json) {
+    return PuzzlePackItem(
+      id: json['id'] as String? ?? '',
+      title: json['title'] as String? ?? '未命名图包',
+      description: json['description'] as String? ?? '',
+      author: json['author'] as String? ?? '',
+      coverPath: json['coverPath'] as String? ?? '',
+      levelCount: json['levelCount'] as int? ?? 0,
+      fileSizeBytes: json['fileSizeBytes'] as int? ?? 0,
+      importedAt:
+          json['importedAt'] as String? ?? DateTime.now().toIso8601String(),
+      sourceType: json['sourceType'] as String? ?? 'local_file',
+      sourceOrigin: json['sourceOrigin'] as String? ?? '',
+      tags:
+          (json['tags'] as List<dynamic>?)?.map((e) => e.toString()).toList() ??
+          const [],
+    );
+  }
 
   /// 图包唯一物理 ID (如 pack_1787548920123_a8f1)
   final String id;
@@ -81,25 +94,6 @@ class PuzzlePackItem {
       'sourceOrigin': sourceOrigin,
       'tags': tags,
     };
-  }
-
-  factory PuzzlePackItem.fromJson(Map<String, dynamic> json) {
-    return PuzzlePackItem(
-      id: json['id'] as String? ?? '',
-      title: json['title'] as String? ?? '未命名图包',
-      description: json['description'] as String? ?? '',
-      author: json['author'] as String? ?? '',
-      coverPath: json['coverPath'] as String? ?? '',
-      levelCount: json['levelCount'] as int? ?? 0,
-      fileSizeBytes: json['fileSizeBytes'] as int? ?? 0,
-      importedAt:
-          json['importedAt'] as String? ?? DateTime.now().toIso8601String(),
-      sourceType: json['sourceType'] as String? ?? 'local_file',
-      sourceOrigin: json['sourceOrigin'] as String? ?? '',
-      tags:
-          (json['tags'] as List<dynamic>?)?.map((e) => e.toString()).toList() ??
-          const [],
-    );
   }
 
   PuzzlePackItem copyWith({

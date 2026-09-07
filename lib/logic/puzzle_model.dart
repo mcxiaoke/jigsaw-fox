@@ -1,6 +1,6 @@
 import 'dart:math' as math;
 
-import '../l10n/gen/strings.g.dart';
+import 'package:jigsawpuzzle/l10n/gen/strings.g.dart';
 
 /// Representation of a difficulty tier with UI metadata.
 class DifficultyTier {
@@ -116,7 +116,7 @@ enum PuzzleAspectRatio {
   /// Calculates the area crop loss when cropping an image with [imageRatio] to [targetRatio].
   /// Formula: CropLoss(r, target) = 1 - min(r / target, target / r)
   static double cropLoss(double imageRatio, double targetRatio) {
-    if (imageRatio <= 0 || targetRatio <= 0) return 1.0;
+    if (imageRatio <= 0 || targetRatio <= 0) return 1;
     return 1.0 - math.min(imageRatio / targetRatio, targetRatio / imageRatio);
   }
 
@@ -255,23 +255,23 @@ class PuzzleDifficulty {
   double get secPerPiece {
     switch (tierLevel) {
       case 'L1':
-        return 3.0;
+        return 3;
       case 'L1.5':
         return 3.5;
       case 'L2':
-        return 5.0;
+        return 5;
       case 'L3':
-        return 8.0;
+        return 8;
       case 'L4':
-        return 12.0;
+        return 12;
       case 'L5':
-        return 18.0;
+        return 18;
       case 'L6':
-        return 25.0;
+        return 25;
       case 'L7':
-        return 28.0;
+        return 28;
       default:
-        return 8.0;
+        return 8;
     }
   }
 

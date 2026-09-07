@@ -26,16 +26,16 @@ void main() {
 
     test('SnapshotStore atomic save, load, and explicit delete', () async {
       const cid = 'main:001';
-      final state1 = PuzzleBoardState(
+      const state1 = PuzzleBoardState(
         canonicalId: cid,
         difficultyKey: '2x2',
         rows: 2,
         cols: 2,
         seed: 100,
-        pieces: const [
-          PieceState(id: 0, r: 0, c: 0, nx: 0.0, ny: 0.0, clusterId: 0),
-          PieceState(id: 1, r: 0, c: 1, nx: 0.5, ny: 0.0, clusterId: 1),
-          PieceState(id: 2, r: 1, c: 0, nx: 0.0, ny: 0.5, clusterId: 2),
+        pieces: [
+          PieceState(id: 0, r: 0, c: 0, nx: 0, ny: 0, clusterId: 0),
+          PieceState(id: 1, r: 0, c: 1, nx: 0.5, ny: 0, clusterId: 1),
+          PieceState(id: 2, r: 1, c: 0, nx: 0, ny: 0.5, clusterId: 2),
           PieceState(id: 3, r: 1, c: 1, nx: 0.5, ny: 0.5, clusterId: 3),
         ],
       );
@@ -60,8 +60,8 @@ void main() {
             id: i,
             r: i ~/ 3,
             c: i % 3,
-            nx: 0.0,
-            ny: 0.0,
+            nx: 0,
+            ny: 0,
             clusterId: i,
           ),
         ),
@@ -109,18 +109,17 @@ void main() {
         const fallbackDiff = PuzzleDifficulty(label: '2x2', rows: 2, cols: 2);
 
         // 1. Trivial: 0%, 0 hints, 0s elapsed, all pieces unmerged
-        final trivialState = PuzzleBoardState(
+        const trivialState = PuzzleBoardState(
           canonicalId: cid,
           difficultyKey: '2x2',
           rows: 2,
           cols: 2,
           seed: 111,
           elapsedSeconds: 2,
-          hintsUsed: 0,
-          pieces: const [
-            PieceState(id: 0, r: 0, c: 0, nx: 0.0, ny: 0.0, clusterId: 0),
-            PieceState(id: 1, r: 0, c: 1, nx: 0.5, ny: 0.0, clusterId: 1),
-            PieceState(id: 2, r: 1, c: 0, nx: 0.0, ny: 0.5, clusterId: 2),
+          pieces: [
+            PieceState(id: 0, r: 0, c: 0, nx: 0, ny: 0, clusterId: 0),
+            PieceState(id: 1, r: 0, c: 1, nx: 0.5, ny: 0, clusterId: 1),
+            PieceState(id: 2, r: 1, c: 0, nx: 0, ny: 0.5, clusterId: 2),
             PieceState(id: 3, r: 1, c: 1, nx: 0.5, ny: 0.5, clusterId: 3),
           ],
         );
@@ -141,15 +140,14 @@ void main() {
         );
 
         // 2. Free placement: 0% solved, but elapsedSeconds >= 5 or has merged clusters
-        final freePlacementState = PuzzleBoardState(
+        const freePlacementState = PuzzleBoardState(
           canonicalId: cid,
           difficultyKey: '2x2',
           rows: 2,
           cols: 2,
           seed: 111,
           elapsedSeconds: 15,
-          hintsUsed: 0,
-          pieces: const [
+          pieces: [
             PieceState(id: 0, r: 0, c: 0, nx: 0.1, ny: 0.1, clusterId: 0),
             PieceState(id: 1, r: 0, c: 1, nx: 0.6, ny: 0.1, clusterId: 1),
             PieceState(id: 2, r: 1, c: 0, nx: 0.1, ny: 0.6, clusterId: 2),

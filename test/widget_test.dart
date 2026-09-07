@@ -1,8 +1,8 @@
 import 'dart:typed_data';
 
+import 'package:flame/game.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:flame/game.dart';
 import 'package:jigsawpuzzle/data/game_repository.dart';
 import 'package:jigsawpuzzle/data/models/level_item.dart';
 import 'package:jigsawpuzzle/game/jigsaw_puzzle_game.dart';
@@ -286,7 +286,6 @@ void main() {
                   VictoryDialog.show(
                     context: context,
                     imageBytes: kTransparentImage,
-                    stars: 3,
                     elapsedSeconds: 83,
                     pieceCount: 64,
                     rewardCoins: 25,
@@ -315,18 +314,18 @@ void main() {
     'LevelItem serialization and backward compatibility with completedPieceCounts',
     () {
       // 1. New data with explicit completedPieceCounts
-      final item = LevelItem(
+      const item = LevelItem(
         id: 'level_1',
         index: 1,
         title: '第 1 关',
         assetPath: 'assets/images/sample_01.jpg',
-        difficulty: const PuzzleDifficulty(
+        difficulty: PuzzleDifficulty(
           label: '3 × 3 (9 块)',
           rows: 3,
           cols: 3,
         ),
         isUnlocked: true,
-        completedPieceCounts: const [9, 16],
+        completedPieceCounts: [9, 16],
       );
 
       final json = item.toJson();
@@ -490,7 +489,7 @@ void main() {
   testWidgets(
     'ChooseBackgroundSheet displays 10 wallpaper options and invokes callback',
     (tester) async {
-      String selectedBg = 'assets/bg/tile_000.webp';
+      var selectedBg = 'assets/bg/tile_000.webp';
 
       await tester.pumpWidget(
         MaterialApp(

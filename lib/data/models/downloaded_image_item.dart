@@ -1,4 +1,4 @@
-import '../../l10n/gen/strings.g.dart';
+import 'package:jigsawpuzzle/l10n/gen/strings.g.dart';
 
 /// Represents an image downloaded from online image sources (Pixabay, Unsplash, Pexels, etc.)
 enum DownloadedQuality {
@@ -34,6 +34,23 @@ class DownloadedImageItem {
     required this.fileSizeBytes,
     required this.downloadedAt,
   });
+
+  factory DownloadedImageItem.fromJson(Map<String, dynamic> json) {
+    return DownloadedImageItem(
+      id:
+          json['id'] as String? ??
+          'img_${DateTime.now().millisecondsSinceEpoch}',
+      localPath: json['localPath'] as String? ?? '',
+      sourcePlatform: json['sourcePlatform'] as String? ?? 'online',
+      sourceUrl: json['sourceUrl'] as String? ?? '',
+      width: json['width'] as int? ?? 1080,
+      height: json['height'] as int? ?? 1080,
+      fileSizeBytes: json['fileSizeBytes'] as int? ?? 0,
+      downloadedAt: json['downloadedAt'] != null
+          ? DateTime.tryParse(json['downloadedAt'] as String) ?? DateTime.now()
+          : DateTime.now(),
+    );
+  }
 
   final String id;
   final String localPath;
@@ -97,21 +114,4 @@ class DownloadedImageItem {
     'fileSizeBytes': fileSizeBytes,
     'downloadedAt': downloadedAt.toIso8601String(),
   };
-
-  factory DownloadedImageItem.fromJson(Map<String, dynamic> json) {
-    return DownloadedImageItem(
-      id:
-          json['id'] as String? ??
-          'img_${DateTime.now().millisecondsSinceEpoch}',
-      localPath: json['localPath'] as String? ?? '',
-      sourcePlatform: json['sourcePlatform'] as String? ?? 'online',
-      sourceUrl: json['sourceUrl'] as String? ?? '',
-      width: json['width'] as int? ?? 1080,
-      height: json['height'] as int? ?? 1080,
-      fileSizeBytes: json['fileSizeBytes'] as int? ?? 0,
-      downloadedAt: json['downloadedAt'] != null
-          ? DateTime.tryParse(json['downloadedAt'] as String) ?? DateTime.now()
-          : DateTime.now(),
-    );
-  }
 }

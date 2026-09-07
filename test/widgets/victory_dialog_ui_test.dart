@@ -34,7 +34,6 @@ void main() {
           child: Scaffold(
             body: VictoryDialog(
               imageBytes: dummyImageBytes,
-              stars: 3,
               elapsedSeconds: 45,
               moveCount: 16,
               pieceCount: 16,
@@ -101,7 +100,6 @@ void main() {
             body: VictoryDialog(
               key: const ValueKey('zh3stars'),
               imageBytes: dummyImageBytes,
-              stars: 3,
               elapsedSeconds: 45,
               moveCount: 16,
               pieceCount: 16,

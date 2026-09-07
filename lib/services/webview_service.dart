@@ -2,9 +2,8 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
+import 'package:jigsawpuzzle/services/app_logger.dart';
 import 'package:path_provider/path_provider.dart';
-
-import 'app_logger.dart';
 
 /// Service managing WebView availability on Windows (WebView2 Runtime detection)
 /// and global WebViewEnvironment lifecycle.

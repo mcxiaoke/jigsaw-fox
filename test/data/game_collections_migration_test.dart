@@ -25,7 +25,7 @@ void main() {
     // mock path_provider：DownloadManager 的 download_cache 目录定位
     const channel = MethodChannel('plugins.flutter.io/path_provider');
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-        .setMockMethodCallHandler(channel, (MethodCall methodCall) async {
+        .setMockMethodCallHandler(channel, (methodCall) async {
           return testRoot.path;
         });
   });

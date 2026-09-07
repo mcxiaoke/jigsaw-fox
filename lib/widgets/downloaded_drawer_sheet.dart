@@ -1,17 +1,16 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:jigsawpuzzle/data/models/downloaded_image_item.dart';
+import 'package:jigsawpuzzle/l10n/gen/strings.g.dart';
+import 'package:jigsawpuzzle/logic/download_manager.dart';
+import 'package:jigsawpuzzle/logic/source_tag.dart';
+import 'package:jigsawpuzzle/pages/crop_puzzle_page.dart';
+import 'package:jigsawpuzzle/theme/app_palette.dart';
+import 'package:jigsawpuzzle/theme/app_text_styles.dart';
+import 'package:jigsawpuzzle/widgets/app_cached_image.dart';
+import 'package:jigsawpuzzle/widgets/game_toast.dart';
 import 'package:phosphoricons_flutter/phosphoricons_flutter.dart';
-
-import '../data/models/downloaded_image_item.dart';
-import '../l10n/gen/strings.g.dart';
-import '../logic/download_manager.dart';
-import '../logic/source_tag.dart';
-import '../pages/crop_puzzle_page.dart';
-import '../theme/app_palette.dart';
-import '../theme/app_text_styles.dart';
-import '../widgets/app_cached_image.dart';
-import '../widgets/game_toast.dart';
 
 /// Modal bottom sheet drawer for managing and selecting batch-downloaded online images.
 class DownloadedDrawerSheet extends StatelessWidget {
@@ -308,7 +307,6 @@ class DownloadedDrawerSheet extends StatelessWidget {
               children: [
                 AppCachedImage(
                   imagePathOrUrl: item.localPath,
-                  fit: BoxFit.cover,
                 ),
                 // Platform Tag
                 Positioned(

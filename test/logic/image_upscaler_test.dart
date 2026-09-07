@@ -35,8 +35,8 @@ void main() {
     test('processPipeline should correctly upscale 2x and enhance image', () {
       final sample = img.Image(width: 100, height: 80);
       // 填充渐变与测试条纹
-      for (int y = 0; y < 80; y++) {
-        for (int x = 0; x < 100; x++) {
+      for (var y = 0; y < 80; y++) {
+        for (var x = 0; x < 100; x++) {
           final p = sample.getPixel(x, y);
           p.r = (x * 2) % 256;
           p.g = (y * 3) % 256;
@@ -47,10 +47,6 @@ void main() {
 
       final result = ImageUpscaler.processPipeline(
         sample,
-        scale: 2.0,
-        enableDenoise: true,
-        denoiseStrength: 0.25,
-        sharpness: 0.45,
       );
 
       expect(result.width, equals(200));
@@ -64,7 +60,6 @@ void main() {
 
       final upscaledBytes = await ImageUpscaler.upscaleBytes(
         bytes: pngBytes,
-        scale: 2.0,
         denoiseStrength: 0.2,
         sharpness: 0.4,
       );
@@ -82,8 +77,8 @@ void main() {
       () {
         // 1. 测试平坦微噪区域：像素在 128 附近微弱波动 (±2)
         final flatSample = img.Image(width: 20, height: 20);
-        for (int y = 0; y < 20; y++) {
-          for (int x = 0; x < 20; x++) {
+        for (var y = 0; y < 20; y++) {
+          for (var x = 0; x < 20; x++) {
             final p = flatSample.getPixel(x, y);
             final noise = (x + y) % 2 == 0 ? 128 : 130;
             p.r = noise;
@@ -96,7 +91,6 @@ void main() {
         final gatedResult = ImageUpscaler.applyLumaGatedCAS(
           flatSample,
           sharpness: 0.8,
-          noiseThresholdLow: 8.0,
         );
 
         // 平坦区域的微噪差值 <= 8，应该完全不被放大，保持原样
@@ -108,8 +102,8 @@ void main() {
 
         // 2. 测试高对比度真实边缘：左半边 0，右半边 255
         final edgeSample = img.Image(width: 20, height: 20);
-        for (int y = 0; y < 20; y++) {
-          for (int x = 0; x < 20; x++) {
+        for (var y = 0; y < 20; y++) {
+          for (var x = 0; x < 20; x++) {
             final p = edgeSample.getPixel(x, y);
             final val = x < 10 ? 30 : 220;
             p.r = val;
@@ -122,8 +116,6 @@ void main() {
         final edgeGatedResult = ImageUpscaler.applyLumaGatedCAS(
           edgeSample,
           sharpness: 0.5,
-          noiseThresholdLow: 8.0,
-          noiseThresholdHigh: 24.0,
         );
 
         // 边缘过渡区域应该被正确锐化

@@ -1,13 +1,14 @@
 import 'dart:convert';
 import 'dart:io';
+
 import 'package:archive/archive.dart';
 import 'package:flutter/foundation.dart';
+import 'package:jigsawpuzzle/logic/content/models/canonical_id.dart';
+import 'package:jigsawpuzzle/logic/content/models/puzzle_event_item.dart';
+import 'package:jigsawpuzzle/logic/content/models/puzzle_level_item.dart';
+import 'package:jigsawpuzzle/logic/content/network/content_http_client.dart';
+import 'package:jigsawpuzzle/services/app_logger.dart';
 import 'package:path/path.dart' as p;
-import '../models/canonical_id.dart';
-import '../models/puzzle_event_item.dart';
-import '../models/puzzle_level_item.dart';
-import '../network/content_http_client.dart';
-import '../../../services/app_logger.dart';
 
 /// 活动中心管线 (Zip 整包 / Array 列表双载荷 + 状态机生命周期 + Auto-GC 垃圾回收)
 class EventsContentPipeline {
@@ -155,7 +156,7 @@ class EventsContentPipeline {
 
   /// 执行 Auto-GC 自动垃圾回收：删除已标记为 disabled 的活动的本地解压目录
   Future<int> performAutoGc() async {
-    int deletedCount = 0;
+    var deletedCount = 0;
     for (final event in _eventsMap.values) {
       if (event.isDisabled) {
         final eventDir = Directory(p.join(eventsStorageBaseDir, event.id));
@@ -281,7 +282,7 @@ class EventsContentPipeline {
       // 自然排序
       files.sort((a, b) => p.basename(a.path).compareTo(p.basename(b.path)));
 
-      int seq = 1;
+      var seq = 1;
       for (final file in files) {
         final filename = p.basename(file.path);
         final canonicalId = CanonicalId.forEvent(event.id, filename);
@@ -297,7 +298,7 @@ class EventsContentPipeline {
         );
       }
     } else if (event.isArrayType) {
-      int seq = 1;
+      var seq = 1;
       for (final url in event.levels) {
         final filename = url.split('/').last.split('?').first;
         final canonicalId = CanonicalId.forEvent(event.id, filename);

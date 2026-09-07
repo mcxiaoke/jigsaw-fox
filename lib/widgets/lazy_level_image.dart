@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 
-import '../logic/cache/level_image_resolver.dart';
-import '../logic/content/models/puzzle_level_item.dart';
-import 'app_cached_image.dart';
+import 'package:jigsawpuzzle/logic/cache/level_image_resolver.dart';
+import 'package:jigsawpuzzle/logic/content/models/puzzle_level_item.dart';
+import 'package:jigsawpuzzle/widgets/app_cached_image.dart';
 
 /// 懒落地关卡缩略：可视时后台下载原图到本地，再以本地文件生成缩略
 ///
@@ -10,8 +10,7 @@ import 'app_cached_image.dart';
 /// 点击直接 `File.readAsBytes` 进 `GamePage`，飞行模式亦可。
 class LazyLevelImage extends StatefulWidget {
   const LazyLevelImage({
-    super.key,
-    required this.level,
+    required this.level, super.key,
     this.fit = BoxFit.cover,
     this.targetDimension,
     this.placeholder,
@@ -121,7 +120,7 @@ class _LazyLevelImageState extends State<LazyLevelImage> {
     }
 
     return AppCachedImage(
-      imagePathOrUrl: _resolvedPath!,
+      imagePathOrUrl: _resolvedPath,
       fit: widget.fit,
       placeholder: widget.placeholder,
       errorWidget: widget.errorWidget,

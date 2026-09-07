@@ -44,11 +44,11 @@ void main() {
       ); // Classic Jigsaw Explorer blue desk background
     final contactShadowPaint = Paint()
       ..color = const Color(0x30000000)
-      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 1.0)
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 1)
       ..isAntiAlias = true;
     final floatShadowPaint = Paint()
       ..color = const Color(0x40000000)
-      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 7.0)
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 7)
       ..isAntiAlias = true;
     final cardboardSidePaint = Paint()
       ..color = const Color(0xFFD6D0C4)
@@ -136,10 +136,10 @@ void main() {
           // 1. Drop shadow (Contact AO vs. Float Spread Shadow)
           canvas.save();
           if (isElevated) {
-            canvas.translate(2.0, 6.0);
+            canvas.translate(2, 6);
             canvas.drawPath(shape.path, floatShadowPaint);
           } else {
-            canvas.translate(0.0, 0.8);
+            canvas.translate(0, 0.8);
             canvas.drawPath(shape.path, contactShadowPaint);
           }
           canvas.restore();
@@ -207,11 +207,11 @@ void main() {
       );
 
       canvas.save();
-      canvas.translate(60.0, 60.0);
+      canvas.translate(60, 60);
 
       // Draw shadow for whole board
       canvas.save();
-      canvas.translate(0, 6.0);
+      canvas.translate(0, 6);
       canvas.drawRect(Rect.fromLTWH(0, 0, imgW, imgH), floatShadowPaint);
       canvas.restore();
 
@@ -281,10 +281,10 @@ void main() {
 
       // Draw 4 distinct pieces with physical cardboard extrusion and shadow
       for (var i = 0; i < 4; i++) {
-        final r = 1;
+        const r = 1;
         final c = i;
         final edges = edgeLayout.edgesFor(r, c);
-        final shape = PieceShape(edges: edges, width: 170.0, height: 170.0);
+        final shape = PieceShape(edges: edges, width: 170, height: 170);
         final srcRect = shape.srcRect(
           row: r,
           col: c,
@@ -300,7 +300,7 @@ void main() {
 
         // 1. Shadow
         canvas.save();
-        canvas.translate(2.0, 6.0);
+        canvas.translate(2, 6);
         canvas.drawPath(shape.path, floatShadowPaint);
         canvas.restore();
 

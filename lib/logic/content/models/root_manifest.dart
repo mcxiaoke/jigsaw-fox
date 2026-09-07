@@ -12,6 +12,39 @@ class RootManifest {
     this.baseUri = '',
   });
 
+  factory RootManifest.fromJson(Map<String, dynamic> json) {
+    final modules = json['modules'] as Map<String, dynamic>? ?? {};
+    final appConfig = json['appConfig'] as Map<String, dynamic>? ?? {};
+
+    DateTime parseDate(dynamic v) {
+      if (v == null) return DateTime.now();
+      try {
+        return DateTime.parse(v.toString());
+      } catch (_) {
+        return DateTime.now();
+      }
+    }
+
+    return RootManifest(
+      schemaVersion: (json['schemaVersion'] as num?)?.toInt() ?? 3,
+      updatedAt: parseDate(json['updatedAt']),
+      notice: appConfig['notice']?.toString() ?? '',
+      minAppVersion: appConfig['minAppVersion']?.toString() ?? '1.0.0',
+      mainModule: MainModuleConfig.fromJson(
+        modules['main'] as Map<String, dynamic>? ?? {},
+      ),
+      dailyModule: DailyModuleConfig.fromJson(
+        modules['daily'] as Map<String, dynamic>? ?? {},
+      ),
+      eventsModule: EventsModuleConfig.fromJson(
+        modules['events'] as Map<String, dynamic>? ?? {},
+      ),
+      collectionsModule: CollectionsModuleConfig.fromJson(
+        modules['collections'] as Map<String, dynamic>? ?? {},
+      ),
+    );
+  }
+
   final int schemaVersion;
   final DateTime updatedAt;
   final String notice;
@@ -47,39 +80,6 @@ class RootManifest {
     );
   }
 
-  factory RootManifest.fromJson(Map<String, dynamic> json) {
-    final modules = json['modules'] as Map<String, dynamic>? ?? {};
-    final appConfig = json['appConfig'] as Map<String, dynamic>? ?? {};
-
-    DateTime parseDate(dynamic v) {
-      if (v == null) return DateTime.now();
-      try {
-        return DateTime.parse(v.toString());
-      } catch (_) {
-        return DateTime.now();
-      }
-    }
-
-    return RootManifest(
-      schemaVersion: (json['schemaVersion'] as num?)?.toInt() ?? 3,
-      updatedAt: parseDate(json['updatedAt']),
-      notice: appConfig['notice']?.toString() ?? '',
-      minAppVersion: appConfig['minAppVersion']?.toString() ?? '1.0.0',
-      mainModule: MainModuleConfig.fromJson(
-        modules['main'] as Map<String, dynamic>? ?? {},
-      ),
-      dailyModule: DailyModuleConfig.fromJson(
-        modules['daily'] as Map<String, dynamic>? ?? {},
-      ),
-      eventsModule: EventsModuleConfig.fromJson(
-        modules['events'] as Map<String, dynamic>? ?? {},
-      ),
-      collectionsModule: CollectionsModuleConfig.fromJson(
-        modules['collections'] as Map<String, dynamic>? ?? {},
-      ),
-    );
-  }
-
   Map<String, dynamic> toJson() {
     return {
       'schemaVersion': schemaVersion,
@@ -103,11 +103,6 @@ class MainModuleConfig {
     this.hash = '',
   });
 
-  final String url;
-  final int version;
-  final int totalCount;
-  final String hash;
-
   factory MainModuleConfig.fromJson(Map<String, dynamic> json) {
     return MainModuleConfig(
       url: json['url']?.toString() ?? '',
@@ -120,6 +115,11 @@ class MainModuleConfig {
     );
   }
 
+  final String url;
+  final int version;
+  final int totalCount;
+  final String hash;
+
   Map<String, dynamic> toJson() => {
     'url': url,
     'version': version,
@@ -130,22 +130,12 @@ class MainModuleConfig {
 
 class DailyModuleConfig {
   const DailyModuleConfig({
-    this.url = '',
-    required this.currentMonth,
+    required this.currentMonth, required this.version, this.url = '',
     this.zipUrlPattern = '',
     this.listUrlPattern = '',
-    required this.version,
     this.hash = '',
     this.count = 0,
   });
-
-  final String url;
-  final String currentMonth;
-  final String zipUrlPattern;
-  final String listUrlPattern;
-  final int version;
-  final String hash;
-  final int count;
 
   factory DailyModuleConfig.fromJson(Map<String, dynamic> json) {
     return DailyModuleConfig(
@@ -158,6 +148,14 @@ class DailyModuleConfig {
       count: (json['count'] as num?)?.toInt() ?? 0,
     );
   }
+
+  final String url;
+  final String currentMonth;
+  final String zipUrlPattern;
+  final String listUrlPattern;
+  final int version;
+  final String hash;
+  final int count;
 
   Map<String, dynamic> toJson() => {
     if (url.isNotEmpty) 'url': url,
@@ -178,11 +176,6 @@ class EventsModuleConfig {
     this.hash = '',
   });
 
-  final String url;
-  final int version;
-  final int count;
-  final String hash;
-
   factory EventsModuleConfig.fromJson(Map<String, dynamic> json) {
     return EventsModuleConfig(
       url: json['url']?.toString() ?? '',
@@ -191,6 +184,11 @@ class EventsModuleConfig {
       hash: json['hash']?.toString() ?? '',
     );
   }
+
+  final String url;
+  final int version;
+  final int count;
+  final String hash;
 
   Map<String, dynamic> toJson() => {
     'url': url,
@@ -208,11 +206,6 @@ class CollectionsModuleConfig {
     this.hash = '',
   });
 
-  final String url;
-  final int version;
-  final int count;
-  final String hash;
-
   factory CollectionsModuleConfig.fromJson(Map<String, dynamic> json) {
     return CollectionsModuleConfig(
       url: json['url']?.toString() ?? '',
@@ -221,6 +214,11 @@ class CollectionsModuleConfig {
       hash: json['hash']?.toString() ?? '',
     );
   }
+
+  final String url;
+  final int version;
+  final int count;
+  final String hash;
 
   Map<String, dynamic> toJson() => {
     'url': url,

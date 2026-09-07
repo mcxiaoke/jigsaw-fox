@@ -4,13 +4,12 @@ import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
-import 'package:phosphoricons_flutter/phosphoricons_flutter.dart';
+import 'package:jigsawpuzzle/l10n/gen/strings.g.dart';
+import 'package:jigsawpuzzle/theme/app_palette.dart';
+import 'package:jigsawpuzzle/theme/app_text_styles.dart';
+import 'package:jigsawpuzzle/widgets/game_toast.dart';
 import 'package:path_provider/path_provider.dart';
-
-import '../l10n/gen/strings.g.dart';
-import '../theme/app_palette.dart';
-import '../theme/app_text_styles.dart';
-import 'game_toast.dart';
+import 'package:phosphoricons_flutter/phosphoricons_flutter.dart';
 
 /// Social share card generator — produces a 1080x1920 portrait PNG
 /// featuring the completed puzzle image, stats, and fox mascot watermark.
@@ -18,12 +17,7 @@ import 'game_toast.dart';
 /// Roadmap P3 5.3: Social Share Card Generator
 class ShareCardGenerator extends StatefulWidget {
   const ShareCardGenerator({
-    super.key,
-    required this.imageBytes,
-    required this.elapsedSeconds,
-    required this.pieceCount,
-    required this.starCount,
-    required this.stepCount,
+    required this.imageBytes, required this.elapsedSeconds, required this.pieceCount, required this.starCount, required this.stepCount, super.key,
     this.levelTitle,
   });
 
@@ -94,9 +88,9 @@ class _ShareCardGeneratorState extends State<ShareCardGenerator>
     setState(() => _isExporting = true);
     try {
       final boundary =
-          _repaintKey.currentContext!.findRenderObject()
+          _repaintKey.currentContext!.findRenderObject()!
               as RenderRepaintBoundary;
-      final image = await boundary.toImage(pixelRatio: 2.0);
+      final image = await boundary.toImage(pixelRatio: 2);
       try {
         final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
         if (byteData == null) throw Exception('Failed to encode PNG');
@@ -261,7 +255,7 @@ class _ShareCardGeneratorState extends State<ShareCardGenerator>
                                         vertical: 16,
                                       ),
                                       child: AspectRatio(
-                                        aspectRatio: 1.0,
+                                        aspectRatio: 1,
                                         child: Container(
                                           decoration: BoxDecoration(
                                             borderRadius: BorderRadius.circular(
@@ -332,7 +326,6 @@ class _ShareCardGeneratorState extends State<ShareCardGenerator>
                                       borderRadius: BorderRadius.circular(20),
                                       border: Border.all(
                                         color: palette.divider,
-                                        width: 1,
                                       ),
                                     ),
                                     child: Row(
@@ -438,7 +431,7 @@ class _ShareCardGeneratorState extends State<ShareCardGenerator>
                                     color: palette.surface,
                                   ),
                                 )
-                              : Icon(
+                              : const Icon(
                                   PhosphorIconsBold.downloadSimple,
                                   size: 18,
                                 ),
@@ -514,7 +507,7 @@ class _ConfettiDotsPainter extends CustomPainter {
       palette.success,
     ];
     final rng = int.parse(size.hashCode.toRadixString(16)) % 42;
-    final dotCount = 24;
+    const dotCount = 24;
     for (var i = 0; i < dotCount; i++) {
       final seed = (i * 137 + rng) % 1000;
       final x = (seed % 100) / 100 * size.width;

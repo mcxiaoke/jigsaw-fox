@@ -4,16 +4,15 @@ import 'dart:math';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:jigsawpuzzle/l10n/gen/strings.g.dart';
+import 'package:jigsawpuzzle/services/achievement_service.dart';
+import 'package:jigsawpuzzle/services/app_logger.dart';
+import 'package:jigsawpuzzle/services/sound_service.dart';
+import 'package:jigsawpuzzle/theme/app_palette.dart';
+import 'package:jigsawpuzzle/theme/app_text_styles.dart';
+import 'package:jigsawpuzzle/widgets/game_toast.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:phosphoricons_flutter/phosphoricons_flutter.dart';
-
-import '../l10n/gen/strings.g.dart';
-import '../services/achievement_service.dart';
-import '../services/app_logger.dart';
-import '../services/sound_service.dart';
-import '../theme/app_palette.dart';
-import '../theme/app_text_styles.dart';
-import 'game_toast.dart';
 
 /// Full-screen Victory dialog with confetti, star animation, and stat roll-up.
 ///
@@ -26,8 +25,7 @@ import 'game_toast.dart';
 /// - Buttons: "Save Wallpaper"(ghost), "Share"(brand), "Next Level"(brand, most prominent)
 class VictoryDialog extends StatefulWidget {
   const VictoryDialog({
-    super.key,
-    required this.imageBytes,
+    required this.imageBytes, super.key,
     this.stars = 3,
     this.elapsedSeconds = 0,
     this.moveCount = 0,
@@ -141,7 +139,7 @@ class _VictoryDialogState extends State<VictoryDialog>
       duration: const Duration(milliseconds: 500),
       vsync: this,
     );
-    _imageScale = Tween<double>(begin: 0.8, end: 1.0).animate(
+    _imageScale = Tween<double>(begin: 0.8, end: 1).animate(
       CurvedAnimation(parent: _imageController, curve: Curves.elasticOut),
     );
 
@@ -179,20 +177,20 @@ class _VictoryDialogState extends State<VictoryDialog>
     if (!mounted) return;
     _fadeController.forward();
 
-    await Future.delayed(const Duration(milliseconds: 200));
+    await Future<void>.delayed(const Duration(milliseconds: 200));
     if (!mounted) return;
 
     // 2. Scale in image
     _imageController.forward();
 
-    await Future.delayed(const Duration(milliseconds: 600));
+    await Future<void>.delayed(const Duration(milliseconds: 600));
 
     // 3. Light up stars sequentially
-    for (int i = 0; i < widget.stars; i++) {
+    for (var i = 0; i < widget.stars; i++) {
       if (!mounted) return;
       setState(() => _litStars = i + 1);
       SoundService.I.play(Sfx.snap);
-      await Future.delayed(const Duration(milliseconds: 400));
+      await Future<void>.delayed(const Duration(milliseconds: 400));
     }
 
     if (!mounted) return;
@@ -268,7 +266,7 @@ class _VictoryDialogState extends State<VictoryDialog>
         child: AnimatedBuilder(
           animation: _fadeAnim,
           builder: (context, child) {
-            return Container(
+            return ColoredBox(
               color: palette.surface.withValues(alpha: 0.92 * _fadeAnim.value),
               child: child,
             );
@@ -707,9 +705,7 @@ class _VictoryDialogState extends State<VictoryDialog>
     required IconData icon,
     required String label,
     required String value,
-    Color? color,
-    required AppPalette palette,
-    required AppTextStyles styles,
+    required AppPalette palette, required AppTextStyles styles, Color? color,
   }) {
     final c = color ?? palette.primaryText;
     return Expanded(
@@ -743,15 +739,15 @@ class _VictoryDialogState extends State<VictoryDialog>
 
 /// Confetti particle painter — gold and amber particles falling down.
 class _ConfettiPainter extends CustomPainter {
-  final AppPalette palette;
-  final List<_Particle> _particles;
-  final Random _rng = Random();
 
   _ConfettiPainter(this.palette) : _particles = [], super() {
-    for (int i = 0; i < 60; i++) {
+    for (var i = 0; i < 60; i++) {
       _particles.add(_Particle.random(_rng));
     }
   }
+  final AppPalette palette;
+  final List<_Particle> _particles;
+  final Random _rng = Random();
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -789,11 +785,6 @@ class _ConfettiPainter extends CustomPainter {
 }
 
 class _Particle {
-  final double x;
-  final double startTime;
-  final double speed;
-  final int color;
-  final double size;
 
   _Particle({
     required this.x,
@@ -812,4 +803,9 @@ class _Particle {
       size: 4 + rng.nextDouble() * 6,
     );
   }
+  final double x;
+  final double startTime;
+  final double speed;
+  final int color;
+  final double size;
 }

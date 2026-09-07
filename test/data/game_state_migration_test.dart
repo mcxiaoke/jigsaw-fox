@@ -24,7 +24,7 @@ void main() {
     // mock path_provider：DownloadManager 的 download_cache 目录定位
     const channel = MethodChannel('plugins.flutter.io/path_provider');
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-        .setMockMethodCallHandler(channel, (MethodCall methodCall) async {
+        .setMockMethodCallHandler(channel, (methodCall) async {
           return testRoot.path;
         });
   });
@@ -60,7 +60,7 @@ void main() {
       expect(sm.state.get('stat:totalPiecesSnapped'), 12);
       expect(sm.state.get('stat:totalPlayTimeSeconds'), 345);
       // 无 {"v":...} 包装
-      expect(sm.state.get('stat:totalPiecesSnapped'), isNot(isA<Map>()));
+      expect(sm.state.get('stat:totalPiecesSnapped'), isNot(isA<Map<dynamic, dynamic>>()));
     });
 
     test('经济默认值：key 缺失时读 0，绝不硬编码 100', () async {

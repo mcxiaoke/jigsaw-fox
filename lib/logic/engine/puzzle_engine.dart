@@ -1,10 +1,9 @@
 import 'dart:math';
 
+import 'package:jigsawpuzzle/logic/geometry/edge_layout.dart';
+import 'package:jigsawpuzzle/logic/models/puzzle_state.dart';
+import 'package:jigsawpuzzle/services/app_logger.dart';
 import 'package:logging/logging.dart';
-
-import '../../services/app_logger.dart';
-import '../geometry/edge_layout.dart';
-import '../models/puzzle_state.dart';
 
 /// 纯领域逻辑拼图核心引擎（Pure Domain Logic Engine）。
 ///
@@ -96,7 +95,8 @@ class PuzzleEngine {
   /// 当某连通分量内含**至少一个边缘碎片**（即该装配体真正触碰并长出棋盘边框）时，
   /// 该分量的所有成员视为“已植入/不可移动”；否则（空中孤岛）保持游离可拖动。
   static Set<int> computePlantedPieceIds(PuzzleBoardState state) {
-    final rows = state.rows, cols = state.cols;
+    final rows = state.rows;
+    final cols = state.cols;
     final snapped = state.pieces.where((p) => p.isSolved(rows, cols)).toList();
     final byCell = {for (final p in snapped) '${p.r},${p.c}': p.id};
     const offsets = [(-1, 0), (1, 0), (0, -1), (0, 1)];
@@ -139,7 +139,8 @@ class PuzzleEngine {
     for (final p in clusterPieces) {
       if (isBorderPiece(state.rows, state.cols, p.r, p.c)) return true;
       for (final (dr, dc) in offsets) {
-        final nr = p.r + dr, nc = p.c + dc;
+        final nr = p.r + dr;
+        final nc = p.c + dc;
         if (nr < 0 || nr >= state.rows || nc < 0 || nc >= state.cols) continue;
         for (final q in state.pieces) {
           if (q.r == nr && q.c == nc && planted.contains(q.id)) return true;
@@ -398,7 +399,7 @@ class PuzzleEngine {
     Set<int>? onBoardPieceIds,
     double epsilon = 0.035,
   }) {
-    var result = List<PieceState>.from(pieces);
+    final result = List<PieceState>.from(pieces);
 
     // Pre-compute cluster sizes (incrementally updated on each merge)
     final clusterSizes = <int, int>{};

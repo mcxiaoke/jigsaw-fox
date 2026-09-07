@@ -3,7 +3,7 @@ import 'dart:typed_data';
 import 'dart:ui' as ui;
 
 import 'package:flutter/painting.dart'
-    show BlendMode, Color, Offset, Paint, PaintingStyle, Rect, TileMode;
+    show BlendMode, Color, ImageShader, Offset, Paint, PaintingStyle, Rect, TileMode;
 
 /// 实体拼图亚麻纸质漫反射微纹理管理器（Linen Finish & Diffuse Noise Manager）。
 ///
@@ -13,7 +13,7 @@ import 'package:flutter/painting.dart'
 ///
 /// 【性能与架构设计】：
 /// 1. 内存中仅生成一张 64x64 像素的无缝平铺微纹理，耗时 < 1ms，内存 < 16KB；
-/// 2. 使用 GPU 硬件采样器 [ImageShader]（[TileMode.repeated]），渲染管线中 0 额外 CPU 计算；
+/// 2. 使用 GPU 硬件采样器 [ui.ImageShader]（[TileMode.repeated]），渲染管线中 0 额外 CPU 计算；
 /// 3. 单例缓存，全局复用。
 class LinenTextureManager {
   LinenTextureManager._();
@@ -155,7 +155,7 @@ class LinenTextureManager {
     final dotPaintLight = Paint()..color = const Color(0x07FFFFFF);
     final dotPaintDark = Paint()..color = const Color(0x07000000);
 
-    for (int i = 0; i < 96; i++) {
+    for (var i = 0; i < 96; i++) {
       final px = rng.nextDouble() * width;
       final py = rng.nextDouble() * height;
       final paint = rng.nextBool() ? dotPaintLight : dotPaintDark;

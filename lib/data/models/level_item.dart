@@ -1,4 +1,4 @@
-import '../../logic/puzzle_model.dart';
+import 'package:jigsawpuzzle/logic/puzzle_model.dart';
 
 /// Represents a level item in the 100-level main gallery.
 class LevelItem {
@@ -20,6 +20,49 @@ class LevelItem {
     this.unlockCoins,
     this.unlockCode,
   });
+
+  factory LevelItem.fromJson(Map<String, dynamic> json) {
+    final rows = json['rows'] as int? ?? 4;
+    final cols = json['cols'] as int? ?? 4;
+    final diff = PuzzleDifficulty.presets.firstWhere(
+      (d) => d.rows == rows && d.cols == cols,
+      orElse: () => PuzzleDifficulty(
+        label: '$cols × $rows (${rows * cols} 块)',
+        rows: rows,
+        cols: cols,
+      ),
+    );
+
+    final rawCompletedCounts = (json['completedPieceCounts'] as List<dynamic>?)
+        ?.map((e) => e as int)
+        .toList();
+    final isCompletedVal = json['isCompleted'] as bool? ?? false;
+    final completedCounts =
+        rawCompletedCounts ?? (isCompletedVal ? [diff.pieceCount] : <int>[]);
+
+    return LevelItem(
+      id: json['id'] as String,
+      index: json['index'] as int,
+      title: json['title'] as String? ?? 'Level ${json['index']}',
+      assetPath: json['assetPath'] as String,
+      difficulty: diff,
+      isUnlocked: json['isUnlocked'] as bool? ?? false,
+      isCompleted: isCompletedVal || completedCounts.isNotEmpty,
+      progressPercent: json['progressPercent'] as int? ?? 0,
+      stars: json['stars'] as int? ?? 0,
+      bestTimeSeconds: json['bestTimeSeconds'] as int? ?? 0,
+      savedSnapshotJson: json['savedSnapshotJson'] as String?,
+      completedPieceCounts: completedCounts,
+      tags:
+          (json['tags'] as List<dynamic>?)?.map((e) => e.toString()).toList() ??
+          const [],
+      addedAt: json['addedAt'] != null
+          ? DateTime.tryParse(json['addedAt'] as String)
+          : null,
+      unlockCoins: json['unlockCoins'] as int?,
+      unlockCode: json['unlockCode'] as String?,
+    );
+  }
 
   final String id;
   final int index;
@@ -108,47 +151,4 @@ class LevelItem {
     'unlockCoins': unlockCoins,
     'unlockCode': unlockCode,
   };
-
-  factory LevelItem.fromJson(Map<String, dynamic> json) {
-    final rows = json['rows'] as int? ?? 4;
-    final cols = json['cols'] as int? ?? 4;
-    final diff = PuzzleDifficulty.presets.firstWhere(
-      (d) => d.rows == rows && d.cols == cols,
-      orElse: () => PuzzleDifficulty(
-        label: '$cols × $rows (${rows * cols} 块)',
-        rows: rows,
-        cols: cols,
-      ),
-    );
-
-    final rawCompletedCounts = (json['completedPieceCounts'] as List<dynamic>?)
-        ?.map((e) => e as int)
-        .toList();
-    final isCompletedVal = json['isCompleted'] as bool? ?? false;
-    final completedCounts =
-        rawCompletedCounts ?? (isCompletedVal ? [diff.pieceCount] : <int>[]);
-
-    return LevelItem(
-      id: json['id'] as String,
-      index: json['index'] as int,
-      title: json['title'] as String? ?? 'Level ${json['index']}',
-      assetPath: json['assetPath'] as String,
-      difficulty: diff,
-      isUnlocked: json['isUnlocked'] as bool? ?? false,
-      isCompleted: isCompletedVal || completedCounts.isNotEmpty,
-      progressPercent: json['progressPercent'] as int? ?? 0,
-      stars: json['stars'] as int? ?? 0,
-      bestTimeSeconds: json['bestTimeSeconds'] as int? ?? 0,
-      savedSnapshotJson: json['savedSnapshotJson'] as String?,
-      completedPieceCounts: completedCounts,
-      tags:
-          (json['tags'] as List<dynamic>?)?.map((e) => e.toString()).toList() ??
-          const [],
-      addedAt: json['addedAt'] != null
-          ? DateTime.tryParse(json['addedAt'] as String)
-          : null,
-      unlockCoins: json['unlockCoins'] as int?,
-      unlockCode: json['unlockCode'] as String?,
-    );
-  }
 }

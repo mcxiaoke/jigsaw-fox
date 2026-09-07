@@ -172,7 +172,7 @@ void main() {
 
     test('PuzzleAspectRatio crop loss formula and aspect detection', () {
       // 1:1 image to 1:1 ratio -> loss 0
-      expect(PuzzleAspectRatio.cropLoss(1.0, 1.0), closeTo(0.0, 0.001));
+      expect(PuzzleAspectRatio.cropLoss(1, 1), closeTo(0.0, 0.001));
 
       // 4:3 (1.333) to 3:2 (1.5) -> loss = 1 - 1.3333/1.5 = 11.1%
       expect(PuzzleAspectRatio.cropLoss(4 / 3, 3 / 2), closeTo(0.111, 0.005));

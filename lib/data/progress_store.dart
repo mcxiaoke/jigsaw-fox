@@ -3,10 +3,9 @@ import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
 import 'package:hive_ce/hive_ce.dart';
-
-import '../services/app_logger.dart';
-import 'snapshot_store.dart';
-import 'storage_manager.dart';
+import 'package:jigsawpuzzle/data/snapshot_store.dart';
+import 'package:jigsawpuzzle/data/storage_manager.dart';
+import 'package:jigsawpuzzle/services/app_logger.dart';
 
 /// 单档位通关记录（v3.3.1 设计）
 class DifficultyRecord {
@@ -23,6 +22,46 @@ class DifficultyRecord {
     this.minMoves = -1,
     this.extra = const {},
   });
+
+  factory DifficultyRecord.fromJson(Map<String, dynamic> json) {
+    const known = {
+      'bestStars',
+      'bestTimeSeconds',
+      'isCompleted',
+      'playCount',
+      'minHintsUsed',
+      'firstCompletedAt',
+      'lastCompletedAt',
+      'firstPlayedAt',
+      'lastPlayedAt',
+      'minMoves',
+    };
+    final extra = <String, dynamic>{};
+    for (final e in json.entries) {
+      if (!known.contains(e.key)) extra[e.key] = e.value;
+    }
+    return DifficultyRecord(
+      bestStars: (json['bestStars'] as int?) ?? 0,
+      bestTimeSeconds: (json['bestTimeSeconds'] as int?) ?? 0,
+      isCompleted: (json['isCompleted'] as bool?) ?? false,
+      playCount: (json['playCount'] as int?) ?? 0,
+      minHintsUsed: (json['minHintsUsed'] as int?) ?? -1,
+      firstCompletedAt: json['firstCompletedAt'] != null
+          ? DateTime.tryParse(json['firstCompletedAt'] as String)
+          : null,
+      lastCompletedAt: json['lastCompletedAt'] != null
+          ? DateTime.tryParse(json['lastCompletedAt'] as String)
+          : null,
+      firstPlayedAt: json['firstPlayedAt'] != null
+          ? DateTime.tryParse(json['firstPlayedAt'] as String)
+          : null,
+      lastPlayedAt: json['lastPlayedAt'] != null
+          ? DateTime.tryParse(json['lastPlayedAt'] as String)
+          : null,
+      minMoves: (json['minMoves'] as int?) ?? -1,
+      extra: extra,
+    );
+  }
 
   final int bestStars;
   final int bestTimeSeconds;
@@ -94,46 +133,6 @@ class DifficultyRecord {
       if (!m.containsKey(k)) m[k] = v;
     });
     return m;
-  }
-
-  factory DifficultyRecord.fromJson(Map<String, dynamic> json) {
-    const known = {
-      'bestStars',
-      'bestTimeSeconds',
-      'isCompleted',
-      'playCount',
-      'minHintsUsed',
-      'firstCompletedAt',
-      'lastCompletedAt',
-      'firstPlayedAt',
-      'lastPlayedAt',
-      'minMoves',
-    };
-    final extra = <String, dynamic>{};
-    for (final e in json.entries) {
-      if (!known.contains(e.key)) extra[e.key] = e.value;
-    }
-    return DifficultyRecord(
-      bestStars: (json['bestStars'] as int?) ?? 0,
-      bestTimeSeconds: (json['bestTimeSeconds'] as int?) ?? 0,
-      isCompleted: (json['isCompleted'] as bool?) ?? false,
-      playCount: (json['playCount'] as int?) ?? 0,
-      minHintsUsed: (json['minHintsUsed'] as int?) ?? -1,
-      firstCompletedAt: json['firstCompletedAt'] != null
-          ? DateTime.tryParse(json['firstCompletedAt'] as String)
-          : null,
-      lastCompletedAt: json['lastCompletedAt'] != null
-          ? DateTime.tryParse(json['lastCompletedAt'] as String)
-          : null,
-      firstPlayedAt: json['firstPlayedAt'] != null
-          ? DateTime.tryParse(json['firstPlayedAt'] as String)
-          : null,
-      lastPlayedAt: json['lastPlayedAt'] != null
-          ? DateTime.tryParse(json['lastPlayedAt'] as String)
-          : null,
-      minMoves: (json['minMoves'] as int?) ?? -1,
-      extra: extra,
-    );
   }
 }
 
@@ -454,7 +453,7 @@ class ProgressStore {
     final now = DateTime.now();
 
     // 同步更新 records 字典（若指定了 activeDifficultyKey 且已通关）
-    var nextRecords =
+    final nextRecords =
         records ?? Map<String, DifficultyRecord>.from(cur.records);
     if (isCompleted == true &&
         activeDifficultyKey != null &&
@@ -682,6 +681,75 @@ class LevelProgress {
     this.extra = const {},
   });
 
+  factory LevelProgress.fromJson(Map<String, dynamic> json) {
+    const known = {
+      'canonicalId',
+      'progressPercent',
+      'isCompleted',
+      'completedPieceCounts',
+      'bestTimeSeconds',
+      'stars',
+      'hasSnapshot',
+      'activeDifficultyKey',
+      'snapshotKeys',
+      'records',
+      'lastSavedAt',
+      'firstCompletedAt',
+      'lastCompletedAt',
+      'firstPlayedAt',
+    };
+    final extra = <String, dynamic>{};
+    for (final e in json.entries) {
+      if (!known.contains(e.key)) extra[e.key] = e.value;
+    }
+
+    final rawRecords = json['records'] as Map<String, dynamic>?;
+    final parsedRecords = <String, DifficultyRecord>{};
+    if (rawRecords != null) {
+      for (final e in rawRecords.entries) {
+        if (e.value is Map<String, dynamic>) {
+          parsedRecords[e.key] = DifficultyRecord.fromJson(
+            e.value as Map<String, dynamic>,
+          );
+        }
+      }
+    }
+
+    return LevelProgress(
+      canonicalId: json['canonicalId'] as String? ?? '',
+      progressPercent: (json['progressPercent'] as int?) ?? 0,
+      isCompleted: (json['isCompleted'] as bool?) ?? false,
+      completedPieceCounts:
+          (json['completedPieceCounts'] as List<dynamic>?)
+              ?.map((e) => e as int)
+              .toList() ??
+          const [],
+      bestTimeSeconds: (json['bestTimeSeconds'] as int?) ?? 0,
+      stars: (json['stars'] as int?) ?? 0,
+      hasSnapshot: (json['hasSnapshot'] as bool?) ?? false,
+      activeDifficultyKey: (json['activeDifficultyKey'] as String?) ?? '',
+      snapshotKeys:
+          (json['snapshotKeys'] as List<dynamic>?)
+              ?.map((e) => e.toString())
+              .toList() ??
+          const [],
+      records: parsedRecords,
+      lastSavedAt: json['lastSavedAt'] != null
+          ? DateTime.tryParse(json['lastSavedAt'] as String)
+          : null,
+      firstCompletedAt: json['firstCompletedAt'] != null
+          ? DateTime.tryParse(json['firstCompletedAt'] as String)
+          : null,
+      lastCompletedAt: json['lastCompletedAt'] != null
+          ? DateTime.tryParse(json['lastCompletedAt'] as String)
+          : null,
+      firstPlayedAt: json['firstPlayedAt'] != null
+          ? DateTime.tryParse(json['firstPlayedAt'] as String)
+          : null,
+      extra: extra,
+    );
+  }
+
   final String canonicalId;
   final int progressPercent;
   final bool isCompleted;
@@ -805,75 +873,6 @@ class LevelProgress {
       if (!m.containsKey(k)) m[k] = v;
     });
     return m;
-  }
-
-  factory LevelProgress.fromJson(Map<String, dynamic> json) {
-    const known = {
-      'canonicalId',
-      'progressPercent',
-      'isCompleted',
-      'completedPieceCounts',
-      'bestTimeSeconds',
-      'stars',
-      'hasSnapshot',
-      'activeDifficultyKey',
-      'snapshotKeys',
-      'records',
-      'lastSavedAt',
-      'firstCompletedAt',
-      'lastCompletedAt',
-      'firstPlayedAt',
-    };
-    final extra = <String, dynamic>{};
-    for (final e in json.entries) {
-      if (!known.contains(e.key)) extra[e.key] = e.value;
-    }
-
-    final rawRecords = json['records'] as Map<String, dynamic>?;
-    final parsedRecords = <String, DifficultyRecord>{};
-    if (rawRecords != null) {
-      for (final e in rawRecords.entries) {
-        if (e.value is Map<String, dynamic>) {
-          parsedRecords[e.key] = DifficultyRecord.fromJson(
-            e.value as Map<String, dynamic>,
-          );
-        }
-      }
-    }
-
-    return LevelProgress(
-      canonicalId: json['canonicalId'] as String? ?? '',
-      progressPercent: (json['progressPercent'] as int?) ?? 0,
-      isCompleted: (json['isCompleted'] as bool?) ?? false,
-      completedPieceCounts:
-          (json['completedPieceCounts'] as List<dynamic>?)
-              ?.map((e) => e as int)
-              .toList() ??
-          const [],
-      bestTimeSeconds: (json['bestTimeSeconds'] as int?) ?? 0,
-      stars: (json['stars'] as int?) ?? 0,
-      hasSnapshot: (json['hasSnapshot'] as bool?) ?? false,
-      activeDifficultyKey: (json['activeDifficultyKey'] as String?) ?? '',
-      snapshotKeys:
-          (json['snapshotKeys'] as List<dynamic>?)
-              ?.map((e) => e.toString())
-              .toList() ??
-          const [],
-      records: parsedRecords,
-      lastSavedAt: json['lastSavedAt'] != null
-          ? DateTime.tryParse(json['lastSavedAt'] as String)
-          : null,
-      firstCompletedAt: json['firstCompletedAt'] != null
-          ? DateTime.tryParse(json['firstCompletedAt'] as String)
-          : null,
-      lastCompletedAt: json['lastCompletedAt'] != null
-          ? DateTime.tryParse(json['lastCompletedAt'] as String)
-          : null,
-      firstPlayedAt: json['firstPlayedAt'] != null
-          ? DateTime.tryParse(json['firstPlayedAt'] as String)
-          : null,
-      extra: extra,
-    );
   }
 
   /// 供 UI 判断是否显示“继续”

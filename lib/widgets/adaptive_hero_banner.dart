@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 
-import '../logic/cache/image_cache_manager.dart';
-import '../theme/app_palette.dart';
-import '../theme/app_text_styles.dart';
-import 'app_cached_image.dart';
+import 'package:jigsawpuzzle/logic/cache/image_cache_manager.dart';
+import 'package:jigsawpuzzle/theme/app_palette.dart';
+import 'package:jigsawpuzzle/theme/app_text_styles.dart';
+import 'package:jigsawpuzzle/widgets/app_cached_image.dart';
 
 /// 横幅卡片数据模型
 class HeroBannerItem {
@@ -32,8 +32,7 @@ class HeroBannerItem {
 /// 移动端自然露边 Peek 引导，桌面与宽屏自然平铺多卡，彻底消灭拉伸失真与裁切问题
 class AdaptiveHeroBanner extends StatelessWidget {
   const AdaptiveHeroBanner({
-    super.key,
-    required this.items,
+    required this.items, super.key,
     this.cardWidth = 290.0,
     this.cardHeight = 156.0,
     this.padding = const EdgeInsets.symmetric(horizontal: 16),
@@ -100,7 +99,6 @@ class AdaptiveHeroBanner extends StatelessWidget {
                 // 1. 封面底图
                 AppCachedImage(
                   imagePathOrUrl: item.imagePathOrUrl,
-                  fit: BoxFit.cover,
                   targetDimension: ThumbnailDimension.eventCover,
                 ),
 

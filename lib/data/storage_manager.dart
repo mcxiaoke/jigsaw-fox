@@ -5,10 +5,9 @@ import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
 import 'package:hive_ce/hive_ce.dart';
+import 'package:jigsawpuzzle/services/app_logger.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
-
-import '../services/app_logger.dart';
 
 /// 三个 box 的名称（版本后缀 -v1，见设计 §6.1）
 const String kBoxProgress = 'game-progress-v1';
@@ -122,6 +121,27 @@ String _randSuffix() => math.Random().nextInt(10000).toString().padLeft(4, '0');
 /// 损坏检测 + 备份恢复 + 空库兜底全部内聚于 [openAll]，
 /// 调用方（main.dart）永不接触 [BoxCorruptException]。
 class StorageManager {
+
+  StorageManager._();
+
+  /// 测试专用构造：注入临时目录并完成 Hive.init，
+  /// 绕过 getApplicationSupportDirectory()（其在 flutter test 下抛 MissingPluginException）
+  @visibleForTesting
+  StorageManager.forTest(String homePath) {
+    _homePathOverride = homePath;
+    _dirOverride = Directory(homePath);
+    Hive.init(homePath);
+    _hiveReady = true;
+  }
+
+  /// 测试专用构造（备份开启版）：目录注入到临时路径，但 `isTestInstance` 为 false，
+  /// 因此 §7.8 的备份/恢复逻辑会真实执行——用于备份与两阶段恢复的用例回归。
+  @visibleForTesting
+  StorageManager.forTestWithBackups(String homePath) {
+    _dirOverride = Directory(homePath);
+    Hive.init(homePath);
+    _hiveReady = true;
+  }
   // v4.3：非 final，测试可 setMockInstance 替换
   static StorageManager instance = StorageManager._();
 
@@ -148,27 +168,6 @@ class StorageManager {
   Directory? _hiveDirCache;
   Directory? _backupsRootCache;
   Directory? _appSupport;
-
-  StorageManager._();
-
-  /// 测试专用构造：注入临时目录并完成 Hive.init，
-  /// 绕过 getApplicationSupportDirectory()（其在 flutter test 下抛 MissingPluginException）
-  @visibleForTesting
-  StorageManager.forTest(String homePath) {
-    _homePathOverride = homePath;
-    _dirOverride = Directory(homePath);
-    Hive.init(homePath);
-    _hiveReady = true;
-  }
-
-  /// 测试专用构造（备份开启版）：目录注入到临时路径，但 `isTestInstance` 为 false，
-  /// 因此 §7.8 的备份/恢复逻辑会真实执行——用于备份与两阶段恢复的用例回归。
-  @visibleForTesting
-  StorageManager.forTestWithBackups(String homePath) {
-    _dirOverride = Directory(homePath);
-    Hive.init(homePath);
-    _hiveReady = true;
-  }
 
   /// 测试实例判定：本 Flutter SDK foundation 无 kTestMode，
   /// 据此关闭备份（§7.8 备份点 A/B），不引入不存在的 API。

@@ -1,12 +1,11 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:jigsawpuzzle/logic/models/puzzle_state.dart';
+import 'package:jigsawpuzzle/logic/puzzle_model.dart';
+import 'package:jigsawpuzzle/services/app_logger.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
-
-import '../logic/models/puzzle_state.dart';
-import '../logic/puzzle_model.dart';
-import '../services/app_logger.dart';
 
 /// 文件级快照存储（原子写、损坏自愈、短哈希防串档、版本前瞻兼容）
 ///
@@ -111,14 +110,14 @@ class SnapshotStore {
   }
 
   String _safePrefix(String canonicalId) {
-    final safeId = canonicalId.replaceAll(RegExp(r'[^a-zA-Z0-9_-]'), '_');
+    final safeId = canonicalId.replaceAll(RegExp('[^a-zA-Z0-9_-]'), '_');
     final hash = _shortHash(canonicalId);
     return '${safeId}_$hash';
   }
 
   String _safeFileName(String canonicalId, String difficultyKey) {
     final prefix = _safePrefix(canonicalId);
-    final safeDiff = difficultyKey.replaceAll(RegExp(r'[^a-zA-Z0-9_-]'), '_');
+    final safeDiff = difficultyKey.replaceAll(RegExp('[^a-zA-Z0-9_-]'), '_');
     return '${prefix}__$safeDiff.snapshot';
   }
 
