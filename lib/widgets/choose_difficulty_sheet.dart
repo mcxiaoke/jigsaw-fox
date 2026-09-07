@@ -12,10 +12,8 @@ import 'package:jigsawpuzzle/logic/geometry/piece_shape.dart';
 import 'package:jigsawpuzzle/logic/puzzle_model.dart';
 import 'package:jigsawpuzzle/logic/source_tag.dart';
 import 'package:jigsawpuzzle/services/sound_service.dart';
-import 'package:jigsawpuzzle/services/unlock_service.dart';
 import 'package:jigsawpuzzle/theme/app_palette.dart';
 import 'package:jigsawpuzzle/theme/app_text_styles.dart';
-import 'package:jigsawpuzzle/widgets/game_toast.dart';
 import 'package:phosphoricons_flutter/phosphoricons_flutter.dart';
 
 /// Custom painter rendering dynamic jigsaw grid preview lines over selected puzzle image.
@@ -178,14 +176,11 @@ class ChooseDifficultySheet extends StatefulWidget {
 
 class _ChooseDifficultySheetState extends State<ChooseDifficultySheet> {
   final GameRepository _repo = GameRepository.instance;
-  final UnlockService _unlockService = UnlockService.instance;
   late PuzzleDifficulty _selectedDifficulty;
   double _imageWidth = 1;
   double _imageHeight = 1;
   bool _imageLoaded = false;
   late bool _showGridOverlay;
-
-  final Map<int, UnlockStatus> _tierUnlockStatuses = {};
 
   // Explicit slang references for tier/estimated (ensures t.difficulty.tier.* & t.difficulty.estimated.* usage)
   // Used only for documentation reference.
@@ -250,30 +245,7 @@ class _ChooseDifficultySheetState extends State<ChooseDifficultySheet> {
           ),
         )
         .difficulty;
-    for (
-      var i = 0;
-      i < UnlockService.kDifficultyStarImageRequirements.length;
-      i++
-    ) {
-      _tierUnlockStatuses[i] = _unlockService.checkDifficultyUnlockSync(i);
-    }
     _decodeImageSize();
-    _loadTierUnlocks();
-  }
-
-  Future<void> _loadTierUnlocks() async {
-    for (
-      var i = 0;
-      i < UnlockService.kDifficultyStarImageRequirements.length;
-      i++
-    ) {
-      final st = await _unlockService.checkDifficultyUnlock(i);
-      if (mounted) {
-        setState(() {
-          _tierUnlockStatuses[i] = st;
-        });
-      }
-    }
   }
 
   Future<void> _decodeImageSize() async {
@@ -301,7 +273,6 @@ class _ChooseDifficultySheetState extends State<ChooseDifficultySheet> {
             )
             .difficulty;
       });
-      _loadTierUnlocks();
     } catch (_) {
     } finally {
       descriptor?.dispose();
@@ -386,9 +357,7 @@ class _ChooseDifficultySheetState extends State<ChooseDifficultySheet> {
     final isEffectivePassed = widget.completedPieceCounts.contains(
       effectiveDiff.pieceCount,
     );
-    final unlockStatus = _tierUnlockStatuses[effectiveDiff.tierIndex];
-    final isTierUnlocked = unlockStatus?.isUnlocked ?? true;
-    final isFullyPlayable = widget.isUnlocked && isTierUnlocked;
+    final isFullyPlayable = widget.isUnlocked;
 
     return Scaffold(
       backgroundColor: palette.surface,
@@ -687,45 +656,6 @@ class _ChooseDifficultySheetState extends State<ChooseDifficultySheet> {
                       ],
                     ),
                   ),
-                )
-              else if (!isTierUnlocked && unlockStatus != null)
-                Padding(
-                  padding: const EdgeInsets.symmetric(
-                    vertical: 4,
-                  ),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 8,
-                    ),
-                    decoration: BoxDecoration(
-                      color: palette.warning.withValues(alpha: 0.12),
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(
-                        color: palette.warning.withValues(alpha: 0.3),
-                      ),
-                    ),
-                    child: Row(
-                      children: [
-                        Icon(
-                          PhosphorIconsFill.lockSimple,
-                          color: palette.warning,
-                          size: 18,
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            unlockStatus.reason,
-                            style: TextStyle(
-                              color: palette.warning,
-                              fontSize: 12.5,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
                 ),
 
               const SizedBox(height: 20),
@@ -851,10 +781,6 @@ class _ChooseDifficultySheetState extends State<ChooseDifficultySheet> {
                         isSelected:
                             tier.difficulty.pieceCount ==
                             effectiveDiff.pieceCount,
-                        isLocked:
-                            _tierUnlockStatuses[tier.difficulty.tierIndex]
-                                ?.isUnlocked ==
-                            false,
                       ),
                       const SizedBox(width: 10),
                     ],
@@ -961,33 +887,26 @@ class _ChooseDifficultySheetState extends State<ChooseDifficultySheet> {
                                             .currentTranslations
                                             .chooseDifficulty
                                             .lockedByLevel
-                                      : (!isTierUnlocked
+                                      : (hasSavedProgress && isMatchingSavedDiff
                                             ? LocaleSettings
                                                   .instance
                                                   .currentTranslations
                                                   .chooseDifficulty
-                                                  .locked
-                                            : (hasSavedProgress &&
-                                                      isMatchingSavedDiff
+                                                  .btnContinue(
+                                                    percent: widget
+                                                        .savedProgressPercent!,
+                                                  )
+                                            : (isEffectivePassed
                                                   ? LocaleSettings
                                                         .instance
                                                         .currentTranslations
                                                         .chooseDifficulty
-                                                        .btnContinue(
-                                                          percent: widget
-                                                              .savedProgressPercent!,
-                                                        )
-                                                  : (isEffectivePassed
-                                                        ? LocaleSettings
-                                                              .instance
-                                                              .currentTranslations
-                                                              .chooseDifficulty
-                                                              .btnReplay
-                                                        : LocaleSettings
-                                                              .instance
-                                                              .currentTranslations
-                                                              .chooseDifficulty
-                                                              .btnStart))),
+                                                        .btnReplay
+                                                  : LocaleSettings
+                                                        .instance
+                                                        .currentTranslations
+                                                        .chooseDifficulty
+                                                        .btnStart)),
                                   style: TextStyle(
                                     fontSize: 16,
                                     fontWeight: FontWeight.bold,
@@ -1040,7 +959,6 @@ class _ChooseDifficultySheetState extends State<ChooseDifficultySheet> {
   Widget _buildPieceOption(
     DifficultyTier tier, {
     required bool isSelected,
-    bool isLocked = false,
   }) {
     final opt = tier.difficulty;
     final isPassed = widget.completedPieceCounts.contains(opt.pieceCount);
@@ -1053,14 +971,14 @@ class _ChooseDifficultySheetState extends State<ChooseDifficultySheet> {
     Color textColor;
 
     if (isSelected) {
-      bgColor = isLocked ? palette.warning : palette.brand;
+      bgColor = palette.brand;
       border = Border.all(
-        color: isLocked ? palette.warning : palette.brand,
+        color: palette.brand,
         width: 2.5,
       );
       shadows = [
         BoxShadow(
-          color: (isLocked ? palette.warning : palette.brand).withValues(
+          color: palette.brand.withValues(
             alpha: 0.35,
           ),
           blurRadius: 8,
@@ -1069,12 +987,6 @@ class _ChooseDifficultySheetState extends State<ChooseDifficultySheet> {
       ];
       iconColor = palette.surface;
       textColor = palette.surface;
-    } else if (isLocked) {
-      bgColor = palette.surfaceContainer;
-      border = Border.all(color: palette.divider);
-      shadows = null;
-      iconColor = palette.disabledText;
-      textColor = palette.secondaryText;
     } else if (isPassed) {
       bgColor = palette.success.withValues(alpha: 0.12);
       border = Border.all(
@@ -1095,28 +1007,6 @@ class _ChooseDifficultySheetState extends State<ChooseDifficultySheet> {
     return InkWell(
       onTap: () {
         SoundService.I.play(Sfx.tap);
-        if (isLocked) {
-          final status = _tierUnlockStatuses[tier.difficulty.tierIndex];
-          final gap =
-              (status?.targetRequired ?? 0) - (status?.currentProgress ?? 0);
-          final msg = gap > 0
-              ? t.chooseDifficulty.lockedProgress(
-                  gap: gap,
-                  tier: tier.localizedTag,
-                )
-              : LocaleSettings
-                    .instance
-                    .currentTranslations
-                    .chooseDifficulty
-                    .locked;
-          GameToast.show(
-            context,
-            icon: PhosphorIconsFill.lockSimple,
-            message: msg,
-            type: GameToastType.warning,
-          );
-          return;
-        }
         setState(() => _selectedDifficulty = opt);
       },
       borderRadius: BorderRadius.circular(16),
@@ -1138,9 +1028,7 @@ class _ChooseDifficultySheetState extends State<ChooseDifficultySheet> {
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 Icon(
-                  isLocked
-                      ? PhosphorIconsFill.lockSimple
-                      : PhosphorIconsFill.puzzlePiece,
+                  PhosphorIconsFill.puzzlePiece,
                   size: 18,
                   color: iconColor,
                 ),
@@ -1187,7 +1075,7 @@ class _ChooseDifficultySheetState extends State<ChooseDifficultySheet> {
                   ),
               ],
             ),
-            if (isPassed && !isLocked)
+            if (isPassed)
               Positioned(
                 top: 0,
                 right: 0,

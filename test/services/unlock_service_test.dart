@@ -21,62 +21,30 @@ void main() {
   });
 
   group('UnlockService Unit Tests', () {
-    test('L1 to L3 are unlocked by default', () async {
-      final unlock = UnlockService.instance;
-      for (var i = 0; i <= 3; i++) {
-        final status = await unlock.checkDifficultyUnlock(i);
-        expect(status.isUnlocked, isTrue);
-      }
-    });
-
-    test('L4 requires 2 distinct 3-star images', () async {
-      final unlock = UnlockService.instance;
-      final store = ProgressStore.instance;
-
-      // 0 images -> locked
-      var status = await unlock.checkDifficultyUnlock(4);
-      expect(status.isUnlocked, isFalse);
-      expect(status.targetRequired, equals(2));
-
-      // 1 image with 3 stars -> still locked
-      await store.recordDifficultyCompletion(
-        canonicalId: 'main:001',
-        difficultyKey: '5x5',
-        stars: 3,
-        timeSeconds: 50,
-        hintsUsed: 0,
-      );
-      status = await unlock.checkDifficultyUnlock(4);
-      expect(status.isUnlocked, isFalse);
-
-      // 2 images with 3 stars -> unlocked!
-      await store.recordDifficultyCompletion(
-        canonicalId: 'main:002',
-        difficultyKey: '5x5',
-        stars: 3,
-        timeSeconds: 50,
-        hintsUsed: 0,
-      );
-      status = await unlock.checkDifficultyUnlock(4);
-      expect(status.isUnlocked, isTrue);
-    });
-
     test(
-      'L5 requires 5 distinct 3-star images, L6 requires 10, and L7 requires 15',
+      'All difficulty tiers (0 to 7) are unlocked by default (sync and async)',
       () async {
         final unlock = UnlockService.instance;
-        final statusL5 = await unlock.checkDifficultyUnlock(5);
-        expect(statusL5.isUnlocked, isFalse);
-        expect(statusL5.targetRequired, equals(5));
+        for (var i = 0; i <= 7; i++) {
+          final syncStatus = unlock.checkDifficultyUnlockSync(i);
+          expect(syncStatus.isUnlocked, isTrue);
 
-        final statusL6 = await unlock.checkDifficultyUnlock(6);
-        expect(statusL6.isUnlocked, isFalse);
-        expect(statusL6.targetRequired, equals(10));
-
-        final statusL7 = await unlock.checkDifficultyUnlock(7);
-        expect(statusL7.isUnlocked, isFalse);
-        expect(statusL7.targetRequired, equals(15));
+          final asyncStatus = await unlock.checkDifficultyUnlock(i);
+          expect(asyncStatus.isUnlocked, isTrue);
+        }
       },
     );
+
+    test('Daily challenge unlock requires main level completion', () async {
+      final unlock = UnlockService.instance;
+      final status = await unlock.checkDailyChallengeUnlock();
+      expect(status.targetRequired, equals(1));
+    });
+
+    test('Event unlock requires 5 main level completions', () async {
+      final unlock = UnlockService.instance;
+      final status = await unlock.checkEventUnlock();
+      expect(status.targetRequired, equals(5));
+    });
   });
 }
