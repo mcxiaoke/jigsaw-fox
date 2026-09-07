@@ -396,7 +396,7 @@
       "(?<![a-z])ferns?(?![a-z])",
       "(?<![a-z])leafs?(?![a-z])",
       "foliage",
-      "mushroom",
+      "mashrooms",
       "(?<![a-z])fungis?(?![a-z])",
       "(?<![a-z])moss(?![a-z])",
       "(?<![a-z])lichens?(?![a-z])",

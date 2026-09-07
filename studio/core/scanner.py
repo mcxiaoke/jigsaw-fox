@@ -19,6 +19,8 @@ try:
 except ImportError:
     HAS_PIL = False
 
+from studio.core.image_proc import report_pil_warnings
+
 IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".webp", ".bmp", ".gif", ".tif", ".tiff"}
 IGNORE_DIRS = {".git", ".svn", ".idea", ".vscode", "__pycache__", "node_modules", "temp", "tmp"}
 
@@ -73,11 +75,12 @@ def get_image_info(p: Path, root: Path, file_hash: str | None = None) -> dict[st
 
         if HAS_PIL:
             try:
-                with Image.open(p) as im:
-                    width, height = im.size
-                    if im.format:
-                        fmt = im.format.upper()
-                    mode = im.mode
+                with report_pil_warnings(p.relative_to(root)):
+                    with Image.open(p) as im:
+                        width, height = im.size
+                        if im.format:
+                            fmt = im.format.upper()
+                        mode = im.mode
             except Exception:
                 pass
 

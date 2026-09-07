@@ -6,15 +6,41 @@ studio.core.image_proc — Pillow 图像处理、缩略图生成与格式转换
 
 from __future__ import annotations
 
+import contextlib
 import hashlib
 import io
+import logging
 import mimetypes
 import os
 import shutil
 import sys
 import threading
+import warnings
 from pathlib import Path
-from typing import Any
+from typing import Any, Iterator
+
+_logger = logging.getLogger("studio.core.image_proc")
+
+
+@contextlib.contextmanager
+def report_pil_warnings(ref: object) -> Iterator[None]:
+    """
+    捕获处理某张图片期间 Pillow 抛出的警告（如 DecompressionBombWarning、
+    Corrupt EXIF 等），并附加正在处理的图片标识输出到日志。
+
+    原 Python warnings 默认只打印到 stderr 且按 (message,file,line) 去重，
+    无法看出触发源是哪个图片文件；这里统一转发为带路径的日志行。
+    """
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        yield
+    for w in caught:
+        _logger.warning(
+            "[Pillow %s] %s (%s)",
+            ref,
+            w.message,
+            w.category.__name__,
+        )
 
 try:
     from PIL import Image, ImageOps  # type: ignore
@@ -83,41 +109,42 @@ def generate_thumbnail_bytes(
             pass
 
     if HAS_PIL:
-        try:
-            with Image.open(p) as im:
-                try:
-                    im = ImageOps.exif_transpose(im)
-                except Exception:
-                    pass
-
-                # 缩放至最大边不超 size
-                im.thumbnail((size, size), Image.Resampling.LANCZOS)
-
-                # 透明通道处理 (合成到纯白背景上)
-                if im.mode == "RGBA":
-                    bg = Image.new("RGB", im.size, (255, 255, 255))
-                    bg.paste(im, mask=im.split()[3])
-                    im = bg
-                elif im.mode != "RGB":
-                    im = im.convert("RGB")
-
-                buf = io.BytesIO()
-                im.save(buf, format="JPEG", quality=quality, optimize=True)
-                data = buf.getvalue()
-
-                # 写入服务端磁盘缓存 (使用带线程标识的临时文件，防止并发写入冲突)
-                if cache_path:
+        with report_pil_warnings(p):
+            try:
+                with Image.open(p) as im:
                     try:
-                        cache_path.parent.mkdir(parents=True, exist_ok=True)
-                        tmp_cache = cache_path.with_suffix(f".tmp_{os.getpid()}_{threading.get_ident()}")
-                        tmp_cache.write_bytes(data)
-                        tmp_cache.replace(cache_path)
+                        im = ImageOps.exif_transpose(im)
                     except Exception:
                         pass
 
-                return data, "image/jpeg"
-        except Exception as e:
-            sys.stderr.write(f"[image_proc] thumbnail error for {p}: {e}\n")
+                    # 缩放至最大边不超 size
+                    im.thumbnail((size, size), Image.Resampling.LANCZOS)
+
+                    # 透明通道处理 (合成到纯白背景上)
+                    if im.mode == "RGBA":
+                        bg = Image.new("RGB", im.size, (255, 255, 255))
+                        bg.paste(im, mask=im.split()[3])
+                        im = bg
+                    elif im.mode != "RGB":
+                        im = im.convert("RGB")
+
+                    buf = io.BytesIO()
+                    im.save(buf, format="JPEG", quality=quality, optimize=True)
+                    data = buf.getvalue()
+
+                    # 写入服务端磁盘缓存 (使用带线程标识的临时文件，防止并发写入冲突)
+                    if cache_path:
+                        try:
+                            cache_path.parent.mkdir(parents=True, exist_ok=True)
+                            tmp_cache = cache_path.with_suffix(f".tmp_{os.getpid()}_{threading.get_ident()}")
+                            tmp_cache.write_bytes(data)
+                            tmp_cache.replace(cache_path)
+                        except Exception:
+                            pass
+
+                    return data, "image/jpeg"
+            except Exception as e:
+                sys.stderr.write(f"[image_proc] thumbnail error for {p}: {e}\n")
 
     # 兜底直接读取原图
     ctype, _ = mimetypes.guess_type(str(p))
@@ -144,34 +171,35 @@ def convert_image(
         except Exception as e:
             return False, str(e)
 
-    try:
-        dst_path.parent.mkdir(parents=True, exist_ok=True)
-        with Image.open(src_path) as im:
-            try:
-                im = ImageOps.exif_transpose(im)
-            except Exception:
-                pass
+    with report_pil_warnings(src_path):
+        try:
+            dst_path.parent.mkdir(parents=True, exist_ok=True)
+            with Image.open(src_path) as im:
+                try:
+                    im = ImageOps.exif_transpose(im)
+                except Exception:
+                    pass
 
-            target_fmt = fmt.lower()
-            if target_fmt == "webp":
-                if im.mode not in ("RGB", "RGBA"):
-                    im = im.convert("RGB")
-                im.save(dst_path, "WEBP", quality=quality, method=6)
-            elif target_fmt in ("jpg", "jpeg"):
-                if im.mode == "RGBA":
-                    bg = Image.new("RGB", im.size, (255, 255, 255))
-                    bg.paste(im, mask=im.split()[3])
-                    im = bg
-                elif im.mode != "RGB":
-                    im = im.convert("RGB")
-                im.save(dst_path, "JPEG", quality=quality, optimize=True)
-            elif target_fmt == "png":
-                im.save(dst_path, "PNG", optimize=True)
-            else:
-                shutil.copy2(src_path, dst_path)
-            return True, None
-    except Exception as e:
-        return False, str(e)
+                target_fmt = fmt.lower()
+                if target_fmt == "webp":
+                    if im.mode not in ("RGB", "RGBA"):
+                        im = im.convert("RGB")
+                    im.save(dst_path, "WEBP", quality=quality, method=6)
+                elif target_fmt in ("jpg", "jpeg"):
+                    if im.mode == "RGBA":
+                        bg = Image.new("RGB", im.size, (255, 255, 255))
+                        bg.paste(im, mask=im.split()[3])
+                        im = bg
+                    elif im.mode != "RGB":
+                        im = im.convert("RGB")
+                    im.save(dst_path, "JPEG", quality=quality, optimize=True)
+                elif target_fmt == "png":
+                    im.save(dst_path, "PNG", optimize=True)
+                else:
+                    shutil.copy2(src_path, dst_path)
+                return True, None
+        except Exception as e:
+            return False, str(e)
 
 
 def make_rename(

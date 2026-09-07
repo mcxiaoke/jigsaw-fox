@@ -70,7 +70,7 @@ TAG_PATTERNS: dict[str, list[str]] = {
     "Nature": [
         r"(?<![a-z])natures?(?![a-z])", r"botanical", r"(?<![a-z])plants?(?![a-z])", r"(?<![a-z])herbs?(?![a-z])", r"(?<![a-z])vines?(?![a-z])",
         r"(?<![a-z])ivys?(?![a-z])", r"succulent", r"(?<![a-z])cactus(?![a-z])", r"(?<![a-z])bonsais?(?![a-z])", r"(?<![a-z])ferns?(?![a-z])",
-        r"(?<![a-z])leafs?(?![a-z])", r"foliage", r"mushroom", r"(?<![a-z])fungis?(?![a-z])", r"(?<![a-z])moss(?![a-z])",
+        r"(?<![a-z])leafs?(?![a-z])", r"foliage", r"mashrooms", r"(?<![a-z])fungis?(?![a-z])", r"(?<![a-z])moss(?![a-z])",
         r"(?<![a-z])lichens?(?![a-z])", r"(?<![a-z])trees?(?![a-z])", r"(?<![a-z])branchs?(?![a-z])", r"(?<![a-z])barks?(?![a-z])", r"(?<![a-z])roots?(?![a-z])",
         r"(?<![a-z])trunks?(?![a-z])", r"(?<![a-z])pines?(?![a-z])", r"(?<![a-z])maples?(?![a-z])", r"(?<![a-z])oaks?(?![a-z])", r"(?<![a-z])birchs?(?![a-z])",
         r"(?<![a-z])palms?(?![a-z])", r"(?<![a-z])sprouts?(?![a-z])", r"(?<![a-z])seeds?(?![a-z])", r"pinecone", r"(?<![a-z])acorns?(?![a-z])",
