@@ -116,7 +116,10 @@ class PuzzleLevelItem {
       return title!.trim();
     }
     if (id.startsWith('${CanonicalId.prefixMain}:')) {
-      return '#${id.substring(CanonicalId.prefixMain.length + 1)}';
+      if (order > 0) return order.toString();
+      final numStr = id.substring(CanonicalId.prefixMain.length + 1);
+      final parsed = int.tryParse(numStr);
+      return parsed != null ? parsed.toString() : numStr;
     }
     if (id.startsWith('${CanonicalId.prefixDaily}:')) {
       final d = id.substring(CanonicalId.prefixDaily.length + 1);
@@ -125,7 +128,7 @@ class PuzzleLevelItem {
       }
       return d;
     }
-    // 默认取最后一段
+    // 默认取最后一段，杜绝冒号技术前缀暴露
     return id.split(':').last;
   }
 

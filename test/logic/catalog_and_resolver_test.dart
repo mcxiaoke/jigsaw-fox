@@ -151,5 +151,34 @@ void main() {
         expect(identical(index1, index3), isFalse);
       },
     );
+
+    test(
+      'PuzzleLevelItem displayTitle displays pure number for main levels',
+      () {
+        const item1 = PuzzleLevelItem(id: 'main:101', order: 101);
+        expect(item1.displayTitle, equals('101'));
+
+        const item2 = PuzzleLevelItem(id: 'main:001', order: 1);
+        expect(item2.displayTitle, equals('1'));
+
+        const itemWithCustomTitle = PuzzleLevelItem(
+          id: 'main:102',
+          order: 102,
+          title: '金毛小狗',
+        );
+        expect(itemWithCustomTitle.displayTitle, equals('金毛小狗'));
+      },
+    );
+
+    test(
+      'UnifiedPuzzleResolver cleans colon prefix for orphan cards without title',
+      () {
+        const emptyIndex = UnifiedCatalogIndex({});
+        const resolver = UnifiedPuzzleResolver(emptyIndex);
+        final card = resolver.resolve(canonicalId: 'main:105');
+        expect(card.isOrphan, isTrue);
+        expect(card.title, equals('105'));
+      },
+    );
   });
 }

@@ -2,7 +2,10 @@ import 'package:flutter/material.dart';
 
 import 'package:jigsawpuzzle/logic/cache/level_image_resolver.dart';
 import 'package:jigsawpuzzle/logic/content/models/puzzle_level_item.dart';
+import 'package:jigsawpuzzle/services/app_logger.dart';
 import 'package:jigsawpuzzle/widgets/app_cached_image.dart';
+import 'package:jigsawpuzzle/widgets/puzzle_card_placeholder.dart';
+import 'package:phosphoricons_flutter/phosphoricons_flutter.dart';
 
 /// 懒落地关卡缩略：可视时后台下载原图到本地，再以本地文件生成缩略
 ///
@@ -10,7 +13,8 @@ import 'package:jigsawpuzzle/widgets/app_cached_image.dart';
 /// 点击直接 `File.readAsBytes` 进 `GamePage`，飞行模式亦可。
 class LazyLevelImage extends StatefulWidget {
   const LazyLevelImage({
-    required this.level, super.key,
+    required this.level,
+    super.key,
     this.fit = BoxFit.cover,
     this.targetDimension,
     this.placeholder,
@@ -68,11 +72,21 @@ class _LazyLevelImageState extends State<LazyLevelImage> {
       if (!mounted) return;
       // 若解析后仍是 http（下载失败），标记失败走 errorWidget
       if (localPath.startsWith('http')) {
+        AppLogger.imageCache.warning(
+          'LazyLevelImage resolve returned remote (download failed) '
+          'id=${widget.level.id} url=${AppLogger.sanitizeUrl(localPath)}',
+        );
         setState(() => _failed = true);
         return;
       }
       setState(() => _resolvedPath = localPath);
-    } catch (_) {
+    } catch (e, st) {
+      AppLogger.imageCache.warning(
+        'LazyLevelImage resolve failed '
+        'id=${widget.level.id} path=${AppLogger.sanitizePath(widget.level.imagePathOrUrl)}',
+        e,
+        st,
+      );
       if (mounted) setState(() => _failed = true);
     }
   }
@@ -92,17 +106,8 @@ class _LazyLevelImageState extends State<LazyLevelImage> {
       }
       // 网络：等待下载时显示占位，下载完成后切本地
       return widget.placeholder ??
-          Container(
-            color: Colors.grey.shade200,
-            alignment: Alignment.center,
-            child: SizedBox(
-              width: 20,
-              height: 20,
-              child: CircularProgressIndicator(
-                strokeWidth: 2,
-                color: Colors.grey.shade400,
-              ),
-            ),
+          PuzzleCardPlaceholder(
+            orderNumber: widget.level.order > 0 ? widget.level.order : null,
           );
     }
 
@@ -112,7 +117,7 @@ class _LazyLevelImageState extends State<LazyLevelImage> {
             color: Colors.grey.shade200,
             alignment: Alignment.center,
             child: Icon(
-              Icons.broken_image_outlined,
+              PhosphorIconsRegular.imageBroken,
               color: Colors.grey.shade400,
               size: 24,
             ),

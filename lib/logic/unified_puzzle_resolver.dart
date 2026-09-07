@@ -142,7 +142,9 @@ class UnifiedPuzzleResolver {
     }
 
     // 孤儿卡兜底（源已被删除或下架）
-    final fallbackTitle = favoriteEntry?.titleSnapshot ?? canonicalId;
+    final fallbackTitle =
+        favoriteEntry?.titleSnapshot ??
+        (canonicalId.contains(':') ? canonicalId.split(':').last : canonicalId);
     final fallbackImage = favoriteEntry?.imageSnapshot ?? '';
     final fallbackLabel = favoriteEntry?.sourceLabelSnapshot ?? '';
     final fallbackLocal = favoriteEntry?.isLocalFileSnapshot ?? false;

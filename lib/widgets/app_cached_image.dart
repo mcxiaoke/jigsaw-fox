@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:jigsawpuzzle/logic/cache/app_cached_image_provider.dart';
 import 'package:jigsawpuzzle/logic/cache/app_cached_network_image_provider.dart';
 import 'package:jigsawpuzzle/logic/cache/image_cache_manager.dart';
+import 'package:jigsawpuzzle/widgets/puzzle_card_placeholder.dart';
 import 'package:phosphoricons_flutter/phosphoricons_flutter.dart';
 
 /// Convenient, high-performance UI Widget for displaying images with built-in
@@ -97,18 +98,7 @@ class AppCachedImage extends StatelessWidget {
   }
 
   Widget _defaultPlaceholder() {
-    return Container(
-      color: Colors.grey.shade200,
-      alignment: Alignment.center,
-      child: SizedBox(
-        width: 20,
-        height: 20,
-        child: CircularProgressIndicator(
-          strokeWidth: 2,
-          color: Colors.grey.shade400,
-        ),
-      ),
-    );
+    return const PuzzleCardPlaceholder();
   }
 
   Widget _defaultError() {

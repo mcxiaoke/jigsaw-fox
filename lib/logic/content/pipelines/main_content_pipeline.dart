@@ -403,6 +403,8 @@ class MainContentPipeline {
         ? DateTime.tryParse(raw['addedAt'].toString())
         : null;
 
+    final title = raw['title']?.toString().trim();
+
     return PuzzleLevelItem(
       id: canonicalId,
       hash: hash,
@@ -410,6 +412,7 @@ class MainContentPipeline {
       isLocalFile: false,
       order: order,
       tags: tags,
+      title: (title != null && title.isNotEmpty) ? title : null,
       addedAt: addedAt,
       unlockCoins: (raw['unlockCoins'] as num?)?.toInt(),
       unlockCode: raw['unlockCode']?.toString(),
