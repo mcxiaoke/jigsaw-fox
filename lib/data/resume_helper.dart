@@ -32,9 +32,9 @@ class ResumeHelper {
   /// 若索引为 true 但文件丢失，会自动执行对账自愈（修复 P1-8）。
   static Future<ResumeInfo?> fetchResume(
     String canonicalId,
-    PuzzleDifficulty fallbackDifficulty, [
+    PuzzleDifficulty fallbackDifficulty, {
     bool? isCompleted,
-  ]) async {
+  }) async {
     final progress = await ProgressStore.instance.load(canonicalId);
     if (!progress.hasSnapshot) return null;
     final dkey = progress.activeDifficultyKey.isNotEmpty
@@ -94,7 +94,9 @@ class ResumeHelper {
     required BuildContext context,
     required String canonicalId,
     required PuzzleDifficulty fallbackDifficulty,
-    required String title, required Uint8List imageBytes, bool isCompleted = false,
+    required String title,
+    required Uint8List imageBytes,
+    bool isCompleted = false,
   }) async {
     final info = await fetchResume(canonicalId, fallbackDifficulty);
     if (info == null) return null;
@@ -123,9 +125,9 @@ class ResumeHelper {
   /// 已通关重玩的残局也应显示进度，故 hasSnapshot 优先于 isCompleted
   static int displayProgress(
     LevelProgress progress,
-    int legacyPercent,
-    bool isCompleted,
-  ) {
+    int legacyPercent, {
+    required bool isCompleted,
+  }) {
     if (progress.hasSnapshot) return progress.progressPercent;
     if (isCompleted) return 0;
     return legacyPercent;
@@ -215,8 +217,13 @@ class ResumeHelper {
     required BuildContext context,
     required String canonicalId,
     required PuzzleDifficulty fallbackDifficulty,
-    required String title, required Uint8List imageBytes, required Future<void> Function(String dkey) onClearRepo, required Future<void> Function(PuzzleDifficulty diff, String? jsonStr)
-    onPushGame, required VoidCallback onCancelled, bool isCompleted = false,
+    required String title,
+    required Uint8List imageBytes,
+    required Future<void> Function(String dkey) onClearRepo,
+    required Future<void> Function(PuzzleDifficulty diff, String? jsonStr)
+    onPushGame,
+    required VoidCallback onCancelled,
+    bool isCompleted = false,
   }) async {
     final result = await maybeShowResumeDialog(
       context: context,

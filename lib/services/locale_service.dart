@@ -104,7 +104,6 @@ class LocaleService extends ChangeNotifier {
   }
 
   /// 测试注入：覆盖语言代码（'zh'/'en'/'zh-CN'），null 清除（生产可用，供 LocaleHelper 兼容）
-  // ignore: use_setters_to_change_properties
   void setOverrideForTest(String? code) {
     _overrideLanguageCode = code;
     try {

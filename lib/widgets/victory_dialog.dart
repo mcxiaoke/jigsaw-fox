@@ -25,7 +25,8 @@ import 'package:phosphoricons_flutter/phosphoricons_flutter.dart';
 /// - Buttons: "Save Wallpaper"(ghost), "Share"(brand), "Next Level"(brand, most prominent)
 class VictoryDialog extends StatefulWidget {
   const VictoryDialog({
-    required this.imageBytes, super.key,
+    required this.imageBytes,
+    super.key,
     this.stars = 3,
     this.elapsedSeconds = 0,
     this.moveCount = 0,
@@ -254,9 +255,7 @@ class _VictoryDialogState extends State<VictoryDialog>
         if (event is KeyDownEvent &&
             event.logicalKey == LogicalKeyboardKey.escape) {
           Navigator.of(context).pop();
-          if (widget.onViewPuzzle != null) {
-            widget.onViewPuzzle!();
-          }
+          widget.onViewPuzzle?.call();
           return KeyEventResult.handled;
         }
         return KeyEventResult.ignored;
@@ -296,9 +295,7 @@ class _VictoryDialogState extends State<VictoryDialog>
                       tooltip: t.victory.btnClose,
                       onPressed: () {
                         Navigator.of(context).pop();
-                        if (widget.onViewPuzzle != null) {
-                          widget.onViewPuzzle!();
-                        }
+                        widget.onViewPuzzle?.call();
                       },
                     ),
                   ),
@@ -531,9 +528,7 @@ class _VictoryDialogState extends State<VictoryDialog>
                               child: OutlinedButton.icon(
                                 onPressed: () {
                                   Navigator.of(context).pop();
-                                  if (widget.onExit != null) {
-                                    widget.onExit!();
-                                  }
+                                  widget.onExit?.call();
                                 },
                                 icon: const Icon(
                                   PhosphorIconsBold.arrowLeft,
@@ -585,9 +580,7 @@ class _VictoryDialogState extends State<VictoryDialog>
                               child: FilledButton.icon(
                                 onPressed: () {
                                   Navigator.of(context).pop();
-                                  if (widget.onExit != null) {
-                                    widget.onExit!();
-                                  }
+                                  widget.onExit?.call();
                                 },
                                 icon: const Icon(
                                   PhosphorIconsBold.check,
@@ -675,9 +668,7 @@ class _VictoryDialogState extends State<VictoryDialog>
                       TextButton.icon(
                         onPressed: () {
                           Navigator.of(context).pop();
-                          if (widget.onViewPuzzle != null) {
-                            widget.onViewPuzzle!();
-                          }
+                          widget.onViewPuzzle?.call();
                         },
                         icon: const Icon(PhosphorIconsBold.eye, size: 15),
                         label: Text(
@@ -705,7 +696,9 @@ class _VictoryDialogState extends State<VictoryDialog>
     required IconData icon,
     required String label,
     required String value,
-    required AppPalette palette, required AppTextStyles styles, Color? color,
+    required AppPalette palette,
+    required AppTextStyles styles,
+    Color? color,
   }) {
     final c = color ?? palette.primaryText;
     return Expanded(
@@ -739,7 +732,6 @@ class _VictoryDialogState extends State<VictoryDialog>
 
 /// Confetti particle painter — gold and amber particles falling down.
 class _ConfettiPainter extends CustomPainter {
-
   _ConfettiPainter(this.palette) : _particles = [], super() {
     for (var i = 0; i < 60; i++) {
       _particles.add(_Particle.random(_rng));
@@ -766,16 +758,17 @@ class _ConfettiPainter extends CustomPainter {
         ..style = PaintingStyle.fill;
 
       canvas.save();
-      canvas.translate(dx, dy - 20);
-      canvas.rotate(t * 3);
-      canvas.drawRect(
-        Rect.fromCenter(
-          center: Offset.zero,
-          width: p.size,
-          height: p.size * 0.4,
-        ),
-        paint,
-      );
+      canvas
+        ..translate(dx, dy - 20)
+        ..rotate(t * 3)
+        ..drawRect(
+          Rect.fromCenter(
+            center: Offset.zero,
+            width: p.size,
+            height: p.size * 0.4,
+          ),
+          paint,
+        );
       canvas.restore();
     }
   }
@@ -785,7 +778,6 @@ class _ConfettiPainter extends CustomPainter {
 }
 
 class _Particle {
-
   _Particle({
     required this.x,
     required this.startTime,

@@ -35,6 +35,8 @@ class LevelImageResolver {
   /// FNV-1a 63 位哈希，与 ImageCacheManager.getCacheKey 同算法，保证同 URL 同哈希
   String _hashUrl(String url) {
     final clean = url.replaceAll(r'\', '/');
+    // FNV-1a offset basis; safe on native (non-JS) targets.
+    // ignore: avoid_js_rounded_ints
     var hash = 0xcbf29ce484222325;
     const fnvPrime = 0x100000001b3;
     final bytes = utf8.encode(clean);

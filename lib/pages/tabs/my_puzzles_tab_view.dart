@@ -146,7 +146,7 @@ class _MyPuzzlesTabViewState extends State<MyPuzzlesTabView> {
     final displayPercent = ResumeHelper.displayProgress(
       progress,
       item.progressPercent,
-      item.isCompleted,
+      isCompleted: item.isCompleted,
     );
     if (!mounted) return;
     await ChooseDifficultySheet.show(

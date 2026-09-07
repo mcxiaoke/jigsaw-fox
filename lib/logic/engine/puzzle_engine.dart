@@ -43,7 +43,7 @@ class PuzzleEngine {
         final rot = rotationEnabled ? rng.nextInt(4) : 0;
 
         // 初始散落位置分布在棋盘两侧（左侧/右侧），避免开局直接落入正确槽位
-        final nx = -0.15 + (c % 2 == 0 ? -0.1 : 1.1) + rng.nextDouble() * 0.1;
+        final nx = -0.15 + (c.isEven ? -0.1 : 1.1) + rng.nextDouble() * 0.1;
         final ny = (r / rows) + (rng.nextDouble() - 0.5) * 0.1;
 
         pieces.add(
@@ -85,7 +85,7 @@ class PuzzleEngine {
     return min(pieceW, pieceH) * ratio;
   }
 
-  /// 判断 [pieceId] 是否处于棋盘边缘。
+  /// 判断 `pieceId` 是否处于棋盘边缘。
   static bool isBorderPiece(int rows, int cols, int r, int c) =>
       r == 0 || r == rows - 1 || c == 0 || c == cols - 1;
 
@@ -154,11 +154,11 @@ class PuzzleEngine {
   ///
   /// 【核心两阶段吸附判定】：
   /// 1. **阶段一：棋盘标准槽位吸附（Board Slot Snapping）**
-  ///    - 遍历拖拽集群中的每块碎片，检查是否与棋盘上的目标绝对位置槽位 `(targetNx, targetNy)` 距离小于 [snapDist]；
+  ///    - 遍历拖拽集群中的每块碎片，检查是否与棋盘上的目标绝对位置槽位 `(targetNx, targetNy)` 距离小于 `snapDist`；
   ///    - 若满足且角度归零，则将整个集群平移就位并锁定精确坐标。
   /// 2. **阶段二：自由邻居碎片合并（Free-floating Neighbor Merging）**
   ///    - 若未吸附到棋盘槽位，检查是否与空中其他同角度邻居碎片（上/下/左/右正交邻居）发生碰撞；
-  ///    - 若相对间距误差小于 [snapDist]，将两组碎片精准对齐并合并为一个新的大集群（统一 clusterId）。
+  ///    - 若相对间距误差小于 `snapDist`，将两组碎片精准对齐并合并为一个新的大集群（统一 clusterId）。
   static BoardTransitionResult resolveSnap({
     required PuzzleBoardState state,
     required int draggedPieceId,
@@ -478,7 +478,10 @@ class PuzzleEngine {
     );
 
     // 计算集群几何中心
-    var minNx = 1.0, maxNx = 0.0, minNy = 1.0, maxNy = 0.0;
+    var minNx = 1.0;
+    var maxNx = 0.0;
+    var minNy = 1.0;
+    var maxNy = 0.0;
     for (final p in clusterPieces) {
       minNx = min(minNx, p.nx);
       maxNx = max(maxNx, p.nx + 1.0 / state.cols);

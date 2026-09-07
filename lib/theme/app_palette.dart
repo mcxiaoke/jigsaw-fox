@@ -48,6 +48,8 @@ class AppPalette {
   final Color divider;
 
   /// 从当前 Theme 的 ColorScheme 构建 — M3 自适应亮暗
+  // Standard Flutter theme-access pattern (cf. Theme.of).
+  // ignore: prefer_constructors_over_static_methods
   static AppPalette of(BuildContext context) {
     final s = Theme.of(context).colorScheme;
     final isDark = Theme.of(context).brightness == Brightness.dark;

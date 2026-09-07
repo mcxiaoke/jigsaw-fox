@@ -3,7 +3,7 @@ import 'dart:typed_data';
 import 'dart:ui' as ui;
 
 import 'package:flutter/painting.dart'
-    show BlendMode, Color, ImageShader, Offset, Paint, PaintingStyle, Rect, TileMode;
+    show BlendMode, Color, Offset, Paint, PaintingStyle, Rect, TileMode;
 
 /// 实体拼图亚麻纸质漫反射微纹理管理器（Linen Finish & Diffuse Noise Manager）。
 ///
@@ -143,7 +143,7 @@ class LinenTextureManager {
 
     for (double x = 0; x < width; x += step) {
       for (double y = 0; y < height; y += step) {
-        final isEven = ((x / step).toInt() + (y / step).toInt()) % 2 == 0;
+        final isEven = ((x / step).toInt() + (y / step).toInt()).isEven;
         if (isEven) {
           canvas.drawRect(Rect.fromLTWH(x, y, 1.5, 1.5), nodePaint);
         }

@@ -97,7 +97,11 @@ class _JigsawOverlayPainter extends CustomPainter {
 /// A bottom sheet dialog matching the commercial jigsaw piece selection UI.
 class ChooseDifficultySheet extends StatefulWidget {
   const ChooseDifficultySheet({
-    required this.imageBytes, required this.initialDifficulty, required this.title, required this.onStart, super.key,
+    required this.imageBytes,
+    required this.initialDifficulty,
+    required this.title,
+    required this.onStart,
+    super.key,
     this.canonicalId,
     this.completedPieceCounts = const {},
     this.isUnlocked = true,
@@ -184,8 +188,10 @@ class _ChooseDifficultySheetState extends State<ChooseDifficultySheet> {
   final Map<int, UnlockStatus> _tierUnlockStatuses = {};
 
   // Explicit slang references for tier/estimated (ensures t.difficulty.tier.* & t.difficulty.estimated.* usage)
+  // Used only for documentation reference.
   // ignore: unused_element
   String get _tierExample => t.difficulty.tier.l1;
+  // Used only for documentation reference.
   // ignore: unused_element
   String get _estimatedExample => t.difficulty.estimated.l1;
 
@@ -726,7 +732,7 @@ class _ChooseDifficultySheetState extends State<ChooseDifficultySheet> {
 
               // Difficulty & Aspect Ratio Info Header
               Padding(
-                padding: const EdgeInsets.symmetric(),
+                padding: EdgeInsets.zero,
                 child: Wrap(
                   alignment: WrapAlignment.center,
                   crossAxisAlignment: WrapCrossAlignment.center,
@@ -835,7 +841,7 @@ class _ChooseDifficultySheetState extends State<ChooseDifficultySheet> {
               // Horizontal scroll of 7 difficulty tiers
               SingleChildScrollView(
                 scrollDirection: Axis.horizontal,
-                padding: const EdgeInsets.symmetric(),
+                padding: EdgeInsets.zero,
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [

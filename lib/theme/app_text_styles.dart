@@ -10,6 +10,8 @@ class AppTextStyles {
 
   final AppPalette palette;
 
+  // Standard Flutter theme-access pattern (cf. Theme.of).
+  // ignore: prefer_constructors_over_static_methods
   static AppTextStyles of(BuildContext context) {
     return AppTextStyles._(palette: AppPalette.of(context));
   }

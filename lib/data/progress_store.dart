@@ -518,9 +518,9 @@ class ProgressStore {
 
   Future<void> setHasSnapshot(
     String canonicalId,
-    String difficultyKey,
-    bool has,
-  ) async {
+    String difficultyKey, {
+    required bool has,
+  }) async {
     final cur = await load(canonicalId);
     final keys = Set<String>.from(cur.snapshotKeys);
     if (has) {
@@ -539,7 +539,7 @@ class ProgressStore {
   }
 
   Future<void> clearSnapshot(String canonicalId, String difficultyKey) async {
-    await setHasSnapshot(canonicalId, difficultyKey, false);
+    await setHasSnapshot(canonicalId, difficultyKey, has: false);
     final cur = await load(canonicalId);
     // 若该难度是 active，则尝试切换到剩余的第一个
     if (cur.activeDifficultyKey == difficultyKey) {

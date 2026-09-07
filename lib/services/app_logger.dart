@@ -304,9 +304,7 @@ class AppLogger {
     try {
       await _rotateIfNeeded();
       _sink ??= _currentFile!.openWrite(mode: FileMode.append);
-      for (final l in lines) {
-        _sink!.writeln(l);
-      }
+      lines.forEach(_sink!.writeln);
       await _sink!.flush();
       // 检查单文件大小
       final len = await _currentFile!.length();

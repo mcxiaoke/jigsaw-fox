@@ -318,8 +318,9 @@ void main() {
     // 模拟多指手势触发
     game.isPinching = true;
     final piece0 = game.children.whereType<PuzzlePieceComponent>().first;
-    piece0.isDragging = true;
-    piece0.position.setFrom(Vector2(100, 100)); // 临时移动
+    piece0
+      ..isDragging = true
+      ..position.setFrom(Vector2(100, 100)); // 临时移动
 
     // 触发取消
     game.cancelAllPieceDragging();
@@ -492,9 +493,10 @@ void main() {
       .firstWhere((p) => p.id == id);
   void placeAtSlot(JigsawPuzzleGame g, int id) {
     final p = pieceOf(g, id);
-    p.isInTray = false;
-    p.scale.setAll(g.zoom);
-    p.position.setFrom(g.normalizedToScreen(p.c / g.cols, p.r / g.rows));
+    p
+      ..isInTray = false
+      ..scale.setAll(g.zoom)
+      ..position.setFrom(g.normalizedToScreen(p.c / g.cols, p.r / g.rows));
     g.handlePieceDragEnd(p);
   }
 
@@ -506,15 +508,17 @@ void main() {
 
     // #1 孤立中间碎片放在非槽位 → 不锁定，可自由拖动
     final interior = pieceOf(g, 5); // (1,1)
-    interior.isInTray = false;
-    interior.position.setFrom(g.normalizedToScreen(0.3, 0.6));
+    interior
+      ..isInTray = false
+      ..position.setFrom(g.normalizedToScreen(0.3, 0.6));
     g.handlePieceDragEnd(interior);
     expect(interior.isLocked, isFalse, reason: '#1 孤立中间碎片可自由拖动(不锁定)');
 
     // #2 中间两片组合(内部岛)就位 → 均不锁定，可整组自由拖动
     placeAtSlot(g, 5); // (1,1)
     placeAtSlot(g, 6); // (1,2)
-    final a = pieceOf(g, 5), b = pieceOf(g, 6);
+    final a = pieceOf(g, 5);
+    final b = pieceOf(g, 6);
     expect(a.isLocked, isFalse, reason: '#2 内部组合第1片应保持可拖动');
     expect(b.isLocked, isFalse, reason: '#2 内部组合第2片应保持可拖动');
   });
@@ -679,10 +683,10 @@ void main() {
 
     // 开启抓取并移动
     game.startHoldingPiece(piece0, 0.5, 0.5);
-    game.updateHoldingPiecePosition(Vector2(200, 300));
-
-    // 取消抓取（例如右键或 ESC）
-    game.cancelHoldingPiece();
+    game
+      ..updateHoldingPiecePosition(Vector2(200, 300))
+      // 取消抓取（例如右键或 ESC）
+      ..cancelHoldingPiece();
     expect(game.holdingPiece, isNull);
     expect(piece0.isDragging, isFalse);
     expect(piece0.isInTray, isTrue);
@@ -701,8 +705,9 @@ void main() {
 
     // 拼出 3 块的大集群
     game.hint();
-    game.hint();
-    game.hint();
+    game
+      ..hint()
+      ..hint();
 
     final boardPieces = game.children
         .whereType<PuzzlePieceComponent>()
@@ -888,8 +893,9 @@ void main() {
         .firstWhere(
           (p) => p.isInTray || !game.boardState.pieceById(p.id).isSolved(3, 3),
         );
-    lastPiece.isInTray = false;
-    lastPiece.position.setValues(-500, -500); // 严重出界
+    lastPiece
+      ..isInTray = false
+      ..position.setValues(-500, -500); // 严重出界
 
     // 触发自检
     game.missingPieceCheck();
@@ -976,8 +982,9 @@ void main() {
 
     // 连续 hint 3 块碎片，形成 3 块碎片在棋盘上的状态
     game.hint();
-    game.hint();
-    game.hint();
+    game
+      ..hint()
+      ..hint();
     expect(game.solvedCount, 3);
 
     // 人为模拟一个由 3 块碎片组成的自定义未锁定自由集群
@@ -1047,8 +1054,9 @@ void main() {
 
     // 1. 将 p0（单块）放置在大窗口右侧边缘 (X=1800, Y=900)
     p0.isInTray = false;
-    p0.isLocked = false;
-    p0.position.setValues(1800, 900);
+    p0
+      ..isLocked = false
+      ..position.setValues(1800, 900);
     final out0 = [0.0, 0.0];
     game.screenToNormalized(p0.position, out0);
     game.boardState = game.boardState.copyWith(
@@ -1059,15 +1067,17 @@ void main() {
 
     // 2. 将 p1, p2 组成自由拼合集群放置在右下方 (X=1700, Y=850)
     p1.isInTray = false;
-    p1.isLocked = false;
-    p1.clusterId = 888;
+    p1
+      ..isLocked = false
+      ..clusterId = 888;
     p1.position.setValues(1700, 850);
     final out1 = [0.0, 0.0];
     game.screenToNormalized(p1.position, out1);
 
     p2.isInTray = false;
-    p2.isLocked = false;
-    p2.clusterId = 888;
+    p2
+      ..isLocked = false
+      ..clusterId = 888;
     p2.position.setValues(1700 + game.pieceSize.x, 850);
     final out2 = [0.0, 0.0];
     game.screenToNormalized(p2.position, out2);
@@ -1168,8 +1178,9 @@ void main() {
 
     // 1. 将 piece0 从托盘拖出到棋盘空白区域放开（避免吸附）
     game.startHoldingPiece(piece0, 0.5, 0.5);
-    game.updateHoldingPiecePosition(Vector2(50, 300));
-    game.dropHoldingPiece();
+    game
+      ..updateHoldingPiecePosition(Vector2(50, 300))
+      ..dropHoldingPiece();
     expect(piece0.isInTray, isFalse);
     expect(piece0.isLocked, isFalse);
 
@@ -1556,9 +1567,10 @@ void main() {
 
     final piece0 = game.children.whereType<PuzzlePieceComponent>().first;
     // 模拟拖出托盘到棋盘
-    piece0.isInTray = false;
-    piece0.position.setValues(150, 150);
-    piece0.scale.setAll(1);
+    piece0
+      ..isInTray = false
+      ..position.setValues(150, 150)
+      ..scale.setAll(1);
 
     // 第 1 次点击扫把
     game.organizeTray();
@@ -1745,8 +1757,9 @@ void main() {
     // 移动第 0 块碎片到顶部
     final p0 = game.children.whereType<PuzzlePieceComponent>().first;
     game.startHoldingPiece(p0, 0.5, 0.5);
-    game.updateHoldingPiecePosition(Vector2(300, 50));
-    game.dropHoldingPiece();
+    game
+      ..updateHoldingPiecePosition(Vector2(300, 50))
+      ..dropHoldingPiece();
 
     // 导出快照并模拟退出再重进（恢复快照）
     final snapshot = game.exportSnapshotJson();

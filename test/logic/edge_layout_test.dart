@@ -82,7 +82,7 @@ void main() {
 
     test('PieceEdges clockwise rotation', () {
       const edges = PieceEdges(
-        top: EdgeCurveDescriptor(edgeType: EdgeType.flat),
+        top: EdgeCurveDescriptor.flat,
         right: EdgeCurveDescriptor(edgeType: EdgeType.tab),
         bottom: EdgeCurveDescriptor(edgeType: EdgeType.blank),
         left: EdgeCurveDescriptor(edgeType: EdgeType.tab),

@@ -63,8 +63,9 @@ void main() {
       final bytes4 = Uint8List(150);
 
       cache.put('key1', bytes1);
-      cache.put('key2', bytes2);
-      cache.put('key3', bytes3);
+      cache
+        ..put('key2', bytes2)
+        ..put('key3', bytes3);
 
       expect(cache.entryCount, 3);
       expect(cache.currentSizeBytes, 600);

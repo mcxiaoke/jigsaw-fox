@@ -219,16 +219,18 @@ class PuzzlePieceComponent extends PositionComponent
     // 2. 第二层：在拾起/悬浮状态下，绘制 1.8mm 硬纸板物理厚度截面（3D Extrusion Side）
     if (isElevated) {
       canvas.save();
-      canvas.translate(0.8, 1.6);
-      canvas.drawPath(shape.path, _cardboardSidePaint);
-      canvas.drawPath(shape.shadowPath, _cardboardBottomEdgePaint);
-      canvas.restore();
+      canvas
+        ..translate(0.8, 1.6)
+        ..drawPath(shape.path, _cardboardSidePaint)
+        ..drawPath(shape.shadowPath, _cardboardBottomEdgePaint)
+        ..restore();
     }
 
     // 3. 第三层：正面图案纹理层与亚麻漫反射层（使用精确二次贝塞尔曲线 Path 剪裁画布）
     canvas.save();
-    canvas.clipPath(shape.path);
-    canvas.drawImageRect(image, srcRect, shape.fillRect, _imagePaint);
+    canvas
+      ..clipPath(shape.path)
+      ..drawImageRect(image, srcRect, shape.fillRect, _imagePaint);
     // 方案 4：亚麻布纹压花 / 纸质漫反射微纹理（消除数码塑料反光）
     final linenPaint = LinenTextureManager.paint;
     if (LinenTextureManager.enabled && linenPaint != null) {

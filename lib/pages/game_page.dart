@@ -28,7 +28,9 @@ import 'package:phosphoricons_flutter/phosphoricons_flutter.dart';
 /// Full-screen in-game puzzle page matching commercial Jigsaw experience.
 class GamePage extends StatefulWidget {
   const GamePage({
-    required this.imageBytes, required this.difficulty, super.key,
+    required this.imageBytes,
+    required this.difficulty,
+    super.key,
     this.levelIndex,
     this.dailyDateStr,
     this.customId,
@@ -146,9 +148,7 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
       final image = frame.image;
       final w = image.width;
       final h = image.height;
-      final pixelData = await image.toByteData(
-        
-      );
+      final pixelData = await image.toByteData();
       image.dispose();
       if (pixelData == null) return;
       final bytes = pixelData.buffer.asUint8List(
@@ -388,6 +388,7 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
       SnapshotStore.instance.saveSync(state);
       final canonicalId = _canonicalIdForSave();
       if (canonicalId.isNotEmpty) {
+        // Fire-and-forget: progress update is best-effort.
         // ignore: discarded_futures
         _repo.updateGenericProgress(
           canonicalId: canonicalId,

@@ -12,12 +12,12 @@ import '../test_helper.dart';
 /// 与 hive_ce 内部 Crc32 完全一致的实现（src/crypto/crc32.dart），
 /// 用于构造「CRC 合法但内容非法」的损坏帧。
 int _crc32(Uint8List bytes, {int crc = 0, int offset = 0, int? length}) {
-  crc = crc ^ 0xffffffff;
+  var c = crc ^ 0xffffffff;
   length ??= bytes.length;
   for (var i = offset; i < offset + length; i++) {
-    crc = _crcTable[(crc ^ bytes[i]) & 0xff] ^ (crc >> 8);
+    c = _crcTable[(c ^ bytes[i]) & 0xff] ^ (c >> 8);
   }
-  return crc ^ 0xffffffff;
+  return c ^ 0xffffffff;
 }
 
 const _crcTable = <int>[

@@ -76,7 +76,7 @@ class TrayBackgroundComponent extends PositionComponent
     final rect = size.toRect();
     canvas.drawRect(rect, _bgPaint);
     // 顶部半透明高光微边线（通栏平铺底栏风格，替代原全包围圆角描边）
-    canvas.drawLine(const ui.Offset(0, 0), ui.Offset(size.x, 0), _borderPaint);
+    canvas.drawLine(ui.Offset.zero, ui.Offset(size.x, 0), _borderPaint);
   }
 
   @override
@@ -98,7 +98,8 @@ class JigsawPuzzleGame extends FlameGame
     required this.image,
     required this.rows,
     required this.cols,
-    required this.onSolved, int? seed,
+    required this.onSolved,
+    int? seed,
     this.rotationEnabled = false,
     this.scatterMode = 'tray',
     this.initialSnapshotJson,
@@ -549,7 +550,10 @@ class JigsawPuzzleGame extends FlameGame
           .toList();
       final contentWidth =
           trayPieces.length * (_trayPieceWidth + _traySpacing) + 36.0;
-      final minScroll = min(0.0, traySize.x - contentWidth);
+      final minScroll = min(
+        0.0,
+        traySize.x - contentWidth,
+      );
       _trayScrollX = _trayScrollX.clamp(minScroll, 0.0);
       _realignTrayPieces(animate: false);
     }
@@ -586,8 +590,14 @@ class JigsawPuzzleGame extends FlameGame
       // 2) 候选棋盘下 pieceSize = board/cols, rows，推算四周栅格可容纳散落槽位数 (同 _getTabletopScatterSlots 逻辑)
       // 3) 槽位数 >= 碎片总数 * coverage(0.80) 即视为可满足散落，允许少量碎片轻微覆盖边线(用户已确认可接受)
       // 4) 二分搜索最大可行 S，随后按 3% 视觉收缩留出呼吸感，并保持长宽比
-      final double fullW = max(100, size.x - _sideMargin * 2);
-      final double fullH = max(100, size.y - _topToolbarHeight - 16.0);
+      final double fullW = max(
+        100.0,
+        size.x - _sideMargin * 2,
+      );
+      final double fullH = max(
+        100.0,
+        size.y - _topToolbarHeight - 16.0,
+      );
 
       Vector2 fitBoard(double maxW, double maxH) {
         final areaAspect = maxW / maxH;
@@ -756,7 +766,10 @@ class JigsawPuzzleGame extends FlameGame
       );
       pieceSize = Vector2(bW / cols, bH / rows);
     } else {
-      final availableBoardW = max(100.0, size.x - _sideMargin * 2);
+      final availableBoardW = max(
+        100.0,
+        size.x - _sideMargin * 2,
+      );
       final availableBoardH = max(
         100.0,
         trayPosition.y - _topToolbarHeight - 8.0,
@@ -1120,7 +1133,10 @@ class JigsawPuzzleGame extends FlameGame
 
     final contentWidth =
         trayPieces.length * (_trayPieceWidth + _traySpacing) + 36.0;
-    final minScroll = min(0.0, traySize.x - contentWidth);
+    final minScroll = min(
+      0.0,
+      traySize.x - contentWidth,
+    );
     const maxScroll = 0.0;
 
     _trayScrollX = (_trayScrollX + deltaX).clamp(minScroll, maxScroll);
@@ -1265,7 +1281,8 @@ class JigsawPuzzleGame extends FlameGame
     final contentH = (normMaxY - normMinY) * boardSize.y * _zoom;
 
     // 水平维度 (X)：内容超视口则贴边 clamp；内容窄于视口则退化为单点居中
-    double minPanX, maxPanX;
+    double minPanX;
+    double maxPanX;
     if (contentW + eps >= viewW) {
       maxPanX = viewLeft - boardTopLeft.x - normMinX * boardSize.x * _zoom;
       minPanX =
@@ -1287,7 +1304,8 @@ class JigsawPuzzleGame extends FlameGame
     );
 
     // 垂直维度 (Y)：内容超视口则贴边 clamp；内容矮于视口则退化为单点居中
-    double minPanY, maxPanY;
+    double minPanY;
+    double maxPanY;
     if (contentH + eps >= viewH) {
       maxPanY = viewTop - boardTopLeft.y - normMinY * boardSize.y * _zoom;
       minPanY =
@@ -1474,12 +1492,13 @@ class JigsawPuzzleGame extends FlameGame
       final comp = _pieces[id];
       if (comp != null) {
         comp.clearActiveEffects();
-        comp.isDragging = false;
-        comp.isInTray = !isTabletop;
-        comp.hideBorders = false;
-        comp.isFilteredOut = false;
-        comp.clusterId = id;
-        comp.rot = 0;
+        comp
+          ..isDragging = false
+          ..isInTray = !isTabletop
+          ..hideBorders = false
+          ..isFilteredOut = false
+          ..clusterId = id
+          ..rot = 0;
         comp.scale.setAll(isTabletop ? _zoom : _trayPieceScale);
         comp.position.setFrom(pPos);
         comp.priority = isTabletop
@@ -1532,8 +1551,9 @@ class JigsawPuzzleGame extends FlameGame
       final wasLocked = comp.isLocked;
       if (isPieceSolved) {
         comp.isLocked = true;
-        comp.priority = _solvedPiecePriority;
-        comp.isInTray = false;
+        comp
+          ..priority = _solvedPiecePriority
+          ..isInTray = false;
         comp.scale.setAll(_zoom);
         // [一致性] 锁定即强制把视觉对齐到正确槽位，确保“锁定 ⟺ 已吸到槽位”。
         comp.position.setFrom(_normalizedToScreen(pState.nx, pState.ny));
@@ -1652,7 +1672,10 @@ class JigsawPuzzleGame extends FlameGame
     }
 
     // 防御性二次限位：确保松手留在棋盘或桌面上的碎片绝对在可视安全区内（防御手势中断等边缘情况）
-    var minCol = 0, maxCol = 0, minRow = 0, maxRow = 0;
+    var minCol = 0;
+    var maxCol = 0;
+    var minRow = 0;
+    var maxRow = 0;
     for (final p in clusterPieces) {
       final relC = p.c - piece.c;
       final relR = p.r - piece.r;
@@ -1833,7 +1856,10 @@ class JigsawPuzzleGame extends FlameGame
           .toList();
       final contentWidth =
           trayPieces.length * (_trayPieceWidth + _traySpacing) + 36.0;
-      final minScroll = min(0.0, traySize.x - contentWidth);
+      final minScroll = min(
+        0.0,
+        traySize.x - contentWidth,
+      );
       _trayScrollX = _trayScrollX.clamp(minScroll, 0.0);
       _realignTrayPieces(animate: animateTray);
     }
@@ -2046,8 +2072,9 @@ class JigsawPuzzleGame extends FlameGame
         final comp = _pieces[p.id];
         if (comp == null) continue;
         comp.clusterId = p.clusterId;
-        comp.rot = p.rot;
-        comp.isInTray = false;
+        comp
+          ..rot = p.rot
+          ..isInTray = false;
         comp.scale.setAll(_zoom);
         comp.clearActiveEffects();
 
@@ -2081,8 +2108,9 @@ class JigsawPuzzleGame extends FlameGame
         final comp = _pieces[p.id];
         if (comp == null) continue;
         comp.clusterId = p.clusterId;
-        comp.rot = p.rot;
-        comp.clearActiveEffects();
+        comp
+          ..rot = p.rot
+          ..clearActiveEffects();
 
         final isSolved = p.isSolved(rows, cols);
         final inMultiCluster = (clusterSizes[p.clusterId] ?? 1) > 1;
@@ -2107,9 +2135,7 @@ class JigsawPuzzleGame extends FlameGame
 
       // 维护托盘顺序
       final traySet = trayPieces.map((p) => p.id).toSet();
-      final orderedTrayIds = _trayOrder
-          .where(traySet.contains)
-          .toList();
+      final orderedTrayIds = _trayOrder.where(traySet.contains).toList();
       for (final p in trayPieces) {
         if (!orderedTrayIds.contains(p.id)) {
           orderedTrayIds.add(p.id);
@@ -2228,14 +2254,16 @@ class JigsawPuzzleGame extends FlameGame
       final c = _pieces[id];
       if (c == null) continue; // 防御：跳过 _pieces 中不存在的碎片
       c.priority = _topPriority;
-      c.isInTray = false;
-      c.scale.setFrom(Vector2.all(_zoom));
-      c.clusterId = statePiece.clusterId;
-      c.rot = statePiece.rot;
-      c.animateTo(
-        _normalizedToScreen(statePiece.nx, statePiece.ny),
-        duration: 0.25,
-      );
+      c
+        ..isInTray = false
+        ..scale.setFrom(Vector2.all(_zoom))
+        ..clusterId = statePiece.clusterId;
+      c
+        ..rot = statePiece.rot
+        ..animateTo(
+          _normalizedToScreen(statePiece.nx, statePiece.ny),
+          duration: 0.25,
+        );
       c.triggerSnapGlow();
     }
 

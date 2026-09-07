@@ -130,7 +130,10 @@ void main() {
       // 透传回写
       final out = s.toJson();
       expect(out['futureField'], 'futureValue');
-      expect(out['pieces'][0]['futurePieceField'], 123);
+      expect(
+        ((out['pieces'] as List).first as Map)['futurePieceField'] as int,
+        123,
+      );
       // 再次解析不丢
       final s2 = PuzzleBoardState.fromJson(out);
       expect(s2.extra['futureField'], 'futureValue');

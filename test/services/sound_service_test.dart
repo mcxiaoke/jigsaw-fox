@@ -153,8 +153,9 @@ void main() {
 
     test('SoundSlot resetSync clears state and increments playToken', () {
       final slot = SoundSlot(0);
-      slot.isBusy = true;
-      slot.currentFile = 'win.wav';
+      slot
+        ..isBusy = true
+        ..currentFile = 'win.wav';
       final initialToken = slot.playToken;
 
       slot.resetSync();

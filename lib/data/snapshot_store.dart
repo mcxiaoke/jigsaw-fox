@@ -101,6 +101,8 @@ class SnapshotStore {
   }
 
   static String _shortHash(String str) {
+    // FNV-1a offset basis; safe on native (non-JS) targets.
+    // ignore: avoid_js_rounded_ints
     var hash = 0xcbf29ce484222325;
     for (var i = 0; i < str.length; i++) {
       hash ^= str.codeUnitAt(i);

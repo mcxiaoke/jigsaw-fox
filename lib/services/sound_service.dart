@@ -156,7 +156,13 @@ class SoundService {
       case Sfx.win:
       case Sfx.winBig:
         return 1000;
-      default:
+      case Sfx.clearShort:
+      case Sfx.jingle:
+      case Sfx.rotate:
+      case Sfx.negative:
+      case Sfx.moveIn:
+      case Sfx.moveOut:
+      case Sfx.numbers:
         return 50;
     }
   }
@@ -221,8 +227,9 @@ class SoundService {
       for (var i = 0; i < _kPoolSize; i++) {
         final player = AudioPlayer();
         // 禁用每帧向原生平台查询播放进度的 FramePositionUpdater，彻底消除高频 MethodChannel 轮询与微任务开销
-        player.positionUpdater = null;
-        player.audioCache = FlameAudio.audioCache;
+        player
+          ..positionUpdater = null
+          ..audioCache = FlameAudio.audioCache;
         await player.setAudioContext(audioContext);
         await player.setReleaseMode(ReleaseMode.stop);
         await player.setPlayerMode(PlayerMode.lowLatency);
@@ -568,7 +575,6 @@ class SoundService {
 
 /// 播放器池槽位实体，绑定单一 AudioPlayer 并管理其释放与归还生命周期
 class SoundSlot {
-
   SoundSlot(this.id, [this.playerInstance]);
   final int id;
   final AudioPlayer? playerInstance;

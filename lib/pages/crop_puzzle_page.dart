@@ -18,7 +18,6 @@ import 'package:phosphoricons_flutter/phosphoricons_flutter.dart';
 
 /// Dynamic crop ratio option derived from [PuzzleAspectRatio] (Plug & Play architecture).
 class CropRatioOption {
-
   const CropRatioOption(this.aspectRatio);
   final PuzzleAspectRatio aspectRatio;
 
@@ -44,7 +43,8 @@ final List<CropRatioOption> supportedCropOptions = List.unmodifiable(
 /// Interactive photo cropping & puzzle creation page with large adaptive viewport and 5 standard aspect ratios.
 class CropPuzzlePage extends StatefulWidget {
   const CropPuzzlePage({
-    required this.rawBytes, super.key,
+    required this.rawBytes,
+    super.key,
     this.sourceType = 'gallery',
     this.sourcePlatform = 'album',
     this.sourceUrl,
@@ -484,8 +484,14 @@ class _CropPuzzlePageState extends State<CropPuzzlePage> {
               Expanded(
                 child: LayoutBuilder(
                   builder: (context, constraints) {
-                    final maxW = max(50.0, constraints.maxWidth - 32);
-                    final maxH = max(50.0, constraints.maxHeight - 72);
+                    final maxW = max(
+                      50.0,
+                      constraints.maxWidth - 32,
+                    );
+                    final maxH = max(
+                      50.0,
+                      constraints.maxHeight - 72,
+                    );
 
                     double boxW;
                     double boxH;

@@ -19,9 +19,10 @@ enum GallerySite {
   unsplash('Unsplash', 'https://unsplash.com/'),
   pexels('Pexels', 'https://www.pexels.com/zh-cn/');
 
+  const GallerySite(this.label, this.url);
+
   final String label;
   final String url;
-  const GallerySite(this.label, this.url);
 }
 
 /// Fullscreen online image browser powered by InAppWebView,

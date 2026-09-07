@@ -38,10 +38,11 @@ void main() {
       for (var y = 0; y < 80; y++) {
         for (var x = 0; x < 100; x++) {
           final p = sample.getPixel(x, y);
-          p.r = (x * 2) % 256;
-          p.g = (y * 3) % 256;
-          p.b = 128;
-          p.a = 255;
+          p
+            ..r = (x * 2) % 256
+            ..g = (y * 3) % 256
+            ..b = 128
+            ..a = 255;
         }
       }
 
@@ -80,11 +81,12 @@ void main() {
         for (var y = 0; y < 20; y++) {
           for (var x = 0; x < 20; x++) {
             final p = flatSample.getPixel(x, y);
-            final noise = (x + y) % 2 == 0 ? 128 : 130;
+            final noise = (x + y).isEven ? 128 : 130;
             p.r = noise;
-            p.g = noise;
-            p.b = noise;
-            p.a = 255;
+            p
+              ..g = noise
+              ..b = noise
+              ..a = 255;
           }
         }
 
@@ -107,9 +109,10 @@ void main() {
             final p = edgeSample.getPixel(x, y);
             final val = x < 10 ? 30 : 220;
             p.r = val;
-            p.g = val;
-            p.b = val;
-            p.a = 255;
+            p
+              ..g = val
+              ..b = val
+              ..a = 255;
           }
         }
 

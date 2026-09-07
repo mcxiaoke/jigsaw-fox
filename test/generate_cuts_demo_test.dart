@@ -28,6 +28,7 @@ Future<void> _savePictureToPng(
   final buffer = byteData!.buffer.asUint8List();
   final file = File(outputPath);
   await file.writeAsBytes(buffer);
+  // Demo helper: printing is intentional for visual output.
   // ignore: avoid_print
   print('Saved sample cut to $outputPath (${width}x$height)');
 }
@@ -131,10 +132,10 @@ void main() {
               (rng.nextDouble() - 0.5) * 30.0;
 
           canvas.save();
-          canvas.translate(colX, rowY);
-
-          // 1. Drop shadow (Contact AO vs. Float Spread Shadow)
-          canvas.save();
+          canvas
+            ..translate(colX, rowY)
+            // 1. Drop shadow (Contact AO vs. Float Spread Shadow)
+            ..save();
           if (isElevated) {
             canvas.translate(2, 6);
             canvas.drawPath(shape.path, floatShadowPaint);
@@ -147,26 +148,28 @@ void main() {
           // 2. Cardboard 3D Extrusion Side (When elevated)
           if (isElevated) {
             canvas.save();
-            canvas.translate(0.8, 1.6);
-            canvas.drawPath(shape.path, cardboardSidePaint);
-            canvas.drawPath(shape.shadowPath, cardboardBottomEdgePaint);
-            canvas.restore();
+            canvas
+              ..translate(0.8, 1.6)
+              ..drawPath(shape.path, cardboardSidePaint)
+              ..drawPath(shape.shadowPath, cardboardBottomEdgePaint)
+              ..restore();
           }
 
           // 3. Front Texture & Linen Finish
           canvas.save();
-          canvas.clipPath(shape.path);
-          canvas.drawImageRect(image1, srcRect, shape.fillRect, imagePaint);
+          canvas
+            ..clipPath(shape.path)
+            ..drawImageRect(image1, srcRect, shape.fillRect, imagePaint);
           if (LinenTextureManager.paint != null) {
             canvas.drawRect(shape.fillRect, LinenTextureManager.paint!);
           }
           canvas.restore();
 
           // 4. Directional Lighting Cutlines (Top/Left highlight + Bottom/Right dark shadow)
-          canvas.drawPath(shape.highlightPath, highlightOutlinePaint);
-          canvas.drawPath(shape.shadowPath, shadowOutlinePaint);
-
-          canvas.restore();
+          canvas
+            ..drawPath(shape.highlightPath, highlightOutlinePaint)
+            ..drawPath(shape.shadowPath, shadowOutlinePaint)
+            ..restore();
         }
       }
 
@@ -206,14 +209,14 @@ void main() {
         Paint()..color = const Color(0xFF22262B),
       );
 
-      canvas.save();
-      canvas.translate(60, 60);
-
-      // Draw shadow for whole board
-      canvas.save();
-      canvas.translate(0, 6);
-      canvas.drawRect(Rect.fromLTWH(0, 0, imgW, imgH), floatShadowPaint);
-      canvas.restore();
+      canvas
+        ..save()
+        ..translate(60, 60)
+        // Draw shadow for whole board
+        ..save()
+        ..translate(0, 6)
+        ..drawRect(Rect.fromLTWH(0, 0, imgW, imgH), floatShadowPaint)
+        ..restore();
 
       for (var r = 0; r < rows; r++) {
         for (var c = 0; c < cols; c++) {
@@ -227,22 +230,22 @@ void main() {
           );
 
           canvas.save();
-          canvas.translate(c * pieceW, r * pieceH);
-
-          // Texture & Linen Finish
-          canvas.save();
-          canvas.clipPath(shape.path);
-          canvas.drawImageRect(image2, srcRect, shape.fillRect, imagePaint);
+          canvas
+            ..translate(c * pieceW, r * pieceH)
+            // Texture & Linen Finish
+            ..save()
+            ..clipPath(shape.path)
+            ..drawImageRect(image2, srcRect, shape.fillRect, imagePaint);
           if (LinenTextureManager.paint != null) {
             canvas.drawRect(shape.fillRect, LinenTextureManager.paint!);
           }
           canvas.restore();
 
           // Cutlines with directional lighting
-          canvas.drawPath(shape.highlightPath, highlightOutlinePaint);
-          canvas.drawPath(shape.shadowPath, shadowOutlinePaint);
-
-          canvas.restore();
+          canvas
+            ..drawPath(shape.highlightPath, highlightOutlinePaint)
+            ..drawPath(shape.shadowPath, shadowOutlinePaint)
+            ..restore();
         }
       }
       canvas.restore();
@@ -296,35 +299,33 @@ void main() {
         const posY = 130.0;
 
         canvas.save();
-        canvas.translate(posX, posY);
-
-        // 1. Shadow
-        canvas.save();
-        canvas.translate(2, 6);
-        canvas.drawPath(shape.path, floatShadowPaint);
-        canvas.restore();
-
-        // 2. Cardboard 3D Side
-        canvas.save();
-        canvas.translate(0.8, 1.6);
-        canvas.drawPath(shape.path, cardboardSidePaint);
-        canvas.drawPath(shape.shadowPath, cardboardBottomEdgePaint);
-        canvas.restore();
-
-        // 3. Piece Front Texture & Linen Finish
-        canvas.save();
-        canvas.clipPath(shape.path);
-        canvas.drawImageRect(image1, srcRect, shape.fillRect, imagePaint);
+        canvas
+          ..translate(posX, posY)
+          // 1. Shadow
+          ..save()
+          ..translate(2, 6)
+          ..drawPath(shape.path, floatShadowPaint)
+          ..restore()
+          // 2. Cardboard 3D Side
+          ..save()
+          ..translate(0.8, 1.6)
+          ..drawPath(shape.path, cardboardSidePaint)
+          ..drawPath(shape.shadowPath, cardboardBottomEdgePaint)
+          ..restore()
+          // 3. Piece Front Texture & Linen Finish
+          ..save()
+          ..clipPath(shape.path)
+          ..drawImageRect(image1, srcRect, shape.fillRect, imagePaint);
         if (LinenTextureManager.paint != null) {
           canvas.drawRect(shape.fillRect, LinenTextureManager.paint!);
         }
         canvas.restore();
 
         // 4. Directional Cutlines
-        canvas.drawPath(shape.highlightPath, highlightOutlinePaint);
-        canvas.drawPath(shape.shadowPath, shadowOutlinePaint);
-
-        canvas.restore();
+        canvas
+          ..drawPath(shape.highlightPath, highlightOutlinePaint)
+          ..drawPath(shape.shadowPath, shadowOutlinePaint)
+          ..restore();
       }
 
       final picture = recorder.endRecording();

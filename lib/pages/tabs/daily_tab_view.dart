@@ -314,7 +314,7 @@ class _DailyTabViewState extends State<DailyTabView> {
     final displayPercent = ResumeHelper.displayProgress(
       progress,
       progress.progressPercent,
-      progress.isCompleted,
+      isCompleted: progress.isCompleted,
     );
     if (!mounted) return;
 

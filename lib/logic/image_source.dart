@@ -19,6 +19,8 @@ const assetSamples = <String>[
   'assets/images/sample_10.jpg',
 ];
 
+// Used as an interface with multiple implementations.
+// ignore: one_member_abstracts
 abstract class PuzzleSource {
   Future<Uint8List> loadBytes();
 }

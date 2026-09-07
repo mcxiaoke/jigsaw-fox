@@ -187,8 +187,9 @@ class ImageUpscaler {
         final finalB = (1.0 - blend) * origPixel.b + blend * outB[idx];
 
         dstPixel.r = finalR.clamp(0.0, 255.0).round();
-        dstPixel.g = finalG.clamp(0.0, 255.0).round();
-        dstPixel.b = finalB.clamp(0.0, 255.0).round();
+        dstPixel
+          ..g = finalG.clamp(0.0, 255.0).round()
+          ..b = finalB.clamp(0.0, 255.0).round();
         if (src.numChannels > 3) {
           dstPixel.a = origPixel.a;
         }
@@ -334,9 +335,10 @@ class ImageUpscaler {
         );
 
         final dstPixel = dst.getPixel(x, y);
-        dstPixel.r = outR;
-        dstPixel.g = outG;
-        dstPixel.b = outB;
+        dstPixel
+          ..r = outR
+          ..g = outG
+          ..b = outB;
         if (src.numChannels > 3) {
           dstPixel.a = e.a;
         }
@@ -423,8 +425,9 @@ class ImageUpscaler {
         // 门限判断：平坦区直接跳过锐化（Early Exit）
         if (deltaContrast <= noiseThresholdLow) {
           dstPixel.r = e.r;
-          dstPixel.g = e.g;
-          dstPixel.b = e.b;
+          dstPixel
+            ..g = e.g
+            ..b = e.b;
           if (src.numChannels > 3) {
             dstPixel.a = e.a;
           }
@@ -448,8 +451,9 @@ class ImageUpscaler {
         final outB = (w * (b.b + d.b + f.b + h.b) + e.b) / totalWeight;
 
         dstPixel.r = outR.clamp(0.0, 255.0).round();
-        dstPixel.g = outG.clamp(0.0, 255.0).round();
-        dstPixel.b = outB.clamp(0.0, 255.0).round();
+        dstPixel
+          ..g = outG.clamp(0.0, 255.0).round()
+          ..b = outB.clamp(0.0, 255.0).round();
         if (src.numChannels > 3) {
           dstPixel.a = e.a;
         }

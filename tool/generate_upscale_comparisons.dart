@@ -1,3 +1,4 @@
+// CLI tool: printing to stdout is expected.
 // ignore_for_file: avoid_print
 import 'dart:io';
 import 'dart:math' as math;

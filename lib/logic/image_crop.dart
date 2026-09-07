@@ -103,7 +103,8 @@ Rect findSmartCropRect(
   }
 
   // 1. 计算目标裁剪尺寸（原图坐标系）
-  double cropW, cropH;
+  double cropW;
+  double cropH;
   if (srcRatio > targetRatio) {
     cropH = srcH.toDouble();
     cropW = srcH * targetRatio;

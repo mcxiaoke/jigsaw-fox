@@ -79,7 +79,7 @@ Future<Box<T>> safeOpenBox<T>(String name) async {
 
 /// 对象型 box（progress / collections）统一写入：值统一为 JSON String，
 /// 根除「未注册 TypeAdapter 的嵌套 Map 重启后退化成 Map[dynamic,dynamic]」崩溃
-/// （设计 §3.2）。写入自动纳入 [_pendingWrites] 队列，供关窗时 `await`。
+/// （设计 §3.2）。写入自动纳入 `_pendingWrites` 队列，供关窗时 `await`。
 Future<void> putJson(Box<dynamic> box, String key, Map<String, dynamic> value) {
   final f = box.put(key, jsonEncode(value));
   // 纳入全局挂起队列（P05 关窗丢档防护）
@@ -121,7 +121,6 @@ String _randSuffix() => math.Random().nextInt(10000).toString().padLeft(4, '0');
 /// 损坏检测 + 备份恢复 + 空库兜底全部内聚于 [openAll]，
 /// 调用方（main.dart）永不接触 [BoxCorruptException]。
 class StorageManager {
-
   StorageManager._();
 
   /// 测试专用构造：注入临时目录并完成 Hive.init，
@@ -146,6 +145,8 @@ class StorageManager {
   static StorageManager instance = StorageManager._();
 
   @visibleForTesting
+  // Test-only mock injection pattern; a setter would expose it to prod code.
+  // ignore: use_setters_to_change_properties
   static void setMockInstance(StorageManager mock) => instance = mock;
 
   Box<dynamic>? progressBox;

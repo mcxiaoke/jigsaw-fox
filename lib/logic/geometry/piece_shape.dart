@@ -10,7 +10,7 @@ import 'package:jigsawpuzzle/logic/geometry/edge_layout.dart';
 /// 拼图碎片不是简单的矩形，凸头（Tab）会伸出到基础矩形单元格外，
 /// 同时凹槽（Blank）在卡扣两侧根部也存在约 10% 的微小外扩。
 /// 为了确保：
-/// 1. 贴图采样区域（[srcRect]）与渲染绘制区域（[fillRect]）能 100% 完整覆盖贝塞尔曲线的极值外轮廓；
+/// 1. 贴图采样区域（`srcRect`）与渲染绘制区域（`fillRect`）能 100% 完整覆盖贝塞尔曲线的极值外轮廓；
 /// 2. 避免边缘纹理被矩形画布边界意外截断，导致在拼装交界角露白或漏底黑缝。
 ///
 /// 【裕量参数选值依据】：
@@ -146,7 +146,7 @@ class PieceShape {
     // 1. Top 边：(0, 0) -> (width, 0)
     edges.top.appendToPath(
       p,
-      start: const Offset(0, 0),
+      start: Offset.zero,
       end: Offset(width, 0),
       normal: const Offset(0, -1),
     );
@@ -171,7 +171,7 @@ class PieceShape {
     // 4. Left 边：标准定义为 (0, 0) -> (0, height)，逆向倒回 (0, 0)
     edges.left.appendToPath(
       p,
-      start: const Offset(0, 0),
+      start: Offset.zero,
       end: Offset(0, height),
       normal: const Offset(-1, 0),
       reverse: true,
@@ -188,7 +188,7 @@ class PieceShape {
     // 1. Left 边：(0, height) -> (0, 0)
     edges.left.appendToPath(
       p,
-      start: const Offset(0, 0),
+      start: Offset.zero,
       end: Offset(0, height),
       normal: const Offset(-1, 0),
       reverse: true,
@@ -196,7 +196,7 @@ class PieceShape {
     // 2. Top 边：(0, 0) -> (width, 0)
     edges.top.appendToPath(
       p,
-      start: const Offset(0, 0),
+      start: Offset.zero,
       end: Offset(width, 0),
       normal: const Offset(0, -1),
     );

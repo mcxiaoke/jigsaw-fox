@@ -192,11 +192,12 @@ void main() {
     test('5. Anti-ZipSlip and system junk files filtering', () async {
       final zipPath = p.join(tempDir.path, 'malicious_and_junk.zip');
       final archive = Archive();
-      archive.addFile(ArchiveFile('__MACOSX/._hidden.png', 10, [1, 2, 3]));
-      archive.addFile(ArchiveFile('.DS_Store', 10, [1, 2, 3]));
-      archive.addFile(
-        ArchiveFile('../escaped.png', testPngBytes.length, testPngBytes),
-      ); // 路径穿越
+      archive
+        ..addFile(ArchiveFile('__MACOSX/._hidden.png', 10, [1, 2, 3]))
+        ..addFile(ArchiveFile('.DS_Store', 10, [1, 2, 3]))
+        ..addFile(
+          ArchiveFile('../escaped.png', testPngBytes.length, testPngBytes),
+        ); // 路径穿越
       archive.addFile(
         ArchiveFile('valid_image.png', testPngBytes.length, testPngBytes),
       );

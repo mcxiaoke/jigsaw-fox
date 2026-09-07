@@ -64,6 +64,7 @@ void _initLifecycleHooks() {
 
 /// flush + 会话备份（§7.8 备份点 B），5 分钟节流
 void _handleBackgroundSync() {
+  // Fire-and-forget: background sync must not block the UI.
   // ignore: discarded_futures
   StorageManager.instance.flushPendingWrites().then((_) {
     if (StorageManager.instance.isTestInstance) return;
@@ -73,6 +74,7 @@ void _handleBackgroundSync() {
       return;
     }
     _lastBackupTime = now;
+    // Fire-and-forget: backup runs in background without blocking.
     // ignore: discarded_futures
     StorageManager.instance.backupNow();
   });

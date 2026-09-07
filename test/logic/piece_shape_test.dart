@@ -10,7 +10,7 @@ void main() {
       const edges = PieceEdges(
         top: EdgeCurveDescriptor(edgeType: EdgeType.tab),
         right: EdgeCurveDescriptor(edgeType: EdgeType.blank),
-        bottom: EdgeCurveDescriptor(edgeType: EdgeType.flat),
+        bottom: EdgeCurveDescriptor.flat,
         left: EdgeCurveDescriptor(edgeType: EdgeType.tab),
       );
 
@@ -32,7 +32,7 @@ void main() {
         top: EdgeCurveDescriptor(edgeType: EdgeType.tab),
         right: EdgeCurveDescriptor(edgeType: EdgeType.tab),
         bottom: EdgeCurveDescriptor(edgeType: EdgeType.blank),
-        left: EdgeCurveDescriptor(edgeType: EdgeType.flat),
+        left: EdgeCurveDescriptor.flat,
       );
 
       final shape = PieceShape(
@@ -54,7 +54,7 @@ void main() {
         top: EdgeCurveDescriptor(edgeType: EdgeType.blank),
         right: EdgeCurveDescriptor(edgeType: EdgeType.tab),
         bottom: EdgeCurveDescriptor(edgeType: EdgeType.tab),
-        left: EdgeCurveDescriptor(edgeType: EdgeType.flat),
+        left: EdgeCurveDescriptor.flat,
       );
 
       final shape = PieceShape(
@@ -86,7 +86,7 @@ void main() {
         top: EdgeCurveDescriptor(edgeType: EdgeType.tab),
         right: EdgeCurveDescriptor(edgeType: EdgeType.tab),
         bottom: EdgeCurveDescriptor(edgeType: EdgeType.blank),
-        left: EdgeCurveDescriptor(edgeType: EdgeType.flat),
+        left: EdgeCurveDescriptor.flat,
       );
 
       final shape = PieceShape(edges: edges, width: 100, height: 100);
@@ -103,7 +103,7 @@ void main() {
         top: EdgeCurveDescriptor(edgeType: EdgeType.tab),
         right: EdgeCurveDescriptor(edgeType: EdgeType.tab),
         bottom: EdgeCurveDescriptor(edgeType: EdgeType.blank),
-        left: EdgeCurveDescriptor(edgeType: EdgeType.flat),
+        left: EdgeCurveDescriptor.flat,
       );
 
       final shape = PieceShape(edges: edges, width: 100, height: 100);

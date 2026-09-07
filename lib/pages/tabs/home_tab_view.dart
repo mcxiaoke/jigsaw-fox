@@ -191,7 +191,7 @@ class _HomeTabViewState extends State<HomeTabView> {
     final displayPercent = ResumeHelper.displayProgress(
       progress,
       level.progressPercent,
-      level.isCompleted,
+      isCompleted: level.isCompleted,
     );
     if (!mounted) return;
     await ChooseDifficultySheet.show(
