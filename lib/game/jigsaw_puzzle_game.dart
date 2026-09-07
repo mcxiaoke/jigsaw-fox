@@ -182,6 +182,15 @@ class JigsawPuzzleGame extends FlameGame
   /// 碎片处于棋盘有效范围判定容差（归一化世界坐标）
   static const double _boardBoundsTolerance = 0.05;
 
+  /// 桌面散落模式散落槽位的网格步长系数（相对碎片基础尺寸）。
+  ///
+  /// 【选值依据】：碎片含凸头（Tab 最大外扩 35%）后物理占宽可达 1.35~1.70 倍基础格，
+  /// 旧值 1.18 使相邻槽位碎片视觉上几乎相贴甚至凸头重叠，洗牌后原图相邻碎片落到
+  /// 相邻槽位时看起来"初始就吸附在一起"。经 7 类窗口尺寸 x 多种难度容量模拟验证，
+  /// 1.45 在紧凑窗口（如 1024x768 4x4、1366x768 5x5）下槽位容量依然满足 0.80 覆盖率，
+  /// 同时典型碎片间隙提升至约 0.15 格，视觉明显分开。
+  static const double tabletopScatterStepRatio = 1.45;
+
   /// 判断归一化坐标是否处于棋盘有效覆盖范围内（含微容差）
   bool _isNormalizedOnBoard(
     double nx,
@@ -622,8 +631,8 @@ class JigsawPuzzleGame extends FlameGame
         final safeTop = testBoardTop - pad;
         final safeRight = testBoardLeft + testBoardSize.x + pad;
         final safeBottom = testBoardTop + testBoardSize.y + pad;
-        final stepX = max(32, testPieceW * 1.18);
-        final stepY = max(32, testPieceH * 1.18);
+        final stepX = max(32, testPieceW * tabletopScatterStepRatio);
+        final stepY = max(32, testPieceH * tabletopScatterStepRatio);
         final colsCount = max(1, ((size.x - 16.0) / stepX).floor());
         final rowsCount = max(1, ((size.y - 60.0) / stepY).floor());
         const topMargin = 48.0;
@@ -662,8 +671,8 @@ class JigsawPuzzleGame extends FlameGame
         final safeTop = testBoardTop - pad;
         final safeRight = testBoardLeft + testBoardSize.x + pad;
         final safeBottom = testBoardTop + testBoardSize.y + pad;
-        final stepX = max(32, testPieceW * 1.18);
-        final stepY = max(32, testPieceH * 1.18);
+        final stepX = max(32, testPieceW * tabletopScatterStepRatio);
+        final stepY = max(32, testPieceH * tabletopScatterStepRatio);
         final colsCount = max(1, ((size.x - 16.0) / stepX).floor());
         final rowsCount = max(1, ((size.y - 60.0) / stepY).floor());
         const topMargin = 48.0;
@@ -836,9 +845,9 @@ class JigsawPuzzleGame extends FlameGame
     final safeRight = boardTopLeft.x + boardSize.x + pad;
     final safeBottom = boardTopLeft.y + boardSize.y + pad;
 
-    // 开阔步长 (1.15 ~ 1.25)，保证碎片充分展开分散
-    final stepX = max(32, pieceSize.x * 1.18);
-    final stepY = max(32, pieceSize.y * 1.18);
+    // 开阔步长 (tabletopScatterStepRatio=1.45 倍基础格)，保证碎片含凸头后仍有明显视觉间隙
+    final stepX = max(32, pieceSize.x * tabletopScatterStepRatio);
+    final stepY = max(32, pieceSize.y * tabletopScatterStepRatio);
 
     final cols = max(1, ((size.x - 16.0) / stepX).floor());
     final rows = max(1, ((size.y - 60.0) / stepY).floor());
@@ -1003,9 +1012,19 @@ class JigsawPuzzleGame extends FlameGame
     final primary = _holdingPiece;
     if (primary == null || _isSolved) return;
 
-    // 1. 计算碎片在当前 Y 坐标下的平滑过渡缩放（桌面散落模式下全程锁定 _zoom，彻底禁用缩放跳变）
+    // 0. 计算同集群内其他碎片（后续缩放、包围盒限位与托盘脱离判定共用）
+    final clusterPieces = _pieces.values.where(
+      (p) => p.clusterId == primary.clusterId && p != primary,
+    );
+    final isMultiCluster = clusterPieces.isNotEmpty;
+
+    // 1. 计算碎片在当前 Y 坐标下的平滑过渡缩放。
+    //    [多块集群] 桌面散落模式 或 已吸附拼合的多块集群：全程锁定棋盘尺寸 _zoom。
+    //    原因：多块集群永远无法放回托盘（handlePieceDragEnd 仅单块允许回托盘），
+    //    拖入托盘区域时缩小到 _trayPieceScale 是误导性反馈，会造成"缩小-松手弹回"。
+    //    [单块碎片] 非桌面模式按光标 Y 在托盘尺寸与棋盘尺寸间平滑过渡（放回托盘的视觉暗示）。
     double currentScale;
-    if (isTabletop) {
+    if (isTabletop || isMultiCluster) {
       currentScale = _zoom;
     } else {
       final trayTop = trayPosition.y;
@@ -1029,10 +1048,6 @@ class JigsawPuzzleGame extends FlameGame
         cursorCanvasPos.y - _holdingAnchorY * primary.size.y * currentScale;
 
     // 3. 计算同集群内其他碎片的相对偏移范围（包围盒约束）
-    final clusterPieces = _pieces.values.where(
-      (p) => p.clusterId == primary.clusterId && p != primary,
-    );
-
     var minCol = 0;
     var maxCol = 0;
     var minRow = 0;

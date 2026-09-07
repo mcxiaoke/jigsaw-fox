@@ -1,5 +1,5 @@
 import 'dart:convert';
-import 'dart:math' show max, min;
+import 'dart:math' show max, min, sqrt;
 import 'dart:ui' as ui;
 
 import 'package:flame/components.dart';
@@ -1966,5 +1966,110 @@ void main() {
         .where((p) => p.isInTray)
         .toList();
     expect(trayPieces.length, 3);
+  });
+
+  test('多块已吸附集群拖入托盘区域时保持棋盘尺寸不缩小，单块碎片仍缩小（修复缩小-松手弹回）', () async {
+    final img = await _decodePng();
+    final game = JigsawPuzzleGame(
+      image: img,
+      rows: 3,
+      cols: 3,
+      onSolved: () {},
+    );
+    game.onGameResize(Vector2(600, 800));
+    await game.onLoad();
+
+    final p0 = game.children.whereType<PuzzlePieceComponent>().firstWhere(
+      (p) => p.id == 0,
+    );
+    final p1 = game.children.whereType<PuzzlePieceComponent>().firstWhere(
+      (p) => p.id == 1,
+    );
+    // 手动构造 2 块已吸附集群（与既有集群测试同法）
+    p0
+      ..isInTray = false
+      ..isLocked = false
+      ..clusterId = 999;
+    p1
+      ..isInTray = false
+      ..isLocked = false
+      ..clusterId = 999;
+
+    // 1. 抓取集群并拖入托盘区域（y 深入托盘内部）
+    game.startHoldingPiece(p0, 0.5, 0.5);
+    game.updateHoldingPiecePosition(Vector2(200, game.trayPosition.y + 40));
+    expect(
+      p0.scale.x,
+      closeTo(game.zoom, 0.001),
+      reason: '多块集群拖入托盘区域必须保持棋盘尺寸，绝不缩小',
+    );
+    expect(p1.scale.x, closeTo(game.zoom, 0.001));
+    expect(
+      p1.scale.x,
+      isNot(closeTo(game.trayPieceScale, 0.001)),
+      reason: '多块集群成员不得缩到托盘尺寸',
+    );
+
+    // 2. 对照行为：单块碎片拖入托盘区域仍应缩小（放回托盘的视觉暗示不能回归）
+    game.dropHoldingPiece();
+    final single = game.children.whereType<PuzzlePieceComponent>().firstWhere(
+      (p) => p.id == 2,
+    );
+    game.startHoldingPiece(single, 0.5, 0.5);
+    game.updateHoldingPiecePosition(Vector2(200, game.trayPosition.y + 40));
+    expect(
+      single.scale.x,
+      closeTo(game.trayPieceScale, 0.001),
+      reason: '单块碎片拖入托盘仍应缩小以提示可放回托盘',
+    );
+  });
+
+  test('桌面散落模式初始洗牌后碎片间距充足，绝不视觉相贴（修复"初始吸附"观感）', () async {
+    final img = await _decodePng();
+    final game = JigsawPuzzleGame(
+      image: img,
+      rows: 4,
+      cols: 4,
+      scatterMode: 'tabletop',
+      onSolved: () {},
+    );
+    game.onGameResize(Vector2(1280, 800));
+    await game.onLoad();
+
+    final pieces = game.children.whereType<PuzzlePieceComponent>().toList();
+    expect(pieces.length, 16);
+
+    // 1.45 步长下相邻散落槽位最小中心距约 1.29 格（步长 - 两侧 ±8% 抖动），
+    // 旧 1.18 步长最小约 1.02 格。用 1.2 格下界可有效防止步长回退导致碎片相贴。
+    final minSide = min(game.pieceSize.x, game.pieceSize.y);
+    final minGap = 1.2 * minSide;
+
+    var minDist = double.infinity;
+    for (var i = 0; i < pieces.length; i++) {
+      for (var j = i + 1; j < pieces.length; j++) {
+        final a = pieces[i];
+        final b = pieces[j];
+        final d = sqrt(
+          (a.position.x +
+                      a.size.x * a.scale.x / 2 -
+                      (b.position.x + b.size.x * b.scale.x / 2)) *
+                  (a.position.x +
+                      a.size.x * a.scale.x / 2 -
+                      (b.position.x + b.size.x * b.scale.x / 2)) +
+              (a.position.y +
+                      a.size.y * a.scale.y / 2 -
+                      (b.position.y + b.size.y * b.scale.y / 2)) *
+                  (a.position.y +
+                      a.size.y * a.scale.y / 2 -
+                      (b.position.y + b.size.y * b.scale.y / 2)),
+        );
+        if (d < minDist) minDist = d;
+      }
+    }
+    expect(
+      minDist,
+      greaterThanOrEqualTo(minGap),
+      reason: '任意两块初始散落碎片中心距不得小于 1.2 格，当前最小 $minDist，期望 >= $minGap',
+    );
   });
 }
