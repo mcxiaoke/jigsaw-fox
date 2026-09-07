@@ -9,6 +9,7 @@
 - 代码格式：对有改动的代码运行 `dart format` ，禁止全仓库运行格式化工具
 - 普通测试: 改代码后运行 `flutter analyze` 和 `flutter test` 测试通过
 - 编译验证: 运行 `flutter build windows --debug` 验证编译无错误
+- 运行验证：运行 `flutter test .\integration_test\app_test.dart -d windows` 无错误
 
 
 ## 注意事项
