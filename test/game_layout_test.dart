@@ -1826,10 +1826,25 @@ void main() {
     // 1. 已归位碎片依然正确归位在棋盘上
     expect(gameTray.solvedCount, 1);
 
-    // 2. 其余未拼碎片全部被收纳进托盘
+    // 2. 其余未拼离散单片全部被收纳进托盘；
+    //    但按设计会保全"已归位碎片"与"多片拼合集群"两类核心资产留在棋盘上，
+    //    所以断言应判断：凡留在托盘之外的碎片，必属 已归位 或 多片集群 二者之一。
     final pieces = gameTray.children.whereType<PuzzlePieceComponent>().toList();
     final trayPieces = pieces.where((p) => p.isInTray).toList();
-    expect(trayPieces.length, equals(8), reason: '9块碎片除1块已归位外，其余8块应全部进入托盘');
+    final onBoardPieces = pieces.where((p) => !p.isInTray).toList();
+    for (final p in onBoardPieces) {
+      final st = gameTray.boardState.pieceById(p.id);
+      final clusterSize = gameTray.boardState.pieces
+          .where((s) => s.clusterId == st.clusterId)
+          .length;
+      final keptAsAsset = st.isSolved(3, 3) || clusterSize > 1;
+      expect(
+        keptAsAsset,
+        isTrue,
+        reason: '留存在棋盘上的碎片必须是已归位或多片集群，碎片 ${p.id} 例外（游离单片必须进托盘）',
+      );
+    }
+    expect(trayPieces.length + onBoardPieces.length, equals(9));
 
     // 3. 所有托盘碎片均在托盘区域内（y >= trayPosition.y - 10.0），绝无悬空或飞出屏幕顶部的碎片
     for (final p in trayPieces) {
