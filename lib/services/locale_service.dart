@@ -15,7 +15,14 @@ enum AppLanguage { system, zh, en }
 /// - 计算 effectiveLocale（用户覆盖 ?? 系统语言，zh-* 归一为 zh）
 /// - 同步 slang 的 LocaleSettings 并通知 UI 重建
 class LocaleService extends ChangeNotifier {
-  LocaleService._();
+  LocaleService._() {
+    // 注册 zh 的 plural resolver，避免切换到中文时 slang 反复走 fallback 并打印警告。
+    // 中文无复数形态，一律归为 'other'。
+    LocaleSettings.setPluralResolver(
+      language: 'zh',
+      cardinalResolver: (n, {zero, one, two, few, many, other}) => other ?? '',
+    );
+  }
   static final LocaleService instance = LocaleService._();
 
   static const String _prefsKey = 'jigsaw_setting_language';
