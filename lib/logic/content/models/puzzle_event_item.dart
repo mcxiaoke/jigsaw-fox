@@ -5,11 +5,14 @@ class PuzzleEventItem {
   const PuzzleEventItem({
     required this.id,
     required this.title,
-    required this.status, required this.type, this.titleZh,
+    required this.status,
+    required this.type,
+    this.titleZh,
     this.desc = '',
     this.descZh,
     this.coverUrl,
     this.zipUrl,
+    this.zipUrls = const [],
     this.zipSha256,
     this.levels = const [],
     this.startTime,
@@ -40,6 +43,11 @@ class PuzzleEventItem {
       descZh: json['descZh']?.toString(),
       coverUrl: json['coverUrl']?.toString(),
       zipUrl: json['zipUrl']?.toString(),
+      zipUrls:
+          (json['zipUrls'] as List<dynamic>?)
+              ?.map((e) => e.toString())
+              .toList() ??
+          const [],
       zipSha256: json['zipSha256']?.toString(),
       levels:
           (json['levels'] as List<dynamic>?)
@@ -84,6 +92,9 @@ class PuzzleEventItem {
 
   /// Zip 下载包地址 (仅 type == 'zip' 时有效)
   final String? zipUrl;
+
+  /// Zip 备用镜像地址列表 (D10：zipUrl 主地址失败时按序轮询；可为空)
+  final List<String> zipUrls;
 
   /// Zip 文件的 SHA256 哈希 (可选校验)
   final String? zipSha256;
@@ -161,6 +172,7 @@ class PuzzleEventItem {
     String? descZh,
     String? coverUrl,
     String? zipUrl,
+    List<String>? zipUrls,
     String? zipSha256,
     List<String>? levels,
     DateTime? startTime,
@@ -180,6 +192,7 @@ class PuzzleEventItem {
       descZh: descZh ?? this.descZh,
       coverUrl: coverUrl ?? this.coverUrl,
       zipUrl: zipUrl ?? this.zipUrl,
+      zipUrls: zipUrls ?? this.zipUrls,
       zipSha256: zipSha256 ?? this.zipSha256,
       levels: levels ?? this.levels,
       startTime: startTime ?? this.startTime,
@@ -202,6 +215,7 @@ class PuzzleEventItem {
       if (descZh != null) 'descZh': descZh,
       'coverUrl': coverUrl,
       'zipUrl': zipUrl,
+      if (zipUrls.isNotEmpty) 'zipUrls': zipUrls,
       'zipSha256': zipSha256,
       'levels': levels,
       'startTime': startTime?.toIso8601String(),

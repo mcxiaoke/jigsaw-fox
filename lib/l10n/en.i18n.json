@@ -568,5 +568,12 @@
       "importFailed": "Failed to pick images: {error}",
       "webviewMissing": "WebView2 runtime is not installed; online image search is unavailable."
     }
+  },
+  "boot": {
+    "initTitle": "Initializing game content…",
+    "initSubtitle": "First launch downloads the puzzle library over the network.",
+    "failedTitle": "Initialization failed",
+    "failedDesc": "Cannot reach the content server. Check your network and retry.",
+    "retry": "Retry"
   }
 }

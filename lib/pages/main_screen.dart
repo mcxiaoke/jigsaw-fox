@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:jigsawpuzzle/l10n/gen/strings.g.dart';
+import 'package:jigsawpuzzle/logic/content/app_content.dart';
 import 'package:jigsawpuzzle/pages/achievements_page.dart';
 import 'package:jigsawpuzzle/pages/settings_page.dart';
 import 'package:jigsawpuzzle/pages/tabs/collections_tab_view.dart';
@@ -29,6 +30,13 @@ class _MainScreenState extends State<MainScreen> {
   void initState() {
     super.initState();
     LocaleService.instance.addListener(_onLocaleChanged);
+    // 后台增量同步（单次）：内容网络同步收口于此（AppContent 不再于 init 自动派发）。
+    // 老用户秒开路径在此补拉最新 manifest/批次；BootGate 成功后同样经由本页触发。
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (AppContent.instance.isInitialized) {
+        AppContent.instance.backgroundSyncOnce();
+      }
+    });
   }
 
   @override

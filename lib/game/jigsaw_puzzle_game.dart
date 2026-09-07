@@ -1007,58 +1007,82 @@ class JigsawPuzzleGame extends FlameGame
   /// 约束分配（方案B）：将 [pieceIds] 按序分配到散落 [slots]，返回"碎片 id → 槽位索引"。
   ///
   /// 【算法】：
-  /// 1. 洗牌顺序 [pieceIds] 保持不变（随机性来源，同 seed 确定性一致）；
-  /// 2. 对每块碎片贪心选槽位：优先选"与其原图逻辑邻居已占用槽位零空间冲突"的槽位；
-  /// 3. 严格无解（槽位紧）时回退到冲突最少的槽位——效果单调不差于完全随机。
+  /// 1. 洗牌顺序 [pieceIds] 是随机性来源（同 seed 确定性一致）；
+  /// 2. 贪心选槽：优先选"与其原图逻辑邻居已占用槽位零空间冲突"的槽位；
+  /// 3. **多轮扰动兜底**：单轮贪心无回溯，紧凑槽位下部分种子会失败（原图邻居
+  ///    被迫落入空间相邻槽 → 初始"伪吸附"观感 + 测试 flaky）。故扰动顺序至多
+  ///    64 轮，命中零冲突解立即返回；全失败则返回冲突最少的轮次（不差于旧行为）。
   List<int> _buildScatterAssignment({
     required List<int> pieceIds,
     required List<Vector2> slots,
   }) {
-    final assignment = List<int>.filled(totalPieces, -1);
-    final used = List<bool>.filled(slots.length, false);
     final logical = _logicalNeighborMap(rows, cols);
     final threshold =
         max(pieceSize.x, pieceSize.y) * tabletopScatterSpatialNeighborRatio;
     final spatial = _buildSpatialNeighborSets(slots, threshold);
 
-    for (final id in pieceIds) {
-      // 该碎片原图逻辑邻居中已分配碎片所占用的槽位集合
-      final neighborSlots = <int>{};
-      for (final nid in logical[id] ?? const <int>{}) {
-        final s = assignment[nid];
-        if (s >= 0) neighborSlots.add(s);
+    List<int>? bestAssign;
+    var bestConflicts = 1 << 30;
+    final baseRng = Random((seed ^ 0x5F3759DF) & 0x7FFFFFFF);
+    const maxRounds = 64;
+    for (var round = 0; round < maxRounds; round++) {
+      final order = List<int>.of(pieceIds);
+      if (round > 0) {
+        order.shuffle(Random(baseRng.nextInt(0x7FFFFFFF)));
       }
 
-      var bestSlot = -1;
-      var bestConflict = 1 << 30;
-      for (var s = 0; s < slots.length; s++) {
-        if (used[s]) continue;
-        var conflict = 0;
-        for (final ns in spatial[s]) {
-          if (neighborSlots.contains(ns)) conflict++;
+      final assign = List<int>.filled(totalPieces, -1);
+      final used = List<bool>.filled(slots.length, false);
+      var roundConflicts = 0;
+
+      for (final id in order) {
+        // 该碎片原图逻辑邻居中已分配碎片所占用的槽位集合
+        final neighborSlots = <int>{};
+        for (final nid in logical[id] ?? const <int>{}) {
+          final s = assign[nid];
+          if (s >= 0) neighborSlots.add(s);
         }
-        if (conflict == 0) {
-          bestSlot = s;
-          break;
-        }
-        if (conflict < bestConflict) {
-          bestConflict = conflict;
-          bestSlot = s;
-        }
-      }
-      if (bestSlot < 0) {
-        // 防御兜底：槽位生成保证 slots.length >= totalPieces，正常不可达
+
+        var bestSlot = -1;
+        var bestConflict = 1 << 30;
         for (var s = 0; s < slots.length; s++) {
-          if (!used[s]) {
+          if (used[s]) continue;
+          var conflict = 0;
+          for (final ns in spatial[s]) {
+            if (neighborSlots.contains(ns)) conflict++;
+          }
+          if (conflict == 0) {
             bestSlot = s;
+            bestConflict = 0;
             break;
           }
+          if (conflict < bestConflict) {
+            bestConflict = conflict;
+            bestSlot = s;
+          }
         }
+        if (bestSlot < 0) {
+          // 防御兜底：槽位生成保证 slots.length >= totalPieces，正常不可达
+          for (var s = 0; s < slots.length; s++) {
+            if (!used[s]) {
+              bestSlot = s;
+              bestConflict = 1; // 无法零冲突（理论不可达），按违规计 1
+              break;
+            }
+          }
+        }
+        roundConflicts += bestConflict;
+        used[bestSlot] = true;
+        assign[id] = bestSlot;
       }
-      used[bestSlot] = true;
-      assignment[id] = bestSlot;
+
+      if (roundConflicts == 0) return assign; // 零冲突解
+      if (roundConflicts < bestConflicts) {
+        bestConflicts = roundConflicts;
+        bestAssign = assign;
+      }
     }
-    return assignment;
+    return bestAssign!;
   }
 
   /// 获取指定碎片在桌面发散模式下的坐标（方案B：按约束分配缓存结果取槽位）。

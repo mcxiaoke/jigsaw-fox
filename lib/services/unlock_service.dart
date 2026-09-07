@@ -1,4 +1,4 @@
-import 'package:jigsawpuzzle/data/game_repository.dart';
+import 'package:jigsawpuzzle/data/progress_store.dart';
 import 'package:jigsawpuzzle/l10n/gen/strings.g.dart';
 
 /// 解锁状态详细信息
@@ -43,6 +43,23 @@ class UnlockService {
   /// 活动与扩展包所需主线通关数
   static const int kEventUnlockRequiredMainLevels = 5;
 
+  /// 已通关的网络主线关卡数（main:xxx，来自 ProgressStore 全量索引）。
+  /// demo 关卡停用后 GameRepository.levels 恒空，不能再作为完成度来源。
+  Future<int> _completedMainLevelCount() async {
+    try {
+      final all = await ProgressStore.instance.loadAllProgress();
+      return all.values
+          .where(
+            (p) =>
+                p.canonicalId.startsWith('main:') &&
+                (p.isCompleted || p.records.values.any((r) => r.isCompleted)),
+          )
+          .length;
+    } catch (_) {
+      return 0;
+    }
+  }
+
   /// 同步检查特定难度档位（0~7）是否已解锁（零门槛设计：全部默认已解锁）
   UnlockStatus checkDifficultyUnlockSync(int tierIndex) {
     return const UnlockStatus(isUnlocked: true);
@@ -55,9 +72,7 @@ class UnlockService {
 
   /// 检查每日挑战是否已解锁
   Future<UnlockStatus> checkDailyChallengeUnlock() async {
-    final completedCount = GameRepository.instance.levels
-        .where((l) => l.isCompleted)
-        .length;
+    final completedCount = await _completedMainLevelCount();
     if (completedCount >= kDailyUnlockRequiredMainLevels) {
       return UnlockStatus(
         isUnlocked: true,
@@ -76,9 +91,7 @@ class UnlockService {
 
   /// 检查活动与图包是否已解锁
   Future<UnlockStatus> checkEventUnlock() async {
-    final completedCount = GameRepository.instance.levels
-        .where((l) => l.isCompleted)
-        .length;
+    final completedCount = await _completedMainLevelCount();
     if (completedCount >= kEventUnlockRequiredMainLevels) {
       return UnlockStatus(
         isUnlocked: true,
@@ -98,13 +111,10 @@ class UnlockService {
     );
   }
 
-  /// 检查主线关卡是否解锁（第 1 关默认开，通关上一关解锁下一关）
-  bool checkLevelUnlock(int levelIndex) {
-    if (levelIndex <= 1) return true;
-    final levels = GameRepository.instance.levels;
-    if (levelIndex - 2 < levels.length) {
-      return levels[levelIndex - 2].isCompleted;
-    }
-    return false;
-  }
+  /// 检查主线关卡是否解锁。
+  ///
+  /// ⚠️ levelIndex 制随 demo 关卡停用而废弃（网络关卡无数组下标语义）；
+  /// 当前 Phase0 零限制全解锁，恒返回 true。若未来要按序解锁网络关卡，
+  /// 需改为按 canonical `main:NNN` order 校验上一关完成状态，勿沿用本签名。
+  bool checkLevelUnlock(int levelIndex) => true;
 }

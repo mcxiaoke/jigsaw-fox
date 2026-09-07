@@ -18,6 +18,7 @@ class PuzzleCollectionItem {
     this.collectionType = 'official',
     this.coverUrl,
     this.zipUrl,
+    this.zipUrls = const [],
     this.zipSha256,
     this.levels = const [],
     this.totalCount = 0,
@@ -63,6 +64,11 @@ class PuzzleCollectionItem {
       collectionType: rawColType,
       coverUrl: json['coverUrl']?.toString(),
       zipUrl: json['zipUrl']?.toString(),
+      zipUrls:
+          (json['zipUrls'] as List<dynamic>?)
+              ?.map((e) => e.toString())
+              .toList() ??
+          const [],
       zipSha256: json['zipSha256']?.toString(),
       levels: rawLevels,
       totalCount: (json['totalCount'] as num?)?.toInt() ?? rawLevels.length,
@@ -105,6 +111,9 @@ class PuzzleCollectionItem {
 
   /// Zip 下载包地址 (仅 type == 'zip' 时有效)
   final String? zipUrl;
+
+  /// Zip 备用镜像地址列表 (D10：zipUrl 主地址失败时按序轮询；可为空)
+  final List<String> zipUrls;
 
   /// Zip 文件的 SHA256 哈希 (可选校验)
   final String? zipSha256;
@@ -206,6 +215,7 @@ class PuzzleCollectionItem {
     String? collectionType,
     String? coverUrl,
     String? zipUrl,
+    List<String>? zipUrls,
     String? zipSha256,
     List<String>? levels,
     int? totalCount,
@@ -229,6 +239,7 @@ class PuzzleCollectionItem {
       collectionType: collectionType ?? this.collectionType,
       coverUrl: coverUrl ?? this.coverUrl,
       zipUrl: zipUrl ?? this.zipUrl,
+      zipUrls: zipUrls ?? this.zipUrls,
       zipSha256: zipSha256 ?? this.zipSha256,
       levels: levels ?? this.levels,
       totalCount: totalCount ?? this.totalCount,
@@ -255,6 +266,7 @@ class PuzzleCollectionItem {
       'collectionType': collectionType,
       'coverUrl': coverUrl,
       'zipUrl': zipUrl,
+      if (zipUrls.isNotEmpty) 'zipUrls': zipUrls,
       'zipSha256': zipSha256,
       'levels': levels,
       'totalCount': totalCount,

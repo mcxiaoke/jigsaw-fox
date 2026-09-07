@@ -1,15 +1,18 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:jigsawpuzzle/data/constants/puzzle_tags.dart';
 import 'package:jigsawpuzzle/data/game_repository.dart';
-import 'package:jigsawpuzzle/data/models/level_item.dart';
+import 'package:jigsawpuzzle/data/progress_store.dart';
 import 'package:jigsawpuzzle/data/resume_helper.dart';
 import 'package:jigsawpuzzle/data/snapshot_store.dart';
 import 'package:jigsawpuzzle/l10n/gen/strings.g.dart';
+import 'package:jigsawpuzzle/logic/cache/level_image_resolver.dart';
 import 'package:jigsawpuzzle/logic/content/app_content.dart';
 import 'package:jigsawpuzzle/logic/content/models/puzzle_event_item.dart';
 import 'package:jigsawpuzzle/logic/content/models/puzzle_level_item.dart';
 import 'package:jigsawpuzzle/logic/image_source.dart';
+import 'package:jigsawpuzzle/logic/puzzle_model.dart';
 import 'package:jigsawpuzzle/pages/event_levels_page.dart';
 import 'package:jigsawpuzzle/pages/game_page.dart';
 import 'package:jigsawpuzzle/services/app_logger.dart';
@@ -19,9 +22,9 @@ import 'package:jigsawpuzzle/theme/app_palette.dart';
 import 'package:jigsawpuzzle/theme/app_text_styles.dart';
 import 'package:jigsawpuzzle/utils/locale_helper.dart';
 import 'package:jigsawpuzzle/widgets/adaptive_hero_banner.dart';
-import 'package:jigsawpuzzle/widgets/app_cached_image.dart';
 import 'package:jigsawpuzzle/widgets/choose_difficulty_sheet.dart';
 import 'package:jigsawpuzzle/widgets/game_toast.dart';
+import 'package:jigsawpuzzle/widgets/lazy_level_image.dart';
 import 'package:phosphoricons_flutter/phosphoricons_flutter.dart';
 
 // 热门N个（横滑常驻，末位固定入口之后展开全部 18 个黄金矩阵标签）
@@ -44,7 +47,6 @@ class HomeTabView extends StatefulWidget {
 }
 
 class _HomeTabViewState extends State<HomeTabView> {
-  final GameRepository _repo = GameRepository.instance;
   String _selectedTag = 'all';
   final ScrollController _scrollController = ScrollController();
   final ScrollController _tagScrollController = ScrollController();
@@ -56,37 +58,42 @@ class _HomeTabViewState extends State<HomeTabView> {
   void initState() {
     super.initState();
     LocaleService.instance.addListener(_onLocaleChanged);
+    // 网络内容（新批次/换图）与玩家进度（通关返回）变化时刷新网格
+    AppContent.instance.contentUpdateNotifier.addListener(_onContentChanged);
+    ProgressStore.instance.progressNotifier.addListener(_onContentChanged);
+  }
+
+  void _onContentChanged() {
+    if (mounted) setState(() {});
   }
 
   void _onLocaleChanged() {
     if (mounted) setState(() {});
   }
 
-  // 标签解析：优先使用素材自身 tags，若为空则按 index 轮转兜底
-  String _resolveTag(LevelItem l) {
-    if (l.tags.isNotEmpty) return l.tags.first;
-    final idx = (l.index - 1) % (kHomeTags.length - 1);
-    return kHomeTags[idx + 1]['id']!;
+  /// 首页关卡数据源：网络 main 模块（manifest → main/index + batches 懒同步）
+  /// BootGate 已保证进入本页时 AppContent 初始化完成；未初始化（测试等）返回空。
+  List<PuzzleLevelItem> _getLevels() {
+    if (!AppContent.instance.isInitialized) return const [];
+    return AppContent.instance.manager.getMainLevels();
   }
 
-  List<LevelItem> _getFilteredLevels(List<LevelItem> all) {
+  List<PuzzleLevelItem> _getFilteredLevels(List<PuzzleLevelItem> all) {
     if (_selectedTag == 'all') return all;
     final selLower = _selectedTag.toLowerCase();
-    return all
-        .where(
-          (l) => l.tags.isNotEmpty
-              ? l.tags.any((t) {
-                  final tLower = t.toLowerCase();
-                  if (tLower == selLower) return true;
-                  final mappedEn = kTagZhToId[t]?.toLowerCase();
-                  if (mappedEn != null && mappedEn == selLower) return true;
-                  final mappedZh = kTagIdToZh[t]?.toLowerCase();
-                  if (mappedZh != null && mappedZh == selLower) return true;
-                  return false;
-                })
-              : _resolveTag(l).toLowerCase() == selLower,
-        )
-        .toList();
+    return all.where((l) {
+      // 网络关卡无 tags 时归入 Others 兜底分类
+      final tags = l.tags.isEmpty ? const ['Others'] : l.tags;
+      return tags.any((t) {
+        final tLower = t.toLowerCase();
+        if (tLower == selLower) return true;
+        final mappedEn = kTagZhToId[t]?.toLowerCase();
+        if (mappedEn != null && mappedEn == selLower) return true;
+        final mappedZh = kTagIdToZh[t]?.toLowerCase();
+        if (mappedZh != null && mappedZh == selLower) return true;
+        return false;
+      });
+    }).toList();
   }
 
   void _onTagSelected(String tag) {
@@ -126,43 +133,85 @@ class _HomeTabViewState extends State<HomeTabView> {
     }
   }
 
-  Future<void> _openLevel(LevelItem level) async {
-    Uint8List imgBytes;
+  Future<void> _openLevel(PuzzleLevelItem level) async {
+    // 网络关卡：统一经 LevelImageResolver 懒下载原图落盘（见缩略必可玩），
+    // 与 event_levels_page 同一套路径
+    Uint8List? imgBytes;
     try {
-      final bytes = await rootBundle.load(level.assetPath);
-      imgBytes = bytes.buffer.asUint8List(
-        bytes.offsetInBytes,
-        bytes.lengthInBytes,
+      final localPath = await LevelImageResolver.instance.resolveLevelLocalPath(
+        level,
       );
+      if (localPath.startsWith('http')) {
+        if (mounted) {
+          GameToast.show(
+            context,
+            icon: PhosphorIconsRegular.warning,
+            message: t.levels.networkFail,
+            type: GameToastType.error,
+          );
+        }
+        return;
+      }
+      if (!mounted) return;
+      if (localPath.startsWith('assets/')) {
+        final data = await DefaultAssetBundle.of(context).load(localPath);
+        imgBytes = data.buffer.asUint8List(
+          data.offsetInBytes,
+          data.lengthInBytes,
+        );
+      } else if (File(localPath).existsSync()) {
+        imgBytes = await File(localPath).readAsBytes();
+      }
     } catch (e, st) {
       AppLogger.game.warning(
-        'Home openLevel asset load failed index=${level.index} path=${level.assetPath}',
+        'Home openLevel image fail id=${level.id}',
         e,
         st,
       );
       if (mounted) {
         GameToast.show(
           context,
-          message: '关卡图片加载失败，请重试',
+          icon: PhosphorIconsRegular.warning,
+          message: t.levels.imgLoadFailed(error: e),
           type: GameToastType.error,
         );
       }
       return;
     }
-    AppLogger.game.info(
-      'Home openLevel index=${level.index} canonical=${GameRepository.canonicalForLevel(level.index)}',
-    );
+    // 兜底：非 http 但本地文件不存在等静默空路径，给用户明确失败反馈
+    if (imgBytes == null) {
+      if (mounted) {
+        GameToast.show(
+          context,
+          icon: PhosphorIconsRegular.warning,
+          message: t.levels.imgLoadFailed(error: Exception('no local file')),
+          type: GameToastType.error,
+        );
+      }
+      return;
+    }
     if (!mounted) return;
-    final canonicalId = GameRepository.canonicalForLevel(level.index);
+
+    final canonicalId = level.id;
+    final prog = ProgressStore.instance.getLevelProgress(canonicalId);
+    AppLogger.game.info(
+      'Home openLevel canonical=$canonicalId order=${level.order}',
+    );
+    // D7：数据未下发 difficulty 前统一默认 square 第二档 6x6/36（recommended 档）
+    final fallbackDifficulty = PuzzleAspectRatio.square1x1.tiers
+        .firstWhere((t) => t.difficulty.recommended)
+        .difficulty;
+    final title = level.displayTitle;
+
     final handled = await ResumeHelper.tryHandleResumeFlow(
       context: context,
       canonicalId: canonicalId,
-      fallbackDifficulty: level.difficulty,
-      isCompleted: level.isCompleted,
-      title: '拼图',
+      fallbackDifficulty: fallbackDifficulty,
+      isCompleted: prog.isCompleted,
+      title: title,
       imageBytes: imgBytes,
-      onClearRepo: (k) => _repo.updateLevelProgress(
-        levelIndex: level.index,
+      onClearRepo: (k) => GameRepository.instance.updateGenericProgress(
+        canonicalId: canonicalId,
         progressPercent: 0,
       ),
       onPushGame: (diff, jsonStr) async {
@@ -170,9 +219,10 @@ class _HomeTabViewState extends State<HomeTabView> {
         await Navigator.of(context).push(
           MaterialPageRoute<void>(
             builder: (_) => GamePage(
-              imageBytes: imgBytes,
+              imageBytes: imgBytes!,
               difficulty: diff,
-              levelIndex: level.index,
+              canonicalId: canonicalId,
+              packTitle: title,
               initialSnapshotJson: jsonStr,
             ),
           ),
@@ -187,38 +237,39 @@ class _HomeTabViewState extends State<HomeTabView> {
       return;
     }
     if (!mounted) return;
-    final progress = await ResumeHelper.loadProgress(canonicalId);
+
     final displayPercent = ResumeHelper.displayProgress(
-      progress,
-      level.progressPercent,
-      isCompleted: level.isCompleted,
+      prog,
+      prog.progressPercent,
+      isCompleted: prog.isCompleted,
     );
     if (!mounted) return;
     await ChooseDifficultySheet.show(
       context: context,
       imageBytes: imgBytes,
-      initialDifficulty: level.difficulty,
-      completedPieceCounts: level.completedPieceCounts.toSet(),
+      initialDifficulty: fallbackDifficulty,
+      completedPieceCounts: prog.completedPieceCounts.toSet(),
       canonicalId: canonicalId,
-      title: level.title,
-      imagePathOrUrl: level.assetPath,
+      title: title,
+      imagePathOrUrl: level.displayPath,
       savedProgressPercent: displayPercent == 0 ? null : displayPercent,
       onResetProgress: () async {
-        final prog = await ResumeHelper.loadProgress(canonicalId);
-        if (prog.activeDifficultyKey.isNotEmpty) {
-          await ResumeHelper.clearResume(canonicalId, prog.activeDifficultyKey);
+        final p = await ResumeHelper.loadProgress(canonicalId);
+        if (p.activeDifficultyKey.isNotEmpty) {
+          await ResumeHelper.clearResume(canonicalId, p.activeDifficultyKey);
         }
-        await _repo.updateLevelProgress(
-          levelIndex: level.index,
+        await GameRepository.instance.updateGenericProgress(
+          canonicalId: canonicalId,
           progressPercent: 0,
         );
         if (!mounted) return;
         await Navigator.of(context).push(
           MaterialPageRoute<void>(
             builder: (_) => GamePage(
-              imageBytes: imgBytes,
-              difficulty: level.difficulty,
-              levelIndex: level.index,
+              imageBytes: imgBytes!,
+              difficulty: fallbackDifficulty,
+              canonicalId: canonicalId,
+              packTitle: title,
             ),
           ),
         );
@@ -226,8 +277,6 @@ class _HomeTabViewState extends State<HomeTabView> {
       },
       onStart: (diff) async {
         final dkey = SnapshotStore.difficultyKeyFor(diff);
-        // 快照由 SnapshotStore 文件级管理；Item 旧快照字段
-        // 遗留 fallback 已移除（改造后恒为 null，清理阶段 §11）
         final snapJson = await SnapshotStore.instance.loadJsonString(
           canonicalId,
           dkey,
@@ -236,9 +285,10 @@ class _HomeTabViewState extends State<HomeTabView> {
         await Navigator.of(context).push(
           MaterialPageRoute<void>(
             builder: (_) => GamePage(
-              imageBytes: imgBytes,
+              imageBytes: imgBytes!,
               difficulty: diff,
-              levelIndex: level.index,
+              canonicalId: canonicalId,
+              packTitle: title,
               initialSnapshotJson: snapJson,
             ),
           ),
@@ -251,6 +301,8 @@ class _HomeTabViewState extends State<HomeTabView> {
   @override
   void dispose() {
     LocaleService.instance.removeListener(_onLocaleChanged);
+    AppContent.instance.contentUpdateNotifier.removeListener(_onContentChanged);
+    ProgressStore.instance.progressNotifier.removeListener(_onContentChanged);
     _scrollController.dispose();
     _tagScrollController.dispose();
     super.dispose();
@@ -260,7 +312,7 @@ class _HomeTabViewState extends State<HomeTabView> {
   Widget build(BuildContext context) {
     final palette = AppPalette.of(context);
     final styles = AppTextStyles.of(context);
-    final allLevels = _repo.levels;
+    final allLevels = _getLevels();
     final filteredLevels = _getFilteredLevels(allLevels);
     final now = DateTime.now();
     final todayDaily = AppContent.instance.isInitialized
@@ -270,7 +322,21 @@ class _HomeTabViewState extends State<HomeTabView> {
     return RefreshIndicator(
       color: palette.brand,
       backgroundColor: palette.surfaceContainer,
-      onRefresh: () async => setState(() {}),
+      onRefresh: () async {
+        // 下拉触发轻量网络增量（main/events/collections 元数据 + daily index，
+        // 不下 daily 月度 zip）。若后台全量轮（含 zip）正在进行，直接结束下拉，
+        // 内容稍后由 contentUpdateNotifier 刷新，避免在互斥锁上干等几十秒。
+        if (AppContent.instance.isInitialized) {
+          if (AppContent.instance.isSyncing) {
+            AppLogger.content.info(
+              'Home pull-refresh skipped: background sync in progress',
+            );
+          } else {
+            await AppContent.instance.syncAll(includeDailyZip: false);
+          }
+        }
+        if (mounted) setState(() {});
+      },
       child: CustomScrollView(
         controller: _scrollController,
         slivers: [
@@ -710,13 +776,16 @@ class _LevelCard extends StatelessWidget {
     required this.palette,
     required this.onTap,
   });
-  final LevelItem level;
+  final PuzzleLevelItem level;
   final AppPalette palette;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    final isNew = level.isNew;
+    // 网络关卡：NEW 用 addedAt（7 天内）；进度/完成角标实时读 ProgressStore
+    final prog = ProgressStore.instance.getLevelProgress(level.id);
+    final isNew = level.isNew && !prog.isCompleted;
+    final hasProgress = prog.progressPercent > 0 && !prog.isCompleted;
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(8),
@@ -735,9 +804,7 @@ class _LevelCard extends StatelessWidget {
         child: Stack(
           fit: StackFit.expand,
           children: [
-            AppCachedImage(
-              imagePathOrUrl: level.assetPath,
-            ),
+            LazyLevelImage(level: level),
             if (isNew)
               Positioned(
                 left: 0,
@@ -765,7 +832,7 @@ class _LevelCard extends StatelessWidget {
                   ),
                 ),
               ),
-            if (level.progressPercent > 0 && !level.isCompleted)
+            if (hasProgress)
               Positioned(
                 top: 6,
                 right: 6,
@@ -779,7 +846,7 @@ class _LevelCard extends StatelessWidget {
                     borderRadius: BorderRadius.circular(10),
                   ),
                   child: Text(
-                    '${level.progressPercent}%',
+                    '${prog.progressPercent}%',
                     style: const TextStyle(
                       color: Colors.white,
                       fontSize: 10,

@@ -567,5 +567,12 @@
       "importFailed": "选择图片失败：{error}",
       "webviewMissing": "当前系统未安装 WebView2 运行时，无法使用在线搜图"
     }
+  },
+  "boot": {
+    "initTitle": "正在初始化游戏内容…",
+    "initSubtitle": "首次启动需联网获取图库，请稍候。",
+    "failedTitle": "初始化失败",
+    "failedDesc": "无法连接内容服务器，请检查网络后重试。",
+    "retry": "重试"
   }
 }

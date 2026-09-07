@@ -4,10 +4,26 @@ import 'package:jigsawpuzzle/data/game_repository.dart';
 import 'package:jigsawpuzzle/data/progress_store.dart';
 import 'package:jigsawpuzzle/data/storage_manager.dart';
 import 'package:jigsawpuzzle/logic/catalog_index.dart';
+import 'package:jigsawpuzzle/logic/content/models/puzzle_level_item.dart';
 import 'package:jigsawpuzzle/logic/puzzle_model.dart';
 import 'package:jigsawpuzzle/logic/unified_puzzle_resolver.dart';
 
 import '../test_helper.dart';
+
+/// 网络主线关卡测试桩（catalog_index 已切网络 main 源，AppContent 单测环境不初始化，
+/// 通过 build(mainLevels:) 注入）
+final List<PuzzleLevelItem> _fakeMainLevels = const [
+  PuzzleLevelItem(
+    id: 'main:001',
+    order: 1,
+    tags: ['Animals'],
+  ),
+  PuzzleLevelItem(
+    id: 'main:002',
+    order: 2,
+    tags: ['Flowers'],
+  ),
+];
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -26,13 +42,15 @@ void main() {
 
   group('UnifiedCatalogIndex & UnifiedPuzzleResolver Tests', () {
     test(
-      'UnifiedCatalogIndex builds and indexes repo levels and daily challenges',
+      'UnifiedCatalogIndex builds and indexes network main levels',
       () async {
-        final index = await UnifiedCatalogIndex.build();
+        final index = await UnifiedCatalogIndex.build(
+          mainLevels: _fakeMainLevels,
+        );
         expect(index.byId.isNotEmpty, isTrue);
 
-        // 主线第 1 关应当存在
-        final cidLevel1 = GameRepository.canonicalForLevel(1);
+        // 网络主线 main:001 应当存在
+        const cidLevel1 = 'main:001';
         final entry1 = index.get(cidLevel1);
         expect(entry1, isNotNull);
         expect(entry1!.sourceLabel, equals('main'));
@@ -50,9 +68,11 @@ void main() {
     test(
       'UnifiedPuzzleResolver resolves normal card with progress and favorites',
       () async {
-        final index = await UnifiedCatalogIndex.build();
+        final index = await UnifiedCatalogIndex.build(
+          mainLevels: _fakeMainLevels,
+        );
         final resolver = UnifiedPuzzleResolver(index);
-        final cid = GameRepository.canonicalForLevel(1);
+        const cid = 'main:001';
 
         // 1. 未游玩、未收藏状态
         final card1 = resolver.resolve(canonicalId: cid);

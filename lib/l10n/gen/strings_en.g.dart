@@ -71,6 +71,7 @@ class Translations with BaseTranslations<AppLocale, Translations> {
 	late final Translations$chooseDifficulty$en chooseDifficulty = Translations$chooseDifficulty$en.internal(_root);
 	late final Translations$achievementsPage$en achievementsPage = Translations$achievementsPage$en.internal(_root);
 	late final Translations$myCenter$en myCenter = Translations$myCenter$en.internal(_root);
+	late final Translations$boot$en boot = Translations$boot$en.internal(_root);
 }
 
 // Path: app
@@ -1374,6 +1375,30 @@ class Translations$myCenter$en {
 	late final Translations$myCenter$toast$en toast = Translations$myCenter$toast$en.internal(_root);
 }
 
+// Path: boot
+class Translations$boot$en {
+	Translations$boot$en.internal(this._root);
+
+	final Translations _root; // ignore: unused_field
+
+	// Translations
+
+	/// en: 'Initializing game content…'
+	String get initTitle => 'Initializing game content…';
+
+	/// en: 'First launch downloads the puzzle library over the network.'
+	String get initSubtitle => 'First launch downloads the puzzle library over the network.';
+
+	/// en: 'Initialization failed'
+	String get failedTitle => 'Initialization failed';
+
+	/// en: 'Cannot reach the content server. Check your network and retry.'
+	String get failedDesc => 'Cannot reach the content server. Check your network and retry.';
+
+	/// en: 'Retry'
+	String get retry => 'Retry';
+}
+
 // Path: howTo.t1
 class Translations$howTo$t1$en {
 	Translations$howTo$t1$en.internal(this._root);
@@ -2535,6 +2560,11 @@ extension on Translations {
 			'myCenter.toast.importSuccess' => ({required Object count}) => 'Imported ${count} images to your library',
 			'myCenter.toast.importFailed' => ({required Object error}) => 'Failed to pick images: ${error}',
 			'myCenter.toast.webviewMissing' => 'WebView2 runtime is not installed; online image search is unavailable.',
+			'boot.initTitle' => 'Initializing game content…',
+			'boot.initSubtitle' => 'First launch downloads the puzzle library over the network.',
+			'boot.failedTitle' => 'Initialization failed',
+			'boot.failedDesc' => 'Cannot reach the content server. Check your network and retry.',
+			'boot.retry' => 'Retry',
 			_ => null,
 		};
 	}

@@ -20,8 +20,13 @@ class ManifestRouter {
   RootManifest? _cachedManifest;
   RootManifest? get currentManifest => _cachedManifest;
 
-  /// 缓存优先：先读盘，命中立即返回；未命中再走网络（P20 秒开优化）
-  Future<RootManifest> resolveManifestCacheFirst() async {
+  /// 缓存优先：先读盘，命中立即返回；未命中再走网络（P20 秒开优化）。
+  ///
+  /// [offlineOnly] = true 时（冷启动组1 纯本地初始化）磁盘未命中则直接返回
+  /// 离线兜底清单，**不发起任何网络请求**——是否联网初始化由 BootGate 决定。
+  Future<RootManifest> resolveManifestCacheFirst({
+    bool offlineOnly = false,
+  }) async {
     if (_cachedManifest != null) return _cachedManifest!;
     final disk = await _loadFromDiskCache();
     if (disk != null) {
@@ -30,6 +35,16 @@ class ManifestRouter {
         'resolveManifestCacheFirst disk hit version=${disk.schemaVersion}',
       );
       return disk;
+    }
+    if (offlineOnly) {
+      AppLogger.manifest.info(
+        'resolveManifestCacheFirst offlineOnly: no disk cache, use fallback manifest',
+      );
+      final fallback = _createDefaultFallbackManifest().copyWith(
+        baseUri: bootstrapUrls.isNotEmpty ? bootstrapUrls.first : '',
+      );
+      _cachedManifest = fallback;
+      return fallback;
     }
     return resolveManifest();
   }

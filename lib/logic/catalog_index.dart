@@ -3,6 +3,7 @@ import 'package:jigsawpuzzle/data/snapshot_store.dart';
 import 'package:jigsawpuzzle/l10n/gen/strings.g.dart';
 import 'package:jigsawpuzzle/logic/content/app_content.dart';
 import 'package:jigsawpuzzle/logic/content/models/canonical_id.dart';
+import 'package:jigsawpuzzle/logic/content/models/puzzle_level_item.dart';
 import 'package:jigsawpuzzle/logic/puzzle_model.dart';
 import 'package:jigsawpuzzle/services/app_logger.dart';
 import 'package:jigsawpuzzle/services/locale_service.dart';
@@ -78,33 +79,43 @@ class UnifiedCatalogIndex {
   }
 
   /// 扫描五大模块并一次性构建只读索引 Map（6000条关卡构建耗时 ~5ms）
-  static Future<UnifiedCatalogIndex> build() async {
+  ///
+  /// [mainLevels] 仅供测试注入（默认取网络 main 管线；AppContent 未初始化时为空）。
+  static Future<UnifiedCatalogIndex> build({
+    List<PuzzleLevelItem>? mainLevels,
+  }) async {
     final sw = Stopwatch()..start();
     final map = <String, CatalogEntry>{};
     final repo = GameRepository.instance;
     final tr = LocaleSettings.instance.currentTranslations;
 
-    // 1. 主线关卡 (main:NNN)
-    for (final level in repo.levels) {
-      final cid = GameRepository.canonicalForLevel(level.index);
-      map[cid] = CatalogEntry(
-        canonicalId: cid,
-        title: level.title,
-        imagePathOrUrl: level.assetPath,
-        isLocalFile: true,
-        sourceLabel: 'main',
-        sourceModule: CanonicalId.prefixMain,
-        aspectRatio: PuzzleAspectRatio.fromSize(
-          level.difficulty.cols.toDouble(),
-          level.difficulty.rows.toDouble(),
-        ),
-        author: tr.source.official,
-        tags: level.tags,
-        addedAt: level.addedAt,
-        recommendedDifficulty: SnapshotStore.difficultyKeyFor(level.difficulty),
-        contextId: level.index.toString(),
-        displaySubtitle: tr.game.titleLevel(index: level.index),
-      );
+    // 1. 主线关卡 (main:NNN) —— 网络 main 内容
+    // （首页数据源已切换网络，见 docs/home-network-migration-and-boot-init-design-20260907.md §3.5；
+    //   旧 demo 关卡 main:001~100 因开发期未发布不做兼容，D11）
+    try {
+      final levelsToIndex =
+          mainLevels ??
+          (AppContent.instance.isInitialized
+              ? AppContent.instance.manager.getMainLevels()
+              : const <PuzzleLevelItem>[]);
+      for (final level in levelsToIndex) {
+        map[level.id] = CatalogEntry(
+          canonicalId: level.id,
+          title: level.displayTitle,
+          imagePathOrUrl: level.displayPath,
+          isLocalFile: level.isLocalFile,
+          sourceLabel: 'main',
+          sourceModule: CanonicalId.prefixMain,
+          aspectRatio: PuzzleAspectRatio.square1x1,
+          author: tr.source.official,
+          tags: level.tags,
+          addedAt: level.addedAt,
+          contextId: level.order.toString(),
+          displaySubtitle: tr.game.titleLevel(index: level.order),
+        );
+      }
+    } catch (e, st) {
+      AppLogger.content.warning('UnifiedCatalogIndex main scan fail', e, st);
     }
 
     // 2. 每日挑战 (daily:yyyyMMdd)

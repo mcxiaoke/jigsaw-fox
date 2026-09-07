@@ -9,6 +9,7 @@ import 'package:jigsawpuzzle/l10n/gen/strings.g.dart';
 import 'package:jigsawpuzzle/logic/cache/image_cache_manager.dart';
 import 'package:jigsawpuzzle/logic/content/app_content.dart';
 import 'package:jigsawpuzzle/logic/download_manager.dart';
+import 'package:jigsawpuzzle/pages/boot_gate_page.dart';
 import 'package:jigsawpuzzle/pages/main_screen.dart';
 import 'package:jigsawpuzzle/services/achievement_store.dart';
 import 'package:jigsawpuzzle/services/app_logger.dart';
@@ -126,25 +127,25 @@ void main() async {
   }
 
   final sw = Stopwatch()..start();
-  // 组1 必须await：首屏与币/成就/收藏强依赖
+  // 组1 必须await：首屏与币/成就/收藏/本地内容缓存强依赖。
+  // AppContent.initFromDiskCache 纯本地（5~15ms，无网络），runApp 前据此判定
+  // initialHome = MainScreen(秒开) 或 BootGatePage(首启初始化)。
   await Future.wait([
     ImageCacheManager.instance.init(),
     GameRepository.instance.init(),
     EconomyService.instance.init(),
     AchievementStore.instance.init(),
     FavoriteStore.instance.init(),
+    AppContent.instance.initFromDiskCache(),
   ]);
   AppLogger.system.info('Group1(Core) init done ${sw.elapsedMilliseconds}ms');
   sw.reset();
-  // 组2/3 可后台：下载与内容同步、音效不阻塞首帧
+  // 组2/3 可后台：下载与音效不阻塞首帧（内容后台增量由 MainScreen/BootGate 收口触发）
   final bgFutures = [
     DownloadManager.instance.init().then((_) {
       AppLogger.system.info(
         'DownloadManager init done ${sw.elapsedMilliseconds}ms',
       );
-    }),
-    AppContent.instance.init().then((_) {
-      AppLogger.system.info('AppContent init done ${sw.elapsedMilliseconds}ms');
     }),
     SoundService.I.init().then((_) {
       AppLogger.system.info(
@@ -159,12 +160,20 @@ void main() async {
   AppLogger.system.info(
     'App launch Locale=${LocaleService.instance.effectiveLocale.name} lang=${LocaleService.instance.language.name}',
   );
-  AppLogger.system.info('App launch completed runApp');
+  // 0 闪烁秒开判定：json + main 前 4 关原图齐 → 直进 MainScreen；否则首启 BootGate
+  final isContentReady = AppContent.instance.isFirstBootReady();
+  AppLogger.system.info(
+    'App launch runApp isContentReady=$isContentReady',
+  );
   runApp(
     TranslationProvider(
       child: AnimatedBuilder(
         animation: LocaleService.instance,
-        builder: (context, _) => const JigsawPuzzleApp(),
+        builder: (context, _) => JigsawPuzzleApp(
+          initialHome: isContentReady
+              ? const MainScreen()
+              : const BootGatePage(),
+        ),
       ),
     ),
   );
@@ -184,7 +193,10 @@ class AppScrollBehavior extends MaterialScrollBehavior {
 }
 
 class JigsawPuzzleApp extends StatefulWidget {
-  const JigsawPuzzleApp({super.key});
+  const JigsawPuzzleApp({this.initialHome = const MainScreen(), super.key});
+
+  /// 首帧宿主：老用户（数据齐）直进 MainScreen；首启走 BootGatePage 初始化
+  final Widget initialHome;
 
   @override
   State<JigsawPuzzleApp> createState() => _JigsawPuzzleAppState();
@@ -237,7 +249,7 @@ class _JigsawPuzzleAppState extends State<JigsawPuzzleApp>
       themeMode: ThemeMode.light, // 默认亮色 — 休闲明亮
       theme: _buildTheme(lightScheme, Brightness.light),
       darkTheme: _buildTheme(darkScheme, Brightness.dark),
-      home: const MainScreen(),
+      home: widget.initialHome,
     );
   }
 

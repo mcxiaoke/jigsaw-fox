@@ -65,6 +65,13 @@ class MainContentPipeline {
 
   final Map<String, PuzzleLevelItem> _levelsMap = {};
 
+  /// 最近一次 syncWithRemote 解析到的远端完整批次 ID 集合（供首启完整性校验）
+  final Set<String> _lastRemoteBatchIds = <String>{};
+  Set<String> get lastRemoteBatchIds => Set.unmodifiable(_lastRemoteBatchIds);
+
+  /// 进行中的图片下载 (单飞防重：同关卡并发 ensure 复用同一 Future，防同路径并发写)
+  final Map<String, Future<PuzzleLevelItem>> _inFlightDownloads = {};
+
   /// 获取当前已加载的所有首页关卡 (按 order 自然升序排序)
   List<PuzzleLevelItem> get levels {
     final list = _levelsMap.values.toList();
@@ -105,6 +112,13 @@ class MainContentPipeline {
           final cachedBatchIds = json['batchIds'] as List<dynamic>? ?? [];
           _localBatchIds.clear();
           _localBatchIds.addAll(cachedBatchIds.map((e) => e.toString()));
+          // 恢复上次 sync 解析到的远端完整批次集合（供幂等校验与短路判定）
+          final cachedRemoteBatchIds =
+              json['remoteBatchIds'] as List<dynamic>? ?? [];
+          _lastRemoteBatchIds.clear();
+          _lastRemoteBatchIds.addAll(
+            cachedRemoteBatchIds.map((e) => e.toString()),
+          );
 
           final rawLevels = json['items'] as List<dynamic>? ?? [];
           var loaded = 0;
@@ -153,8 +167,12 @@ class MainContentPipeline {
       AppLogger.mainPipe.warning('syncWithRemote empty url skip');
       return false;
     }
-    // 版本未变且已有数据，无需重复拉取
-    if (remoteVersion <= _localVersion && _levelsMap.isNotEmpty) {
+    // 版本未变且已有数据，无需重复拉取 —— **仅当本地批次完整时短路**
+    // （防止"某轮批次部分失败已把 localVersion 推高，后续重试/重启永久短路
+    //   而本地缺角"的死局：批次不完整时必须继续拉 index 重灌 missingBatches）
+    if (remoteVersion <= _localVersion &&
+        _levelsMap.isNotEmpty &&
+        _localBatchIds.containsAll(_lastRemoteBatchIds)) {
       AppLogger.mainPipe.fine('syncWithRemote skip version not newer');
       return false;
     }
@@ -174,6 +192,11 @@ class MainContentPipeline {
             .whereType<Map<String, dynamic>>()
             .map(MainBatchInfo.fromJson)
             .toList();
+
+        // 记录本次远端声明的完整批次集合（首启批次完整性校验依据）
+        _lastRemoteBatchIds
+          ..clear()
+          ..addAll(remoteBatches.map((b) => b.batchId));
 
         // 差集计算：仅下载本地未处理的批次
         final missingBatches = remoteBatches
@@ -275,10 +298,34 @@ class MainContentPipeline {
     }
   }
 
-  /// 确保指定关卡的图片已下载至本地磁盘 (按需懒加载)
+  /// 确保指定关卡的图片已下载至本地磁盘 (按需懒加载，同关卡单飞防重)。
+  ///
+  /// [timeout] 透传至底层 Dio receiveTimeout：首启等强时限场景显式传入
+  /// （如 8s）让 HTTP Socket 在超时点主动中断，避免外层 Future 已超时但底层
+  /// 连接仍占用默认 60s（Dio）导致重试等待/文件并发写问题。未传则用 Dio 默认。
   Future<PuzzleLevelItem> ensureLevelImageDownloaded(
-    PuzzleLevelItem level,
-  ) async {
+    PuzzleLevelItem level, {
+    Duration? timeout,
+  }) {
+    final inFlight = _inFlightDownloads[level.id];
+    if (inFlight != null) {
+      AppLogger.mainPipe.fine('ensureDownloaded in-flight reuse ${level.id}');
+      return inFlight;
+    }
+    final future = _ensureLevelImageDownloadedImpl(level, timeout: timeout);
+    _inFlightDownloads[level.id] = future;
+    future.whenComplete(() {
+      if (identical(_inFlightDownloads[level.id], future)) {
+        _inFlightDownloads.remove(level.id);
+      }
+    });
+    return future;
+  }
+
+  Future<PuzzleLevelItem> _ensureLevelImageDownloadedImpl(
+    PuzzleLevelItem level, {
+    Duration? timeout,
+  }) async {
     if (level.isLocalFile &&
         level.localPath != null &&
         File(level.localPath!).existsSync()) {
@@ -298,10 +345,14 @@ class MainContentPipeline {
     }
 
     AppLogger.mainPipe.info(
-      'ensureDownloaded downloading ${level.id} from ${AppLogger.sanitizeUrl(level.url)}',
+      'ensureDownloaded downloading ${level.id} from ${AppLogger.sanitizeUrl(level.url)} timeout=${timeout?.inSeconds ?? 60}s',
     );
     try {
-      final downloaded = await _httpClient.downloadFile(level.url, localPath);
+      final downloaded = await _httpClient.downloadFile(
+        level.url,
+        localPath,
+        timeout: timeout,
+      );
       final updated = level.copyWith(
         localPath: downloaded.path,
         isLocalFile: true,
@@ -410,6 +461,8 @@ class MainContentPipeline {
       final payload = {
         'version': _localVersion,
         'batchIds': _localBatchIds.toList(),
+        if (_lastRemoteBatchIds.isNotEmpty)
+          'remoteBatchIds': _lastRemoteBatchIds.toList(),
         'items': items,
       };
       final tmpFile = File('$cacheFilePath.tmp');

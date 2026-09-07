@@ -113,7 +113,11 @@ class GameRepository {
     } catch (e, st) {
       AppLogger.repo.warning('init Snapshot/Progress failed', e, st);
     }
-    _initLevels();
+    // 2026-09-07：首页数据源切换为网络 main 内容
+    // （docs/home-network-migration-and-boot-init-design-20260907.md §3.5 / D2），
+    // 不再生成内置 100 关 demo。_initLevels() 函数体保留，供后续"内置 samples
+    // 关卡"复用；测试可通过 reloadBuiltinLevelsForTest() 显式恢复。
+    // _initLevels();
     await _initCustomPuzzles();
     AppLogger.repo.info(
       'init done ${sw.elapsedMilliseconds}ms levels=${_levels.length} custom=${_customPuzzles.length}',
@@ -128,6 +132,14 @@ class GameRepository {
   static String canonicalForCustom(String id) => 'ugc:$id';
   static String canonicalForPack(String packId, String fileName) =>
       'pack:$packId:$fileName';
+
+  /// 测试专用钩子：显式重新生成内置 demo 关卡。
+  ///
+  /// 生产启动已不调用 [_initLevels]（首页数据源切换为网络 main 内容，
+  /// docs/home-network-migration-and-boot-init-design-20260907.md §3.5）。
+  /// 单测中如需内置关卡（历史迁移/UI 桩数据），在 init() 之后调用本方法恢复。
+  @visibleForTesting
+  void reloadBuiltinLevelsForTest() => _initLevels();
 
   void _initLevels() {
     final list = <LevelItem>[];

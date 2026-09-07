@@ -28,6 +28,7 @@ class DailyContentPipeline {
     required String yyyyMm,
     String zipUrlPattern = '',
     String? explicitZipUrl,
+    List<String> mirrorUrls = const [],
     DateTime? overrideToday,
   }) async {
     final monthDir = Directory(p.join(dailyStorageBaseDir, yyyyMm));
@@ -62,9 +63,14 @@ class DailyContentPipeline {
     );
 
     try {
-      // 1. 下载月度 Zip
-      AppLogger.daily.info('Downloading daily zip $yyyyMm');
-      final zipFile = await _httpClient.downloadFile(zipUrl, tempZipPath);
+      // 1. 下载月度 Zip (D10：explicit zip + mirrorUrls 备用镜像按序轮询)
+      AppLogger.daily.info(
+        'Downloading daily zip $yyyyMm mirrors=${mirrorUrls.length + 1}',
+      );
+      final zipFile = await _httpClient.downloadFileWithMirrors(
+        [zipUrl, ...mirrorUrls.where((u) => u != zipUrl)],
+        tempZipPath,
+      );
       final bytes = await zipFile.readAsBytes();
       AppLogger.daily.info(
         'Downloaded daily zip $yyyyMm bytes=${bytes.length}',

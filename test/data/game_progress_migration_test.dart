@@ -46,6 +46,7 @@ void main() {
       await ProgressStore.instance.reloadForTest();
 
       await GameRepository.instance.init();
+      GameRepository.instance.reloadBuiltinLevelsForTest(); // 测试需内置关卡桩数据
       final levels = GameRepository.instance.levels;
       expect(levels, hasLength(100));
 
@@ -74,6 +75,7 @@ void main() {
       // 确认全库已无 jigsaw level  读写（LevelItem 的 prefs 水合分支已删除）：
       // 走 updateLevelProgress 正常链路写进度
       await GameRepository.instance.init();
+      GameRepository.instance.reloadBuiltinLevelsForTest(); // 测试需内置关卡桩数据
       await GameRepository.instance.updateLevelProgress(
         levelIndex: 5,
         progressPercent: 100,
@@ -92,6 +94,7 @@ void main() {
       await sm.openAll();
       await ProgressStore.instance.reloadForTest();
       await GameRepository.instance.init();
+      GameRepository.instance.reloadBuiltinLevelsForTest(); // 测试需内置关卡桩数据
       final l5 = GameRepository.instance.levels.firstWhere((l) => l.index == 5);
       expect(l5.isCompleted, isTrue);
       expect(l5.stars, 2);

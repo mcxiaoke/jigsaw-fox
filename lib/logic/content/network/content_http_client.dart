@@ -168,4 +168,41 @@ class ContentHttpClient {
       rethrow;
     }
   }
+
+  /// 按序尝试多个镜像 URL 下载同一文件（`zipUrls` 备用镜像契约，D10）。
+  ///
+  /// 第一个可用镜像成功即返回；单个镜像失败（网络/404/超时）自动切换到下一个，
+  /// 全部失败则抛出最后一次异常。dest 已由 [downloadFile] 保证 .part 原子落盘，
+  /// 镜像切换不会残留损坏文件。
+  Future<File> downloadFileWithMirrors(
+    List<String> urls,
+    String destinationPath, {
+    Duration? timeout,
+    void Function(int received, int total)? onProgress,
+  }) async {
+    final candidates = urls.where((u) => u.trim().isNotEmpty).toList();
+    if (candidates.isEmpty) {
+      throw ArgumentError('urls must not be empty');
+    }
+    HttpException? lastError;
+    for (var i = 0; i < candidates.length; i++) {
+      try {
+        return await downloadFile(
+          candidates[i],
+          destinationPath,
+          timeout: timeout,
+          onProgress: onProgress,
+        );
+      } catch (e) {
+        lastError = e is HttpException
+            ? e
+            : HttpException('$e for ${candidates[i]}');
+        AppLogger.network.warning(
+          'downloadFileWithMirrors mirror $i/${candidates.length} failed: '
+          '${AppLogger.sanitizeUrl(candidates[i])} -> retry next mirror',
+        );
+      }
+    }
+    throw lastError!;
+  }
 }

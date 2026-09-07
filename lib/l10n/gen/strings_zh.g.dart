@@ -69,6 +69,7 @@ class TranslationsZh extends Translations with BaseTranslations<AppLocale, Trans
 	@override late final _Translations$chooseDifficulty$zh chooseDifficulty = _Translations$chooseDifficulty$zh._(_root);
 	@override late final _Translations$achievementsPage$zh achievementsPage = _Translations$achievementsPage$zh._(_root);
 	@override late final _Translations$myCenter$zh myCenter = _Translations$myCenter$zh._(_root);
+	@override late final _Translations$boot$zh boot = _Translations$boot$zh._(_root);
 }
 
 // Path: app
@@ -710,6 +711,20 @@ class _Translations$myCenter$zh extends Translations$myCenter$en {
 	@override late final _Translations$myCenter$card$zh card = _Translations$myCenter$card$zh._(_root);
 	@override late final _Translations$myCenter$orphanDialog$zh orphanDialog = _Translations$myCenter$orphanDialog$zh._(_root);
 	@override late final _Translations$myCenter$toast$zh toast = _Translations$myCenter$toast$zh._(_root);
+}
+
+// Path: boot
+class _Translations$boot$zh extends Translations$boot$en {
+	_Translations$boot$zh._(TranslationsZh root) : this._root = root, super.internal(root);
+
+	final TranslationsZh _root; // ignore: unused_field
+
+	// Translations
+	@override String get initTitle => '正在初始化游戏内容…';
+	@override String get initSubtitle => '首次启动需联网获取图库，请稍候。';
+	@override String get failedTitle => '初始化失败';
+	@override String get failedDesc => '无法连接内容服务器，请检查网络后重试。';
+	@override String get retry => '重试';
 }
 
 // Path: howTo.t1
@@ -1641,6 +1656,11 @@ extension on TranslationsZh {
 			'myCenter.toast.importSuccess' => ({required Object count}) => '已成功导入 ${count} 张图片到素材库',
 			'myCenter.toast.importFailed' => ({required Object error}) => '选择图片失败：${error}',
 			'myCenter.toast.webviewMissing' => '当前系统未安装 WebView2 运行时，无法使用在线搜图',
+			'boot.initTitle' => '正在初始化游戏内容…',
+			'boot.initSubtitle' => '首次启动需联网获取图库，请稍候。',
+			'boot.failedTitle' => '初始化失败',
+			'boot.failedDesc' => '无法连接内容服务器，请检查网络后重试。',
+			'boot.retry' => '重试',
 			_ => null,
 		};
 	}

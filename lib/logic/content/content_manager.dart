@@ -60,9 +60,17 @@ class ContentManager {
   RootManifest? get currentManifest => manifestRouter.currentManifest;
 
   bool _isSyncing = false;
-  Future<void>? _syncFuture;
+  Future<Object?>? _syncFuture;
+
+  /// 是否有网络同步正在进行（含后台全量轮）。UI 据此避免等待互斥轮导致转圈。
+  bool get isSyncing => _isSyncing;
   final Map<String, String> _dailyMonthZipUrls = {};
+  final Map<String, List<String>> _dailyMonthMirrorUrls = {};
   List<String> get availableDailyMonths => _dailyMonthZipUrls.keys.toList();
+
+  /// 指定月份的每日挑战 zip 备用镜像（zipUrl 主地址失败时轮询）
+  List<String> dailyMonthMirrorUrls(String yyyyMm) =>
+      _dailyMonthMirrorUrls[yyyyMm] ?? const [];
 
   /// 解析指定月份每日挑战 ZIP 地址 (优先读缓存，无则拉取 daily/index.json 解析)
   Future<String?> resolveDailyMonthZipUrl(String yyyyMm) async {
@@ -101,6 +109,20 @@ class ContentManager {
                   zip,
                 );
               }
+              // D10：zipUrls 备用镜像（相对地址以 daily/index.json 为基准解析）
+              if (monthStr != null) {
+                final rawMirrors = (m['zipUrls'] as List<dynamic>?)
+                    ?.map(
+                      (e) => ContentHttpClient.resolveUrl(
+                        dailyIndexUrl,
+                        e.toString(),
+                      ),
+                    )
+                    .toList();
+                if (rawMirrors != null && rawMirrors.isNotEmpty) {
+                  _dailyMonthMirrorUrls[monthStr] = rawMirrors;
+                }
+              }
             }
           }
           AppLogger.daily.info(
@@ -128,12 +150,17 @@ class ContentManager {
 
   /// 1. 初始化所有本地缓存与扩展包 (冷启动快速秒开)
   /// P20 优化：manifest 先读盘缓存，避免弱网 4-16s 阻塞秒开
-  Future<void> initialize() async {
-    AppLogger.content.info('ContentManager initialize start');
+  /// [offlineOnly] = true 时（组1 纯本地）磁盘未命中不发起网络，是否联网由 BootGate 决定
+  Future<void> initialize({bool offlineOnly = false}) async {
+    AppLogger.content.info(
+      'ContentManager initialize start offlineOnly=$offlineOnly',
+    );
     final sw = Stopwatch()..start();
     try {
       // manifest 先尝试磁盘缓存，网络留后台 syncAll
-      final manifestFuture = manifestRouter.resolveManifestCacheFirst();
+      final manifestFuture = manifestRouter.resolveManifestCacheFirst(
+        offlineOnly: offlineOnly,
+      );
       await Future.wait([
         manifestFuture,
         mainPipeline.initializeFromCache(),
@@ -150,8 +177,14 @@ class ContentManager {
     }
   }
 
-  /// 2. 全局网络增量同步（P20 加互斥锁，二次调用等待首次结果）
-  Future<void> syncAll({DateTime? overrideToday}) async {
+  /// 2. 全局网络增量同步（P20 互斥锁：进行中则等待当前轮，杜绝双写）
+  ///
+  /// [includeDailyZip] = false 时仅拉取 daily/index.json 元数据（月份 zip 地址 /
+  /// 镜像），**不下载当月 zip**——用于下拉轻刷新等场景，zip 仍由 daily Tab 懒加载。
+  Future<void> syncAll({
+    DateTime? overrideToday,
+    bool includeDailyZip = true,
+  }) async {
     if (_isSyncing) {
       AppLogger.content.info('syncAll already in progress, wait previous');
       try {
@@ -160,103 +193,171 @@ class ContentManager {
       return;
     }
     _isSyncing = true;
-    final future = () async {
-      AppLogger.content.info('syncAll start overrideToday=$overrideToday');
-      final sw = Stopwatch()..start();
-      // 1. 获取最新 Root Manifest
-      final manifest = await manifestRouter.resolveManifest(forceRefresh: true);
-      AppLogger.content.info(
-        'syncAll manifest resolved version=${manifest.schemaVersion} main=${AppLogger.sanitizeUrl(manifest.mainModule.url)} events=${AppLogger.sanitizeUrl(manifest.eventsModule.url)}',
-      );
-
-      final baseUri = manifest.baseUri;
-      final mainUrl = ContentHttpClient.resolveUrl(
-        baseUri,
-        manifest.mainModule.url,
-      );
-      final eventsUrl = ContentHttpClient.resolveUrl(
-        baseUri,
-        manifest.eventsModule.url,
-      );
-      final collectionsUrl = ContentHttpClient.resolveUrl(
-        baseUri,
-        manifest.collectionsModule.url,
-      );
-
-      // 2. 并发同步各模块元数据
-      try {
-        await Future.wait([
-          // 同步首页关卡
-          mainPipeline
-              .syncWithRemote(
-                remoteUrl: mainUrl,
-                remoteVersion: manifest.mainModule.version,
-              )
-              .then(
-                (v) => AppLogger.content.info(
-                  'main sync done hasNew=$v levels=${mainPipeline.levels.length}',
-                ),
-              ),
-          // 同步活动列表 (自动触发 Auto-GC)
-          eventsPipeline
-              .syncWithRemote(remoteUrl: eventsUrl)
-              .then(
-                (v) => AppLogger.content.info(
-                  'events sync done $v events=${eventsPipeline.visibleEvents.length}',
-                ),
-              ),
-          // 同步官方图集列表
-          collectionsPipeline
-              .syncWithRemote(remoteUrl: collectionsUrl)
-              .then(
-                (v) => AppLogger.content.info(
-                  'collections sync done $v collections=${collectionsPipeline.visibleCollections.length}',
-                ),
-              ),
-          // 预备当月每日挑战
-          () async {
-            final currentMonth = overrideToday != null
-                ? _formatCurrentMonth(overrideToday)
-                : (manifest.dailyModule.currentMonth.isNotEmpty
-                      ? manifest.dailyModule.currentMonth
-                      : _formatCurrentMonth(DateTime.now()));
-
-            final targetZipUrl = await resolveDailyMonthZipUrl(currentMonth);
-
-            if (targetZipUrl != null ||
-                manifest.dailyModule.zipUrlPattern.isNotEmpty) {
-              final ok = await dailyPipeline.ensureMonthReady(
-                yyyyMm: currentMonth,
-                zipUrlPattern: manifest.dailyModule.zipUrlPattern,
-                explicitZipUrl: targetZipUrl,
-                overrideToday: overrideToday,
-              );
-              AppLogger.content.info(
-                'daily ensureMonthReady $currentMonth ok=$ok levels=${dailyPipeline.getLevelsForMonth(currentMonth, overrideToday: overrideToday).length}',
-              );
-            } else {
-              AppLogger.content.fine(
-                'daily zipUrl empty skip month $currentMonth',
-              );
-            }
-          }(),
-        ]);
-        AppLogger.content.info('syncAll done ${sw.elapsedMilliseconds}ms');
-      } catch (e, st) {
-        AppLogger.content.severe(
-          'syncAll failed ${sw.elapsedMilliseconds}ms',
-          e,
-          st,
-        );
-        rethrow;
-      }
-    }();
+    final future = _syncAllCore(
+      overrideToday: overrideToday,
+      includeDailyZip: includeDailyZip,
+    );
     _syncFuture = future;
     try {
       await future;
     } finally {
       _isSyncing = false;
       _syncFuture = null;
+    }
+  }
+
+  /// 首启门禁用：仅同步 manifest + main 元数据（不碰 events/collections/daily/zip），
+  /// 与 [syncAll] 共享同一互斥锁，返回最新 RootManifest 供调用方校验。
+  /// 网络全败时 resolveManifest 会降级 offline fallback（main url 为空），
+  /// 由调用方判定并抛出首启失败。
+  Future<RootManifest> syncMainContent() async {
+    if (_isSyncing) {
+      AppLogger.content.info(
+        'syncMainContent wait previous sync, then run again',
+      );
+      try {
+        await _syncFuture;
+      } catch (_) {}
+    }
+    if (_isSyncing) {
+      throw StateError('syncMainContent concurrency guard broken');
+    }
+    _isSyncing = true;
+    final future = _syncMainCore();
+    _syncFuture = future;
+    try {
+      return await future;
+    } finally {
+      _isSyncing = false;
+      _syncFuture = null;
+    }
+  }
+
+  Future<RootManifest> _syncMainCore() async {
+    AppLogger.content.info('syncMainContent start');
+    final sw = Stopwatch()..start();
+    final manifest = await manifestRouter.resolveManifest(forceRefresh: true);
+    final mainUrl = ContentHttpClient.resolveUrl(
+      manifest.baseUri,
+      manifest.mainModule.url,
+    );
+    if (manifest.mainModule.url.isEmpty || mainUrl.isEmpty) {
+      throw StateError(
+        'syncMainContent: manifest main module url empty (all CDN unreachable)',
+      );
+    }
+    await mainPipeline.syncWithRemote(
+      remoteUrl: mainUrl,
+      remoteVersion: manifest.mainModule.version,
+    );
+    AppLogger.content.info(
+      'syncMainContent done ${sw.elapsedMilliseconds}ms levels=${mainPipeline.levels.length} remoteBatches=${mainPipeline.lastRemoteBatchIds.length} localBatches=${mainPipeline.localBatchIds.length}',
+    );
+    return manifest;
+  }
+
+  Future<void> _syncAllCore({
+    DateTime? overrideToday,
+    required bool includeDailyZip,
+  }) async {
+    AppLogger.content.info(
+      'syncAll start overrideToday=$overrideToday includeDailyZip=$includeDailyZip',
+    );
+    final sw = Stopwatch()..start();
+    // 1. 获取最新 Root Manifest
+    final manifest = await manifestRouter.resolveManifest(forceRefresh: true);
+    AppLogger.content.info(
+      'syncAll manifest resolved version=${manifest.schemaVersion} main=${AppLogger.sanitizeUrl(manifest.mainModule.url)} events=${AppLogger.sanitizeUrl(manifest.eventsModule.url)}',
+    );
+
+    final baseUri = manifest.baseUri;
+    final mainUrl = ContentHttpClient.resolveUrl(
+      baseUri,
+      manifest.mainModule.url,
+    );
+    final eventsUrl = ContentHttpClient.resolveUrl(
+      baseUri,
+      manifest.eventsModule.url,
+    );
+    final collectionsUrl = ContentHttpClient.resolveUrl(
+      baseUri,
+      manifest.collectionsModule.url,
+    );
+
+    // 2. 并发同步各模块元数据
+    try {
+      await Future.wait([
+        // 同步首页关卡
+        mainPipeline
+            .syncWithRemote(
+              remoteUrl: mainUrl,
+              remoteVersion: manifest.mainModule.version,
+            )
+            .then(
+              (v) => AppLogger.content.info(
+                'main sync done hasNew=$v levels=${mainPipeline.levels.length}',
+              ),
+            ),
+        // 同步活动列表 (自动触发 Auto-GC)
+        eventsPipeline
+            .syncWithRemote(remoteUrl: eventsUrl)
+            .then(
+              (v) => AppLogger.content.info(
+                'events sync done $v events=${eventsPipeline.visibleEvents.length}',
+              ),
+            ),
+        // 同步官方图集列表
+        collectionsPipeline
+            .syncWithRemote(remoteUrl: collectionsUrl)
+            .then(
+              (v) => AppLogger.content.info(
+                'collections sync done $v collections=${collectionsPipeline.visibleCollections.length}',
+              ),
+            ),
+        // 预备当月每日挑战（每日 index 元数据必拉；zip 是否下载受 includeDailyZip 控制）
+        () async {
+          final currentMonth = overrideToday != null
+              ? _formatCurrentMonth(overrideToday)
+              : (manifest.dailyModule.currentMonth.isNotEmpty
+                    ? manifest.dailyModule.currentMonth
+                    : _formatCurrentMonth(DateTime.now()));
+
+          final targetZipUrl = await resolveDailyMonthZipUrl(currentMonth);
+
+          if (!includeDailyZip) {
+            AppLogger.content.info(
+              'syncAll includeDailyZip=false: daily meta resolved for $currentMonth (zip skipped)',
+            );
+            return;
+          }
+
+          if (targetZipUrl != null ||
+              manifest.dailyModule.zipUrlPattern.isNotEmpty) {
+            final ok = await dailyPipeline.ensureMonthReady(
+              yyyyMm: currentMonth,
+              zipUrlPattern: manifest.dailyModule.zipUrlPattern,
+              explicitZipUrl: targetZipUrl,
+              mirrorUrls: dailyMonthMirrorUrls(currentMonth),
+              overrideToday: overrideToday,
+            );
+            AppLogger.content.info(
+              'daily ensureMonthReady $currentMonth ok=$ok levels=${dailyPipeline.getLevelsForMonth(currentMonth, overrideToday: overrideToday).length}',
+            );
+          } else {
+            AppLogger.content.fine(
+              'daily zipUrl empty skip month $currentMonth',
+            );
+          }
+        }(),
+      ]);
+      AppLogger.content.info('syncAll done ${sw.elapsedMilliseconds}ms');
+    } catch (e, st) {
+      AppLogger.content.severe(
+        'syncAll failed ${sw.elapsedMilliseconds}ms',
+        e,
+        st,
+      );
+      rethrow;
     }
   }
 
@@ -272,9 +373,11 @@ class ContentManager {
   List<PuzzleLevelItem> filterMainByTag(String tag) =>
       mainPipeline.filterByTag(tag);
 
-  /// 确保指定首页关卡图片已下载
-  Future<PuzzleLevelItem> ensureMainLevelDownloaded(PuzzleLevelItem level) =>
-      mainPipeline.ensureLevelImageDownloaded(level);
+  /// 确保指定首页关卡图片已下载 ([timeout] 透传至底层 Dio，首启强时限场景使用)
+  Future<PuzzleLevelItem> ensureMainLevelDownloaded(
+    PuzzleLevelItem level, {
+    Duration? timeout,
+  }) => mainPipeline.ensureLevelImageDownloaded(level, timeout: timeout);
 
   // --- 每日挑战 Daily 模块便捷代理 ---
 
@@ -299,6 +402,7 @@ class ContentManager {
       yyyyMm: yyyyMm,
       zipUrlPattern: pattern,
       explicitZipUrl: explicitZip,
+      mirrorUrls: dailyMonthMirrorUrls(yyyyMm),
       overrideToday: overrideToday,
     );
   }

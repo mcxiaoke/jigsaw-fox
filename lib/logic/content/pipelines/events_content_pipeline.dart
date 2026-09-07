@@ -107,6 +107,15 @@ class EventsContentPipeline {
             if (zip != null && zip.isNotEmpty) {
               raw['zipUrl'] = ContentHttpClient.resolveUrl(remoteUrl, zip);
             }
+            // zipUrls 备用镜像 (D10)：相对地址同样以 index 为基准解析
+            final rawZipUrls = (raw['zipUrls'] as List<dynamic>?)
+                ?.map(
+                  (e) => ContentHttpClient.resolveUrl(remoteUrl, e.toString()),
+                )
+                .toList();
+            if (rawZipUrls != null && rawZipUrls.isNotEmpty) {
+              raw['zipUrls'] = rawZipUrls;
+            }
             final levels = (raw['levels'] as List<dynamic>?)
                 ?.map(
                   (e) => ContentHttpClient.resolveUrl(remoteUrl, e.toString()),
@@ -201,9 +210,9 @@ class EventsContentPipeline {
       );
 
       try {
-        // 1. 下载 Zip 包
-        final zipFile = await _httpClient.downloadFile(
-          event.zipUrl!,
+        // 1. 下载 Zip 包 (D10：zipUrl 主地址 + zipUrls 备用镜像按序轮询)
+        final zipFile = await _httpClient.downloadFileWithMirrors(
+          [event.zipUrl!, ...event.zipUrls.where((u) => u != event.zipUrl)],
           tempZipPath,
         );
         final bytes = await zipFile.readAsBytes();
