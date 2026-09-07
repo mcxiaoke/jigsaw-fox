@@ -191,6 +191,14 @@ class JigsawPuzzleGame extends FlameGame
   /// 同时典型碎片间隙提升至约 0.15 格，视觉明显分开。
   static const double tabletopScatterStepRatio = 1.45;
 
+  /// 桌面散落模式"空间相邻槽位"判定阈值系数（相对碎片长边）。
+  ///
+  /// 【选值依据】：水平/垂直紧邻槽位中心距上沿 = 步长 1.45 + 两侧各 ±8% 抖动 ≈ 1.61 倍碎片尺寸，
+  /// 阈值 1.65 可完整覆盖全部水平/垂直紧邻对；对角线槽位（约 2.05 倍，16:9 图下 1.66 倍）中
+  /// 中心距落在 [1.61, 1.65] 重叠区内的少数会被额外纳入约束——宁可多约束（回退冲突最小化），
+  /// 也绝不漏判导致原图相邻碎片重新落在紧邻槽位。
+  static const double tabletopScatterSpatialNeighborRatio = 1.65;
+
   /// 判断归一化坐标是否处于棋盘有效覆盖范围内（含微容差）
   bool _isNormalizedOnBoard(
     double nx,
@@ -302,6 +310,13 @@ class JigsawPuzzleGame extends FlameGame
     //    Pieces are SHUFFLED so the tray order never matches the original image order.
     _trayOrder = List<int>.generate(totalPieces, (i) => i)
       ..shuffle(Random(seed));
+    // [方案B] 桌面散落模式：洗牌后按"原图逻辑邻居禁空间相邻"约束分配散落槽位
+    if (isTabletop) {
+      _scatterAssignmentCache = _buildScatterAssignment(
+        pieceIds: _trayOrder,
+        slots: _getTabletopScatterSlots(totalPieces),
+      );
+    }
     var trayIndex = 0;
     for (final id in _trayOrder) {
       final r = id ~/ cols;
@@ -321,7 +336,7 @@ class JigsawPuzzleGame extends FlameGame
       );
 
       final pPos = isTabletop
-          ? _getScatterPositionForIndex(trayIndex, totalPieces)
+          ? _getScatterPositionForPieceId(id)
           : _getTrayPositionForIndex(trayIndex);
       final normOut = [0.0, 0.0];
       _screenToNormalized(pPos, normOut);
@@ -396,6 +411,7 @@ class JigsawPuzzleGame extends FlameGame
     _lastGameSize = size.clone();
     _computeLayout();
     _tabletopScatterSlots = null;
+    _scatterAssignmentCache = null;
     _syncResizeTransform();
   }
 
@@ -550,6 +566,7 @@ class JigsawPuzzleGame extends FlameGame
     // 5. 刷新桌面散落槽位缓存（若是散落模式）
     if (isTabletop) {
       _tabletopScatterSlots = null;
+      _scatterAssignmentCache = null;
     }
 
     // 6. 重排托盘碎片
@@ -815,6 +832,11 @@ class JigsawPuzzleGame extends FlameGame
 
   List<Vector2>? _tabletopScatterSlots;
 
+  /// 桌面散落模式"碎片 → 散落槽位索引"约束分配缓存（方案B）。
+  /// 以碎片 id 为下标、值为槽位索引；仅在初始洗牌（onLoad / resetCurrentGame）时构建，
+  /// organizeTray 与读档重散落使用独立的局部约束分配，避免与已固定碎片（已归位/多片集群）冲突。
+  List<int>? _scatterAssignmentCache;
+
   /// Computes the exact screen coordinate for the N-th piece in the bottom tray.
   /// 碎片基础单元格在托盘内垂直居中对齐，上下对称预留 50% 基础高度空间（完全包容 35% 凸头并留白）
   Vector2 _getTrayPositionForIndex(int index) {
@@ -945,13 +967,105 @@ class JigsawPuzzleGame extends FlameGame
     return slots;
   }
 
-  /// 获取指定碎片在桌面发散模式下的坐标
-  Vector2 _getScatterPositionForIndex(int index, int total) {
-    if (scatterMode != 'tabletop') {
-      return _getTrayPositionForIndex(index);
+  /// 原图 4-连通逻辑邻居表：pieceId → 上下左右邻居 id 集合。
+  ///
+  /// 【用途（方案B）】：桌面散落约束分配时，保证任何一对"原图相邻"的碎片
+  /// 不被分配到空间相邻的散落槽位，杜绝洗牌后出现"初始即吸附/拼好"的观感。
+  static Map<int, Set<int>> _logicalNeighborMap(int rows, int cols) {
+    final map = <int, Set<int>>{};
+    for (var r = 0; r < rows; r++) {
+      for (var c = 0; c < cols; c++) {
+        final id = r * cols + c;
+        final set = <int>{};
+        if (r > 0) set.add((r - 1) * cols + c);
+        if (r < rows - 1) set.add((r + 1) * cols + c);
+        if (c > 0) set.add(r * cols + c - 1);
+        if (c < cols - 1) set.add(r * cols + c + 1);
+        map[id] = set;
+      }
     }
-    final slots = _getTabletopScatterSlots(total);
-    return slots[index % slots.length];
+    return map;
+  }
+
+  /// 槽位空间邻居表：中心距小于 [threshold] 的槽位互为空间邻居。
+  static List<Set<int>> _buildSpatialNeighborSets(
+    List<Vector2> slots,
+    double threshold,
+  ) {
+    final sets = List.generate(slots.length, (_) => <int>{});
+    for (var i = 0; i < slots.length; i++) {
+      for (var j = i + 1; j < slots.length; j++) {
+        if ((slots[i] - slots[j]).length < threshold) {
+          sets[i].add(j);
+          sets[j].add(i);
+        }
+      }
+    }
+    return sets;
+  }
+
+  /// 约束分配（方案B）：将 [pieceIds] 按序分配到散落 [slots]，返回"碎片 id → 槽位索引"。
+  ///
+  /// 【算法】：
+  /// 1. 洗牌顺序 [pieceIds] 保持不变（随机性来源，同 seed 确定性一致）；
+  /// 2. 对每块碎片贪心选槽位：优先选"与其原图逻辑邻居已占用槽位零空间冲突"的槽位；
+  /// 3. 严格无解（槽位紧）时回退到冲突最少的槽位——效果单调不差于完全随机。
+  List<int> _buildScatterAssignment({
+    required List<int> pieceIds,
+    required List<Vector2> slots,
+  }) {
+    final assignment = List<int>.filled(totalPieces, -1);
+    final used = List<bool>.filled(slots.length, false);
+    final logical = _logicalNeighborMap(rows, cols);
+    final threshold =
+        max(pieceSize.x, pieceSize.y) * tabletopScatterSpatialNeighborRatio;
+    final spatial = _buildSpatialNeighborSets(slots, threshold);
+
+    for (final id in pieceIds) {
+      // 该碎片原图逻辑邻居中已分配碎片所占用的槽位集合
+      final neighborSlots = <int>{};
+      for (final nid in logical[id] ?? const <int>{}) {
+        final s = assignment[nid];
+        if (s >= 0) neighborSlots.add(s);
+      }
+
+      var bestSlot = -1;
+      var bestConflict = 1 << 30;
+      for (var s = 0; s < slots.length; s++) {
+        if (used[s]) continue;
+        var conflict = 0;
+        for (final ns in spatial[s]) {
+          if (neighborSlots.contains(ns)) conflict++;
+        }
+        if (conflict == 0) {
+          bestSlot = s;
+          break;
+        }
+        if (conflict < bestConflict) {
+          bestConflict = conflict;
+          bestSlot = s;
+        }
+      }
+      if (bestSlot < 0) {
+        // 防御兜底：槽位生成保证 slots.length >= totalPieces，正常不可达
+        for (var s = 0; s < slots.length; s++) {
+          if (!used[s]) {
+            bestSlot = s;
+            break;
+          }
+        }
+      }
+      used[bestSlot] = true;
+      assignment[id] = bestSlot;
+    }
+    return assignment;
+  }
+
+  /// 获取指定碎片在桌面发散模式下的坐标（方案B：按约束分配缓存结果取槽位）。
+  /// 仅桌面模式调用；托盘模式由调用方直接使用 [_getTrayPositionForIndex]。
+  Vector2 _getScatterPositionForPieceId(int id) {
+    final slots = _getTabletopScatterSlots(totalPieces);
+    return slots[_scatterAssignmentCache![id]];
   }
 
   @override
@@ -1482,6 +1596,13 @@ class JigsawPuzzleGame extends FlameGame
 
     // 重新打散托盘顺序，避免每次重置都出现相同的排列
     _trayOrder = List<int>.generate(totalPieces, (i) => i)..shuffle(Random());
+    // [方案B] 桌面散落模式：重置后同样按约束分配散落槽位（新洗牌顺序）
+    if (isTabletop) {
+      _scatterAssignmentCache = _buildScatterAssignment(
+        pieceIds: _trayOrder,
+        slots: _getTabletopScatterSlots(totalPieces),
+      );
+    }
     final normOut = [0.0, 0.0];
     final initialPieces = <PieceState>[];
     var trayIndex = 0;
@@ -1490,7 +1611,7 @@ class JigsawPuzzleGame extends FlameGame
       final r = id ~/ cols;
       final c = id % cols;
       final pPos = isTabletop
-          ? _getScatterPositionForIndex(trayIndex, totalPieces)
+          ? _getScatterPositionForPieceId(id)
           : _getTrayPositionForIndex(trayIndex);
       _screenToNormalized(pPos, normOut);
 
@@ -1908,7 +2029,20 @@ class JigsawPuzzleGame extends FlameGame
         resetZoom();
       }
       final slots = _getTabletopScatterSlots(totalPieces);
-      var slotIdx = 0;
+      // [方案B] 先收集本次需要重新散落的游离单片，再约束分配槽位（不污染初始分配缓存）
+      final scatterIds = <int>[];
+      for (final p in _pieces.values) {
+        final statePiece = _boardState.pieceById(p.id);
+        final isSolved = statePiece.isSolved(rows, cols);
+        final clusterSize = _pieces.values
+            .where((o) => o.clusterId == p.clusterId)
+            .length;
+        if (!isSolved && clusterSize == 1) scatterIds.add(p.id);
+      }
+      final assignment = _buildScatterAssignment(
+        pieceIds: scatterIds,
+        slots: slots,
+      );
       final updatedPieces = <PieceState>[];
 
       for (final p in _pieces.values) {
@@ -1918,7 +2052,7 @@ class JigsawPuzzleGame extends FlameGame
             .where((o) => o.clusterId == p.clusterId)
             .length;
         if (!isSolved && clusterSize == 1) {
-          final slotPos = slots[slotIdx % slots.length];
+          final slotPos = slots[assignment[p.id]];
           // slotPos 是基于基准未缩放棋盘 (1.0x) 的世界槽位
           final baseNx = (slotPos.x - boardTopLeft.x) / boardSize.x;
           final baseNy = (slotPos.y - boardTopLeft.y) / boardSize.y;
@@ -1928,7 +2062,6 @@ class JigsawPuzzleGame extends FlameGame
           final targetPos = _normalizedToScreen(baseNx, baseNy);
           p.animateTo(targetPos, duration: 0.25);
           updatedPieces.add(statePiece.copyWith(nx: baseNx, ny: baseNy));
-          slotIdx++;
         } else {
           updatedPieces.add(statePiece);
         }
@@ -2081,7 +2214,19 @@ class JigsawPuzzleGame extends FlameGame
       // 当前为桌面模式：
       // 无论快照来自何种模式，全场所有碎片均属于桌面系统，严禁标记 isInTray = true，统一缩放为 _zoom
       final slots = _getTabletopScatterSlots(totalPieces);
-      var slotIdx = 0;
+      // [方案B] 旧存档/模式切换需重散落的游离单片：先收集再约束分配槽位
+      final scatterIds = <int>[];
+      if (needsRealign) {
+        for (final p in newState.pieces) {
+          final isSolved = p.isSolved(rows, cols);
+          final inMultiCluster = (clusterSizes[p.clusterId] ?? 1) > 1;
+          if (!isSolved && !inMultiCluster) scatterIds.add(p.id);
+        }
+      }
+      final assignment = _buildScatterAssignment(
+        pieceIds: scatterIds,
+        slots: slots,
+      );
 
       for (final p in newState.pieces) {
         final comp = _pieces[p.id];
@@ -2100,13 +2245,12 @@ class JigsawPuzzleGame extends FlameGame
 
         if (needsRealign && !isAdsorbedOrClustered) {
           // 旧存档或模式切换：未吸附游离单片直接初始化归位到桌面四周槽位（相当于自动扫把）
-          final slotPos = slots[slotIdx % slots.length];
+          final slotPos = slots[assignment[p.id]];
           final baseNx = (slotPos.x - boardTopLeft.x) / boardSize.x;
           final baseNy = (slotPos.y - boardTopLeft.y) / boardSize.y;
           final targetScreenPos = _normalizedToScreen(baseNx, baseNy);
           comp.position.setFrom(targetScreenPos);
           updatedPiecesMap[p.id] = p.copyWith(nx: baseNx, ny: baseNy);
-          slotIdx++;
         } else {
           // 正常同模式继续，或已归位/拼合碎片：精准保留原坐标
           final targetScreenPos = _normalizedToScreen(p.nx, p.ny);

@@ -2072,4 +2072,113 @@ void main() {
       reason: '任意两块初始散落碎片中心距不得小于 1.2 格，当前最小 $minDist，期望 >= $minGap',
     );
   });
+
+  test('桌面散落模式洗牌后原图相邻碎片绝不被分配到空间相邻槽位（方案B约束分配）', () async {
+    final img = await _decodePng();
+    final game = JigsawPuzzleGame(
+      image: img,
+      rows: 4,
+      cols: 4,
+      scatterMode: 'tabletop',
+      onSolved: () {},
+    );
+    game.onGameResize(Vector2(1280, 800));
+    await game.onLoad();
+
+    // 与实现完全一致的判定阈值：长边 × 1.65（覆盖步长+抖动上沿 1.61）
+    final threshold =
+        max(game.pieceSize.x, game.pieceSize.y) *
+        JigsawPuzzleGame.tabletopScatterSpatialNeighborRatio;
+
+    void verifyNoAdjacent(String phase) {
+      for (var id = 0; id < 16; id++) {
+        final r = id ~/ 4;
+        final c = id % 4;
+        final neighbors = <int>[];
+        if (r > 0) neighbors.add((r - 1) * 4 + c);
+        if (r < 3) neighbors.add((r + 1) * 4 + c);
+        if (c > 0) neighbors.add(r * 4 + c - 1);
+        if (c < 3) neighbors.add(r * 4 + c + 1);
+        for (final nid in neighbors) {
+          if (nid <= id) continue; // 每对只校验一次
+          final a = game.children
+              .whereType<PuzzlePieceComponent>()
+              .firstWhere((p) => p.id == id);
+          final b = game.children
+              .whereType<PuzzlePieceComponent>()
+              .firstWhere((p) => p.id == nid);
+          final dx = (a.position.x + a.size.x * a.scale.x / 2) -
+              (b.position.x + b.size.x * b.scale.x / 2);
+          final dy = (a.position.y + a.size.y * a.scale.y / 2) -
+              (b.position.y + b.size.y * b.scale.y / 2);
+          final d = sqrt(dx * dx + dy * dy);
+          expect(
+            d,
+            greaterThanOrEqualTo(threshold),
+            reason: '$phase 原图相邻碎片 $id/$nid 不得落入空间相邻槽位，实际中心距 $d < $threshold',
+          );
+        }
+      }
+    }
+
+    // 1. 初始洗牌
+    verifyNoAdjacent('初始洗牌');
+
+    // 2. 重新洗牌（重置游戏）后依然满足
+    game.resetCurrentGame();
+    verifyNoAdjacent('重置洗牌');
+  });
+
+  test('桌面散落模式扫把整理后，原图相邻的游离单片不会被重新分配到相邻槽位（方案B）', () async {
+    final img = await _decodePng();
+    final game = JigsawPuzzleGame(
+      image: img,
+      rows: 4,
+      cols: 4,
+      scatterMode: 'tabletop',
+      onSolved: () {},
+    );
+    game.onGameResize(Vector2(1280, 800));
+    await game.onLoad();
+
+    // 拼入 3 块形成已归位资产，其余 13 块保持游离单片
+    game.hint();
+    game
+      ..hint()
+      ..hint();
+    expect(game.solvedCount, 3);
+
+    game.organizeTray();
+
+    final threshold =
+        max(game.pieceSize.x, game.pieceSize.y) *
+        JigsawPuzzleGame.tabletopScatterSpatialNeighborRatio;
+
+    // organizeTray 会立即更新 boardState 归一化坐标（动画仅作用于组件视觉层），
+    // 因此用 boardState 坐标投影验证约束分配结果。
+    for (var id = 0; id < 16; id++) {
+      final st = game.boardState.pieceById(id);
+      if (st.isSolved(4, 4)) continue; // 已归位碎片保留在棋盘上，不参与散落约束
+      final r = id ~/ 4;
+      final c = id % 4;
+      final neighbors = <int>[];
+      if (r > 0) neighbors.add((r - 1) * 4 + c);
+      if (r < 3) neighbors.add((r + 1) * 4 + c);
+      if (c > 0) neighbors.add(r * 4 + c - 1);
+      if (c < 3) neighbors.add(r * 4 + c + 1);
+      for (final nid in neighbors) {
+        if (nid <= id) continue;
+        final nst = game.boardState.pieceById(nid);
+        if (nst.isSolved(4, 4)) continue;
+        final a = game.normalizedToScreen(st.nx, st.ny);
+        final b = game.normalizedToScreen(nst.nx, nst.ny);
+        final d = (a - b).length;
+        expect(
+          d,
+          greaterThanOrEqualTo(threshold),
+          reason: '扫把整理后原图相邻碎片 $id/$nid 不得重新相邻，实际中心距 $d < $threshold',
+        );
+      }
+    }
+  });
 }
