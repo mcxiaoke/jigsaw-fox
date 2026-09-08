@@ -108,8 +108,8 @@ class _CollectionsTabViewState extends State<CollectionsTabView> {
         ? _content.manager.getVisibleEvents()
         : <PuzzleEventItem>[];
 
-    // 2. 顶部 Banner：仅来自 events.json 的活动大卡片
     final heroItems = visibleEvents.map((ev) {
+      final isNew = ev.isNew;
       return HeroBannerItem(
         id: ev.id,
         title: ev.displayTitle,
@@ -118,9 +118,9 @@ class _CollectionsTabViewState extends State<CollectionsTabView> {
             : t.events.subFallback,
         imagePathOrUrl:
             ev.coverUrl ?? (ev.levels.isNotEmpty ? ev.levels.first : ''),
-        badgeText: t.events.badgeLimited,
-        badgeEmoji: '🔥',
-        badgeColor: const Color(0xFFD97706),
+        badgeText: isNew ? 'NEW' : t.events.badgeLimited,
+        badgeEmoji: isNew ? '✨' : '🔥',
+        badgeColor: isNew ? const Color(0xFFC97A2E) : const Color(0xFFD97706),
         onTap: () {
           SoundService.I.play(Sfx.tap);
           EventLevelsPage.open(context, ev);
@@ -377,7 +377,36 @@ class _CollectionsTabViewState extends State<CollectionsTabView> {
                   ),
                 ),
 
-                // 3. 右上角：下载状态/角标
+                // 3. 左上角：NEW 角标 (与首页 Home 保持一致)
+                if (col.isNew)
+                  Positioned(
+                    left: 0,
+                    top: 8,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 3,
+                      ),
+                      decoration: const BoxDecoration(
+                        color: Color(0xFFC97A2E),
+                        borderRadius: BorderRadius.only(
+                          topRight: Radius.circular(4),
+                          bottomRight: Radius.circular(4),
+                        ),
+                      ),
+                      child: const Text(
+                        'New',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w800,
+                          fontStyle: FontStyle.italic,
+                        ),
+                      ),
+                    ),
+                  ),
+
+                // 4. 右上角：下载状态/角标
                 Positioned(
                   right: 8,
                   top: 8,
@@ -389,34 +418,16 @@ class _CollectionsTabViewState extends State<CollectionsTabView> {
                   ),
                 ),
 
-                // 4. 底部图集标题 (仅有 title，不显示 desc)
+                // 5. 底部图集标题与关卡数 (关卡数在标题上方一行，标题独占整行完整显示)
                 Positioned(
                   left: 10,
                   right: 10,
                   bottom: 8,
-                  child: Row(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Expanded(
-                        child: Text(
-                          col.displayTitle,
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 13.5,
-                            fontWeight: FontWeight.bold,
-                            shadows: [
-                              Shadow(
-                                color: Colors.black87,
-                                blurRadius: 4,
-                                offset: Offset(0, 1),
-                              ),
-                            ],
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
                       if (effectiveCount > 0) ...[
-                        const SizedBox(width: 4),
                         Text(
                           t.collections.levelCount(count: effectiveCount),
                           style: TextStyle(
@@ -432,7 +443,25 @@ class _CollectionsTabViewState extends State<CollectionsTabView> {
                             ],
                           ),
                         ),
+                        const SizedBox(height: 2),
                       ],
+                      Text(
+                        col.displayTitle,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 13.5,
+                          fontWeight: FontWeight.bold,
+                          shadows: [
+                            Shadow(
+                              color: Colors.black87,
+                              blurRadius: 4,
+                              offset: Offset(0, 1),
+                            ),
+                          ],
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
                     ],
                   ),
                 ),

@@ -164,7 +164,7 @@ class _EventsTabViewState extends State<EventsTabView> {
                     ),
                   ),
                 ),
-                // Top-left Status Badge
+                // Top-left Status Badge (NEW 优先展示)
                 Positioned(
                   left: 12,
                   top: 12,
@@ -174,24 +174,31 @@ class _EventsTabViewState extends State<EventsTabView> {
                       vertical: 4,
                     ),
                     decoration: BoxDecoration(
-                      color: event.isActive ? palette.brand : Colors.black54,
+                      color: event.isNew
+                          ? const Color(0xFFC97A2E)
+                          : (event.isActive ? palette.brand : Colors.black54),
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         Icon(
-                          event.isActive
+                          event.isNew
                               ? PhosphorIconsFill.sparkle
-                              : PhosphorIconsRegular.clockCounterClockwise,
+                              : (event.isActive
+                                    ? PhosphorIconsFill.sparkle
+                                    : PhosphorIconsRegular
+                                          .clockCounterClockwise),
                           color: Colors.white,
                           size: 13,
                         ),
                         const SizedBox(width: 4),
                         Text(
-                          event.isActive
-                              ? t.events.badgeActive
-                              : t.events.badgePast,
+                          event.isNew
+                              ? 'NEW'
+                              : (event.isActive
+                                    ? t.events.badgeActive
+                                    : t.events.badgePast),
                           style: const TextStyle(
                             color: Colors.white,
                             fontSize: 11,

@@ -32,6 +32,7 @@ class PuzzleCollectionItem {
     this.downloadStatus = CollectionDownloadStatus.notDownloaded,
     this.startTime,
     this.endTime,
+    this.updatedAt,
   });
 
   factory PuzzleCollectionItem.fromJson(Map<String, dynamic> json) {
@@ -83,6 +84,7 @@ class PuzzleCollectionItem {
           : CollectionDownloadStatus.notDownloaded,
       startTime: parseDate(json['startTime']),
       endTime: parseDate(json['endTime']),
+      updatedAt: parseDate(json['updatedAt']) ?? parseDate(json['startTime']),
     );
   }
 
@@ -152,6 +154,9 @@ class PuzzleCollectionItem {
   /// 活动类图集的结束时间 (可选)
   final DateTime? endTime;
 
+  /// 图集最后更新/发布时间 (用于 NEW 角标判定)
+  final DateTime? updatedAt;
+
   bool get isZipType => type.toLowerCase() == 'zip';
   bool get isArrayType => type.toLowerCase() == 'array';
   bool get isActive => status.toLowerCase() == 'active';
@@ -159,6 +164,13 @@ class PuzzleCollectionItem {
   bool get isDisabled => status.toLowerCase() == 'disabled';
   bool get isEvent =>
       collectionType.toLowerCase() == 'event' || startTime != null;
+
+  /// 是否为最近 7 天内更新/发布的新图集
+  bool get isNew {
+    final dt = updatedAt ?? startTime;
+    if (dt == null) return false;
+    return DateTime.now().difference(dt).inDays < 7;
+  }
 
   /// 格式化显示的友好体积 (如 "14.5 MB")
   String get displayFileSize {
@@ -230,6 +242,7 @@ class PuzzleCollectionItem {
     CollectionDownloadStatus? downloadStatus,
     DateTime? startTime,
     DateTime? endTime,
+    DateTime? updatedAt,
   }) {
     return PuzzleCollectionItem(
       id: id ?? this.id,
@@ -254,6 +267,7 @@ class PuzzleCollectionItem {
       downloadStatus: downloadStatus ?? this.downloadStatus,
       startTime: startTime ?? this.startTime,
       endTime: endTime ?? this.endTime,
+      updatedAt: updatedAt ?? this.updatedAt,
     );
   }
 
@@ -279,6 +293,7 @@ class PuzzleCollectionItem {
       'isLocalDownloaded': isLocalDownloaded,
       'startTime': startTime?.toIso8601String(),
       'endTime': endTime?.toIso8601String(),
+      if (updatedAt != null) 'updatedAt': updatedAt?.toIso8601String(),
     };
   }
 

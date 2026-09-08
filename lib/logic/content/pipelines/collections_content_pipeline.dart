@@ -409,6 +409,7 @@ class CollectionsContentPipeline {
           .toList();
       files.sort((a, b) => p.basename(a.path).compareTo(p.basename(b.path)));
 
+      final effectiveDate = collection.updatedAt ?? collection.startTime;
       var seq = 1;
       for (final file in files) {
         final filename = p.basename(file.path);
@@ -421,10 +422,12 @@ class CollectionsContentPipeline {
             sourceModule: CanonicalId.prefixCollection,
             eventId: collection.id,
             order: seq++,
+            addedAt: effectiveDate,
           ),
         );
       }
     } else if (collection.isArrayType) {
+      final effectiveDate = collection.updatedAt ?? collection.startTime;
       var seq = 1;
       for (final url in collection.levels) {
         final filename = url.split('/').last.split('?').first;
@@ -437,6 +440,7 @@ class CollectionsContentPipeline {
             sourceModule: CanonicalId.prefixCollection,
             eventId: collection.id,
             order: seq++,
+            addedAt: effectiveDate,
           ),
         );
       }

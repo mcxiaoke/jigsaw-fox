@@ -21,6 +21,7 @@ class PuzzleEventItem {
     this.totalCount = 0,
     this.fileSizeBytes = 0,
     this.isLocalDownloaded = false,
+    this.updatedAt,
   });
 
   factory PuzzleEventItem.fromJson(Map<String, dynamic> json) {
@@ -63,6 +64,7 @@ class PuzzleEventItem {
           0,
       fileSizeBytes: (json['fileSizeBytes'] as num?)?.toInt() ?? 0,
       isLocalDownloaded: json['isLocalDownloaded'] as bool? ?? false,
+      updatedAt: parseDate(json['updatedAt']) ?? parseDate(json['startTime']),
     );
   }
 
@@ -108,6 +110,9 @@ class PuzzleEventItem {
   /// 活动结束时间
   final DateTime? endTime;
 
+  /// 活动最后更新/发布时间 (用于 NEW 角标判定)
+  final DateTime? updatedAt;
+
   /// 排序权重
   final int displayOrder;
 
@@ -126,6 +131,13 @@ class PuzzleEventItem {
   bool get isUpcoming => status == 'upcoming';
   bool get isZipType => type == 'zip';
   bool get isArrayType => type == 'array';
+
+  /// 是否为最近 7 天内更新/发布的新活动
+  bool get isNew {
+    final dt = updatedAt ?? startTime;
+    if (dt == null) return false;
+    return DateTime.now().difference(dt).inDays < 7;
+  }
 
   /// 格式化显示的友好体积 (如 "14.5 MB")
   String get displayFileSize {
@@ -177,6 +189,7 @@ class PuzzleEventItem {
     List<String>? levels,
     DateTime? startTime,
     DateTime? endTime,
+    DateTime? updatedAt,
     int? displayOrder,
     int? totalCount,
     int? fileSizeBytes,
@@ -197,6 +210,7 @@ class PuzzleEventItem {
       levels: levels ?? this.levels,
       startTime: startTime ?? this.startTime,
       endTime: endTime ?? this.endTime,
+      updatedAt: updatedAt ?? this.updatedAt,
       displayOrder: displayOrder ?? this.displayOrder,
       totalCount: totalCount ?? this.totalCount,
       fileSizeBytes: fileSizeBytes ?? this.fileSizeBytes,
@@ -220,6 +234,7 @@ class PuzzleEventItem {
       'levels': levels,
       'startTime': startTime?.toIso8601String(),
       'endTime': endTime?.toIso8601String(),
+      if (updatedAt != null) 'updatedAt': updatedAt?.toIso8601String(),
       'displayOrder': displayOrder,
       'totalCount': totalCount,
       'fileSizeBytes': fileSizeBytes,

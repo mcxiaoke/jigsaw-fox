@@ -436,6 +436,7 @@ class _CollectionLevelsPageState extends State<CollectionLevelsPage> {
         final progress = snapshot.data;
         final isCompleted = progress?.isCompleted == true;
         final percent = progress?.progressPercent ?? 0;
+        final isNew = level.isNew && !isCompleted;
 
         return InkWell(
           onTap: () => _openLevel(level, index),
@@ -473,29 +474,34 @@ class _CollectionLevelsPageState extends State<CollectionLevelsPage> {
                     ),
                   ),
                 ),
-                // 关卡编号角标
-                Positioned(
-                  left: 8,
-                  top: 8,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 3,
-                    ),
-                    decoration: BoxDecoration(
-                      color: Colors.black54,
-                      borderRadius: BorderRadius.circular(6),
-                    ),
-                    child: Text(
-                      t.game.titleLevel(index: index),
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 10.5,
-                        fontWeight: FontWeight.bold,
+                // NEW 角标 (与首页 Home 保持一致)
+                if (isNew)
+                  Positioned(
+                    left: 0,
+                    top: 8,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 3,
+                      ),
+                      decoration: const BoxDecoration(
+                        color: Color(0xFFC97A2E),
+                        borderRadius: BorderRadius.only(
+                          topRight: Radius.circular(4),
+                          bottomRight: Radius.circular(4),
+                        ),
+                      ),
+                      child: const Text(
+                        'New',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w800,
+                          fontStyle: FontStyle.italic,
+                        ),
                       ),
                     ),
                   ),
-                ),
                 // 右上角状态 (完成/进度)
                 if (isCompleted)
                   Positioned(

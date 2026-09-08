@@ -48,6 +48,12 @@ class AppContent {
     return _manager!;
   }
 
+  @visibleForTesting
+  void setManagerForTest(ContentManager? m) {
+    _manager = m;
+    _isInitialized = m != null;
+  }
+
   static final PackContentPipeline _fallbackPacks = PackContentPipeline(
     packsBaseDir: '',
   );

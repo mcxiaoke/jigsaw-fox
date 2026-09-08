@@ -291,6 +291,7 @@ class EventsContentPipeline {
       // 自然排序
       files.sort((a, b) => p.basename(a.path).compareTo(p.basename(b.path)));
 
+      final effectiveDate = event.updatedAt ?? event.startTime;
       var seq = 1;
       for (final file in files) {
         final filename = p.basename(file.path);
@@ -303,10 +304,12 @@ class EventsContentPipeline {
             sourceModule: CanonicalId.prefixEvent,
             eventId: event.id,
             order: seq++,
+            addedAt: effectiveDate,
           ),
         );
       }
     } else if (event.isArrayType) {
+      final effectiveDate = event.updatedAt ?? event.startTime;
       var seq = 1;
       for (final url in event.levels) {
         final filename = url.split('/').last.split('?').first;
@@ -319,6 +322,7 @@ class EventsContentPipeline {
             sourceModule: CanonicalId.prefixEvent,
             eventId: event.id,
             order: seq++,
+            addedAt: effectiveDate,
           ),
         );
       }

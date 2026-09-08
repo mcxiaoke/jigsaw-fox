@@ -2,6 +2,7 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import 'package:jigsawpuzzle/data/progress_store.dart';
 import 'package:jigsawpuzzle/l10n/gen/strings.g.dart';
 import 'package:jigsawpuzzle/logic/cache/level_image_resolver.dart';
 import 'package:jigsawpuzzle/logic/content/app_content.dart';
@@ -237,6 +238,11 @@ class _EventLevelsPageState extends State<EventLevelsPage> {
   }
 
   Widget _buildLevelCard(PuzzleLevelItem level, int index, AppPalette palette) {
+    final prog = ProgressStore.instance.getLevelProgress(level.id);
+    final isCompleted = prog.isCompleted;
+    final percent = prog.progressPercent;
+    final isNew = level.isNew && !isCompleted;
+
     return InkWell(
       onTap: () => _openLevel(level, index),
       borderRadius: BorderRadius.circular(16),
@@ -263,25 +269,75 @@ class _EventLevelsPageState extends State<EventLevelsPage> {
                 ),
               ),
             ),
-            Positioned(
-              left: 8,
-              top: 8,
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                decoration: BoxDecoration(
-                  color: Colors.black54,
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Text(
-                  t.game.titleLevel(index: index),
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 11,
-                    fontWeight: FontWeight.bold,
+            // NEW 角标 (与首页 Home 保持一致)
+            if (isNew)
+              Positioned(
+                left: 0,
+                top: 8,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 3,
+                  ),
+                  decoration: const BoxDecoration(
+                    color: Color(0xFFC97A2E),
+                    borderRadius: BorderRadius.only(
+                      topRight: Radius.circular(4),
+                      bottomRight: Radius.circular(4),
+                    ),
+                  ),
+                  child: const Text(
+                    'New',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w800,
+                      fontStyle: FontStyle.italic,
+                    ),
                   ),
                 ),
               ),
-            ),
+            // 右上角状态 (完成/进度)
+            if (isCompleted)
+              Positioned(
+                right: 8,
+                top: 8,
+                child: Container(
+                  padding: const EdgeInsets.all(3.5),
+                  decoration: const BoxDecoration(
+                    color: Colors.green,
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    PhosphorIconsBold.check,
+                    color: Colors.white,
+                    size: 11,
+                  ),
+                ),
+              )
+            else if (percent > 0)
+              Positioned(
+                right: 8,
+                top: 8,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 6,
+                    vertical: 2,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Colors.black54,
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Text(
+                    '$percent%',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 10,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ),
           ],
         ),
       ),

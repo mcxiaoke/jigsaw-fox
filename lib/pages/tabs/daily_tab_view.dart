@@ -427,6 +427,8 @@ class _DailyTabViewState extends State<DailyTabView> {
             .getDailyLevelsForMonth(monthMm)
             .where((lvl) => !lvl.isTimeLocked)
             .toList();
+        // 每月挑战倒序排列：最新的日期在最前面
+        levels.sort((a, b) => (b.dailyDate ?? '').compareTo(a.dailyDate ?? ''));
       }
       monthGroups[monthKey] = levels;
 
