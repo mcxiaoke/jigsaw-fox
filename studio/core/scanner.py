@@ -197,7 +197,7 @@ def get_image_info(p: Path, root: Path, file_hash: str | None = None) -> dict[st
             "width": width,
             "height": height,
             "long_side": long_side,
-            # 导出规格化要求长边 >=2160，低于此记 too_small_long warning（供运营换图）
+            # 导出规格化要求长边 >=1920，低于此记 too_small_long warning（供运营换图）
             "too_small_long": width > 0 and long_side < DEFAULT_LONG_TARGET,
             "format": fmt,
             "mode": mode,
@@ -380,4 +380,3 @@ def find_duplicate_groups(
             dup_groups[h] = unique_group
 
     return dup_groups
-

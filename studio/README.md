@@ -154,42 +154,52 @@ python studio/server.py --loglevel DEBUG --logfile temp/my_studio.log
 
 ## 四、 目录结构一览
 
+后端目录
+
 ```text
 studio/
-├── __init__.py
-├── __main__.py               # 模块入口 (python -m studio)
-├── server.py                 # HTTP 服务网关、独占端口监听与 REST 路由
-├── taxonomy.py               # 分类体系与标签定义 (单一事实源 SSOT)
-├── test_studio.py            # 后端 23 个自动化单元测试
-├── test_frontend.py          # 前端冒烟与无头浏览器 CDP 挂载测试
-├── README.md                 # 工作台介绍与使用指南
-├── docs/
-│   ├── studio-technical-architecture.md             # 系统完整技术架构文档
-│   └── content-studio-hash-and-export-tracking-design.md # 哈希与导出防重设计
-├── core/
-│   ├── cache_db.py           # SQLite3 算力缓存引擎 (.studio.db WAL 模式)
-│   ├── quality_evaluator.py  # OpenCV 物理质检与四周智能裁剪引擎
-│   ├── scanner.py            # 递归目录扫描与增量哈希
-│   ├── image_proc.py         # Pillow 缩略图生成与格式转码
-│   ├── tags_manager.py       # tags.json 增量对齐与原子写回
-│   └── export_tracker.py     # exported.json 防重账本读写
-├── exporters/
-│   ├── base.py               # 导出器抽象基类
-│   ├── registry.py           # 导出器策略注册中心
-│   ├── manifest_manager.py   # manifest.json 路由清单原子维护
-│   ├── main_exporter.py      # 主线关卡导出器
-│   ├── daily_exporter.py     # 月度日历导出器
-│   ├── event_exporter.py     # 主题活动导出器
-│   └── collection_exporter.py# 官方合集导出器
-└── static/
-    ├── index.html            # 语义化响应式 HTML 界面
-    ├── css/studio.css        # 现代 UI 样式与品质徽章
-    ├── js/
-    │   ├── api.js            # REST API 异步调用封装
-    │   ├── app.js            # Vue 3 应用主逻辑与响应式状态
-    │   └── taxonomy.js       # 前端降级备用标签配置
-    └── vendor/
-        └── vue.global.prod.js# 本地静态 Vue 3 运行时 (无需 npm 构建)
+├── server.py               HTTP 服务：路由分发、业务编排、JobStore、质检 worker、日志初始化
+├── taxonomy.py             分类法单一事实源（14 主 Tag + 中文名 + 路径推断规则）
+├── __main__.py             支持 `python -m studio` 启动
+├── core/                   领域核心层（不依赖 HTTP）
+│   ├── cache_db.py         SQLite 算力缓存（文件元数据 / 质检分 / 用户裁切覆盖）
+│   ├── scanner.py          目录扫描、哈希、图片元信息、排序、重复检测
+│   ├── tags_manager.py     tags.json 读写、记录归一化、扫描结果与既有标签合并
+│   ├── quality_evaluator.py 物理适玩度质检（8×8 死区分析 + smart crop 提分）
+│   ├── crop_compute.py     纯几何/能量裁剪算法（与 scripts/imgcrop.py 共用）
+│   ├── image_proc.py       缩略图、转码、规格化、并行进程池
+│   ├── exports_ledger.py   导出账本（.studio/ledger，含 read_only 试导出模式）
+│   ├── export_tracker.py   旧版 exported.json 账本读取（兼容层）
+│   └── workspace.py        源目录 .studio 工作区（目录结构、审计流水、发布镜像）
+├── exporters/              策略模式导出引擎
+│   ├── base.py             BaseExporter 抽象基类 + 试导出隔离 + 进度上报
+│   ├── registry.py         类型 → 导出器 工厂（main/daily/event/collection）
+│   ├── main_exporter.py    主线关卡（序号 + 版本 + 分批次）
+│   ├── daily_exporter.py   月度日历（ZIP）
+│   ├── pack_exporter_base.py  Event/Collection 公共基类（ZIP 打包）
+│   ├── event_exporter.py / collection_exporter.py  仅覆写 item 元数据
+│   └── manifest_manager.py 客户端 manifest.json 路由清单维护
+├── static/                 前端工作台（见 WebUI 文档）
+└── test_*.py               单元/契约测试（test_studio / test_ledger / test_workspace /
+                            test_image_proc / test_frontend）
+```
+
+前端目录
+
+```
+studio/static/
+├── index.html                 模板：头部 / 配置栏 / 侧栏 / 工具条 / 卡片网格 /
+│                              导出三步工作台 / 正式导出确认 Modal / 大图查看器 / Toast
+│                              + 致命白屏守卫内联脚本（renderFatalError）
+├── css/studio.css             全部样式（含 .export-view max-width:1920px 大屏适配）
+├── js/
+│   ├── logger.js              零依赖 IIFE：接管 console + 环形缓冲 + 浮动日志面板（window.StdLog）
+│   ├── api.js                 REST 客户端：唯一发请求的地方
+│   ├── app.js                 Vue 主应用：全部状态、计算属性、业务方法
+│   └── taxonomy.js            由 scripts/build_taxonomy.py 生成的离线分类常量（window.TAXONOMY）
+└── vendor/
+    ├── vue.global.prod.js
+    └── Sortable.min.js
 ```
 
 ---

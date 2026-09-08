@@ -179,7 +179,7 @@ const app = createApp({
       format: "webp",
       // main 默认数字序号命名，让「文件名 = order」，手动拖拽的顺序在产物上直接可见
       rename: "sequence",
-      startOrder: 101,
+      startOrder: 1,
       version: "",
       month: new Date().toISOString().slice(0, 7).replace("-", ""),
       eventId: "",
@@ -1780,7 +1780,7 @@ const app = createApp({
         targetRatios: exportConfig.value.targetRatios || ["auto"],
         cropMode: exportConfig.value.cropMode || "smart",
         sortBy: exportConfig.value.sortBy,
-        startOrder: parseInt(exportConfig.value.startOrder || 101, 10),
+        startOrder: parseInt(exportConfig.value.startOrder || 1, 10),
         version: exportConfig.value.version,
         month: exportConfig.value.month,
         eventId: exportConfig.value.eventId,
