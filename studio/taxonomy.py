@@ -39,6 +39,12 @@ MAIN_TAGS: list[dict[str, Any]] = [
 MAIN_TAG_IDS: list[str] = [t["id"] for t in MAIN_TAGS]
 TAG_ZH: dict[str, str] = {t["id"]: t["zh"] for t in MAIN_TAGS}
 
+# 兜底标签的**唯一规范形式**（全链路只认这一个大小写）。
+# 约定：素材没有标签 / 标签无法归类时，tags 一律写成 [OTHERS_TAG]，
+# 而不是空数组 [] 或小写 "others"。这样"是否未分类"在任何地方都等价于
+# `OTHERS_TAG in tags`，排序/筛选/统计规则得以完全统一。
+OTHERS_TAG = "Others"
+
 # 兼容性别名映射 (代码向下兼容)
 CATALOG_DEFS = MAIN_TAGS
 SPECIFIC_TAG_DEFS = MAIN_TAGS

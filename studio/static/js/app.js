@@ -12,11 +12,12 @@ import {
   fetchTaxonomy,
   getFileUrl,
   getThumbUrl,
+  previewExport,
   saveTags,
   scanDirectory,
 } from "./api.js";
 
-const { createApp, ref, computed, onMounted, watch } = window.Vue;
+const { createApp, ref, computed, onMounted, watch, nextTick } = window.Vue;
 
 const app = createApp({
   setup() {
@@ -45,6 +46,32 @@ const app = createApp({
     // 双行排布拆分 (Row 1: 前 7 个大类 + 全部共 8 项; Row 2: 后 7 个大类共 7 项)
     const mainTagsRow1 = computed(() => mainTags.value.slice(0, 7));
     const mainTagsRow2 = computed(() => mainTags.value.slice(7));
+
+    // -----------------------------------------------------------------------
+    // 标签不变量（单一事实源）
+    // -----------------------------------------------------------------------
+    // 约定：素材没有标签 / 标签无法归类时，tags 一律落成规范兜底标签 ["Others"]，
+    // 绝不出现空数组或小写 "others"。于是「是否未分类」在任何位置都等价于
+    // `r.tags.includes(OTHERS)`，筛选 / 统计 / 排序不再需要任何特判分支。
+    const OTHERS = "Others";
+    const isOthersTag = (t) => String(t || "").trim().toLowerCase() === "others";
+    const normalizeTags = (tags) => {
+      // 无标签落成规范兜底桶 ["Others"]；小写 others / 大小写混杂也统一成规范形式，
+      // 保证任意位置 `tags.includes(OTHERS)` 恒等于「未分类」
+      const out = [];
+      for (const raw of Array.isArray(tags) ? tags : []) {
+        const t = isOthersTag(raw) ? OTHERS : String(raw).trim();
+        if (t && !out.includes(t)) out.push(t);
+      }
+      return out.length ? out : [OTHERS];
+    };
+    const isOthers = (r) => !!(r && Array.isArray(r.tags) && r.tags.includes(OTHERS));
+    // 写入标签并同步 catalogs / 待复核态，保证不变量恒成立
+    const applyTags = (r, tags, reviewRequired) => {
+      r.tags = normalizeTags(tags);
+      r.catalogs = [...r.tags];
+      r.review_required = reviewRequired === undefined ? isOthers(r) : reviewRequired;
+    };
 
     // -----------------------------------------------------------------------
     // 配置与路径 (本地存储持久化)
@@ -129,7 +156,8 @@ const app = createApp({
     const exportType = ref("main");
     const exportConfig = ref({
       format: "webp",
-      rename: "none",
+      // main 默认数字序号命名，让「文件名 = order」，手动拖拽的顺序在产物上直接可见
+      rename: "sequence",
       startOrder: 101,
       version: "",
       month: new Date().toISOString().slice(0, 7).replace("-", ""),
@@ -144,10 +172,14 @@ const app = createApp({
       outputMode: "zip",
       excludeExported: true,
       exportScope: "all", // 'all' | 'selected'
+      sortBy: "name_asc",
+      quality: 70,
     });
     const isExporting = ref(false);
     const exportLogs = ref([]);
     const exportSummary = ref("");
+    // 确认导出前的必填校验错误（输出目录等），在第③步红条展示，避免只有一闪而过的 toast
+    const exportError = ref("");
 
     // 待导出范围内是否包含内容重复的图片 (用于弹窗提前预警)
     const hasDuplicateInExportScope = computed(() => {
@@ -172,6 +204,128 @@ const app = createApp({
     const viewerModalOpen = ref(false);
     const viewerIndex = ref(0);
 
+    // -----------------------------------------------------------------------
+    // 导出三步流状态 (配置 → 顺序调整 → 预览)
+    // -----------------------------------------------------------------------
+    const exportStep = ref(1);
+    const orderGridEl = ref(null);
+    // 第②步用 ✕ 剔除的相对路径集合：预检与最终导出都必须真正排除这些图片
+    const exportExcluded = ref(new Set());
+    const previewState = ref({ loading: false, error: "", ordered: null, stats: null, suggested: null, estRatio: 0.2 });
+    const previewLoading = computed(() => !!previewState.value.loading);
+    const previewError = computed(() => previewState.value.error || "");
+    const previewOrdered = computed(() => previewState.value.ordered || []);
+    const previewStats = computed(() => previewState.value.stats || null);
+    const suggested = computed(() => previewState.value.suggested || null);
+    const suggestedStartHint = computed(() => (suggested.value && exportType.value === "main") ? suggested.value.suggestedStartOrder : null);
+    const suggestedMaxOrder = computed(() => (suggested.value && suggested.value.maxOrder) || 0);
+    const suggestedVersion = computed(() => (suggested.value && suggested.value.suggestedVersion) || 0);
+    const listBase = computed(() => {
+      if (exportType.value === "main") {
+        const n = Number(exportConfig.value.startOrder);
+        if (n > 0) return n;
+        return (suggested.value && suggested.value.suggestedStartOrder) || 1;
+      }
+      return 1;
+    });
+    const suggestedStartForList = computed(() => listBase.value);
+    const suggestedMaxForList = computed(() => (exportType.value === "main" ? listBase.value : 1));
+    // 分布条刻度：标签分布与目录分布各自独立归一化，避免互相挤压
+    const distMaxTags = computed(() => {
+      const s = previewState.value.stats;
+      if (!s) return 1;
+      const vals = Object.values(s.tags || {});
+      return Math.max(1, ...vals);
+    });
+    const distMaxDirs = computed(() => {
+      const s = previewState.value.stats;
+      if (!s) return 1;
+      const vals = Object.values(s.dirs || {});
+      return Math.max(1, ...vals);
+    });
+    const hbarWidth = (c, kind) => {
+      const max = kind === "dirs" ? distMaxDirs.value : distMaxTags.value;
+      return `${Math.round((Number(c) / max) * 100)}%`;
+    };
+    const fmtBytes = (n) => {
+      const v = Number(n || 0);
+      if (v >= 1 << 30) return (v / (1 << 30)).toFixed(1) + " GB";
+      if (v >= 1 << 20) return (v / (1 << 20)).toFixed(1) + " MB";
+      if (v >= 1 << 10) return (v / (1 << 10)).toFixed(0) + " KB";
+      return v + " B";
+    };
+
+    // 打标记录瘦身：仅回传预检/导出真正需要的字段，
+    // 避免 25k 张时把 width/height/quality/size 等全量字段塞进请求体（实测可从 MB 级降到 KB 级）
+    const buildSlimRecords = () =>
+      records.value.map((r) => ({
+        path: r.path,
+        file: r.file,
+        hash: r.hash || "",
+        tags: r.tags || [],
+        exported: !!r.exported,
+      }));
+
+    // 构建预检 payload (与最终导出保持一致)
+    const buildPreviewPayload = () => {
+      const scopeSelected = exportConfig.value.exportScope === "selected" && selectedSet.value.size > 0;
+      // 范围集：selected 时用勾选的图片；all 时省略(后端按全部)
+      const selectedPaths = scopeSelected ? Array.from(selectedSet.value) : undefined;
+      // 顺序集：手动排序时把用户拖出来的顺序单独传给后端
+      const manualOrder =
+        exportConfig.value.sortBy === "manual" && previewState.value.ordered && previewState.value.ordered.length
+          ? previewState.value.ordered.map((o) => o.rel)
+          : undefined;
+      return {
+        type: exportType.value,
+        srcDir: srcDir.value.trim(),
+        outDir: outDir.value.trim(),
+        sortBy: exportConfig.value.sortBy,
+        format: exportConfig.value.format,
+        quality: exportConfig.value.quality,
+        excludeExported: Boolean(exportConfig.value.excludeExported),
+        selectedPaths,
+        manualOrder,
+        // ✕ 剔除清单：让后端把这些图片从待导出清单里真正移除（而非排到末尾）
+        excludedPaths: exportExcluded.value.size ? Array.from(exportExcluded.value) : undefined,
+        tagsRecords: buildSlimRecords(),
+      };
+    };
+
+    const loadExportPreview = async () => {
+      previewState.value.loading = true;
+      previewState.value.error = "";
+      try {
+        const res = await previewExport(buildPreviewPayload());
+        previewState.value.ordered = res.ordered || [];
+        previewState.value.stats = res.stats || null;
+        previewState.value.suggested = res.suggested || null;
+        // 记录服务端给出的「预计/原图」换算比，供本地剔除单张后重算体积保持同口径
+        const st = res.stats || {};
+        previewState.value.estRatio =
+          Number(st.sourceBytes) > 0 ? Number(st.estWebpBytes) / Number(st.sourceBytes) : 0.2;
+        // 自动填充起始序号（仅 main，且当前为空/小于建议值时）
+        if (exportType.value === "main" && res.suggested && res.suggested.suggestedStartOrder) {
+          const cur = Number(exportConfig.value.startOrder) || 0;
+          if (cur === 0 || cur < res.suggested.suggestedStartOrder) {
+            exportConfig.value.startOrder = res.suggested.suggestedStartOrder;
+          }
+        }
+      } catch (e) {
+        previewState.value.error = e.message || "预检失败";
+      } finally {
+        previewState.value.loading = false;
+        // 等 loading 覆盖层移除、网格真正渲染后再绑定拖拽
+        nextTick(rebuildSortable);
+      }
+    };
+
+    const resetStartOrderForType = () => {
+      if (exportType.value === "main" && suggested.value && suggested.value.suggestedStartOrder) {
+        exportConfig.value.startOrder = suggested.value.suggestedStartOrder;
+      }
+    };
+
     // Toast 提示
     const toast = ref({ show: false, text: "", timer: null });
     const showToast = (text) => {
@@ -187,29 +341,24 @@ const app = createApp({
     // 计算属性 (Computed)
     // -----------------------------------------------------------------------
 
-    // 标签统计计数 (Others 是未分类/无标签素材的虚拟 filter 集合)
+    // 标签统计计数：未打标素材的 tags 已归一化为 ["Others"]，直接平铺计数即可
     const tagCounts = computed(() => {
       const map = {};
-      let othersCount = 0;
       for (const r of records.value) {
-        const realTags = (r.tags || []).filter((t) => t.toLowerCase() !== "others");
-        if (realTags.length === 0) {
-          othersCount++;
-        }
-        for (const t of realTags) {
+        const tags = normalizeTags(r.tags);
+        for (const t of tags) {
           map[t] = (map[t] || 0) + 1;
         }
       }
-      map["Others"] = othersCount;
+      if (!(OTHERS in map)) map[OTHERS] = 0;
       return map;
     });
 
-    // 待复核总数 (含无真实标签与标记待复核的素材)
+    // 待复核总数 (无真实标签 = 落在 Others 桶，或显式标记待复核)
     const unreviewedCount = computed(() => {
       let cnt = 0;
       for (const r of records.value) {
-        const isUntagged = !r.tags || r.tags.length === 0 || r.tags.every((t) => t.toLowerCase() === "others");
-        if (r.review_required || isUntagged) {
+        if (r.review_required || isOthers(r)) {
           cnt++;
         }
       }
@@ -245,10 +394,10 @@ const app = createApp({
     const filteredRecords = computed(() => {
       let list = records.value;
 
-      // 1. Tag 过滤 (Others 对应无真实标签的集合)
+      // 1. Tag 过滤 (Others 桶 = tags 里含兜底标签的记录，与真实标签完全同一规则)
       if (activeTag.value) {
         if (activeTag.value.toLowerCase() === "others") {
-          list = list.filter((r) => !r.tags || r.tags.length === 0 || r.tags.every((t) => t.toLowerCase() === "others"));
+          list = list.filter((r) => isOthers(r));
         } else {
           list = list.filter((r) => r.tags && r.tags.includes(activeTag.value));
         }
@@ -256,9 +405,7 @@ const app = createApp({
 
       // 2. 待复核过滤
       if (onlyUnreviewed.value) {
-        list = list.filter(
-          (r) => r.review_required || !r.tags || r.tags.length === 0 || r.tags.every((t) => t.toLowerCase() === "others")
-        );
+        list = list.filter((r) => r.review_required || isOthers(r));
       }
 
       // 2.5 仅看重复素材过滤
@@ -363,7 +510,11 @@ const app = createApp({
       isScanning.value = true;
       try {
         const res = await scanDirectory(srcDir.value.trim());
-        records.value = res.records || [];
+        // 加载即强制标签不变量：空/缺失 tags 一律落成 ["Others"]，后续全链路无需特判
+        records.value = (res.records || []).map((r) => {
+          r.tags = normalizeTags(r.tags);
+          return r;
+        });
         selectedSet.value.clear();
         if (res.stats && res.stats.qualitySummary) {
           qualitySummary.value = res.stats.qualitySummary;
@@ -516,7 +667,7 @@ const app = createApp({
     const selectUnreviewedOnly = () => {
       const next = new Set();
       for (const r of filteredRecords.value) {
-        if (r.review_required || (r.tags && r.tags.some((t) => t.toLowerCase() === "others"))) {
+        if (r.review_required || isOthers(r)) {
           next.add(r.path);
         }
       }
@@ -567,7 +718,7 @@ const app = createApp({
 
     // 辅助同步单个 record 的 catalogs
     const updateRecordCatalogs = (item) => {
-      item.catalogs = item.tags && item.tags.length > 0 ? [...item.tags] : ["Others"];
+      item.catalogs = [...normalizeTags(item.tags)];
     };
 
     // -----------------------------------------------------------------------
@@ -583,9 +734,8 @@ const app = createApp({
       let count = 0;
       for (const r of records.value) {
         if (selectedSet.value.has(r.path)) {
-          r.tags = [targetTag];
-          r.catalogs = [targetTag];
-          r.review_required = targetTag.toLowerCase() === "others";
+          // 覆盖为 Others 时保持 ["Others"] 规范形式，review_required 由不变量推导
+          applyTags(r, [targetTag], isOthersTag(targetTag));
           count++;
         }
       }
@@ -601,16 +751,14 @@ const app = createApp({
       let count = 0;
       for (const r of records.value) {
         if (selectedSet.value.has(r.path)) {
-          let tags = r.tags || [];
+          let tags = normalizeTags(r.tags);
           if (!tags.includes(targetTag)) {
-            // 如果追加的是具体标签，自动移除 'Others' / 'others' 兜底
-            if (targetTag.toLowerCase() !== "others") {
-              tags = tags.filter((t) => t.toLowerCase() !== "others");
+            // 追加具体标签时自动移除 Others 兜底（两者互斥）
+            if (!isOthersTag(targetTag)) {
+              tags = tags.filter((t) => !isOthersTag(t));
             }
             tags.push(targetTag);
-            r.tags = tags;
-            r.catalogs = tags;
-            r.review_required = tags.some((t) => t.toLowerCase() === "others");
+            applyTags(r, tags);
             count++;
           }
         }
@@ -627,17 +775,16 @@ const app = createApp({
       let count = 0;
       for (const r of records.value) {
         if (selectedSet.value.has(r.path)) {
-          let tags = r.tags || [];
-          if (tags.includes(targetTag)) {
-            tags = tags.filter((t) => t !== targetTag);
-            if (tags.length === 0) {
-              tags = ["Others"];
-              r.review_required = true;
-            }
-            r.tags = tags;
-            r.catalogs = tags;
-            count++;
+          const before = normalizeTags(r.tags);
+          if (!before.includes(targetTag)) continue;
+          const tags = before.filter((t) => t !== targetTag);
+          // 移空即退回规范兜底桶 ["Others"]（不变量保证非空）
+          if (tags.length === 0) {
+            applyTags(r, [OTHERS], true);
+          } else {
+            applyTags(r, tags);
           }
+          count++;
         }
       }
       showToast(`已从 ${count} 张图片中移除标签 [${tagZh.value[targetTag] || targetTag}]`);
@@ -647,9 +794,7 @@ const app = createApp({
       if (selectedCount.value === 0) return;
       for (const r of records.value) {
         if (selectedSet.value.has(r.path)) {
-          r.tags = ["Others"];
-          r.catalogs = ["Others"];
-          r.review_required = true;
+          applyTags(r, [OTHERS], true);
         }
       }
       showToast(`已将选中的 ${selectedCount.value} 张图片重置为 [Others] 并标记待复核`);
@@ -673,19 +818,19 @@ const app = createApp({
     const toggleViewerTag = (tagId) => {
       if (!currentViewerItem.value) return;
       const item = currentViewerItem.value;
-      let tags = [...(item.tags || [])];
+      let tags = normalizeTags(item.tags);
       if (tags.includes(tagId)) {
         tags = tags.filter((t) => t !== tagId);
-        if (tags.length === 0) tags = ["Others"];
+        // 移空即退回规范兜底桶 ["Others"]
+        if (tags.length === 0) tags = [OTHERS];
       } else {
-        if (tagId.toLowerCase() !== "others") {
-          tags = tags.filter((t) => t.toLowerCase() !== "others");
+        // 追加具体标签时自动移除 Others 兜底（两者互斥）
+        if (!isOthersTag(tagId)) {
+          tags = tags.filter((t) => !isOthersTag(t));
         }
         tags.push(tagId);
       }
-      item.tags = tags;
-      item.catalogs = tags;
-      item.review_required = tags.some((t) => t.toLowerCase() === "others");
+      applyTags(item, tags);
     };
 
     const toggleViewerReview = () => {
@@ -726,7 +871,14 @@ const app = createApp({
     const openExport = () => {
       exportSummary.value = "";
       exportLogs.value = [];
+      exportStep.value = 1;
+      exportExcluded.value = new Set(); // 每次新导出会话清空上一次的剔除记录
+      exportError.value = "";
+      // 若已在浏览页勾选图片，默认只导出选中的那几张，而非全部
+      exportConfig.value.exportScope = selectedSet.value.size > 0 ? "selected" : "all";
       exportModalOpen.value = true;
+      // 后台预检，自动填充建议序号/版本并预热第二步清单（不阻塞进入第一步）
+      loadExportPreview();
     };
 
     const closeExport = () => {
@@ -734,13 +886,248 @@ const app = createApp({
       exportModalOpen.value = false;
     };
 
+    // 结果页「再导一次」：清空日志并回到第一步（避免误触重复导出）
+    const restartExport = () => {
+      if (isExporting.value) return;
+      exportLogs.value = [];
+      exportSummary.value = "";
+      exportStep.value = 1;
+    };
+
+    const goExportStep = async (n) => {
+      exportError.value = "";
+      if (exportType.value === "event" || exportType.value === "collection") {
+        if ((n === 2 || n === 3) && !exportConfig.value.title.trim()) {
+          showToast("请填写英文标题 (Title)");
+          return;
+        }
+      }
+      if (n === 2 || n === 3) {
+        await loadExportPreview();
+      }
+      exportStep.value = n;
+    };
+
+    // 输出目录 / HTTP 根地址从主界面移入导出流程后：
+    // 填写即记忆(localStorage)，并重跑预检让「建议序号/版本」基于真实产物目录
+    const onOutputChange = () => {
+      persistConfig();
+      exportError.value = "";
+      if (exportModalOpen.value && exportStep.value === 3) {
+        loadExportPreview();
+      }
+    };
+
+    const goPrevStep = () => {
+      if (isExporting.value) return;
+      if (exportStep.value === 1) return;
+      if (exportStep.value === 4) { exportStep.value = 1; return; }
+      exportStep.value -= 1;
+    };
+
+    const toManualSort = () => {
+      exportConfig.value.sortBy = "manual";
+      goExportStep(2);
+    };
+    const reverseOrder = () => {
+      previewState.value.ordered = [...(previewState.value.ordered || [])].reverse();
+      nextTick(rebuildSortable);
+    };
+
+    // -----------------------------------------------------------------------
+    // 一键随机排序（tag 均分）：同 tag 尽量不相邻、尽量均匀分布，组间按 taxonomy 顺序轮排
+    // -----------------------------------------------------------------------
+    const randomShuffleOrder = () => {
+      const arr = previewState.value.ordered;
+      if (!arr || arr.length < 2) return;
+      previewState.value.ordered = fairTagShuffle([...arr]);
+      exportConfig.value.sortBy = "manual"; // 随机后允许继续手动拖拽/↑↓调整
+      nextTick(rebuildSortable);
+      showToast(`已按标签均匀打乱 (${previewState.value.ordered.length} 张)，可继续手动调整`);
+    };
+
+    // 主标签：优先取首个真实标签，没有则视为 Others 兜底桶
+    // 欠账优先贪心混排：
+    //   每个 tag 的目标份额 = pos/N × count，谁「欠得最多」谁下一个出列（同分按 taxonomy 顺序破平），
+    //   且不连续放同一 tag（除非只剩它可选）。结果满足：同 tag 尽量不相邻、数量悬殊也均匀分布；
+    //   首个位置强制从 taxonomy 顺序第一个非空组开始，保证观感顺序。
+    const fairTagShuffle = (items) => {
+      const N = items.length;
+      const groups = new Map();
+      const tagIdx = new Map((mainTags.value || []).map((t, i) => [t.id, i]));
+      for (const it of items) {
+        const real = (it.tags || []).find((t) => !isOthersTag(t));
+        const tag = real || OTHERS;
+        if (!groups.has(tag)) groups.set(tag, []);
+        groups.get(tag).push(it);
+      }
+      // 组内洗牌 (Fisher-Yates)
+      for (const g of groups.values()) {
+        for (let i = g.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [g[i], g[j]] = [g[j], g[i]];
+        }
+      }
+      // 组序：按 taxonomy 顺序，Others 恒在最后，未知名标签排在 Others 前
+      const keys = [...groups.keys()].sort((a, b) => {
+        const ia = tagIdx.has(a) ? tagIdx.get(a) : 1e6 - 1;
+        const ib = tagIdx.has(b) ? tagIdx.get(b) : 1e6 - 1;
+        return ia - ib;
+      });
+      const cycle = keys.filter((k) => k !== OTHERS);
+      if (groups.has(OTHERS)) cycle.push(OTHERS);
+      if (!cycle.length) return [...items];
+
+      const count = new Map(cycle.map((k) => [k, groups.get(k).length]));
+      const placed = new Map(cycle.map((k) => [k, 0]));
+      const out = [];
+
+      // 强制头部：taxonomy 顺序的第一个非空组
+      const head = cycle.find((k) => count.get(k) > 0);
+      out.push(head);
+      count.set(head, count.get(head) - 1);
+      placed.set(head, placed.get(head) + 1);
+
+      for (let pos = 1; pos < N; pos++) {
+        const cand = [];
+        cycle.forEach((k, ki) => {
+          if (count.get(k) <= 0) return;
+          // 欠账 = 理论应出数量 - 已出数量（同分让 taxonomy 更靠前的组先出）
+          const deficit = ((pos + 1) / N) * groups.get(k).length - placed.get(k);
+          cand.push({ k, deficit, ki });
+        });
+        cand.sort((a, b) => b.deficit - a.deficit || a.ki - b.ki);
+        let pick = cand[0];
+        const prev = out[out.length - 1];
+        // 避免与上一个同 tag；若还有别的组可选就换次优组
+        if (pick && pick.k === prev && cand.length > 1) {
+          const alt = cand.find((c) => c.k !== prev);
+          if (alt) pick = alt;
+        }
+        out.push(pick.k);
+        count.set(pick.k, count.get(pick.k) - 1);
+        placed.set(pick.k, placed.get(pick.k) + 1);
+      }
+
+      // 按生成的 tag 顺序取出各组图片
+      const seqTags = out;
+      const ptr = new Map(cycle.map((k) => [k, 0]));
+      return seqTags.map((tag) => {
+        const g = groups.get(tag);
+        const item = g[ptr.get(tag)];
+        ptr.set(tag, ptr.get(tag) + 1);
+        return item;
+      });
+    };
+    const moveExportItem = (i, dir) => {
+      const arr = previewState.value.ordered;
+      if (!arr) return;
+      const j = i + dir;
+      if (j < 0 || j >= arr.length) return;
+      const tmp = arr[i]; arr[i] = arr[j]; arr[j] = tmp;
+      previewState.value.ordered = [...arr];
+    };
+
+    // 按当前 ordered 重算统计（剔除单张后保持 KPI/分布与清单同口径）
+    const recalcPreviewStats = () => {
+      const arr = previewState.value.ordered || [];
+      const s = previewState.value.stats || {};
+      const tags = {};
+      const dirs = {};
+      let sourceBytes = 0;
+      let already = 0;
+      for (const it of arr) {
+        sourceBytes += Number(it.size || 0);
+        if (it.isExported) already++;
+        const tagList = it.tags && it.tags.length ? it.tags : [OTHERS];
+        for (const tg of tagList) tags[tg] = (tags[tg] || 0) + 1;
+        const d = it.dir || "(根目录)";
+        dirs[d] = (dirs[d] || 0) + 1;
+      }
+      previewState.value.stats = {
+        ...s,
+        total: arr.length,
+        sourceBytes,
+        estWebpBytes: Math.round(sourceBytes * (Number(previewState.value.estRatio) || 0.2)),
+        tags,
+        dirs,
+        alreadyExported: already,
+      };
+    };
+
+    const removeFromPreview = (i) => {
+      const arr = previewState.value.ordered;
+      if (!arr) return;
+      const it = arr[i];
+      if (it && it.rel) {
+        const next = new Set(exportExcluded.value);
+        next.add(it.rel);
+        exportExcluded.value = next;
+      }
+      previewState.value.ordered = arr.filter((_, idx) => idx !== i);
+      recalcPreviewStats();
+      nextTick(rebuildSortable);
+    };
+
+    // -----------------------------------------------------------------------
+    // 缩略图网格拖拽排序 (SortableJS)
+    // -----------------------------------------------------------------------
+    let sortable = null;
+    const destroySortable = () => {
+      if (sortable) { try { sortable.destroy(); } catch (_) {} sortable = null; }
+    };
+    const rebuildSortable = () => {
+      destroySortable();
+      if (exportStep.value !== 2) return;
+      if (exportConfig.value.sortBy !== "manual") return;
+      const el = orderGridEl.value;
+      if (!el || typeof window.Sortable === "undefined") return;
+      sortable = window.Sortable.create(el, {
+        animation: 150,
+        ghostClass: "sortable-ghost",
+        chosenClass: "sortable-chosen",
+        onEnd(evt) {
+          const arr = previewState.value.ordered;
+          if (!arr || evt.oldIndex == null || evt.newIndex == null) return;
+          const moved = arr.splice(evt.oldIndex, 1)[0];
+          arr.splice(evt.newIndex, 0, moved);
+          previewState.value.ordered = [...arr];
+        },
+      });
+    };
+
+    // 进入第二步 / 切换排序方式 / 预检重建列表 时同步拖拽
+    watch(
+      [exportStep, () => exportConfig.value.sortBy, () => (previewState.value.ordered || []).length],
+      () => {
+        nextTick(rebuildSortable);
+      },
+    );
+
+    // 切换导出范围后清单完全不同，剔除记录一并作废
+    watch(
+      () => exportConfig.value.exportScope,
+      () => {
+        exportExcluded.value = new Set();
+      },
+    );
+
     const runExport = async () => {
-      if (!srcDir.value.trim() || !outDir.value.trim()) {
-        showToast("请填写源目录和输出目录");
+      // 必填校验：错误在第③步红条持久展示（不再只有一闪而过的 toast）
+      exportError.value = "";
+      if (!srcDir.value.trim()) {
+        exportError.value = "图片源目录为空：请回到主界面填写源目录后再导出。";
+        showToast("导出中止：未填写图片源目录");
+        return;
+      }
+      if (!outDir.value.trim()) {
+        exportError.value = "输出目录为空：导出前请先在上方填写 输出目录 (Output Directory)。";
+        showToast("导出中止：未填写输出目录");
         return;
       }
       if ((exportType.value === "event" || exportType.value === "collection") && !exportConfig.value.title.trim()) {
-        showToast("请填写英文标题 (Title)");
+        exportError.value = "缺少英文标题：Event / Collection 导出前请填写英文标题 (Title)。";
+        showToast("导出中止：请填写英文标题 (Title)");
         return;
       }
       persistConfig();
@@ -755,6 +1142,8 @@ const app = createApp({
         httpBase: httpBase.value.trim(),
         format: exportConfig.value.format,
         rename: exportConfig.value.rename,
+        quality: exportConfig.value.quality,
+        sortBy: exportConfig.value.sortBy,
         startOrder: parseInt(exportConfig.value.startOrder || 101, 10),
         version: exportConfig.value.version,
         month: exportConfig.value.month,
@@ -772,7 +1161,12 @@ const app = createApp({
           exportConfig.value.exportScope === "selected" && selectedSet.value.size > 0
             ? Array.from(selectedSet.value)
             : undefined,
-        tagsRecords: records.value,
+        manualOrder:
+          exportConfig.value.sortBy === "manual" && previewState.value.ordered?.length
+            ? previewState.value.ordered.map((o) => o.rel)
+            : undefined,
+        excludedPaths: exportExcluded.value.size ? Array.from(exportExcluded.value) : undefined,
+        tagsRecords: buildSlimRecords(),
       };
 
       try {
@@ -780,12 +1174,16 @@ const app = createApp({
         exportLogs.value = res.logs || [];
         exportSummary.value = res.summary || "导出完成";
         showToast("导出成功！");
+        exportStep.value = 4;
 
         // 重新拉取以实时刷新卡片的已导出角标与统计计数
         try {
           const freshData = await scanDirectory(srcDir.value.trim());
           if (freshData && freshData.records) {
-            records.value = freshData.records;
+            records.value = freshData.records.map((r) => {
+              r.tags = normalizeTags(r.tags);
+              return r;
+            });
           }
         } catch (_) {
           // ignore
@@ -795,6 +1193,7 @@ const app = createApp({
           { t: new Date().toLocaleTimeString(), level: "err", msg: err.message },
         ];
         showToast(`导出失败: ${err.message}`);
+        exportStep.value = 4;
       } finally {
         isExporting.value = false;
       }
@@ -972,6 +1371,32 @@ const app = createApp({
       isExporting,
       exportLogs,
       exportSummary,
+      exportStep,
+      orderGridEl,
+      exportExcluded,
+      previewLoading,
+      previewError,
+      previewOrdered,
+      previewStats,
+      suggestedStartHint,
+      suggestedMaxOrder,
+      suggestedVersion,
+      suggestedStartForList,
+      suggestedMaxForList,
+      fmtBytes,
+      hbarWidth,
+      goExportStep,
+      goPrevStep,
+      toManualSort,
+      reverseOrder,
+      randomShuffleOrder,
+      moveExportItem,
+      removeFromPreview,
+      restartExport,
+      onOutputChange,
+      exportError,
+      persistConfig,
+      resetStartOrderForType,
       viewerModalOpen,
       currentViewerItem,
       toast,

@@ -13,6 +13,7 @@ from typing import Any
 from studio.core.scanner import find_tags_file
 from studio.core.workspace import StudioWorkspace
 from studio.taxonomy import (
+    OTHERS_TAG,
     get_catalogs_for_tags,
     guess_tags_from_path,
     normalize_token,
@@ -84,7 +85,9 @@ def normalize_records(raw_data: Any, root: Path) -> tuple[list[dict[str, Any]], 
         tags = _extract_tags(item, rel)
         cats = get_catalogs_for_tags(tags)
         conf = float(item.get("confidence", 0) or 0)
-        review = bool(item.get("review_required", False)) or (conf < 0.75) or ("others" in tags)
+        # 注意：tags 已是规范形式（"Others"），此前这里的 "others" 小写比较永远为假，
+        # 导致「未分类素材」不会被自动标记待复核。
+        review = bool(item.get("review_required", False)) or (conf < 0.75) or (OTHERS_TAG in tags)
 
         rec = {
             "path": rel,

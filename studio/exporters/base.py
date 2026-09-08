@@ -12,6 +12,36 @@ from pathlib import Path
 from typing import Any, Callable
 
 
+def resolve_quality(data: dict[str, Any], default: int = 70) -> int:
+    """从导出参数中解析并夹取 WebP/JPEG 压缩质量 (1~100)。非法或缺失回退默认。"""
+    try:
+        q = int(data.get("quality", default))
+    except Exception:
+        return default
+    if q < 1:
+        return 1
+    if q > 100:
+        return 100
+    return q
+
+
+def resolve_excluded(data: dict[str, Any]) -> set[str]:
+    """解析前端在第②步用 ✕ 剔除的相对路径集合（小写 posix 口径）。
+
+    这些图片已从导出批次中剔除，导出器必须把它们从待导出清单中真正移除，
+    否则会出现「预览里看不到、导出却多出来」的不一致。
+    """
+    raw = data.get("excludedPaths")
+    if not isinstance(raw, list):
+        return set()
+    out: set[str] = set()
+    for p in raw:
+        s = str(p).replace("\\", "/").strip().lower()
+        if s:
+            out.add(s)
+    return out
+
+
 @dataclass
 class ExportResult:
     """导出操作执行结果"""

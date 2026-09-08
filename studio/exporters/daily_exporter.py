@@ -15,10 +15,20 @@ from typing import Any
 import zipfile
 
 from studio.core.exports_ledger import ExportsLedger
-from studio.core.image_proc import HAS_PIL, convert_image, make_rename, validate_image
-from studio.core.scanner import compute_file_sha256, scan_images
+from studio.core.image_proc import (
+    HAS_PIL,
+    convert_images_parallel,
+    make_rename,
+    validate_image,
+)
+from studio.core.scanner import (
+    build_manual_order,
+    compute_file_sha256,
+    scan_images,
+    sort_images,
+)
 from studio.core.workspace import StudioWorkspace
-from studio.exporters.base import BaseExporter, ExportResult
+from studio.exporters.base import BaseExporter, ExportResult, resolve_excluded, resolve_quality
 from studio.exporters.manifest_manager import ManifestManager
 
 
@@ -47,8 +57,23 @@ class DailyExporter(BaseExporter):
             images = scan_images(self.src_p)
             self.log(f"扫描源目录获得 {len(images)} 张图片，目标月份: {month}", "info")
 
+        # 剔除第②步 ✕ 移除的图片（预览与导出必须同口径）
+        excluded = resolve_excluded(self.data)
+        if excluded:
+            before = len(images)
+            images = [p for p in images if p.relative_to(self.src_p).as_posix().lower() not in excluded]
+            self.log(f"已剔除 {before - len(images)} 张在第②步手动移除的图片，剩余 {len(images)} 张", "info")
+            if not images:
+                raise ValueError("所有图片均已被手动剔除，无可打包内容")
+
         if not images:
             raise ValueError("源目录中没有找到可打包的图片文件")
+
+        # 0. 排序：确定打包/分配日期的顺序
+        sort_by = (self.data.get("sortBy") or "name_asc").strip().lower()
+        manual_order = build_manual_order(self.src_p, self.data.get("manualOrder") or selected_paths)
+        images = sort_images(images, sort_by, manual_order=manual_order)
+        self.log(f"已按排序策略 [{sort_by}] 排定 {len(images)} 张图片顺序", "info")
 
         # 1. 图片格式与完整性校验 + 重复图片校验拦截
         seen_hashes: dict[str, list[str]] = {}
@@ -119,14 +144,35 @@ class DailyExporter(BaseExporter):
 
         prev_month = next((m for m in existing_months if isinstance(m, dict) and m.get("month") == month), None)
 
-        # 预打包 ZIP 至临时文件以计算内容哈希
+        # 预打包 ZIP 至临时文件以计算内容哈希 (图片并行转码，顺序写 zip 保持确定性)
         tmp_zip = Path(tempfile.gettempdir()) / f"_daily_{month}_tmp.zip"
+        zip_quality = resolve_quality(self.data)
+
+        zip_entries: list[tuple[Path, Path | None, str]] = []  # (src, tmp_f|None, arc_name)
+        zip_tasks: list[dict[str, Any]] = []
+        for idx, (p, arc_name, logical_id, file_hash) in enumerate(target_items, start=1):
+            if self.fmt != "original" and HAS_PIL:
+                tmp_conv = Path(tempfile.gettempdir()) / f"_daily_{month}_{idx:03d}_{arc_name}"
+                zip_entries.append((p, tmp_conv, arc_name))
+                zip_tasks.append({
+                    "src": str(p),
+                    "dst": str(tmp_conv),
+                    "fmt": self.fmt,
+                    "quality": zip_quality,
+                    "need_src_hash": False,
+                    "need_dst_hash": False,
+                })
+            else:
+                zip_entries.append((p, None, arc_name))
+        zip_results = convert_images_parallel(zip_tasks)
+
         with zipfile.ZipFile(tmp_zip, "w", zipfile.ZIP_DEFLATED) as zf:
-            for p, arc_name, logical_id, file_hash in target_items:
-                if self.fmt != "original" and HAS_PIL:
-                    tmp_conv = Path(tempfile.gettempdir()) / f"_daily_{arc_name}"
-                    ok, _ = convert_image(p, tmp_conv, self.fmt)
-                    if ok:
+            res_i = 0
+            for p, tmp_conv, arc_name in zip_entries:
+                if tmp_conv is not None:
+                    ok = bool(zip_results[res_i].get("ok")) if res_i < len(zip_results) else False
+                    res_i += 1
+                    if ok and tmp_conv.exists():
                         zf.write(tmp_conv, arcname=arc_name)
                         tmp_conv.unlink(missing_ok=True)
                         continue

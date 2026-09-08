@@ -155,7 +155,7 @@ def convert_image(
     src_path: Path,
     dst_path: Path,
     fmt: str = "original",
-    quality: int = 85,
+    quality: int = 70,
 ) -> tuple[bool, str | None]:
     """
     批量导出格式转换。
@@ -234,6 +234,86 @@ def make_rename(
     if fmt and fmt != "original":
         return f"{Path(original_name).stem}{target_ext}"
     return original_name
+
+
+def sha256_file(p: Path | str) -> str:
+    """计算文件 SHA-256（供并行转码 worker 使用，避免额外 import scanner）"""
+    h = hashlib.sha256()
+    try:
+        with open(p, "rb") as f:
+            for chunk in iter(lambda: f.read(1 << 20), b""):
+                h.update(chunk)
+        return h.hexdigest()
+    except Exception:
+        return ""
+
+
+# ---------------------------------------------------------------------------
+# 并行批量转码 (多进程池)
+# ---------------------------------------------------------------------------
+# 单张 libwebp method=6 编码是 CPU 密集且无法单张内并行，批量导出的数量级
+# 加速来自「多张图片并行编码」。worker 必须为模块级函数 (Windows spawn 可 pickle)。
+
+
+def _convert_one_parallel(job: dict) -> dict:
+    """进程池 worker：执行单张转码并按需返回源/目标哈希。
+
+    job: {"src": str, "dst": str, "fmt": str, "quality": int,
+          "need_src_hash": bool, "need_dst_hash": bool}
+    返回: {"ok": bool, "err": str | None, "src_hash": str, "dst_hash": str,
+           "dst_size": int}
+    """
+    src = Path(job["src"])
+    dst = Path(job["dst"])
+    fmt = job.get("fmt", "original")
+    quality = int(job.get("quality", 70))
+    ok, err = convert_image(src, dst, fmt, quality=quality)
+    return {
+        "ok": ok,
+        "err": err,
+        "src_hash": sha256_file(src) if job.get("need_src_hash") else "",
+        "dst_hash": sha256_file(dst) if job.get("need_dst_hash") and dst.exists() else "",
+        "dst_size": dst.stat().st_size if dst.exists() else 0,
+    }
+
+
+def _default_export_workers() -> int:
+    """默认并行 worker 数：环境变量 STUDIO_EXPORT_WORKERS 优先，否则 min(8, CPU 核数)。"""
+    env = os.environ.get("STUDIO_EXPORT_WORKERS", "").strip()
+    if env.isdigit() and int(env) > 0:
+        return min(int(env), 64)
+    try:
+        return max(1, min(8, os.cpu_count() or 1))
+    except Exception:
+        return 4
+
+
+def convert_images_parallel(
+    tasks: list[dict],
+    workers: int | None = None,
+) -> list[dict]:
+    """并行批量转码一批图片。
+
+    tasks: 元素与 _convert_one_parallel 的 job 相同。
+    workers: 并行进程数；None 时按 _default_export_workers()。
+    返回与 tasks 顺序一一对应的结果列表；进程池不可用 (如受限环境) 时
+    自动回退为串行执行，保证任何环境下行为与结果一致。
+    """
+    if not tasks:
+        return []
+    n = workers or _default_export_workers()
+    n = max(1, min(n, len(tasks)))
+    if n <= 1:
+        return [_convert_one_parallel(t) for t in tasks]
+
+    try:
+        import concurrent.futures as _cf
+
+        with _cf.ProcessPoolExecutor(max_workers=n) as ex:
+            return list(ex.map(_convert_one_parallel, tasks))
+    except Exception:
+        # 进程池不可用 (spawn 受限/内存不足等) 时顺序兜底，绝不中断导出
+        return [_convert_one_parallel(t) for t in tasks]
 
 
 def validate_image(img_path: Path | str) -> tuple[bool, str | None]:

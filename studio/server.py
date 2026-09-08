@@ -31,15 +31,18 @@ if str(_root_dir) not in sys.path:
 
 from studio.core.cache_db import CacheDB
 from studio.core.export_tracker import get_exported_map, load_exported_ledger
+from studio.core.exports_ledger import ExportsLedger
 from studio.core.image_proc import HAS_PIL, generate_thumbnail_bytes
 from studio.core.quality_evaluator import evaluate_image, evaluate_images_batch
 from studio.core.scanner import (
+    build_manual_order,
     compute_file_sha256,
     find_duplicate_groups,
     find_tags_file,
     get_image_info,
     scan_image_infos,
     scan_images,
+    sort_images,
 )
 from studio.core.tags_manager import (
     load_tags_file,
@@ -54,15 +57,40 @@ from studio.taxonomy import (
     CATALOG_TO_TAGS_MAP,
     MAIN_TAGS,
     MAIN_TAG_IDS,
+    OTHERS_TAG,
     SPECIFIC_TAG_DEFS,
     TAG_TO_CATALOGS,
     TAG_ZH,
+    guess_tags_from_path,
+    normalize_token,
 )
 
 STATIC_DIR = Path(__file__).parent / "static"
 DEFAULT_LOG_FILE = _root_dir / "temp" / "studio.log"
 
 logger = logging.getLogger("studio")
+
+
+def _estimate_ratio(fmt: str, quality: int) -> float:
+    """按输出格式与压缩质量粗估「预计产物体积 / 原图体积」比例。
+
+    仅用于导出前预览的诚实标注，不追求精确：
+      webp  — 基准 0.20 (quality=70 时)，随 quality 幂次缩放
+      jpg   — 基准 0.35 (quality=70 时)，随 quality 幂次缩放
+      其他  — png / original 不转码，按原图计 1.0
+    """
+    f = (fmt or "").strip().lower()
+    if f in ("jpg", "jpeg"):
+        base = 0.35
+    elif f == "webp":
+        base = 0.20
+    else:
+        return 1.0
+    try:
+        q = max(1, min(100, int(quality)))
+    except (TypeError, ValueError):
+        q = 70
+    return max(0.04, min(1.0, base * ((q / 70.0) ** 1.35)))
 
 
 def setup_logger(
@@ -263,6 +291,10 @@ class StudioRequestHandler(BaseHTTPRequestHandler):
 
         if path == "/api/export":
             self._handle_export(data)
+            return
+
+        if path == "/api/export/preview":
+            self._handle_export_preview(data)
             return
 
         if path == "/api/quality/batch":
@@ -770,7 +802,7 @@ class StudioRequestHandler(BaseHTTPRequestHandler):
             if result.success:
                 ledger = load_exported_ledger(src_p)
                 res_dict["totalExported"] = ledger.get("total_exported", 0)
-                logger.info(f"[EXPORT] 导出成功: 输出文件={result.output_file}")
+                logger.info(f"[EXPORT] 导出成功: 输出文件={result.files}")
             else:
                 logger.error(f"[EXPORT] 导出失败: {result.error}")
             self._json(res_dict)
@@ -785,6 +817,161 @@ class StudioRequestHandler(BaseHTTPRequestHandler):
                 "error": str(e),
                 "logs": logs,
             }, status=500)
+
+    def _handle_export_preview(self, data: dict[str, Any]) -> None:
+        """导出前只读预检：按排序方式返回图片清单 + 统计 + 建议起始序号/版本 (不写盘)"""
+        src = (data.get("srcDir") or "").strip()
+        out = (data.get("outDir") or "").strip()
+        exp_type = (data.get("type") or "main").strip().lower()
+        if not src:
+            self._error("缺少 srcDir")
+            return
+
+        # 统一用 resolve() 后的根目录：/api/scan 与 build_manual_order 都是 resolved 口径，
+        # 否则 manual 排序的键匹配不上会静默退化成扫描字典序
+        root = Path(src).resolve()
+        if not root.is_dir():
+            self._error(f"源目录不存在: {src}", status=404)
+            return
+        out_p = Path(out) if out else None
+
+        selected_paths = data.get("selectedPaths")
+        sort_by = (data.get("sortBy") or "name_asc").strip().lower()
+        exclude_exported = bool(data.get("excludeExported"))
+        # 第②步 ✕ 剔除的图片：预览与导出必须同口径
+        excluded_raw = data.get("excludedPaths")
+        excluded = {
+            str(p).replace("\\", "/").strip().lower()
+            for p in excluded_raw if str(p).strip()
+        } if isinstance(excluded_raw, list) else set()
+        fmt = (data.get("format") or "webp").strip().lower()
+        try:
+            quality = int(data.get("quality", 70))
+        except (TypeError, ValueError):
+            quality = 70
+        quality = max(1, min(100, quality))
+
+        # 1. 校选图范围 + 排序
+        images = scan_images(root)
+        if selected_paths and isinstance(selected_paths, list) and len(selected_paths) > 0:
+            selected_set = {str(p).replace("\\", "/").strip().lower() for p in selected_paths}
+            images = [p for p in images if p.relative_to(root).as_posix().lower() in selected_set]
+        if excluded:
+            images = [p for p in images if p.relative_to(root).as_posix().lower() not in excluded]
+        manual_order = build_manual_order(root, data.get("manualOrder") or selected_paths)
+        images = sort_images(images, sort_by, manual_order=manual_order)
+
+        # 2. 标签与哈希来源：前端传入 records 优先，否则退回源目录 tags 文件
+        raw_records = data.get("tagsRecords")
+        records: list[dict[str, Any]] = []
+        if raw_records:
+            records, _ = normalize_records(raw_records, root)
+        else:
+            tag_file = find_tags_file(root)
+            if tag_file:
+                raw, _ = load_tags_file(tag_file)
+                records, _ = normalize_records(raw, root)
+        rec_by_rel: dict[str, dict[str, Any]] = {}
+        rec_by_name: dict[str, dict[str, Any]] = {}
+        for r in records:
+            k = (r.get("path") or r.get("file") or "").replace("\\", "/")
+            rec_by_rel[k] = r
+            rec_by_name[Path(k).name] = r
+
+        # 3. 已导出状态与主线条目 maxOrder
+        ledger = ExportsLedger(root)
+        exp_map = ledger.get_exported_map()
+        exp_hashes = ledger.get_exported_hashes()
+        max_order = ledger.get_max_order(exp_type) if exp_type in ("main",) else 0
+
+        # 4. 构建有序清单与统计
+        ordered: list[dict[str, Any]] = []
+        tag_counter: dict[str, int] = {}
+        dir_counter: dict[str, int] = {}
+        source_bytes = 0
+        already = 0
+
+        for p in images:
+            rel = p.relative_to(root).as_posix().replace("\\", "/")
+            rec = rec_by_rel.get(rel) or rec_by_name.get(p.name) or {}
+            tags = rec.get("tags") or []
+            # 无标签一律落成规范兜底标签 [Others]，与导出器/前端保持同一口径
+            norm = [normalize_token(t) for t in tags if normalize_token(t)] or [OTHERS_TAG]
+            h = (rec.get("hash") or "").strip().lower()
+            if not h:
+                try:
+                    h = compute_file_sha256(p)
+                except Exception:
+                    h = ""
+            try:
+                size = int(rec.get("size") or 0) or p.stat().st_size
+            except Exception:
+                size = 0
+            is_exp = bool(h and h in exp_hashes)
+
+            if exclude_exported and is_exp:
+                continue
+
+            source_bytes += size
+            if is_exp:
+                already += 1
+            dir1 = rel.rsplit("/", 1)[0] if "/" in rel else "(根目录)"
+            for tg in norm:
+                tag_counter[tg] = tag_counter.get(tg, 0) + 1
+            dir_counter[dir1] = dir_counter.get(dir1, 0) + 1
+            prev = exp_map.get(h) or exp_map.get(rel)
+            ordered.append({
+                "rel": rel,
+                "file": p.name,
+                "tags": norm,
+                "dir": dir1,
+                "size": size,
+                "isExported": is_exp,
+                "prevTarget": (prev.get("target") if isinstance(prev, dict) else None),
+            })
+
+        # 5. 建议值 (根据 outDir/main/index.json 与源侧账本)
+        suggested: dict[str, Any] = {
+            "maxOrder": max_order,
+            "suggestedStartOrder": (max_order + 1) if max_order > 0 else 101,
+            "suggestedVersion": 0,
+        }
+        if exp_type == "main" and out_p:
+            idx_path = out_p / "main" / "index.json"
+            if idx_path.exists():
+                try:
+                    idx = json.loads(idx_path.read_text(encoding="utf-8"))
+                    if isinstance(idx, dict):
+                        idx_max = int(idx.get("maxOrder") or 0)
+                        idx_ver = int(idx.get("version") or 0)
+                        if idx_max > suggested["maxOrder"]:
+                            suggested["maxOrder"] = idx_max
+                            suggested["suggestedStartOrder"] = idx_max + 1
+                        suggested["suggestedVersion"] = idx_ver
+                except Exception:
+                    pass
+
+        est_ratio = _estimate_ratio(fmt, quality)
+        stats = {
+            "total": len(ordered),
+            "sourceBytes": source_bytes,
+            # 预计（按输出格式与 quality 折算；png/original 不转码按原图计）
+            "estWebpBytes": int(source_bytes * est_ratio),
+            "estRatio": round(est_ratio, 4),
+            "tags": tag_counter,
+            "dirs": dir_counter,
+            "alreadyExported": already,
+        }
+        if exp_type == "main" and suggested.get("maxOrder", 0) > 0:
+            stats["suggestedStartOrder"] = suggested["suggestedStartOrder"]
+
+        self._json({
+            "ok": True,
+            "type": exp_type,
+            "ordered": ordered,
+            "stats": stats,
+            "suggested": suggested,
+        })
 
     def _serve_static_file(self, p: Path, ctype: str) -> None:
         if not p.exists() or not p.is_file():

@@ -16,10 +16,21 @@ from typing import Any, Callable
 import zipfile
 
 from studio.core.exports_ledger import ExportsLedger
-from studio.core.image_proc import HAS_PIL, convert_image, make_rename, validate_image
-from studio.core.scanner import compute_file_sha256, scan_images
+from studio.core.image_proc import (
+    HAS_PIL,
+    convert_images_parallel,
+    convert_image,
+    make_rename,
+    validate_image,
+)
+from studio.core.scanner import (
+    build_manual_order,
+    compute_file_sha256,
+    scan_images,
+    sort_images,
+)
 from studio.core.workspace import StudioWorkspace
-from studio.exporters.base import BaseExporter, ExportResult
+from studio.exporters.base import BaseExporter, ExportResult, resolve_excluded, resolve_quality
 from studio.exporters.manifest_manager import ManifestManager
 
 
@@ -69,8 +80,23 @@ class PackExporterBase(BaseExporter):
             images = scan_images(self.src_p)
             self.log(f"扫描源目录获得 {len(images)} 张图片，目标 ID: {pack_id}", "info")
 
+        # 剔除第②步 ✕ 移除的图片（预览与导出必须同口径）
+        excluded = resolve_excluded(self.data)
+        if excluded:
+            before = len(images)
+            images = [p for p in images if p.relative_to(self.src_p).as_posix().lower() not in excluded]
+            self.log(f"已剔除 {before - len(images)} 张在第②步手动移除的图片，剩余 {len(images)} 张", "info")
+            if not images:
+                raise ValueError("所有图片均已被手动剔除，无可导出内容")
+
         if not images:
             raise ValueError("源目录中没有找到可导出的图片文件")
+
+        # 0. 排序：确定打包内序号顺序 (确定性)
+        sort_by = (self.data.get("sortBy") or "name_asc").strip().lower()
+        manual_order = build_manual_order(self.src_p, self.data.get("manualOrder") or selected_paths)
+        images = sort_images(images, sort_by, manual_order=manual_order)
+        self.log(f"已按排序策略 [{sort_by}] 排定 {len(images)} 张图片顺序", "info")
 
         # 2. 物理完整性与格式损坏校验 (3-p2-1)
         for p in images:
@@ -152,15 +178,36 @@ class PackExporterBase(BaseExporter):
 
         prev_item = next((it for it in existing_items if isinstance(it, dict) and it.get("id") == pack_id), None)
 
-        # 预打包 ZIP 到临时文件以确定内容哈希
+        # 预打包 ZIP 到临时文件以确定内容哈希 (图片并行转码，再顺序写 zip 保持确定性)
         tmp_zip = Path(tempfile.gettempdir()) / f"_{self.module}_{pack_id}_tmp.zip"
+        zip_quality = resolve_quality(self.data)
+
+        zip_entries: list[tuple[Path, Path | None, str]] = []  # (src, tmp_f|None, arc_name)
+        zip_tasks: list[dict[str, Any]] = []
+        for idx, p in enumerate(images, start=1):
+            arc_name = make_rename(p.name, idx, self.rename_rule, self.fmt)
+            if self.fmt != "original" and HAS_PIL:
+                tmp_f = Path(tempfile.gettempdir()) / f"_{self.module}_{pack_id}_{idx}_{arc_name}"
+                zip_entries.append((p, tmp_f, arc_name))
+                zip_tasks.append({
+                    "src": str(p),
+                    "dst": str(tmp_f),
+                    "fmt": self.fmt,
+                    "quality": zip_quality,
+                    "need_src_hash": False,
+                    "need_dst_hash": False,
+                })
+            else:
+                zip_entries.append((p, None, arc_name))
+        zip_results = convert_images_parallel(zip_tasks)
+
         with zipfile.ZipFile(tmp_zip, "w", zipfile.ZIP_DEFLATED) as zf:
-            for idx, p in enumerate(images, start=1):
-                arc_name = make_rename(p.name, idx, self.rename_rule, self.fmt)
-                if self.fmt != "original" and HAS_PIL:
-                    tmp_f = Path(tempfile.gettempdir()) / f"_{self.module}_{arc_name}"
-                    ok, _ = convert_image(p, tmp_f, self.fmt)
-                    if ok:
+            res_i = 0
+            for p, tmp_f, arc_name in zip_entries:
+                if tmp_f is not None:
+                    ok = bool(zip_results[res_i].get("ok")) if res_i < len(zip_results) else False
+                    res_i += 1
+                    if ok and tmp_f.exists():
                         zf.write(tmp_f, arcname=arc_name)
                         tmp_f.unlink(missing_ok=True)
                         continue
@@ -211,7 +258,7 @@ class PackExporterBase(BaseExporter):
             })
 
         # 生成封面图并双重校验完整性
-        ok_cov, err_cov = convert_image(images[0], cover_path, "webp")
+        ok_cov, err_cov = convert_image(images[0], cover_path, "webp", quality=zip_quality)
         if not ok_cov:
             self.log(f"封面生成失败: {err_cov}", "err")
             raise ValueError(f"封面图生成失败 ({images[0].name}): {err_cov}")

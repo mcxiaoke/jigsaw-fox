@@ -972,4 +972,189 @@ button, input, select, textarea { font: inherit; color: inherit; }
   font-size: 11px;
   font-weight: 500;
 }
+/* ============ 全屏导出工作台 ============ */
+/* 第③步 输出设置 + 必填错误红条 */
+.output-settings {
+  border: 1px solid #c7d2fe;
+  background: #eef2ff;
+  border-radius: 8px;
+  padding: 10px 14px;
+  margin-bottom: 12px;
+}
+.output-settings-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: #3730a3;
+  margin-bottom: 8px;
+}
+.export-error-banner {
+  margin-bottom: 12px;
+  padding: 10px 14px;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  border-radius: 6px;
+  color: #b91c1c;
+  font-size: 13px;
+  font-weight: 600;
+}
+.export-view-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.6);
+  z-index: 2000;
+  display: flex;
+  align-items: stretch;
+  justify-content: center;
+  padding: 24px;
+}
+.export-view {
+  background: #fff;
+  border-radius: 12px;
+  width: 100%;
+  /* 上限 1920px：大屏 / 4K 下给顺序调整网格更多列数，小屏由 padding 自然收敛 */
+  max-width: 1920px;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.4);
+  overflow: hidden;
+}
+.export-view-head {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 14px 18px;
+  border-bottom: 1px solid #e2e8f0;
+  background: #f8fafc;
+}
+.export-view-head h3 { margin: 0; font-size: 16px; }
+.export-stepper { display: flex; align-items: center; gap: 6px; font-size: 13px; color: #94a3b8; flex: 1; }
+.export-stepper span { cursor: pointer; }
+.export-stepper .active { color: #166534; font-weight: 700; }
+.export-stepper .done { color: #059669; }
+.export-stepper .sep { color: #cbd5e1; }
+.export-body {
+  padding: 16px 18px;
+  overflow-y: auto;
+  flex: 1;
+  min-height: 0; /* 配合 flex:1 精确填满剩余高度，避免底部大片留白 */
+}
+.export-nav {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 12px 18px;
+  border-top: 1px solid #e2e8f0;
+  background: #f8fafc;
+}
+.export-nav .btn:first-child { margin-right: auto; }
+.export-result { padding: 0 18px 8px; overflow-y: auto; max-height: 200px; }
+
+/* 顺序调整网格 (缩略图拖拽排序) */
+.order-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(104px, 1fr));
+  gap: 10px;
+}
+.order-grid.locked { cursor: default; }
+.og-card {
+  position: relative;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #f8fafc;
+  padding: 6px;
+  /* 大清单(数千张)渲染优化：视口外的卡片跳过布局与绘制，显著降低首帧开销 */
+  content-visibility: auto;
+  contain-intrinsic-size: auto 150px;
+}
+.og-card.is-sorted { cursor: grab; }
+.og-card.is-sorted:active { cursor: grabbing; }
+.og-card.sortable-ghost { opacity: 0.45; }
+.og-card.sortable-chosen { border-color: #2563eb; box-shadow: 0 4px 10px rgba(37, 99, 235, 0.25); }
+.og-num {
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  min-width: 20px;
+  text-align: center;
+  padding: 1px 5px;
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.72);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  z-index: 2;
+}
+.og-thumb {
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  object-fit: cover;
+  border-radius: 6px;
+  background: #eef2f7;
+  display: block;
+  /* 禁用浏览器原生图片拖拽，避免与 SortableJS 抢拖拽事件导致落点漂移 */
+  -webkit-user-drag: none;
+  user-select: none;
+  pointer-events: none;
+}
+/* 手动排序的 ↑ / ↓ / ✕ 兜底按钮 (大列表拖拽卡顿时仍可精确调整) */
+.og-ops {
+  display: flex;
+  gap: 4px;
+  margin-top: 5px;
+}
+.og-btn {
+  flex: 1;
+  border: 1px solid #cbd5e1;
+  background: #fff;
+  color: #334155;
+  border-radius: 5px;
+  font-size: 12px;
+  line-height: 1;
+  padding: 4px 0;
+  cursor: pointer;
+}
+.og-btn:hover:not(:disabled) { background: #eff6ff; border-color: #93c5fd; color: #1d4ed8; }
+.og-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+.og-btn.danger:hover:not(:disabled) { background: #fef2f2; border-color: #fca5a5; color: #b91c1c; }
+.og-exp {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  font-size: 11px;
+  color: #b45309;
+  background: rgba(255, 247, 237, 0.92);
+  border: 1px solid #fcd34d;
+  border-radius: 999px;
+  padding: 0 6px;
+  z-index: 2;
+}
+.og-name {
+  display: block;
+  margin-top: 6px;
+  font-size: 12px;
+  color: #334155;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.og-lock-hint { background: #eef2ff; border-radius: 999px; padding: 2px 10px; }
+
+/* 预览统计 */
+.kpi-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+.kpi {
+  background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px;
+  padding: 10px 12px; text-align: center;
+}
+.kpi b { display: block; font-size: 20px; color: #0f172a; }
+.kpi span { font-size: 12px; color: #64748b; }
+.kpi-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 14px; }
+.kpi-block { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px; }
+.kpi-t { font-weight: 700; font-size: 13px; margin-bottom: 8px; color: #334155; }
+.hbar { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+.hb-lbl { width: 84px; font-size: 12px; color: #475569; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: none; }
+.hb-track { flex: 1; height: 8px; border-radius: 999px; background: #e2e8f0; overflow: hidden; }
+.hb-fill { display: block; height: 100%; border-radius: 999px; background: #2563eb; }
+.hb-num { width: 36px; text-align: right; font-size: 12px; font-weight: 600; flex: none; color: #334155; }
 

@@ -9,6 +9,7 @@ from __future__ import annotations
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import hashlib
 import os
+import re
 from pathlib import Path
 from typing import Any, Callable
 
@@ -46,6 +47,87 @@ def scan_images(root: str | Path) -> list[Path]:
                 images.append(p)
 
     return sorted(images, key=lambda p: p.relative_to(r).as_posix().lower())
+
+
+def sort_images(
+    paths: list[Path],
+    sort_by: str = "name_asc",
+    manual_order: list[str] | None = None,
+) -> list[Path]:
+    """
+    按指定策略对待导出图片列表做稳定的确定性排序。
+
+    sort_by 取值:
+      name_asc / name_dsc   — 按文件名
+      path_asc / path_dsc   — 按相对路径
+      mtime_asc / mtime_dsc — 按修改时间
+      size_asc / size_dsc   — 按文件大小
+      manual / none          — 保持 manual_order 指定的相对路径顺序（否则保持原顺序）
+
+    确定性保证：主排序键相等时一律以其相对路径(小写)升序兜底，
+    保证同一批素材多次导出得到的顺序完全一致（幂等）。
+    manual_order: 期望的相对路径(小写)列表；sort_by 为 manual 时使用。
+    """
+    if not paths:
+        return paths
+
+    sb = (sort_by or "name_asc").lower()
+    if sb in ("manual", "none"):
+        if manual_order:
+            rank = {k: i for i, k in enumerate(manual_order)}
+            return sorted(paths, key=lambda p: rank.get(p.as_posix().lower(), len(paths)))
+        return list(paths)
+
+    cache: dict[Path, Any] = {}
+
+    def _st(p: Path):
+        st = cache.get(p)
+        if st is None:
+            try:
+                st = p.stat()
+            except Exception:
+                st = None
+            cache[p] = st
+        return st
+
+    key_fns = {
+        "name": lambda p: p.name.lower(),
+        "path": lambda p: p.as_posix().lower(),
+        "mtime": lambda p: (_st(p).st_mtime_ns if _st(p) else 0),
+        "size": lambda p: (_st(p).st_size if _st(p) else 0),
+    }
+    base, _, direction = sb.rpartition("_")
+    key = key_fns.get(base)
+    if key is None:
+        return list(paths)
+    desc = direction == "dsc"
+
+    # 先按 (主键, 相对路径) 升序稳定排序，保证同键时确定性
+    ordered = sorted(paths, key=lambda p: (key(p), p.as_posix().lower()))
+    if desc:
+        # Python sort(reverse=True) 稳定：主键相等时保持前面 asc 兜底序
+        ordered.sort(key=key, reverse=True)
+    return ordered
+
+
+def build_manual_order(src_p: Path | str, selected_paths: list[Any] | None) -> list[str] | None:
+    """
+    把前端传入的相对路径列表 (selectedPaths) 构造成与 sort_images 中
+    Path.as_posix().lower() 可比的键列表，供 manual 排序使用。
+    - 绝对路径原样保留；
+    - 相对路径基于 src_p 解析成绝对 posix 小写形式。
+    """
+    if not selected_paths:
+        return None
+    sp = Path(src_p).resolve()
+    keys: list[str] = []
+    for s in selected_paths:
+        s_norm = str(s).strip().replace("\\", "/")
+        if s_norm.startswith("/") or re.match(r"^[A-Za-z]:/", s_norm):
+            keys.append(s_norm.lower())
+        else:
+            keys.append((sp / s_norm).as_posix().lower())
+    return keys
 
 
 def compute_file_sha256(path: Path | str, chunk_size: int = 128 * 1024) -> str:

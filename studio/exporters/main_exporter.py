@@ -13,13 +13,23 @@ from pathlib import Path
 from typing import Any
 
 from studio.core.exports_ledger import ExportsLedger
-from studio.core.image_proc import convert_image, make_rename, validate_image
-from studio.core.scanner import compute_file_sha256, find_tags_file, scan_images
+from studio.core.image_proc import (
+    convert_images_parallel,
+    make_rename,
+    validate_image,
+)
+from studio.core.scanner import (
+    build_manual_order,
+    compute_file_sha256,
+    find_tags_file,
+    scan_images,
+    sort_images,
+)
 from studio.core.tags_manager import load_tags_file, normalize_records
 from studio.core.workspace import StudioWorkspace
-from studio.exporters.base import BaseExporter, ExportResult
+from studio.exporters.base import BaseExporter, ExportResult, resolve_excluded, resolve_quality
 from studio.exporters.manifest_manager import ManifestManager
-from studio.taxonomy import guess_tags_from_path, normalize_token
+from studio.taxonomy import OTHERS_TAG, guess_tags_from_path, normalize_token
 
 
 class MainExporter(BaseExporter):
@@ -43,8 +53,23 @@ class MainExporter(BaseExporter):
             images = scan_images(self.src_p)
             self.log(f"扫描源目录获得 {len(images)} 张图片", "info")
 
+        # 剔除第②步 ✕ 移除的图片（预览与导出必须同口径）
+        excluded = resolve_excluded(self.data)
+        if excluded:
+            before = len(images)
+            images = [p for p in images if p.relative_to(self.src_p).as_posix().lower() not in excluded]
+            self.log(f"已剔除 {before - len(images)} 张在第②步手动移除的图片，剩余 {len(images)} 张", "info")
+            if not images:
+                raise ValueError("所有图片均已被手动剔除，无可导出内容")
+
         if not images:
             raise ValueError("源目录中没有找到可导出的图片文件")
+
+        # 0. 排序：确定导出顺序 (= order 分配顺序 / 关卡编号顺序)
+        sort_by = (self.data.get("sortBy") or "name_asc").strip().lower()
+        manual_order = build_manual_order(self.src_p, self.data.get("manualOrder") or selected_paths)
+        images = sort_images(images, sort_by, manual_order=manual_order)
+        self.log(f"已按排序策略 [{sort_by}] 排定 {len(images)} 张图片顺序", "info")
 
         # 读取或使用前端传入的 tags 记录
         raw_records = self.data.get("tagsRecords")
@@ -143,6 +168,13 @@ class MainExporter(BaseExporter):
         start_order_input = self.data.get("startOrder")
         if start_order_input is not None and str(start_order_input).strip() != "":
             start_order = int(start_order_input)
+            # 防覆盖防护：显式传入的起始序号不得小于等于当前最大序号，除非是补丁修订
+            if not self.data.get("isPatch") and existing_max_order > 0 and start_order <= existing_max_order:
+                raise ValueError(
+                    f"起始关卡序号 {start_order} 必须大于当前最大序号 {existing_max_order}，"
+                    f"请从 {existing_max_order + 1} 开始，避免覆盖已导出的关卡"
+                    f"（如需修正已有关卡，请使用补丁模式 isPatch）。"
+                )
         else:
             start_order = (existing_max_order + 1) if existing_max_order > 0 else 101
 
@@ -152,7 +184,8 @@ class MainExporter(BaseExporter):
         elif existing_version > 0:
             version = existing_version + 1
         else:
-            version = 101
+            # 首次导出版本号从 1 开始（与前端「下版本 1」提示一致；101 是起始序号不是版本号）
+            version = 1
 
         batch_id = self.data.get("batchId") or f"batch_{len(existing_batches) + 1:03d}"
 
@@ -172,21 +205,25 @@ class MainExporter(BaseExporter):
                     self.log(f"注意: {msg} (文件: {p.name})", "warn")
 
         # 4. 图片转码与复制 (存放到 images/)
+        img_quality = resolve_quality(self.data)
         batch_levels: list[dict[str, Any]] = []
         exported_items: list[dict[str, Any]] = []
         converted_count = 0
         errors: list[str] = []
         now_str = dt.datetime.now(dt.timezone.utc).isoformat().replace("+00:00", "Z")
 
+        # 4a. 父进程准备每张图元数据 (order/tags/输出名，均为轻量计算)
+        plans: list[dict[str, Any]] = []
         for idx, p in enumerate(images):
             rel = p.relative_to(self.src_p).as_posix().replace("\\", "/")
             tags = tag_map.get(rel) or tag_map.get(p.name)
-            if not tags or tags == ["Others"] or tags == ["others"]:
+            # 兜底标签统一为规范形式，路径推断只在「未分类/无标签」时介入
+            if not tags or tags == [OTHERS_TAG] or tags == [OTHERS_TAG.lower()]:
                 guessed = guess_tags_from_path(p, root=self.src_p)
                 if guessed:
                     tags = guessed
             if not tags:
-                tags = ["Others"]
+                tags = [OTHERS_TAG]
 
             order = start_order + idx
             logical_id = f"main:{order}"
@@ -201,37 +238,66 @@ class MainExporter(BaseExporter):
                 img_name = make_rename(p.name, order, self.rename_rule, self.fmt)
                 supersedes_id = None
 
-            dst = images_dir / img_name
-            ok, err = convert_image(p, dst, self.fmt)
-            if ok:
+            src_hash = hash_map.get(rel) or hash_map.get(p.name) or ""
+            plans.append({
+                "p": p,
+                "rel": rel,
+                "tags": tags,
+                "order": order,
+                "logical_id": logical_id,
+                "img_name": img_name,
+                "dst": images_dir / img_name,
+                "rev": rev,
+                "supersedes_id": supersedes_id,
+                "src_hash": src_hash,
+            })
+
+        # 4b. 多进程并行转码 (libwebp method=6 编码大图为耗时大头，图级并行提速数倍)
+        tasks = [{
+            "src": str(pl["p"]),
+            "dst": str(pl["dst"]),
+            "fmt": self.fmt,
+            "quality": img_quality,
+            "need_src_hash": not pl["src_hash"],
+            "need_dst_hash": True,
+        } for pl in plans]
+        results = convert_images_parallel(tasks)
+        if len(results) != len(plans):
+            raise RuntimeError("并行转码结果数量不一致，导出中止")
+
+        # 4c. 串行按序组装批次与账本记录 (顺序/标签/文件名语义与并行前完全一致)
+        for pl, res in zip(plans, results):
+            if res.get("ok"):
                 converted_count += 1
             else:
-                errors.append(f"{p.name}: {err}")
+                errors.append(f"{pl['p'].name}: {res.get('err')}")
 
-            img_hash = compute_file_sha256(dst) if dst.exists() else ""
+            order = pl["order"]
+            logical_id = pl["logical_id"]
+            img_name = pl["img_name"]
+            img_hash = res.get("dst_hash") or ""
 
             batch_levels.append({
                 "id": logical_id,
                 "order": order,
                 "url": f"../images/{img_name}",
-                "tags": tags,
+                "tags": pl["tags"],
                 "hash": img_hash,
                 "addedAt": now_str,
             })
 
-            h = hash_map.get(rel) or hash_map.get(p.name) or compute_file_sha256(p)
             exported_items.append({
-                "sourceHash": h,
-                "sourcePath": rel,
-                "sourceSize": p.stat().st_size if p.exists() else 0,
+                "sourceHash": pl["src_hash"] or res.get("src_hash") or "",
+                "sourcePath": pl["rel"],
+                "sourceSize": pl["p"].stat().st_size if pl["p"].exists() else 0,
                 "module": "main",
                 "logicalId": logical_id,
                 "order": order,
                 "batchId": batch_id,
                 "targetFile": f"main/images/{img_name}",
                 "targetHash": img_hash,
-                "revision": rev,
-                "supersedes": supersedes_id,
+                "revision": pl["rev"],
+                "supersedes": pl["supersedes_id"],
             })
 
         self.log(f"图片处理完成: {converted_count}/{len(images)}" + (f", {len(errors)} 失败" if errors else ""), "ok")
