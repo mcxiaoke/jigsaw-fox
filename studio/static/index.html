@@ -604,6 +604,32 @@
 
         <!-- ============ 第三步：导出前预览 ============ -->
         <div v-if="exportStep === 3" class="export-body">
+          <!-- 导出模式开关：默认安全试导出；正式导出需二次确认 (纯前端防呆) -->
+          <div class="output-settings">
+            <div class="output-settings-title">🚦 本次导出方式</div>
+            <div class="trial-toggle-row">
+              <button
+                class="btn mode-btn"
+                :class="{ active: exportConfig.trial }"
+                :disabled="isExporting"
+                @click="exportConfig.trial = true"
+              >
+                🧪 试导出 <span class="mode-hint">不写账本/ID/清单，不部署</span>
+              </button>
+              <button
+                class="btn mode-btn danger"
+                :class="{ active: !exportConfig.trial }"
+                :disabled="isExporting"
+                @click="exportConfig.trial = false"
+              >
+                🚀 正式导出 <span class="mode-hint">提交并部署</span>
+              </button>
+            </div>
+            <div v-if="!exportConfig.trial" class="formal-warn-banner">
+              ⚠️ 当前为 <b>正式导出</b>：将写入源库账本、占用 ID/版本号、改写 index/manifest.json 并拷贝到部署目录（不可撤销）。
+            </div>
+          </div>
+
           <!-- 输出设置：主界面已不再收集，导出确认前在此填写（记忆上次 + 默认值） -->
           <div class="output-settings">
             <div class="output-settings-title">📦 输出设置（确认导出前必填）</div>
@@ -667,7 +693,14 @@
               <span class="msg">{{ l.msg }}</span>
             </div>
           </div>
-          <div v-if="exportSummary" style="padding:8px 12px; background:#ecfdf5; color:#047857; border-radius:6px; font-weight:600;">🎉 {{ exportSummary }}</div>
+          <div v-if="exportSummary" style="padding:8px 12px; background:#ecfdf5; color:#047857; border-radius:6px; font-weight:600;"
+               :class="{ 'trial-success-banner': lastExportIsTrial }">
+            <span v-if="lastExportIsTrial">🧪 {{ exportSummary }}</span>
+            <span v-else>🎉 {{ exportSummary }}</span>
+            <div v-if="lastExportIsTrial && lastTrialDir" style="font-weight:400; font-size:12px; margin-top:4px; color:#065f46;">
+              试导出未写入账本/ID/清单、未部署。产物目录：<code style="user-select:all;">{{ lastTrialDir }}</code>
+            </div>
+          </div>
         </div>
 
         <div class="export-nav">
@@ -683,11 +716,48 @@
               {{ previewLoading ? '⏳ 预检中…' : '下一步：顺序调整 →' }}
             </button>
             <button v-else-if="exportStep === 2" class="btn primary" :disabled="isExporting" @click="goExportStep(3)">下一步：导出前预览 →</button>
-            <button v-else-if="exportStep === 3" class="btn primary" :disabled="isExporting" @click="runExport">
+            <button v-else-if="exportStep === 3" class="btn primary" :disabled="isExporting" @click="startExport">
               <span v-if="isExporting">⏳ {{ exportProgressText }}</span>
-              <span v-else>✅ 确认导出</span>
+              <span v-else-if="exportConfig.trial">🧪 开始试导出</span>
+              <span v-else>🚀 确认正式导出</span>
             </button>
           </template>
+        </div>
+      </div>
+    </div>
+
+    <!-- 正式导出二次确认 Modal (纯前端防呆)：切换到正式导出时必须显式确认副作用 -->
+    <div v-if="confirmFormalOpen" class="modal-mask formal-confirm-modal" @click.self="confirmFormalOpen = false">
+      <div class="viewer-dialog">
+        <div class="viewer-header">
+          <div class="viewer-title-box">
+            <b style="color:#fff;">🚀 确认正式导出？</b>
+            <span class="viewer-meta-badge" style="background:#b91c1c; color:#fff;">不可撤销</span>
+          </div>
+          <button class="modal-close" style="color:#fff;" @click="confirmFormalOpen = false">×</button>
+        </div>
+        <div class="viewer-content" style="max-height:60vh; overflow:auto;">
+          <div class="formal-confirm-body">
+            <p class="formal-confirm-title">正式导出将产生以下不可撤销的副作用：</p>
+            <ul class="formal-confirm-list">
+              <li><b>写入权威账本</b>：追加导出记录，占用图片 hash / 逻辑 ID / 修订号。</li>
+              <li><b>占用序号与版本</b>：分配 <code>main:n</code> 序号、递增模块 version。</li>
+              <li><b>改写清单</b>：更新 <code>index.json</code> 与 <code>manifest.json</code>（含 release 镜像）。</li>
+              <li><b>拷贝部署目录</b>：将产物写入输出目录 <code>{{ outDir }}</code>。</li>
+              <li>此操作<b>会写死源库 <code>.studio</code> 元数据且不予回滚</b>；同素材跨模块复用将被拦截或预警。</li>
+            </ul>
+            <label class="formal-confirm-check" :class="{ checked: formalConfirmChecked }">
+              <input type="checkbox" v-model="formalConfirmChecked" />
+              <span>我已仔细核对以上副作用，确认执行正式导出</span>
+            </label>
+          </div>
+        </div>
+        <div class="viewer-footer" style="justify-content:flex-end; gap:10px; border-top:1px solid var(--bg-border,#e5e7eb);">
+          <button class="btn" @click="confirmFormalOpen = false">返回</button>
+          <button class="btn" style="background:#dc2626; border-color:#b91c1c; color:#fff;"
+                  :disabled="!formalConfirmChecked" @click="confirmFormalExport">
+            我已核对，执行正式导出
+          </button>
         </div>
       </div>
     </div>

@@ -38,8 +38,9 @@ class MainExporter(BaseExporter):
             raise ValueError(f"源目录不存在: {self.src_p}")
 
     def execute(self) -> ExportResult:
-        ws = StudioWorkspace(self.src_p)
-        ledger = ExportsLedger(self.src_p)
+        ws = StudioWorkspace(self.src_p, read_only=self.is_trial)
+        ledger = ExportsLedger(self.src_p, read_only=self.is_trial)
+        build_root = self._write_root(ws)
 
         selected_paths = self.data.get("selectedPaths")
         if selected_paths and isinstance(selected_paths, list) and len(selected_paths) > 0:
@@ -138,24 +139,26 @@ class MainExporter(BaseExporter):
                 + "\n".join(detail_lines)
             )
 
-        # 2. 输出目录拓扑准备 (.studio/release/main)
-        release_main_dir = ws.release_dir / "main"
-        batches_dir = release_main_dir / "batches"
-        images_dir = release_main_dir / "images"
+        # 2. 输出目录拓扑准备 (写构建根：正式 outDir，试导出 outDir/_trial_{ts})
+        src_main_dir = ws.release_dir / "main"  # 读状态源 (release 镜像)
+        write_main_dir = build_root / "main"    # 写构建根
+        batches_dir = write_main_dir / "batches"
+        images_dir = write_main_dir / "images"
         batches_dir.mkdir(parents=True, exist_ok=True)
         images_dir.mkdir(parents=True, exist_ok=True)
 
-        # 读取已有 index.json 获取版本与批次信息 (统一 items 键)
-        index_json_path = release_main_dir / "index.json"
+        # 读取已有 index.json 获取版本与批次信息 (统一 items 键) —— 一律从 release 状态源读
+        src_index_path = src_main_dir / "index.json"
+        index_json_path = write_main_dir / "index.json"  # 写路径 (正式=release，试导出=构建根)
         existing_index: dict[str, Any] = {}
         existing_batches: list[dict[str, Any]] = []
         existing_version = 0
         existing_total_count = 0
         existing_max_order = ledger.get_max_order("main")
 
-        if index_json_path.exists():
+        if src_index_path.exists():
             try:
-                existing_index = json.loads(index_json_path.read_text(encoding="utf-8"))
+                existing_index = json.loads(src_index_path.read_text(encoding="utf-8"))
                 if isinstance(existing_index, dict):
                     existing_batches = existing_index.get("items") or existing_index.get("batches") or []
                     existing_version = int(existing_index.get("version", 0))
@@ -353,11 +356,19 @@ class MainExporter(BaseExporter):
         tmp_idx.replace(index_json_path)
         self.log(f"主线索引 index.json 已更新: version={version}, batches={len(existing_batches)}", "ok")
 
-        # 7. 两阶段发布：拷贝 release 镜像至用户指定的 outDir (纯净发布，无 legacy 兼容文件)
-        copied_files = ws.copy_release_to_out("main", self.out_p)
+        # 7. 两阶段发布：正式导出才拷贝 release 镜像至 outDir；试导出时转录已直接写入构建根
+        copied_files: list[str] = []
+        if self._commit():
+            copied_files = ws.copy_release_to_out("main", self.out_p)
+        else:
+            copied_files = [
+                str(p.resolve())
+                for p in build_root.rglob("*") if p.is_file()
+            ]
 
-        # 8. 更新根 manifest.json (同时同步镜像至 ws.release_dir)
-        index_hash = compute_file_sha256(index_json_path)
+        # 8. 更新根 manifest.json (试导出只写构建根内快照，传 ws=None 掐断 release 镜像)
+        index_write_path = write_main_dir / "index.json"
+        index_hash = compute_file_sha256(index_write_path)
         rel_mod_url = "main/index.json"
         m_file = ManifestManager.update_module(
             self.out_p,
@@ -367,30 +378,61 @@ class MainExporter(BaseExporter):
             self.log,
             count=new_total_count,
             module_hash=index_hash,
-            ws=ws,
+            ws=None if self.is_trial else ws,
         )
         if m_file:
             copied_files.append(str(m_file.resolve()))
 
-        # 9. 记录源侧权威账本与导出流水
-        try:
-            ws.ledger.append_records(exported_items)
-            ws.log_export(
-                "export_main",
-                batchId=batch_id,
-                module="main",
-                count=len(images),
-                version=version,
-                startOrder=start_order,
-                endOrder=start_order + len(images) - 1,
-                outDir=str(self.out_p),
-            )
-            self.log(f"已将 {len(exported_items)} 张图片记入源侧权威账本", "ok")
-        except Exception as e:
-            self.log(f"更新源侧权威账本失败: {e}", "warn")
+        # 9. 试导出元数据包 (自包含：source_map + ledger_delta + trial.log)
+        if self.is_trial:
+            source_map: dict[str, Any] = {}
+            for pl, it in zip(plans, exported_items):
+                source_map[pl["rel"]] = {
+                    "sourceHash": it["sourceHash"],
+                    "sourceSize": it["sourceSize"],
+                    "targetFile": it["targetFile"],
+                    "targetHash": it["targetHash"],
+                    "order": it["order"],
+                    "logicalId": it["logicalId"],
+                    "tags": pl["tags"],
+                    "fmt": self.fmt,
+                    "quality": resolve_quality(self.data),
+                    "rename": self.rename_rule,
+                }
+            self._write_trial_meta(source_map, exported_items, logs=[])
+
+        # 10. 记录源侧权威账本与导出流水 (仅正式导出)
+        if self._commit():
+            try:
+                ledger.append_records(exported_items)
+                ws.log_export(
+                    "export_main",
+                    batchId=batch_id,
+                    module="main",
+                    count=len(images),
+                    version=version,
+                    startOrder=start_order,
+                    endOrder=start_order + len(images) - 1,
+                    outDir=str(self.out_p),
+                )
+                self.log(f"已将 {len(exported_items)} 张图片记入源侧权威账本", "ok")
+            except Exception as e:
+                self.log(f"更新源侧权威账本失败: {e}", "warn")
+
+        if self.is_trial:
+            self._would_commit = {
+                "module": "main",
+                "startOrder": start_order,
+                "endOrder": start_order + len(images) - 1,
+                "version": version,
+                "ids": [f"main:{o}" for o in range(start_order, start_order + len(images))],
+            }
+            summary = f"[试导出] 未提交 main 批次 trial_{self._trial_ts}（{len(images)} 关）[正式将分配 main:{start_order}~main:{start_order + len(images) - 1}, version={version}]"
+        else:
+            summary = f"已成功导出 {len(images)} 个关卡至分卷 {batch_id} (version={version})"
 
         return ExportResult(
             success=True,
-            summary=f"已成功导出 {len(images)} 个关卡至分卷 {batch_id} (version={version})",
+            summary=summary,
             files=copied_files,
         )

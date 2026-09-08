@@ -30,7 +30,7 @@ class StudioWorkspace:
 
     _lock = threading.Lock()
 
-    def __init__(self, src_dir: Path | str) -> None:
+    def __init__(self, src_dir: Path | str, read_only: bool = False) -> None:
         self.src_dir = Path(src_dir).resolve()
         self.studio_dir = self.src_dir / ".studio"
         self.cache_dir = self.studio_dir / "cache"
@@ -44,13 +44,14 @@ class StudioWorkspace:
         self.staging_dir = self.studio_dir / "staging"
         self.release_dir = self.studio_dir / "release"
         self.thumbs_dir = self.cache_dir / "thumbs"
+        self._read_only = bool(read_only)
 
         self.ensure_structure()
 
     @property
     def ledger(self) -> Any:
         from studio.core.exports_ledger import ExportsLedger
-        return ExportsLedger(self.src_dir)
+        return ExportsLedger(self.src_dir, read_only=self._read_only)
 
     def ensure_structure(self) -> None:
         """初始化 .studio/ 目录结构并执行向后兼容的数据迁移"""
@@ -66,7 +67,8 @@ class StudioWorkspace:
             ):
                 d.mkdir(parents=True, exist_ok=True)
 
-            self._migrate_legacy_files()
+            if not self._read_only:
+                self._migrate_legacy_files()
 
     def _migrate_legacy_files(self) -> None:
         """平滑自动迁移根目录下的旧版元数据文件"""

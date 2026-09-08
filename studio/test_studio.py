@@ -6,6 +6,7 @@ studio.test_studio — Content Studio 核心功能与自动化回归测试套件
 
 import json
 import logging
+import os
 import shutil
 import sys
 import tempfile
@@ -1126,6 +1127,144 @@ class TestExportStatusEndpoint(unittest.TestCase):
         finally:
             server.shutdown()
             server.server_close()
+
+
+class TestTrialExportNonPollution(unittest.TestCase):
+    """试导出 (trial) 不污染 .studio 的验收测试。
+
+    核心断言：试导出前后 src/.studio 的持久化文件 (ledger/logs/release) 内容与
+    是否存在完全不变；试导出产物只落在 outDir/_trial_{ts}/，且含 _trial_meta/。
+    """
+
+    def setUp(self):
+        self.test_dir = Path(tempfile.mkdtemp(prefix="studio_trial_"))
+        self.src_dir = self.test_dir / "src"
+        self.out_dir = self.test_dir / "out"
+        self.src_dir.mkdir(parents=True)
+        self.out_dir.mkdir(parents=True)
+
+        # 造几个测试图
+        if HAS_PIL:
+            from PIL import Image
+            cat_dir = self.src_dir / "Cats"
+            cat_dir.mkdir()
+            for i in range(1, 4):
+                img = Image.new("RGB", (100, 100), color=(80 * i, 60, 200))
+                img.save(cat_dir / f"cat_{i:02d}.jpg", "JPEG")
+        else:
+            for i in range(1, 4):
+                (self.src_dir / "Cats").mkdir(exist_ok=True)
+                (self.src_dir / "Cats" / f"cat_{i:02d}.jpg").write_bytes(b"fake" * 8)
+
+    def tearDown(self):
+        shutil.rmtree(self.test_dir, ignore_errors=True)
+
+    def _studio_snapshot(self) -> dict:
+        """对 .studio 下的持久化写文件做快照：rel_path -> (exists, content, mtime)。"""
+        studio = self.src_dir / ".studio"
+        snap: dict[str, tuple] = {}
+        if not studio.exists():
+            return snap
+        for root, _dirs, files in os.walk(studio):
+            for f in files:
+                p = Path(root) / f
+                rel = p.relative_to(studio).as_posix()
+                stat = p.stat()
+                snap[rel] = (True, p.read_bytes(), stat.st_mtime_ns)
+        return snap
+
+    def _assert_studio_unchanged(self, before: dict) -> None:
+        """断言 .studio 快照未变：既有文件内容/存在性/修改时间一致，且无新增文件。"""
+        after = self._studio_snapshot()
+        self.assertEqual(set(before.keys()), set(after.keys()),
+                         "试导出不应新增/删除 .studio 内的任何持久化文件")
+        for rel, (exists, content, mtime) in before.items():
+            self.assertTrue(after[rel][0], f"{rel} 不应被删除")
+            self.assertEqual(after[rel][1], content, f"{rel} 内容不应改变")
+            self.assertEqual(after[rel][2], mtime, f"{rel} mtime 不应改变")
+
+    def test_main_trial_does_not_pollute_studio(self):
+        logs: list[tuple] = []
+        before = self._studio_snapshot()
+
+        exporter = get_exporter(
+            exp_type="main",
+            data={"trial": True, "startOrder": 101, "version": 5,
+                  "format": "webp" if HAS_PIL else "original", "rename": "sequence"},
+            src_p=self.src_dir,
+            out_p=self.out_dir,
+            http_base="http://trial.local/data",
+            log_fn=lambda msg, lvl="info": logs.append((lvl, msg)),
+        )
+        exporter.validate()
+        result = exporter.execute()
+
+        self.assertTrue(result.success)
+        self.assertTrue(exporter.is_trial)
+        # 产物落在 outDir/_trial_{ts}
+        self.assertTrue(exporter._build_root.is_dir())
+        self.assertTrue((exporter._build_root / "main" / "index.json").exists())
+        images_dir = exporter._build_root / "main" / "images"
+        self.assertTrue(images_dir.exists())
+        webp_list = list(images_dir.glob("*.webp"))
+        self.assertEqual(len(webp_list), 3)
+        self.assertTrue((exporter._build_root / "manifest.json").exists())
+        self.assertTrue((exporter._build_root / "_trial_meta" / "ledger_delta.json").exists())
+        self.assertTrue((exporter._build_root / "_trial_meta" / "source_map.json").exists())
+        # 不得触碰正式 outDir
+        self.assertFalse((self.out_dir / "main").exists(),
+                         "试导出不得在正式 outDir 下产生 main 目录")
+        self.assertFalse((self.out_dir / "manifest.json").exists(),
+                         "试导出不得在正式 outDir 下产生 manifest.json")
+        # .studio 零污染
+        self._assert_studio_unchanged(before)
+        # 返回 wouldCommit
+        self.assertEqual(exporter._would_commit["module"], "main")
+        self.assertEqual(exporter._would_commit["startOrder"], 101)
+        self.assertEqual(exporter._would_commit["endOrder"], 103)
+
+    def test_daily_trial_does_not_pollute_studio(self):
+        before = self._studio_snapshot()
+        exporter = get_exporter(
+            exp_type="daily",
+            data={"trial": True, "month": "202609",
+                  "format": "webp" if HAS_PIL else "original", "rename": "date"},
+            src_p=self.src_dir,
+            out_p=self.out_dir,
+            http_base="http://trial.local/data",
+            log_fn=lambda msg, lvl="info": None,
+        )
+        exporter.validate()
+        result = exporter.execute()
+
+        self.assertTrue(result.success)
+        self.assertTrue((exporter._build_root / "daily" / "index.json").exists())
+        self.assertTrue((exporter._build_root / "_trial_meta" / "ledger_delta.json").exists())
+        self.assertFalse((self.out_dir / "daily").exists())
+        self.assertFalse((self.out_dir / "manifest.json").exists())
+        self._assert_studio_unchanged(before)
+
+    def test_formal_export_writes_studio(self):
+        """对照组：正式导出确实会写 .studio (账本+release+logs)，证明快照断言有区分度。"""
+        exporter = get_exporter(
+            exp_type="main",
+            data={"startOrder": 101, "version": 5,
+                  "format": "webp" if HAS_PIL else "original", "rename": "sequence"},
+            src_p=self.src_dir,
+            out_p=self.out_dir,
+            http_base="http://trial.local/data",
+            log_fn=lambda msg, lvl="info": None,
+        )
+        exporter.validate()
+        result = exporter.execute()
+        self.assertTrue(result.success)
+        self.assertFalse(exporter.is_trial)
+        # 正式导出后 .studio 出现账本与 release 产物
+        self.assertTrue((self.src_dir / ".studio" / "ledger" / "exports.json").exists())
+        self.assertTrue((self.src_dir / ".studio" / "release" / "main" / "index.json").exists())
+        self.assertTrue((self.src_dir / ".studio" / "logs" / "exports.jsonl").exists())
+        # 正式产物在 outDir
+        self.assertTrue((self.out_dir / "main" / "index.json").exists())
 
 
 if __name__ == "__main__":

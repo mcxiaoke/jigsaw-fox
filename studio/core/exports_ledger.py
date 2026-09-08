@@ -28,10 +28,11 @@ class ExportsLedger:
     - 内存倒排索引: sourceHash -> list[record], logicalId -> record
     """
 
-    def __init__(self, src_dir: Path | str) -> None:
+    def __init__(self, src_dir: Path | str, read_only: bool = False) -> None:
         self.src_dir = Path(src_dir).resolve()
-        self.workspace = StudioWorkspace(self.src_dir)
+        self.workspace = StudioWorkspace(self.src_dir, read_only=read_only)
         self.ledger_file = self.workspace.ledger_file
+        self._read_only = bool(read_only)
         self._lock = threading.Lock()
 
         self.schema_version = 2
@@ -142,7 +143,8 @@ class ExportsLedger:
             self.updated_at = dt.datetime.now(dt.timezone.utc).isoformat().replace("+00:00", "Z")
             self.records = migrated_records
             self._rebuild_indices()
-            self._save_unlocked()
+            if not self._read_only:
+                self._save_unlocked()
             return True
         except Exception as e:
             logger.warning("[ledger] 旧版 exported.json 迁移失败，跳过: %s", e)
@@ -201,6 +203,8 @@ class ExportsLedger:
 
     def save(self) -> tuple[bool, str]:
         """原子保存 exports.json 账本"""
+        if self._read_only:
+            return False, "账本处于只读模式，禁止写入"
         with self._lock:
             return self._save_unlocked()
 
@@ -282,6 +286,8 @@ class ExportsLedger:
         向账本中追加新导出记录 (Append-Only) 并同步原子落盘与写入日志
         """
         if not new_records:
+            return 0
+        if self._read_only:
             return 0
 
         with self._lock:

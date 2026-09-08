@@ -175,10 +175,18 @@ const app = createApp({
       exportScope: "all", // 'all' | 'selected'
       sortBy: "name_asc",
       quality: 70,
+      // 默认安全：试导出 (试导出=trial:true，不写账本/ID/清单/部署；正式导出需二次确认)
+      trial: true,
     });
     const isExporting = ref(false);
     const exportLogs = ref([]);
     const exportSummary = ref("");
+    // 本次导出是试导出 (仅前端展示用)：真确值取自服务端响应 res.trial
+    const lastExportIsTrial = ref(false);
+    const lastTrialDir = ref("");
+    // 正式导出二次确认弹窗 (纯前端防呆)
+    const confirmFormalOpen = ref(false);
+    const formalConfirmChecked = ref(false);
     // 导出进度 (转码 n/total)；仅执行中填充，用于按钮/面板实时提示
     const exportProgress = ref("");
     const exportProgressText = computed(() =>
@@ -891,6 +899,8 @@ const app = createApp({
       exportError.value = "";
       // 若已在浏览页勾选图片，默认只导出选中的那几张，而非全部
       exportConfig.value.exportScope = selectedSet.value.size > 0 ? "selected" : "all";
+      lastExportIsTrial.value = false;
+      lastTrialDir.value = "";
       exportModalOpen.value = true;
       // 后台预检，自动填充建议序号/版本并预热第二步清单（不阻塞进入第一步）
       loadExportPreview();
@@ -1136,6 +1146,21 @@ const app = createApp({
       },
     );
 
+    const startExport = async () => {
+      // 纯前端防呆：试导出直接执行；正式导出必须先过二次确认弹窗
+      if (exportConfig.value.trial) {
+        await runExport();
+      } else {
+        formalConfirmChecked.value = false;
+        confirmFormalOpen.value = true;
+      }
+    };
+
+    const confirmFormalExport = async () => {
+      confirmFormalOpen.value = false;
+      await runExport();
+    };
+
     const runExport = async () => {
       // 必填校验：错误在第③步红条持久展示（不再只有一闪而过的 toast）
       exportError.value = "";
@@ -1160,6 +1185,8 @@ const app = createApp({
       exportSummary.value = "";
       exportProgress.value = "";
       exportDone.value = false;
+      lastExportIsTrial.value = Boolean(exportConfig.value.trial);
+      lastTrialDir.value = "";
 
       // 进度感知：前端生成任务 id；POST 与状态轮询并行，
       // 任一通道先到达终态即收尾 (finalize 幂等，后到者忽略)
@@ -1197,8 +1224,17 @@ const app = createApp({
         exportDone.value = true; // 完成后停留第③步预览视图，不跳转、不刷新统计
         if (success) {
           exportSummary.value = (info && info.summary) || "导出完成";
-          showToast("导出成功！");
-          rescanAfterSuccess();
+          lastExportIsTrial.value = Boolean(info && info.isTrial);
+          lastTrialDir.value = (info && info.trialDir) || lastTrialDir.value;
+          if (info && info.isTrial) {
+            showToast("试导出完成：未写入账本/ID/清单，未部署");
+          } else {
+            showToast("导出成功！");
+          }
+          // 试导出不触碰账本，跳过重新扫描，避免用户误以为失败
+          if (!(info && info.skipRescan)) {
+            rescanAfterSuccess();
+          }
         } else {
           const msg = (info && info.error) || "导出失败";
           exportSummary.value = "";
@@ -1216,7 +1252,11 @@ const app = createApp({
         }
         if (!st || !st.found || finalized) return; // 任务不存在/已收尾：静默停止
         if (st.state === "done") {
-          finalize(true, { summary: st.summary });
+          finalize(true, {
+            summary: st.summary,
+            isTrial: lastExportIsTrial.value,
+            skipRescan: lastExportIsTrial.value,
+          });
           return;
         }
         if (st.state === "error") {
@@ -1262,6 +1302,7 @@ const app = createApp({
             ? previewState.value.ordered.map((o) => o.rel)
             : undefined,
         excludedPaths: exportExcluded.value.size ? Array.from(exportExcluded.value) : undefined,
+        trial: Boolean(exportConfig.value.trial),
         tagsRecords: buildSlimRecords(),
       };
 
@@ -1269,7 +1310,15 @@ const app = createApp({
         const res = await executeExport(payload);
         if (!finalized) {
           if (res && res.ok) {
-            finalize(true, { summary: res.summary });
+            if (res.trial) {
+              lastExportIsTrial.value = true;
+              lastTrialDir.value = res.trialDir || "";
+              finalize(true, { summary: res.summary, skipRescan: true, isTrial: true, trialDir: res.trialDir || "" });
+            } else {
+              lastExportIsTrial.value = false;
+              lastTrialDir.value = "";
+              finalize(true, { summary: res.summary });
+            }
           } else {
             finalize(false, {
               error: (res && res.error) || "导出失败",
@@ -1521,6 +1570,12 @@ const app = createApp({
       openExport,
       closeExport,
       runExport,
+      startExport,
+      confirmFormalExport,
+      confirmFormalOpen,
+      formalConfirmChecked,
+      lastExportIsTrial,
+      lastTrialDir,
       copyExportLogs,
       filterGrade,
       isEvaluatingQuality,

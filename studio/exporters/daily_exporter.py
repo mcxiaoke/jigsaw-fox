@@ -42,8 +42,9 @@ class DailyExporter(BaseExporter):
 
     def execute(self) -> ExportResult:
         month = (self.data.get("month") or self.data.get("YYYYMM") or "").strip()
-        ws = StudioWorkspace(self.src_p)
-        ledger = ExportsLedger(self.src_p)
+        ws = StudioWorkspace(self.src_p, read_only=self.is_trial)
+        ledger = ExportsLedger(self.src_p, read_only=self.is_trial)
+        build_root = self._write_root(ws)
 
         selected_paths = self.data.get("selectedPaths")
         if selected_paths and isinstance(selected_paths, list) and len(selected_paths) > 0:
@@ -125,17 +126,19 @@ class DailyExporter(BaseExporter):
                 elif sev == "warning":
                     self.log(f"注意: {msg} (文件: {p.name})", "warn")
 
-        # 3. 两阶段发布：输出目录拓扑 (.studio/release/daily)
-        release_daily_dir = ws.release_dir / "daily"
-        zips_dir = release_daily_dir / "zips"
+        # 3. 两阶段发布：写构建根 (正式 ws.release_dir/daily，试导出 _trial_{ts}/daily)
+        src_daily_dir = ws.release_dir / "daily"
+        write_daily_dir = build_root / "daily"
+        zips_dir = write_daily_dir / "zips"
         zips_dir.mkdir(parents=True, exist_ok=True)
-        # 读取现有 daily/index.json 以检测是否同月重复导出 (统一规范容器键 items)
-        index_json_path = release_daily_dir / "index.json"
+        # 读取现有 daily/index.json 以检测是否同月重复导出 (统一规范容器键 items) —— 从 release 状态源读
+        src_index_path = src_daily_dir / "index.json"
+        index_json_path = write_daily_dir / "index.json"
         existing_months: list[dict[str, Any]] = []
         existing_version = 0
-        if index_json_path.exists():
+        if src_index_path.exists():
             try:
-                loaded = json.loads(index_json_path.read_text(encoding="utf-8"))
+                loaded = json.loads(src_index_path.read_text(encoding="utf-8"))
                 if isinstance(loaded, dict):
                     existing_months = loaded.get("items", [])
                     existing_version = int(loaded.get("version", 0))
@@ -246,10 +249,17 @@ class DailyExporter(BaseExporter):
         tmp_idx.replace(index_json_path)
         self.log(f"daily/index.json 写入成功 (version={new_version}, count={len(images)})", "ok")
 
-        # 5. 两阶段发布：拷贝 release 目录文件至 outDir (纯净发布，无 legacy 兼容文件)
-        copied_files = ws.copy_release_to_out("daily", self.out_p)
+        # 5. 两阶段发布：正式导出才拷贝 release 镜像至 outDir；试导出时转录已直接写入构建根
+        copied_files: list[str] = []
+        if self._commit():
+            copied_files = ws.copy_release_to_out("daily", self.out_p)
+        else:
+            copied_files = [
+                str(p.resolve())
+                for p in build_root.rglob("*") if p.is_file()
+            ]
 
-        # 6. 更新 manifest.json (同时镜像到 ws.release_dir)
+        # 6. 更新 manifest.json (试导出只写构建根内快照，传 ws=None 掐断 release 镜像)
         index_hash = compute_file_sha256(index_json_path)
         rel_mod_url = "daily/index.json"
         m_file = ManifestManager.update_module(
@@ -261,30 +271,60 @@ class DailyExporter(BaseExporter):
             count=len(images),
             module_hash=index_hash,
             extra_fields={"currentMonth": month},
-            ws=ws,
+            ws=None if self.is_trial else ws,
         )
         if m_file:
             copied_files.append(str(m_file.resolve()))
 
-        # 7. 记录权威账本与导出流水
-        try:
-            ledger.append_records(exported_items)
-            ws.log_export(
-                "export_daily",
-                month=month,
-                module="daily",
-                count=len(images),
-                version=new_version,
-                zipSize=zip_size,
-                zipHash=zip_hash,
-                outDir=str(self.out_p),
-            )
-            self.log(f"已将 {len(exported_items)} 张图片记入源侧权威账本", "ok")
-        except Exception as e:
-            self.log(f"更新权威账本失败: {e}", "warn")
+        # 7a. 试导出元数据包
+        if self.is_trial:
+            source_map: dict[str, Any] = {}
+            for p, arc_name, logical_id, file_hash in target_items:
+                source_map[p.relative_to(self.src_p).as_posix().replace("\\", "/")] = {
+                    "sourceHash": file_hash,
+                    "sourceSize": p.stat().st_size if p.exists() else 0,
+                    "targetFile": f"daily/zips/{zip_file_name}#{arc_name}",
+                    "logicalId": logical_id,
+                    "month": month,
+                    "revision": rev,
+                    "fmt": self.fmt,
+                    "quality": zip_quality,
+                    "rename": self.rename_rule,
+                }
+            self._write_trial_meta(source_map, exported_items, logs=[])
+
+        # 7. 记录权威账本与导出流水 (仅正式导出)
+        if self._commit():
+            try:
+                ledger.append_records(exported_items)
+                ws.log_export(
+                    "export_daily",
+                    month=month,
+                    module="daily",
+                    count=len(images),
+                    version=new_version,
+                    zipSize=zip_size,
+                    zipHash=zip_hash,
+                    outDir=str(self.out_p),
+                )
+                self.log(f"已将 {len(exported_items)} 张图片记入源侧权威账本", "ok")
+            except Exception as e:
+                self.log(f"更新权威账本失败: {e}", "warn")
+
+        if self.is_trial:
+            self._would_commit = {
+                "module": "daily",
+                "month": month,
+                "count": len(images),
+                "version": new_version,
+                "zipUrl": f"zips/{zip_file_name}",
+            }
+            summary = f"[试导出] 未提交 daily 月份 {month}（{len(images)} 张）[正式将写 version={new_version}]"
+        else:
+            summary = f"已成功打包 {len(images)} 张图片至 {month}.zip 并更新 daily 模块"
 
         return ExportResult(
             success=True,
-            summary=f"已成功打包 {len(images)} 张图片至 {month}.zip 并更新 daily 模块",
+            summary=summary,
             files=copied_files,
         )

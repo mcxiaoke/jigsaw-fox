@@ -7,7 +7,9 @@ studio.exporters.base — 资产导出器抽象基类与通用数据结构
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+import datetime as dt
 from dataclasses import dataclass, field
+import json
 from pathlib import Path
 from typing import Any, Callable
 
@@ -82,6 +84,11 @@ class BaseExporter(ABC):
         self.log = log_fn
         self.progress_fn = progress_fn
 
+        # 试导出 (trial) 标记：缺省为 False (=正式导出)，向后兼容旧调用
+        self.is_trial = bool(data.get("trial", False))
+        self._build_root: Path | None = None
+        self._trial_ts: str = ""
+
     def report_progress(self, done: int, total: int, current: dict | None = None, ok: bool = True) -> None:
         """上报单张图片转码进度（并行池每完成一张调用一次）。
 
@@ -113,6 +120,45 @@ class BaseExporter(ABC):
     def validate(self) -> None:
         """校验输入参数，不合法时抛出 ValueError"""
         pass
+
+    def _commit(self) -> bool:
+        """是否执行"提交"（写账本/流水/release 镜像）。试导出时为 False。"""
+        return not self.is_trial
+
+    def _write_root(self, ws) -> Path:
+        """计算模块写入根 (尚未拼 {module})：
+        正式 = ws.release_dir (两阶段发布起点)；试导出 = outDir/_trial_{ts}。
+        试导出时同时把 self._build_root 记下、self.out_p 重定向到构建根，
+        使 manifest/文件清单落在试导出目录内。
+        """
+        if not self.is_trial:
+            self._build_root = ws.release_dir
+            return self._build_root
+        if not self._build_root:
+            self._trial_ts = dt.datetime.now().strftime("%Y%m%d_%H%M%S")
+            self._build_root = self.out_p / f"_trial_{self._trial_ts}"
+            self.out_p = self._build_root
+        return self._build_root
+
+    def _write_trial_meta(
+        self,
+        source_map: dict[str, Any],
+        ledger_delta: list[dict[str, Any]],
+        logs: list[dict[str, str]],
+    ) -> None:
+        """将试导出自包含元数据包写入 build_root/_trial_meta/（仅试导出调用）。"""
+        meta_dir = self._build_root / "_trial_meta"
+        meta_dir.mkdir(parents=True, exist_ok=True)
+        meta_dir.joinpath("source_map.json").write_text(
+            json.dumps(source_map, ensure_ascii=False, indent=2), encoding="utf-8"
+        )
+        meta_dir.joinpath("ledger_delta.json").write_text(
+            json.dumps(ledger_delta, ensure_ascii=False, indent=2), encoding="utf-8"
+        )
+        meta_dir.joinpath("trial.log").write_text(
+            "\n".join(f"[{e.get('level','info')}] {e.get('msg','')}" for e in logs),
+            encoding="utf-8",
+        )
 
     @abstractmethod
     def execute(self) -> ExportResult:

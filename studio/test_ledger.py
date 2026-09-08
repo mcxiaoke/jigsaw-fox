@@ -121,6 +121,45 @@ class TestExportsLedger(unittest.TestCase):
         self.assertEqual(rec["order"], 201)
         self.assertTrue(ledger.ledger_file.exists())
 
+    def test_read_only_no_migration_write(self):
+        """暗坑 A：read_only 下即使存在 legacy exported.json，也只能内存迁移，不得落盘。"""
+        legacy_file = self.test_dir / "exported.json"
+        legacy_data = {
+            "version": "1.0.0",
+            "updated_at": "2026-09-05T00:00:00Z",
+            "hashes": {
+                "old_hash_1": {
+                    "hash": "old_hash_1",
+                    "path": "Nature/lake.jpg",
+                    "file_size": 5000,
+                    "export_type": "main",
+                    "order": 201,
+                    "target": "main/0201.webp",
+                }
+            },
+        }
+        legacy_file.write_text(json.dumps(legacy_data), encoding="utf-8")
+
+        ledger = ExportsLedger(self.test_dir, read_only=True)
+        # 内存已迁移
+        self.assertEqual(len(ledger.records), 1)
+        # 但不得写入 exports.json
+        self.assertFalse(ledger.ledger_file.exists())
+
+    def test_read_only_rejects_writes(self):
+        """双保险：read_only 下 append_records / save 必须拒绝，不产生任何写入。"""
+        ledger = ExportsLedger(self.test_dir, read_only=True)
+        self.assertEqual(ledger.append_records([{
+            "sourceHash": "h",
+            "sourcePath": "a.jpg",
+            "module": "main",
+            "logicalId": "main:101",
+        }]), 0)
+        self.assertEqual(len(ledger.records), 0)
+        ok, _ = ledger.save()
+        self.assertFalse(ok)
+        self.assertFalse(ledger.ledger_file.exists())
+
 
 if __name__ == "__main__":
     unittest.main()

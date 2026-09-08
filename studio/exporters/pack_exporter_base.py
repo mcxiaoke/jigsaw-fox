@@ -64,8 +64,9 @@ class PackExporterBase(BaseExporter):
         status = self.data.get("status", "active")
         display_order = int(self.data.get("displayOrder", 1))
 
-        ws = StudioWorkspace(self.src_p)
-        ledger = ExportsLedger(self.src_p)
+        ws = StudioWorkspace(self.src_p, read_only=self.is_trial)
+        ledger = ExportsLedger(self.src_p, read_only=self.is_trial)
+        build_root = self._write_root(ws)
 
         # 1. 扫描与选图过滤
         selected_paths = self.data.get("selectedPaths")
@@ -156,20 +157,22 @@ class PackExporterBase(BaseExporter):
                 elif sev == "warning":
                     self.log(f"注意: {msg} (文件: {p.name})", "warn")
 
-        # 6. 构建输出目录拓扑 (两阶段发布：先构建至 .studio/release/{module})
-        release_mod_dir = ws.release_dir / self.module
-        packs_dir = release_mod_dir / "packs"
-        covers_dir = release_mod_dir / "covers"
+        # 6. 构建输出目录拓扑 (写构建根：正式 ws.release_dir/{module}，试导出 _trial_{ts}/{module})
+        src_mod_dir = ws.release_dir / self.module
+        write_mod_dir = build_root / self.module
+        packs_dir = write_mod_dir / "packs"
+        covers_dir = write_mod_dir / "covers"
         packs_dir.mkdir(parents=True, exist_ok=True)
         covers_dir.mkdir(parents=True, exist_ok=True)
 
-        # 读取现有 index.json 以检测是否同名重复导出
-        index_json_path = release_mod_dir / "index.json"
+        # 读取现有 index.json 以检测是否同名重复导出 —— 从 release 状态源读
+        src_index_path = src_mod_dir / "index.json"
+        index_json_path = write_mod_dir / "index.json"
         existing_items: list[dict[str, Any]] = []
         existing_version = 0
-        if index_json_path.exists():
+        if src_index_path.exists():
             try:
-                loaded = json.loads(index_json_path.read_text(encoding="utf-8"))
+                loaded = json.loads(src_index_path.read_text(encoding="utf-8"))
                 if isinstance(loaded, dict):
                     existing_items = loaded.get("items", [])
                     existing_version = int(loaded.get("version", 0))
@@ -315,10 +318,17 @@ class PackExporterBase(BaseExporter):
         tmp_idx.replace(index_json_path)
         self.log(f"{self.module}/index.json 写入成功 (version={new_version}, items={len(existing_items)})", "ok")
 
-        # 8. 两阶段发布：拷贝 release 目录文件至 outDir (纯净交付，不包含任何旧格式兼容文件)
-        copied_files = ws.copy_release_to_out(self.module, self.out_p)
+        # 8. 两阶段发布：正式导出才拷贝 release 镜像至 outDir；试导出时转录已直接写入构建根
+        copied_files: list[str] = []
+        if self._commit():
+            copied_files = ws.copy_release_to_out(self.module, self.out_p)
+        else:
+            copied_files = [
+                str(p.resolve())
+                for p in build_root.rglob("*") if p.is_file()
+            ]
 
-        # 9. 更新根 manifest.json (同时进入 release 镜像与 outDir)
+        # 9. 更新根 manifest.json (试导出只写构建根内快照，传 ws=None 掐断 release 镜像)
         index_hash = compute_file_sha256(index_json_path)
         rel_mod_url = f"{self.module}/index.json"
         manifest_file = ManifestManager.update_module(
@@ -329,30 +339,60 @@ class PackExporterBase(BaseExporter):
             self.log,
             count=len(existing_items),
             module_hash=index_hash,
-            ws=ws,
+            ws=None if self.is_trial else ws,
         )
         if manifest_file:
             copied_files.append(str(manifest_file.resolve()))
 
-        # 10. 记录权威账本与导出流水
-        try:
-            ledger.append_records(exported_items)
-            ws.log_export(
-                f"export_{self.module}",
-                packId=pack_id,
-                module=self.module,
-                count=len(images),
-                version=new_version,
-                zipSize=zip_size,
-                zipHash=zip_hash,
-                outDir=str(self.out_p),
-            )
-            self.log(f"已将 {len(exported_items)} 张图片记入源侧权威账本", "ok")
-        except Exception as e:
-            self.log(f"更新权威账本失败: {e}", "warn")
+        # 9a. 试导出元数据包
+        if self.is_trial:
+            source_map: dict[str, Any] = {}
+            for it in exported_items:
+                source_map[it["sourcePath"]] = {
+                    "sourceHash": it["sourceHash"],
+                    "sourceSize": it["sourceSize"],
+                    "targetFile": it["targetFile"],
+                    "logicalId": it["logicalId"],
+                    "revision": it.get("revision", 1),
+                    "packId": pack_id,
+                    "fmt": self.fmt,
+                    "quality": zip_quality,
+                    "rename": self.rename_rule,
+                }
+            self._write_trial_meta(source_map, exported_items, logs=[])
+
+        # 10. 记录权威账本与导出流水 (仅正式导出)
+        if self._commit():
+            try:
+                ledger.append_records(exported_items)
+                ws.log_export(
+                    f"export_{self.module}",
+                    packId=pack_id,
+                    module=self.module,
+                    count=len(images),
+                    version=new_version,
+                    zipSize=zip_size,
+                    zipHash=zip_hash,
+                    outDir=str(self.out_p),
+                )
+                self.log(f"已将 {len(exported_items)} 张图片记入源侧权威账本", "ok")
+            except Exception as e:
+                self.log(f"更新权威账本失败: {e}", "warn")
+
+        if self.is_trial:
+            self._would_commit = {
+                "module": self.module,
+                "packId": pack_id,
+                "count": len(images),
+                "version": new_version,
+                "zipUrl": zip_rel_url,
+            }
+            summary = f"[试导出] 未提交 {self.module} 模块包 {pack_id}（{len(images)} 张）[正式将写 version={new_version}]"
+        else:
+            summary = f"已成功导出 {self.module} 模块包 {pack_id} (count={len(images)})"
 
         return ExportResult(
             success=True,
-            summary=f"已成功导出 {self.module} 模块包 {pack_id} (count={len(images)})",
+            summary=summary,
             files=copied_files,
         )

@@ -946,8 +946,14 @@ class StudioRequestHandler(BaseHTTPRequestHandler):
             result.logs = logs
             res_dict = result.to_dict()
             if result.success:
-                ledger = load_exported_ledger(src_p)
-                res_dict["totalExported"] = ledger.get("total_exported", 0)
+                if getattr(exporter, "is_trial", False):
+                    res_dict["trial"] = True
+                    res_dict["trialDir"] = str(getattr(exporter, "_build_root", ""))
+                    res_dict["wouldCommit"] = getattr(exporter, "_would_commit", {})
+                    log_fn(f"试导出完成，产物位于: {res_dict.get('trialDir')}", "info")
+                else:
+                    ledger = load_exported_ledger(src_p)
+                    res_dict["totalExported"] = ledger.get("total_exported", 0)
                 logger.info(f"[EXPORT] 导出成功: 输出文件={result.files}")
                 _job_finish(task_id, summary=result.summary)
             else:
