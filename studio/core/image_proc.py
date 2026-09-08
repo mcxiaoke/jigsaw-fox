@@ -49,6 +49,25 @@ try:
 except ImportError:
     HAS_PIL = False
 
+# 导出规格化：长边目标（固定常量，改需求改这里）
+DEFAULT_LONG_TARGET = 1920
+
+# 规格化纯算法依赖 numpy（能量图/积分图）。缺失时规格化导出不可用，普通转码仍正常。
+try:
+    from studio.core.crop_compute import (
+        aspect_crop_box,
+        build_ratio_pool,
+        compute_content_box,
+        expand_ratio_families,
+        resize_long,
+        select_aspect,
+        smart_aspect_crop_box,
+    )
+
+    HAS_CROP_COMPUTE = True
+except Exception:  # noqa: BLE001  numpy 缺失等任何导入失败都降级
+    HAS_CROP_COMPUTE = False
+
 # 服务端缩略图磁盘缓存目录 (优先存放于源工作区 srcDir/.studio/cache/thumbs/)
 DEFAULT_THUMB_CACHE_DIR = Path(__file__).resolve().parent.parent.parent / "temp" / "studio_cache" / "thumbs"
 THUMB_CACHE_DIR = DEFAULT_THUMB_CACHE_DIR
@@ -204,6 +223,114 @@ def convert_image(
             return False, str(e)
 
 
+def image_long_side(img_path: Path | str) -> int | None:
+    """返回图片长边（max(宽,高)）；不可解码或 PIL 缺失时返回 None。"""
+    if not HAS_PIL:
+        return None
+    try:
+        with Image.open(img_path) as im:
+            w, h = im.size
+            return int(max(w, h))
+    except Exception:
+        return None
+
+
+def normalize_export_image(
+    src_path: Path,
+    dst_path: Path,
+    *,
+    fmt: str = "webp",
+    quality: int = 70,
+    target_ratios: tuple[str, ...] = ("auto",),
+    long_target: int = DEFAULT_LONG_TARGET,
+    crop_mode: str = "smart",
+    trim_background: bool = True,
+) -> tuple[bool, str | None, dict | None]:
+    """规格化导出：打开 → EXIF 校正 → 长边阻断 → (可选)去背景框定 → 比例裁切 → 长边缩放 → 转码写盘。
+
+    target_ratios: 比例族数组，元素为 "auto" / "1:1" / "4:3" / "2:3"；"auto" 并入默认池(1:1+4:3族)。
+    crop_mode: "smart" 主体感知 / "center" 居中 / "none" 不裁切(仅缩放)。
+    返回 (ok, err, meta)。源图长边 < long_target 时阻断：ok=False、err 为阻断提示、meta=None。
+    """
+    if not HAS_CROP_COMPUTE:
+        return False, "规格化算法依赖 numpy 缺失（请安装 numpy），无法执行规格化导出", None
+    with report_pil_warnings(src_path):
+        try:
+            dst_path.parent.mkdir(parents=True, exist_ok=True)
+            with Image.open(src_path) as im:
+                try:
+                    im = ImageOps.exif_transpose(im)
+                except Exception:
+                    pass
+                W, H = im.size
+                if max(W, H) < long_target:
+                    return False, (
+                        f"源图长边不足: 长边 {max(W, H)}px < 目标 {long_target}px，导出被阻断"
+                        f"（官方只发布高清图，请更换更高分辨率素材）"
+                    ), None
+
+                # 1. (可选) 去背景内容感知框定
+                if trim_background:
+                    content_box = compute_content_box(im)
+                else:
+                    content_box = (0, 0, W, H)
+                cw = max(1, content_box[2] - content_box[0])
+                ch = max(1, content_box[3] - content_box[1])
+                content_aspect = cw / ch
+
+                # 2. 比例自适应选档（按最小损失，content_box 口径；横竖朝向由镜像自适应）
+                pool = build_ratio_pool(expand_ratio_families(list(target_ratios)))
+                target, label = select_aspect(content_aspect, ratio_pool=pool)
+
+                # 3. 裁窗定位
+                if crop_mode == "smart":
+                    crop_box = smart_aspect_crop_box(im, content_box, target)
+                    mode = "smart"
+                elif crop_mode == "center":
+                    crop_box = aspect_crop_box(content_box, target)
+                    mode = "center"
+                else:  # none
+                    crop_box = (0, 0, W, H)
+                    mode = "none"
+
+                # 4. 长边缩放（只缩小不放大）
+                out = resize_long(im.crop(crop_box), long_target)
+
+                # 5. 转码写盘（与 convert_image 同口径）
+                target_fmt = fmt.lower()
+                if target_fmt == "webp":
+                    if out.mode not in ("RGB", "RGBA"):
+                        out = out.convert("RGB")
+                    out.save(dst_path, "WEBP", quality=quality, method=6)
+                elif target_fmt in ("jpg", "jpeg"):
+                    if out.mode == "RGBA":
+                        bg = Image.new("RGB", out.size, (255, 255, 255))
+                        bg.paste(out, mask=out.split()[3])
+                        out = bg
+                    elif out.mode != "RGB":
+                        out = out.convert("RGB")
+                    out.save(dst_path, "JPEG", quality=quality, optimize=True)
+                elif target_fmt == "png":
+                    out.save(dst_path, "PNG", optimize=True)
+                else:
+                    return False, f"不支持的规格化输出格式: {fmt}", None
+
+                ow, oh = out.size
+                meta = {
+                    "ratio_family": "/".join(sorted({str(r).strip() for r in (target_ratios or ())})) or "auto",
+                    "ratio": label,
+                    "mode": mode,
+                    "orig_size": [W, H],
+                    "content_box": list(content_box),
+                    "crop_box": list(crop_box),
+                    "out_size": [ow, oh],
+                    "long_target": long_target,
+                }
+                return True, None, meta
+        except Exception as e:
+            return False, str(e), None
+
+
 def make_rename(
     original_name: str,
     idx: int,
@@ -258,25 +385,43 @@ def sha256_file(p: Path | str) -> str:
 
 
 def _convert_one_parallel(job: dict) -> dict:
-    """进程池 worker：执行单张转码并按需返回源/目标哈希。
+    """进程池 worker：执行单张转码（或规格化转码）并按需返回源/目标哈希。
 
     job: {"src": str, "dst": str, "fmt": str, "quality": int,
-          "need_src_hash": bool, "need_dst_hash": bool}
+          "need_src_hash": bool, "need_dst_hash": bool,
+          "normalize": optional {target_ratios, long_target, crop_mode, trim_background}}
+    携带 "normalize" 时走规格化（比例裁切+长边缩放）；否则退化为现有 convert_image。
     返回: {"ok": bool, "err": str | None, "src_hash": str, "dst_hash": str,
-           "dst_size": int}
+           "dst_size": int, "normalize": dict|None}
     """
     src = Path(job["src"])
     dst = Path(job["dst"])
     fmt = job.get("fmt", "original")
     quality = int(job.get("quality", 70))
-    ok, err = convert_image(src, dst, fmt, quality=quality)
-    return {
+    normalize = job.get("normalize") or None
+    meta = None
+    if normalize and fmt.lower() != "original":
+        ok, err, meta = normalize_export_image(
+            src,
+            dst,
+            fmt=fmt,
+            quality=quality,
+            target_ratios=tuple(normalize.get("target_ratios") or ("auto",)),
+            long_target=int(normalize.get("long_target") or DEFAULT_LONG_TARGET),
+            crop_mode=str(normalize.get("crop_mode") or "smart"),
+            trim_background=bool(normalize.get("trim_background", True)),
+        )
+    else:
+        ok, err = convert_image(src, dst, fmt, quality=quality)
+    res = {
         "ok": ok,
         "err": err,
         "src_hash": sha256_file(src) if job.get("need_src_hash") else "",
         "dst_hash": sha256_file(dst) if job.get("need_dst_hash") and dst.exists() else "",
         "dst_size": dst.stat().st_size if dst.exists() else 0,
+        "normalize": meta,
     }
+    return res
 
 
 def _default_export_workers() -> int:
@@ -318,7 +463,7 @@ def convert_images_parallel(
             results.append(r)
             if on_progress:
                 try:
-                    on_progress(done_i, total, t, bool(r.get("ok")))
+                    on_progress(done_i, total, t, bool(r.get("ok")), r)
                 except Exception:
                     pass
         return results
@@ -341,11 +486,12 @@ def convert_images_parallel(
                         "src_hash": "",
                         "dst_hash": "",
                         "dst_size": 0,
+                        "normalize": None,
                     }
                 done_count += 1
                 if on_progress:
                     try:
-                        on_progress(done_count, total, tasks[i], bool(results[i].get("ok")))
+                        on_progress(done_count, total, tasks[i], bool(results[i].get("ok")), results[i])
                     except Exception:
                         pass
             return results
@@ -357,7 +503,7 @@ def convert_images_parallel(
             results.append(r)
             if on_progress:
                 try:
-                    on_progress(done_i, total, t, bool(r.get("ok")))
+                    on_progress(done_i, total, t, bool(r.get("ok")), r)
                 except Exception:
                     pass
         return results

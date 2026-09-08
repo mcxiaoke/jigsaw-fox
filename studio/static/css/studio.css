@@ -1242,3 +1242,41 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .hb-fill { display: block; height: 100%; border-radius: 999px; background: #2563eb; }
 .hb-num { width: 36px; text-align: right; font-size: 12px; font-weight: 600; flex: none; color: #334155; }
 
+
+/* 规格化目标比例：auto 激活时给非自动项降透明度 */
+.opacity-aux {
+  opacity: 0.45;
+}
+
+/* 分辨率不足卡片（长边<2160，导出会规格化阻断）：置灰不可选 */
+.img-card.is-small-long {
+  opacity: 0.5;
+  filter: grayscale(0.35);
+  cursor: not-allowed;
+}
+.img-card.is-small-long .card-check {
+  cursor: not-allowed;
+}
+.card-small-long-badge {
+  position: absolute;
+  top: 6px;
+  right: 60px;
+  background: rgba(220, 38, 38, 0.92);
+  color: #fff;
+  font-size: 11px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  z-index: 3;
+  pointer-events: none;
+}
+
+/* 侧边栏伪分类（已导出 / 不合格）：非真实 tag，加视觉区分 */
+.tag-nav-item.pseudo {
+  background: rgba(241, 245, 249, 0.6);
+  border-left: 3px solid #cbd5e1;
+  margin-top: 2px;
+}
+.tag-nav-item.pseudo.active {
+  border-left-color: var(--primary);
+  background: #eff6ff;
+}

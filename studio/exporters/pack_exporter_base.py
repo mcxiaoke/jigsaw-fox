@@ -30,7 +30,14 @@ from studio.core.scanner import (
     sort_images,
 )
 from studio.core.workspace import StudioWorkspace
-from studio.exporters.base import BaseExporter, ExportResult, resolve_excluded, resolve_quality
+from studio.exporters.base import (
+    BaseExporter,
+    ExportResult,
+    assert_min_long,
+    resolve_excluded,
+    resolve_normalize,
+    resolve_quality,
+)
 from studio.exporters.manifest_manager import ManifestManager
 
 
@@ -106,6 +113,16 @@ class PackExporterBase(BaseExporter):
                 rel_p = p.relative_to(self.src_p).as_posix()
                 self.log(f"导出中止: 图片损坏或格式无效: {rel_p} ({err_msg})", "err")
                 raise ValueError(f"待导出图片中存在损坏或格式无效的文件: {rel_p} ({err_msg})")
+
+        # 2a. 规格化：长边 <2160 阻断（仅在规格化激活时生效，向后兼容旧调用）
+        normalize_spec = resolve_normalize(self.data)
+        if normalize_spec:
+            assert_min_long(images, self.log)
+            self.log(
+                f"规格化开启: 长边={normalize_spec['long_target']}px, 比例族={normalize_spec['target_ratios']}, "
+                f"裁切={normalize_spec['crop_mode']}, 去背景={'开' if normalize_spec['trim_background'] else '关'}",
+                "info",
+            )
 
         # 3. 排除已导出图片 (excludeExported)
         if self.data.get("excludeExported"):
@@ -201,6 +218,7 @@ class PackExporterBase(BaseExporter):
                     "quality": zip_quality,
                     "need_src_hash": False,
                     "need_dst_hash": False,
+                    **({"normalize": normalize_spec} if normalize_spec else {}),
                 })
             else:
                 zip_entries.append((p, None, arc_name))
@@ -249,10 +267,16 @@ class PackExporterBase(BaseExporter):
         exported_items: list[dict[str, Any]] = []
         now_str = dt.datetime.now(dt.timezone.utc).isoformat().replace("+00:00", "Z")
 
+        # 规格化元数据按源路径归档（zip 转码任务结果对齐 source 路径）
+        norm_map: dict[str, dict[str, Any]] = {}
+        for t, r in zip(zip_tasks, zip_results):
+            if r.get("normalize"):
+                norm_map[str(Path(t["src"]).resolve())] = r["normalize"]
+
         for idx, p in enumerate(images, start=1):
             arc_name = make_rename(p.name, idx, self.rename_rule, self.fmt)
             file_hash = compute_file_sha256(p)
-            exported_items.append({
+            entry: dict[str, Any] = {
                 "sourceHash": file_hash,
                 "sourcePath": p.relative_to(self.src_p).as_posix().replace("\\", "/"),
                 "sourceSize": p.stat().st_size if p.exists() else 0,
@@ -260,7 +284,11 @@ class PackExporterBase(BaseExporter):
                 "logicalId": f"{self.module}:{pack_id}:{p.name}",
                 "targetFile": f"{self.module}/packs/{zip_file_name}#{arc_name}",
                 "revision": rev,
-            })
+            }
+            norm = norm_map.get(str(p.resolve()))
+            if norm:
+                entry["normalize"] = norm
+            exported_items.append(entry)
 
         # 生成封面图并双重校验完整性
         ok_cov, err_cov = convert_image(images[0], cover_path, "webp", quality=zip_quality)
@@ -348,7 +376,7 @@ class PackExporterBase(BaseExporter):
         if self.is_trial:
             source_map: dict[str, Any] = {}
             for it in exported_items:
-                source_map[it["sourcePath"]] = {
+                entry: dict[str, Any] = {
                     "sourceHash": it["sourceHash"],
                     "sourceSize": it["sourceSize"],
                     "targetFile": it["targetFile"],
@@ -359,6 +387,9 @@ class PackExporterBase(BaseExporter):
                     "quality": zip_quality,
                     "rename": self.rename_rule,
                 }
+                if it.get("normalize"):
+                    entry["normalize"] = it["normalize"]
+                source_map[it["sourcePath"]] = entry
             self._write_trial_meta(source_map, exported_items, logs=[])
 
         # 10. 记录权威账本与导出流水 (仅正式导出)

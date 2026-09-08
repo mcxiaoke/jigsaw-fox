@@ -14,6 +14,9 @@ from pathlib import Path
 from typing import Any, Callable
 
 
+from studio.core.image_proc import DEFAULT_LONG_TARGET, image_long_side
+
+
 def resolve_quality(data: dict[str, Any], default: int = 70) -> int:
     """从导出参数中解析并夹取 WebP/JPEG 压缩质量 (1~100)。非法或缺失回退默认。"""
     try:
@@ -25,6 +28,49 @@ def resolve_quality(data: dict[str, Any], default: int = 70) -> int:
     if q > 100:
         return 100
     return q
+
+
+def resolve_normalize(data: dict[str, Any]) -> dict[str, Any] | None:
+    """从导出参数解析"规格化" spec（比例族 + 长边 + 裁切方式）。
+
+    返回 None 表示不规格化（走普通转码，向后兼容旧调用）。
+    显式 `normalize=False` 则始终关闭；否则一旦参数里出现 targetRatios/cropMode 即生效
+    （前端导出工作台第①步会下发）。长边 2160 为常量，不开放给 UI。
+    """
+    if data.get("normalize") is False:
+        return None
+    if "targetRatios" not in data and "cropMode" not in data:
+        return None
+    ratios = data.get("targetRatios")
+    crop_mode = (data.get("cropMode") or "smart").strip().lower()
+    if crop_mode not in ("smart", "center", "none"):
+        crop_mode = "smart"
+    return {
+        "target_ratios": ratios if isinstance(ratios, list) and ratios else ["auto"],
+        "long_target": int(data.get("longTarget") or DEFAULT_LONG_TARGET),
+        "crop_mode": crop_mode,
+        "trim_background": bool(data.get("trimBackground", True)),
+    }
+
+
+def assert_min_long(
+    images: list,
+    log_fn: Callable[[str, str], None],
+    long_target: int = DEFAULT_LONG_TARGET,
+    context: str = "导出",
+) -> None:
+    """导出前阻断校验：任一源图长边 < long_target 都直接中止（不放大、不降级放行）。"""
+    for p in images:
+        L = image_long_side(p)
+        if L is None:
+            continue
+        if L < long_target:
+            msg = (
+                f"{context}被阻断: 源图长边 {L}px < 目标 {long_target}px（{getattr(p, 'name', p)}）。"
+                f"官方只发布高清图，请更换更高分辨率素材。"
+            )
+            log_fn(msg, "err")
+            raise ValueError(msg)
 
 
 def resolve_excluded(data: dict[str, Any]) -> set[str]:
@@ -89,10 +135,12 @@ class BaseExporter(ABC):
         self._build_root: Path | None = None
         self._trial_ts: str = ""
 
-    def report_progress(self, done: int, total: int, current: dict | None = None, ok: bool = True) -> None:
+    def report_progress(self, done: int, total: int, current: dict | None = None,
+                        ok: bool = True, result: dict | None = None) -> None:
         """上报单张图片转码进度（并行池每完成一张调用一次）。
 
         current: 刚完成任务的信息 dict，含 src / dst（zip 场景额外用 label 提供归档展示名）。
+        result: 该任务执行结果的 dict（可含 normalize 规格化元数据）。
         无 progress_fn 订阅者时仍会输出逐张处理日志（self.log），保证导出面板实时滚动；
         本方法内部任何异常一律吞掉，绝不影响导出主流程。
         """
@@ -103,10 +151,16 @@ class BaseExporter(ABC):
                 disp_name = str(current.get("label") or current.get("dst") or "")
                 dst_name = _Path(disp_name).name if disp_name else ""
                 arrow = " ==> " if dst_name else ""
-                if ok:
-                    self.log(f"图片 {src_name}{arrow}{dst_name} ({done}/{total})", "info")
+                norm = (result or {}).get("normalize") if result else None
+                if norm:
+                    ow, oh = norm.get("out_size") or (0, 0)
+                    norm_tag = f" [规格化 ratio={norm.get('ratio')} {ow}x{oh}]"
                 else:
-                    self.log(f"图片 {src_name}{arrow}{dst_name} 转码失败", "warn")
+                    norm_tag = ""
+                if ok:
+                    self.log(f"图片 {src_name}{arrow}{dst_name}{norm_tag} ({done}/{total})", "info")
+                else:
+                    self.log(f"图片 {src_name}{arrow}{dst_name}{norm_tag} 转码失败", "warn")
         except Exception:
             pass
         if self.progress_fn is None:

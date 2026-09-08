@@ -175,6 +175,9 @@ const app = createApp({
       exportScope: "all", // 'all' | 'selected'
       sortBy: "name_asc",
       quality: 70,
+      // 规格化（长边固定 1920，只缩小）：目标比例族数组 + 裁切方式
+      targetRatios: ["auto"], // 'auto'(1:1+4:3) 或手动子集 '1:1' / '4:3' / '2:3'
+      cropMode: "smart", // 'smart' | 'center' | 'none'
       // 默认安全：试导出 (试导出=trial:true，不写账本/ID/清单/部署；正式导出需二次确认)
       trial: true,
     });
@@ -282,6 +285,23 @@ const app = createApp({
         exported: !!r.exported,
       }));
 
+    // 规格化目标比例族选择（多选，互斥于"自动"预设自动池 1:1+4:3）
+    const hasRatio = (r) => (exportConfig.value.targetRatios || []).includes(r);
+    const toggleRatio = (r) => {
+      const arr = exportConfig.value.targetRatios || [];
+      if (r === "auto") {
+        exportConfig.value.targetRatios = ["auto"];
+        return;
+      }
+      // 显式选择时清掉"自动"预设
+      const next = arr.filter((x) => x !== "auto");
+      const i = next.indexOf(r);
+      if (i >= 0) next.splice(i, 1);
+      else next.push(r);
+      // 无任何显式选择时回退"自动"
+      exportConfig.value.targetRatios = next.length ? next : ["auto"];
+    };
+
     // 构建预检 payload (与最终导出保持一致)
     const buildPreviewPayload = () => {
       const scopeSelected = exportConfig.value.exportScope === "selected" && selectedSet.value.size > 0;
@@ -299,6 +319,9 @@ const app = createApp({
         sortBy: exportConfig.value.sortBy,
         format: exportConfig.value.format,
         quality: exportConfig.value.quality,
+        // 规格化（长边固定 1920）
+        targetRatios: exportConfig.value.targetRatios || ["auto"],
+        cropMode: exportConfig.value.cropMode || "smart",
         excludeExported: Boolean(exportConfig.value.excludeExported),
         selectedPaths,
         manualOrder,
@@ -396,6 +419,15 @@ const app = createApp({
       return Math.max(0, records.value.length - exportedCount.value);
     });
 
+    // 不合格（像素不足 / 分辨率不足）总数：长边 <1920，导出会被规格化阻断
+    const smallLongCount = computed(() => {
+      let cnt = 0;
+      for (const r of records.value) {
+        if (r.too_small_long) cnt++;
+      }
+      return cnt;
+    });
+
     // 重复图片统计
     const duplicateRecords = computed(() => records.value.filter((r) => r.is_duplicate));
     const duplicateCount = computed(() => duplicateRecords.value.length);
@@ -412,7 +444,12 @@ const app = createApp({
       let list = records.value;
 
       // 1. Tag 过滤 (Others 桶 = tags 里含兜底标签的记录，与真实标签完全同一规则)
-      if (activeTag.value) {
+      // 侧边栏伪分类："已导出"(__exported) / "不合格"(__small_long)。仅在当前选中时为特例，否则走正常 tag/搜索过滤
+      if (activeTag.value === "__exported") {
+        list = list.filter((r) => !!r.exported);
+      } else if (activeTag.value === "__small_long") {
+        list = list.filter((r) => !!r.too_small_long);
+      } else if (activeTag.value) {
         if (activeTag.value.toLowerCase() === "others") {
           list = list.filter((r) => isOthers(r));
         } else {
@@ -653,7 +690,13 @@ const app = createApp({
     // 选择控制
     const isSelected = (item) => selectedSet.value.has(item.path);
 
+    // 不可选判定：分辨率不足(长边<1920，导出会被规格化阻断) 或 已导出(导出面板会拦截)。
+    // 凡命中此判定的图在选图阶段就置灰，禁止通过任何选择入口(点击/全选/反选/待复核/未导出)入选。
+    const isUnselectable = (item) => !!item.too_small_long || !!item.exported;
+
     const toggleSelect = (item) => {
+      // 不可选：分辨率不足或已导出的图直接放弃
+      if (isUnselectable(item)) return;
       const next = new Set(selectedSet.value);
       if (next.has(item.path)) {
         next.delete(item.path);
@@ -666,6 +709,7 @@ const app = createApp({
     const selectAllFiltered = () => {
       const next = new Set(selectedSet.value);
       for (const r of filteredRecords.value) {
+        if (isUnselectable(r)) continue; // 跳过分辨率不足/已导出
         next.add(r.path);
       }
       selectedSet.value = next;
@@ -678,6 +722,7 @@ const app = createApp({
     const invertSelection = () => {
       const next = new Set();
       for (const r of filteredRecords.value) {
+        if (isUnselectable(r)) continue; // 跳过分辨率不足/已导出
         if (!selectedSet.value.has(r.path)) {
           next.add(r.path);
         }
@@ -688,6 +733,7 @@ const app = createApp({
     const selectUnreviewedOnly = () => {
       const next = new Set();
       for (const r of filteredRecords.value) {
+        if (isUnselectable(r)) continue; // 跳过分辨率不足/已导出
         if (r.review_required || isOthers(r)) {
           next.add(r.path);
         }
@@ -699,6 +745,7 @@ const app = createApp({
     const selectUnexportedOnly = () => {
       const next = new Set();
       for (const r of filteredRecords.value) {
+        if (isUnselectable(r)) continue; // 跳过分辨率不足(已导出天然 >= 已导出分支)
         if (!r.exported) {
           next.add(r.path);
         }
@@ -897,8 +944,8 @@ const app = createApp({
       exportStep.value = 1;
       exportExcluded.value = new Set(); // 每次新导出会话清空上一次的剔除记录
       exportError.value = "";
-      // 若已在浏览页勾选图片，默认只导出选中的那几张，而非全部
-      exportConfig.value.exportScope = selectedSet.value.size > 0 ? "selected" : "all";
+      // 仅支持按勾选导出（"全部"已废弃，防止混入未勾选/分辨率不足/已导出的图）
+      exportConfig.value.exportScope = "selected";
       lastExportIsTrial.value = false;
       lastTrialDir.value = "";
       exportModalOpen.value = true;
@@ -1174,6 +1221,12 @@ const app = createApp({
         showToast("导出中止：未填写输出目录");
         return;
       }
+      // 仅支持按勾选导出：必须先在素材库勾选要导出的图片
+      if (selectedSet.value.size === 0) {
+        exportError.value = "未勾选任何图片：请在素材库中勾选要导出的图片后再导出（分辨率不足/已导出的图已置灰不可选）。";
+        showToast("导出中止：未勾选任何图片");
+        return;
+      }
       if ((exportType.value === "event" || exportType.value === "collection") && !exportConfig.value.title.trim()) {
         exportError.value = "缺少英文标题：Event / Collection 导出前请填写英文标题 (Title)。";
         showToast("导出中止：请填写英文标题 (Title)");
@@ -1279,6 +1332,8 @@ const app = createApp({
         format: exportConfig.value.format,
         rename: exportConfig.value.rename,
         quality: exportConfig.value.quality,
+        targetRatios: exportConfig.value.targetRatios || ["auto"],
+        cropMode: exportConfig.value.cropMode || "smart",
         sortBy: exportConfig.value.sortBy,
         startOrder: parseInt(exportConfig.value.startOrder || 101, 10),
         version: exportConfig.value.version,
@@ -1501,6 +1556,7 @@ const app = createApp({
       unreviewedCount,
       exportedCount,
       unexportedCount,
+      smallLongCount,
       filteredRecords,
       selectedCount,
       isAllFilteredSelected,
@@ -1585,6 +1641,9 @@ const app = createApp({
       scoredCount,
       evalSingleQuality,
       triggerBatchQuality,
+      hasRatio,
+      toggleRatio,
+      isUnselectable,
     };
   },
 });

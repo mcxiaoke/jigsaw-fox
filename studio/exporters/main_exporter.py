@@ -27,7 +27,14 @@ from studio.core.scanner import (
 )
 from studio.core.tags_manager import load_tags_file, normalize_records
 from studio.core.workspace import StudioWorkspace
-from studio.exporters.base import BaseExporter, ExportResult, resolve_excluded, resolve_quality
+from studio.exporters.base import (
+    BaseExporter,
+    ExportResult,
+    assert_min_long,
+    resolve_excluded,
+    resolve_normalize,
+    resolve_quality,
+)
 from studio.exporters.manifest_manager import ManifestManager
 from studio.taxonomy import OTHERS_TAG, guess_tags_from_path, normalize_token
 
@@ -120,6 +127,15 @@ class MainExporter(BaseExporter):
             if not valid:
                 self.log(f"导出中止: 待导出图片损坏或无效: {p.name} ({err_msg})", "err")
                 raise ValueError(f"待导出图片损坏或无效: {p.name} ({err_msg})")
+        # 0a. 规格化：长边 <2160 阻断（仅在规格化激活时生效，向后兼容旧调用）
+        normalize_spec = resolve_normalize(self.data)
+        if normalize_spec:
+            assert_min_long(images, self.log)
+            self.log(
+                f"规格化开启: 长边={normalize_spec['long_target']}px, 比例族={normalize_spec['target_ratios']}, "
+                f"裁切={normalize_spec['crop_mode']}, 去背景={'开' if normalize_spec['trim_background'] else '关'}",
+                "info",
+            )
 
         # 1. 重复图片校验拦截：严禁同批次包含重复素材 (防止主线关卡重复)，检测到重复直接报错中止！
         seen_hashes: dict[str, list[str]] = {}
@@ -265,6 +281,7 @@ class MainExporter(BaseExporter):
             "quality": img_quality,
             "need_src_hash": not pl["src_hash"],
             "need_dst_hash": True,
+            **({"normalize": normalize_spec} if normalize_spec else {}),
         } for pl in plans]
         results = convert_images_parallel(tasks, on_progress=self.report_progress)
         if len(results) != len(plans):
@@ -303,6 +320,7 @@ class MainExporter(BaseExporter):
                 "targetHash": img_hash,
                 "revision": pl["rev"],
                 "supersedes": pl["supersedes_id"],
+                **({"normalize": res.get("normalize")} if res.get("normalize") else {}),
             })
 
         self.log(f"图片处理完成: {converted_count}/{len(images)}" + (f", {len(errors)} 失败" if errors else ""), "ok")
@@ -387,7 +405,7 @@ class MainExporter(BaseExporter):
         if self.is_trial:
             source_map: dict[str, Any] = {}
             for pl, it in zip(plans, exported_items):
-                source_map[pl["rel"]] = {
+                entry: dict[str, Any] = {
                     "sourceHash": it["sourceHash"],
                     "sourceSize": it["sourceSize"],
                     "targetFile": it["targetFile"],
@@ -399,6 +417,9 @@ class MainExporter(BaseExporter):
                     "quality": resolve_quality(self.data),
                     "rename": self.rename_rule,
                 }
+                if it.get("normalize"):
+                    entry["normalize"] = it["normalize"]
+                source_map[pl["rel"]] = entry
             self._write_trial_meta(source_map, exported_items, logs=[])
 
         # 10. 记录源侧权威账本与导出流水 (仅正式导出)

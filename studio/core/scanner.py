@@ -21,7 +21,7 @@ try:
 except ImportError:
     HAS_PIL = False
 
-from studio.core.image_proc import report_pil_warnings
+from studio.core.image_proc import DEFAULT_LONG_TARGET, report_pil_warnings
 
 logger = logging.getLogger(__name__)
 
@@ -183,6 +183,7 @@ def get_image_info(p: Path, root: Path, file_hash: str | None = None) -> dict[st
             except Exception:
                 file_hash = ""
 
+        long_side = max(width, height)
         return {
             "path": rel,
             "file": p.name,
@@ -191,6 +192,9 @@ def get_image_info(p: Path, root: Path, file_hash: str | None = None) -> dict[st
             "hash": file_hash,
             "width": width,
             "height": height,
+            "long_side": long_side,
+            # 导出规格化要求长边 >=2160，低于此记 too_small_long warning（供运营换图）
+            "too_small_long": width > 0 and long_side < DEFAULT_LONG_TARGET,
             "format": fmt,
             "mode": mode,
             "aspect_ratio": aspect_ratio,
@@ -263,6 +267,7 @@ def scan_image_infos(
                     orientation = "landscape"
                 elif c_height > c_width:
                     orientation = "portrait"
+                c_long = max(c_width, c_height)
                 return {
                     "path": rel,
                     "file": p.name,
@@ -271,6 +276,8 @@ def scan_image_infos(
                     "hash": file_hash,
                     "width": c_width,
                     "height": c_height,
+                    "long_side": c_long,
+                    "too_small_long": c_long < DEFAULT_LONG_TARGET,
                     "format": c_format or p.suffix.lstrip(".").upper(),
                     "mode": "RGB",
                     "aspect_ratio": aspect_ratio,

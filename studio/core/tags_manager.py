@@ -198,7 +198,8 @@ def merge_scanned_images(
             matched_rec = orphan_by_hash.pop(file_hash)
             matched_rec["path"] = rel
             matched_rec["file"] = Path(rel).name
-            for k in ("width", "height", "format", "size", "mtime", "aspect_ratio", "orientation"):
+            for k in ("width", "height", "format", "size", "mtime", "aspect_ratio", "orientation",
+                      "long_side", "too_small_long"):
                 if info.get(k):
                     matched_rec[k] = info.get(k)
             matched_rec["hash"] = file_hash
@@ -215,7 +216,8 @@ def merge_scanned_images(
                 info = image_infos[rel]
                 if not r.get("hash") and info.get("hash"):
                     r["hash"] = info["hash"]
-                for k in ("width", "height", "format", "size", "mtime", "aspect_ratio", "orientation"):
+                for k in ("width", "height", "format", "size", "mtime", "aspect_ratio", "orientation",
+                          "long_side", "too_small_long"):
                     if k not in r or not r[k]:
                         r[k] = info.get(k)
 
@@ -264,6 +266,8 @@ def merge_scanned_images(
                 "mtime": info.get("mtime", 0),
                 "aspect_ratio": info.get("aspect_ratio", 1.0),
                 "orientation": info.get("orientation", "square"),
+                "long_side": info.get("long_side", 0),
+                "too_small_long": bool(info.get("too_small_long", False)),
             })
         else:
             guessed = guess_tags_from_path(p, root=root)
@@ -290,6 +294,8 @@ def merge_scanned_images(
                 "mtime": info.get("mtime", 0),
                 "aspect_ratio": info.get("aspect_ratio", 1.0),
                 "orientation": info.get("orientation", "square"),
+                "long_side": info.get("long_side", 0),
+                "too_small_long": bool(info.get("too_small_long", False)),
             }
             active_records.append(new_rec)
             if file_hash and has_real and file_hash not in hash_donor_map:
