@@ -897,6 +897,18 @@
             </span>
           </div>
           <button class="btn xs" style="color:#fff; border:1px solid #334155; background:#1e293b;" @click="enterCropMode" v-if="!cropMode && currentViewerItem" title="手动画裁切框，导出时优先使用">✂ 画裁切框</button>
+          <button
+            class="btn xs"
+            v-if="!cropMode && currentViewerItem"
+            :disabled="!canDeleteViewerItem || isDeletingImage"
+            :title="canDeleteViewerItem ? '删除该图片 (移动到 Deleted 目录)' : '已导出的图片不能删除'"
+            style="color:#fff; border:1px solid #b91c1c; background:#dc2626;"
+            :style="{ opacity: canDeleteViewerItem ? 1 : 0.45, cursor: canDeleteViewerItem ? 'pointer' : 'not-allowed' }"
+            @click="requestDeleteViewerItem"
+          >
+            <span v-if="isDeletingImage">⏳ 删除中...</span>
+            <span v-else>🗑 删除</span>
+          </button>
           <button class="modal-close" style="color: #fff;" @click="closeViewer">×</button>
         </div>
 
@@ -1040,6 +1052,37 @@
               <span v-else>✔ 标记待复核</span>
             </button>
           </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 删除素材二次确认 AlertDialog -->
+    <div v-if="deleteConfirmOpen" class="modal-mask delete-confirm-modal" @click.self="cancelDeleteViewerItem">
+      <div class="modal-dialog" style="max-width: 520px;">
+        <div class="modal-header" style="background:#fef2f2; border-bottom:1px solid #fecaca;">
+          <h3 style="color:#b91c1c;">🗑 确认删除这张图片？</h3>
+          <button class="modal-close" @click="cancelDeleteViewerItem">×</button>
+        </div>
+        <div class="modal-body" style="padding: 16px 20px;">
+          <div class="delete-confirm-file">
+            <div><b>{{ currentViewerItem?.file }}</b></div>
+            <div style="margin-top:4px; color:#64748b;">{{ currentViewerItem?.path }}</div>
+          </div>
+          <p class="formal-confirm-title" style="margin-bottom:8px;">删除后将产生以下结果：</p>
+          <ul class="formal-confirm-list">
+            <li>文件被移动到源目录下的 <code>Deleted/</code> 回收目录（<b>不是彻底删除</b>，可手工找回）。</li>
+            <li>该图片会从当前列表与缓存数据库中移除，重新扫描不会再出现。</li>
+            <li>该图片的质检评分缓存与手动裁切框会一并失效清理。</li>
+          </ul>
+          <p class="delete-confirm-warn">⚠️ 已导出的图片不可删除；若确实需要，请先处理导出账本记录。</p>
+        </div>
+        <div class="modal-footer">
+          <button class="btn" @click="cancelDeleteViewerItem" :disabled="isDeletingImage">取消</button>
+          <button class="btn" style="background:#dc2626; border-color:#b91c1c; color:#fff;"
+                  :disabled="isDeletingImage" @click="confirmDeleteViewerItem">
+            <span v-if="isDeletingImage">⏳ 删除中...</span>
+            <span v-else>确认删除</span>
+          </button>
         </div>
       </div>
     </div>

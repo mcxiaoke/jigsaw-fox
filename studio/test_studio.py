@@ -1366,5 +1366,126 @@ class TestTrialExportNonPollution(unittest.TestCase):
         self.assertTrue((self.out_dir / "main" / "index.json").exists())
 
 
+class TestImageDelete(unittest.TestCase):
+    """测试单图删除: 软删除至 <SourceDir>/Deleted/ + 数据侧同步 + 已导出保护"""
+
+    def setUp(self):
+        import threading
+
+        from studio.core.cache_db import CacheDB
+        from studio.server import StudioRequestHandler, StudioServer
+
+        self.test_dir = Path(tempfile.mkdtemp(prefix="studio_delete_test_"))
+        (self.test_dir / "sub").mkdir(parents=True, exist_ok=True)
+        (self.test_dir / "sub" / "a.jpg").write_bytes(b"AAAA")
+        (self.test_dir / "sub" / "b.jpg").write_bytes(b"BBBB")
+        (self.test_dir / "c.jpg").write_bytes(b"CCCC")
+
+        self.h_a = compute_file_sha256(self.test_dir / "sub" / "a.jpg")
+        self.h_b = compute_file_sha256(self.test_dir / "sub" / "b.jpg")
+
+        with CacheDB(self.test_dir) as db:
+            db.upsert_files(
+                [
+                    {"path": "sub/a.jpg", "mtime": 1, "size": 4, "hash": self.h_a,
+                     "width": 1, "height": 1, "format": "JPG"},
+                    {"path": "sub/b.jpg", "mtime": 1, "size": 4, "hash": self.h_b,
+                     "width": 1, "height": 1, "format": "JPG"},
+                    {"path": "c.jpg", "mtime": 1, "size": 4,
+                     "hash": compute_file_sha256(self.test_dir / "c.jpg"),
+                     "width": 1, "height": 1, "format": "JPG"},
+                ]
+            )
+            db.save_quality(self.h_a, {"score": 88, "grade": "A", "status": "ok", "details": {}})
+            db.set_user_override(self.h_a, crop_box=(0.1, 0.1, 0.9, 0.9), crop_ratio="1:1")
+
+        # 标记 b.jpg 为已导出 (legacy exported.json 账本)
+        record_exports(
+            self.test_dir,
+            [{"hash": self.h_b, "path": "sub/b.jpg", "export_type": "main", "order": 1}],
+        )
+
+        self.httpd = StudioServer(("127.0.0.1", 0), StudioRequestHandler)
+        self.port = self.httpd.server_address[1]
+        self.thread = threading.Thread(target=self.httpd.serve_forever, daemon=True)
+        self.thread.start()
+
+    def tearDown(self):
+        self.httpd.shutdown()
+        self.httpd.server_close()
+        shutil.rmtree(self.test_dir, ignore_errors=True)
+
+    def _post_delete(self, payload):
+        import json
+        import urllib.error
+        import urllib.request
+
+        req = urllib.request.Request(
+            f"http://127.0.0.1:{self.port}/api/delete",
+            data=json.dumps(payload).encode("utf-8"),
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        try:
+            with urllib.request.urlopen(req, timeout=15) as resp:
+                return resp.status, json.loads(resp.read().decode("utf-8"))
+        except urllib.error.HTTPError as e:
+            return e.code, json.loads(e.read().decode("utf-8"))
+
+    def test_delete_moves_to_deleted_dir_and_purges_db(self):
+        from studio.core.cache_db import CacheDB
+
+        status, res = self._post_delete(
+            {"dir": str(self.test_dir), "path": "sub/a.jpg", "hash": self.h_a}
+        )
+        self.assertEqual(status, 200)
+        self.assertTrue(res.get("ok"))
+        self.assertEqual(res.get("deletedTo"), "Deleted/sub/a.jpg")
+
+        # 文件被移动而非彻底删除，且保留原子目录结构
+        self.assertFalse((self.test_dir / "sub" / "a.jpg").exists())
+        self.assertTrue((self.test_dir / "Deleted" / "sub" / "a.jpg").is_file())
+
+        # 数据库条目与随之失去引用的附属数据被清理
+        with CacheDB(self.test_dir) as db:
+            cached = db.load_file_cache()
+            self.assertNotIn("sub/a.jpg", cached)
+            self.assertIn("sub/b.jpg", cached)
+            self.assertIn("c.jpg", cached)
+            self.assertIsNone(db.get_quality(self.h_a))
+            self.assertIsNone(db.get_user_override(self.h_a))
+
+    def test_delete_rejects_exported_image(self):
+        status, res = self._post_delete(
+            {"dir": str(self.test_dir), "path": "sub/b.jpg", "hash": self.h_b}
+        )
+        self.assertEqual(status, 409)
+        self.assertIn("已导出", res.get("error") or "")
+        # 文件必须仍在原处
+        self.assertTrue((self.test_dir / "sub" / "b.jpg").is_file())
+
+    def test_delete_rejects_outside_root_and_missing_file(self):
+        outside = self.test_dir.parent / f"{self.test_dir.name}_outside.jpg"
+        outside.write_bytes(b"OUT")
+        try:
+            status, _ = self._post_delete({"dir": str(self.test_dir), "path": str(outside)})
+            self.assertEqual(status, 400)
+            self.assertTrue(outside.is_file())
+        finally:
+            outside.unlink(missing_ok=True)
+
+        status, _ = self._post_delete({"dir": str(self.test_dir), "path": "nope.jpg"})
+        self.assertEqual(status, 404)
+
+    def test_delete_never_overwrites_existing_file_in_recycle_bin(self):
+        (self.test_dir / "Deleted").mkdir(parents=True, exist_ok=True)
+        (self.test_dir / "Deleted" / "c.jpg").write_bytes(b"OLD")
+
+        status, res = self._post_delete({"dir": str(self.test_dir), "path": "c.jpg"})
+        self.assertEqual(status, 200)
+        self.assertEqual((self.test_dir / "Deleted" / "c.jpg").read_bytes(), b"OLD")
+        self.assertTrue(str(res.get("deletedTo", "")).startswith("Deleted/c_"))
+
+
 if __name__ == "__main__":
     unittest.main()

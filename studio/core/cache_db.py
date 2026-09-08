@@ -189,6 +189,87 @@ class CacheDB:
                     )
             return len(to_delete)
 
+    def delete_files(self, paths: Iterable[str]) -> list[str]:
+        """
+        按相对路径删除文件缓存条目 (素材被移入 Deleted/ 后的数据侧同步)。
+
+        返回被删除条目所关联的内容 hash 列表 (小写、已去重)，
+        供调用方进一步判断是否要清理失去引用的用户覆盖记录。
+        """
+        targets = [p.replace("\\", "/") for p in paths if p]
+        if not targets:
+            return []
+
+        removed_hashes: list[str] = []
+        with self._lock:
+            conn = self._get_conn()
+            with conn:
+                # 分批执行，防止 SQL 参数数量超限
+                for i in range(0, len(targets), 500):
+                    batch = targets[i : i + 500]
+                    placeholders = ",".join("?" for _ in batch)
+                    cursor = conn.execute(
+                        f"SELECT hash FROM file_cache WHERE path IN ({placeholders})",
+                        batch,
+                    )
+                    for row in cursor:
+                        h = (row["hash"] or "").strip().lower()
+                        if h:
+                            removed_hashes.append(h)
+                    conn.execute(
+                        f"DELETE FROM file_cache WHERE path IN ({placeholders})",
+                        batch,
+                    )
+        return list(dict.fromkeys(removed_hashes))
+
+    def cleanup_orphan_hash_data(self, hashes: Iterable[str]) -> dict[str, int]:
+        """
+        清理指定 hash 的按内容寻址附属数据（用户覆盖记录 + 质检评分缓存）。
+
+        仅当该 hash 在 file_cache 中已无任何文件引用时才删除，
+        避免误删同内容副本（重复图）仍在使用中的覆盖数据或评分。
+
+        返回: {"overrides": n, "qualities": n}
+        """
+        clean = list({(h or "").strip().lower() for h in hashes if h})
+        result = {"overrides": 0, "qualities": 0}
+        if not clean:
+            return result
+
+        with self._lock:
+            conn = self._get_conn()
+            with conn:
+                for i in range(0, len(clean), 500):
+                    batch = clean[i : i + 500]
+                    placeholders = ",".join("?" for _ in batch)
+                    rows = conn.execute(
+                        f"SELECT hash FROM user_overrides WHERE hash IN ({placeholders})",
+                        batch,
+                    ).fetchall()
+                    rows += conn.execute(
+                        f"SELECT hash FROM quality_cache WHERE hash IN ({placeholders})",
+                        batch,
+                    ).fetchall()
+                    for row in rows:
+                        h = (row["hash"] or "").strip().lower()
+                        if not h:
+                            continue
+                        still_used = conn.execute(
+                            "SELECT 1 FROM file_cache WHERE hash = ? LIMIT 1", (h,)
+                        ).fetchone()
+                        if still_used:
+                            continue
+                        c1 = conn.execute(
+                            "DELETE FROM user_overrides WHERE hash = ?", (h,)
+                        )
+                        result["overrides"] += 1 if c1.rowcount else 0
+                        c2 = conn.execute(
+                            "DELETE FROM quality_cache WHERE hash = ?", (h,)
+                        )
+                        if c2.rowcount:
+                            result["qualities"] += 1
+        return result
+
     def get_qualities(self, hashes: list[str]) -> dict[str, dict[str, Any]]:
         """
         根据内容 Hash 列表批量查询质检评分结果。

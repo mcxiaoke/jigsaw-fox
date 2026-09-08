@@ -6,6 +6,7 @@ import {
   batchEvaluateQuality,
   cancelQualityJob,
   checkHealth,
+  deleteImage,
   executeExport,
   fetchJobStatus,
   fetchManualCrops,
@@ -1124,6 +1125,14 @@ const app = createApp({
     // -----------------------------------------------------------------------
     // 大图查看器 (Viewer) 与单张快捷打标
     // -----------------------------------------------------------------------
+    // 删除素材: 软删除至 <SourceDir>/Deleted/ (服务端同侧拦截已导出图片)
+    const deleteConfirmOpen = ref(false);
+    const isDeletingImage = ref(false);
+
+    const canDeleteViewerItem = computed(
+      () => !!currentViewerItem.value && !currentViewerItem.value.exported
+    );
+
     const toggleViewerTag = (tagId) => {
       if (!currentViewerItem.value) return;
       const item = currentViewerItem.value;
@@ -1146,6 +1155,77 @@ const app = createApp({
       if (!currentViewerItem.value) return;
       currentViewerItem.value.review_required = !currentViewerItem.value.review_required;
     };
+
+    // -----------------------------------------------------------------------
+    // 删除素材 (二次确认 -> 移动至 Deleted/ -> 从列表与数据库移除)
+    // -----------------------------------------------------------------------
+    const requestDeleteViewerItem = () => {
+      const item = currentViewerItem.value;
+      if (!item || isDeletingImage.value) return;
+      if (item.exported) {
+        showToast("已导出的图片不能删除");
+        return;
+      }
+      deleteConfirmOpen.value = true;
+    };
+
+    const cancelDeleteViewerItem = () => {
+      if (isDeletingImage.value) return;
+      deleteConfirmOpen.value = false;
+    };
+
+    const confirmDeleteViewerItem = async () => {
+      const item = currentViewerItem.value;
+      if (!item || isDeletingImage.value) return;
+      const dir = srcDir.value.trim();
+      if (!dir) {
+        showToast("缺少源目录配置，无法删除");
+        return;
+      }
+      if (item.exported) {
+        showToast("已导出的图片不能删除");
+        deleteConfirmOpen.value = false;
+        return;
+      }
+      // 若在裁切模式中删除，先退出裁切避免 Cropper 实例残留
+      if (cropMode.value) exitCropMode(false);
+
+      isDeletingImage.value = true;
+      const removedPath = item.path;
+      try {
+        const res = await deleteImage(dir, removedPath, item.hash || "");
+        // 1) 从前端数据列表移除
+        records.value = records.value.filter((r) => r.path !== removedPath);
+        // 2) 同步清理勾选集合
+        if (selectedSet.value.has(removedPath)) {
+          const next = new Set(selectedSet.value);
+          next.delete(removedPath);
+          selectedSet.value = next;
+        }
+        deleteConfirmOpen.value = false;
+        showToast("已删除，文件已移动到 Deleted/ 目录");
+        // 3) 修正 viewer 指针：列表空则关闭，越界则收敛到末位
+        if (filteredRecords.value.length === 0) {
+          closeViewer();
+        } else {
+          if (viewerIndex.value >= filteredRecords.value.length) {
+            viewerIndex.value = filteredRecords.value.length - 1;
+          }
+          syncViewerImg();
+        }
+        console.log("[DELETE] 删除成功:", {
+          path: removedPath,
+          deletedTo: res.deletedTo,
+        });
+      } catch (err) {
+        // 失败时保留确认框，便于用户看到原因后重试
+        showToast("删除失败: " + err.message);
+        console.error("[DELETE] 删除失败:", removedPath, err);
+      } finally {
+        isDeletingImage.value = false;
+      }
+    };
+
     const openViewer = (item) => {
       const idx = filteredRecords.value.findIndex((r) => r.path === item.path);
       if (idx !== -1) {
@@ -1928,7 +2008,9 @@ const app = createApp({
         if (["INPUT", "TEXTAREA", "SELECT"].includes(e.target.tagName)) return;
 
         if (e.key === "Escape") {
-          if (viewerModalOpen.value) {
+          if (deleteConfirmOpen.value) {
+            cancelDeleteViewerItem();
+          } else if (viewerModalOpen.value) {
             closeViewer();
           } else if (exportModalOpen.value) {
             closeExport();
@@ -1938,6 +2020,11 @@ const app = createApp({
         } else if (viewerModalOpen.value) {
           if (e.key === "ArrowLeft") prevViewer();
           if (e.key === "ArrowRight") nextViewer();
+          // Delete 快捷键：同样走二次确认，裁切模式下不触发避免误删
+          if (e.key === "Delete" && !deleteConfirmOpen.value && !cropMode.value) {
+            e.preventDefault();
+            requestDeleteViewerItem();
+          }
         } else if (e.ctrlKey && e.key.toLowerCase() === "a") {
           e.preventDefault();
           selectAllFiltered();
@@ -2078,6 +2165,12 @@ const app = createApp({
       nextViewer,
       toggleViewerTag,
       toggleViewerReview,
+      deleteConfirmOpen,
+      isDeletingImage,
+      canDeleteViewerItem,
+      requestDeleteViewerItem,
+      cancelDeleteViewerItem,
+      confirmDeleteViewerItem,
       openExport,
       closeExport,
       runExport,

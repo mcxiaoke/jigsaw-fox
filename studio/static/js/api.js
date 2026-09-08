@@ -184,6 +184,21 @@ export async function saveManualCrop(hash, box, ratio, dir = "") {
   return data;
 }
 
+/**
+ * 删除单张素材 (软删除: 移动到 <SourceDir>/Deleted/ 并从缓存数据库移除)
+ * 已导出的图片由服务端拒绝并返回 error，前端应据此提示。
+ */
+export async function deleteImage(dir, path, hash = "") {
+  const res = await fetch("/api/delete", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ dir, path, hash }),
+  });
+  const data = await res.json().catch(() => ({ ok: false, error: "删除请求失败" }));
+  if (!res.ok || !data.ok) throw new Error(data.error || "删除失败");
+  return data;
+}
+
 export async function deleteManualCrop(hash, dir = "") {
   const params = new URLSearchParams();
   params.set("hash", hash);

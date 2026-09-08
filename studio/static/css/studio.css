@@ -1199,6 +1199,27 @@ button, input, select, textarea { font: inherit; color: inherit; }
   color: #0f766e;
   font-weight: 600;
 }
+/* 删除素材二次确认弹窗（层级高于大图查看器，避免被遮挡不可点） */
+.delete-confirm-modal {
+  z-index: 2100;
+}
+.delete-confirm-file {
+  margin: 10px 0 14px;
+  padding: 10px 12px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  font-size: 13px;
+  color: #334155;
+  word-break: break-all;
+}
+.delete-confirm-file b {
+  color: #0f172a;
+}
+.delete-confirm-warn {
+  color: #b45309;
+  font-size: 13px;
+}
 .export-view-overlay {
   position: fixed;
   inset: 0;

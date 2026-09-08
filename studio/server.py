@@ -14,6 +14,7 @@ import json
 import logging
 import mimetypes
 import os
+import shutil
 import socket
 import sys
 import threading
@@ -68,6 +69,10 @@ from studio.taxonomy import (
 )
 
 STATIC_DIR = Path(__file__).parent / "static"
+
+# 素材删除回收目录名：删除 = 把文件移入 <SourceDir>/Deleted/（软删除，可手工找回）。
+# scanner.IGNORE_DIRS 已包含 "deleted"（大小写不敏感），故该目录不会被后续扫描重新纳入。
+DELETED_DIR_NAME = "Deleted"
 
 
 def _default_log_file() -> Path:
@@ -532,6 +537,10 @@ class StudioRequestHandler(BaseHTTPRequestHandler):
 
         if path == "/api/crop/manual":
             self._handle_post_manual_crop(data)
+            return
+
+        if path == "/api/delete":
+            self._handle_delete_image(data)
             return
 
         self.send_error(404, f"Not Found POST: {path}")
@@ -1063,6 +1072,125 @@ class StudioRequestHandler(BaseHTTPRequestHandler):
             ok = db.delete_user_override(hash_val)
         logger.info(f"[MANUAL_CROP] DELETE: hash={hash_val[:16]}... ok={ok}")
         self._json({"ok": ok})
+
+    def _handle_delete_image(self, data: dict[str, Any]) -> None:
+        """
+        POST /api/delete — 删除单张素材（软删除，可手工找回）。
+
+        语义：
+        1. 把源文件移动到 <SourceDir>/Deleted/ 下的同名相对路径（保留原子目录结构）；
+        2. 从 SQLite 缓存数据库移除该路径条目，并清理随之失去引用的用户覆盖记录；
+        3. 已导出（账本命中 hash 或路径）的图片一律拒绝删除。
+
+        Deleted/ 已被 scanner.IGNORE_DIRS 忽略，因此后续扫描不会把回收目录重新纳入。
+        """
+        dir_param = (data.get("dir") or "").strip()
+        path_s = (data.get("path") or "").strip()
+
+        if not dir_param:
+            self._error("缺少必要参数 dir")
+            return
+        if not path_s:
+            self._error("缺少必要参数 path")
+            return
+
+        root = Path(dir_param).resolve()
+        if not root.exists() or not root.is_dir():
+            self._error(f"目录不存在: {dir_param}", status=404)
+            return
+
+        rel_raw = urllib.parse.unquote(path_s).replace("\\", "/").strip().strip("/")
+        raw_path = Path(rel_raw)
+        src = raw_path.resolve() if raw_path.is_absolute() else (root / rel_raw)
+
+        try:
+            src_res = src.resolve()
+        except Exception as e:
+            self._error(f"路径无法解析: {rel_raw} ({e})", status=400)
+            return
+
+        # 安全边界：绝不允许越出源目录操作任何文件
+        if src_res != root and root not in src_res.parents:
+            self._error("拒绝删除源目录之外的文件", status=400)
+            return
+        if not src_res.is_file():
+            self._error(f"文件不存在: {rel_raw}", status=404)
+            return
+
+        rel = src_res.relative_to(root).as_posix()
+
+        dest_root = (root / DELETED_DIR_NAME).resolve()
+        if src_res == dest_root or dest_root in src_res.parents:
+            self._error("该文件已位于回收目录 Deleted/ 中", status=400)
+            return
+
+        # 已导出保护：账本按 hash 或相对路径命中即视为已导出，禁止删除
+        exp_ledger = load_exported_ledger(root) or {}
+        exp_hashes = exp_ledger.get("hashes", {}) or {}
+        exp_map = get_exported_map(root) or {}
+
+        file_hash = (data.get("hash") or "").strip().lower()
+        if not file_hash:
+            try:
+                file_hash = compute_file_sha256(src_res).strip().lower()
+            except Exception as e:
+                logger.warning(f"[DELETE] 计算 hash 失败: {src_res} ({e})")
+                file_hash = ""
+
+        exp_info = (exp_hashes.get(file_hash) if file_hash else None) or exp_map.get(rel)
+        if exp_info:
+            logger.warning(f"[DELETE] 拒绝删除已导出素材: {rel} (hash={file_hash[:16]}...)")
+            self._error("已导出的图片不能删除", status=409)
+            return
+
+        # 目标路径冲突时追加时间戳序号，绝不覆盖回收目录中已有的同名文件
+        dest = dest_root / rel
+        if dest.exists():
+            stem = Path(rel).stem
+            suffix = Path(rel).suffix
+            stamp = dt.datetime.now().strftime("%Y%m%d%H%M%S")
+            seq = 1
+            while True:
+                cand = dest.parent / f"{stem}_{stamp}_{seq}{suffix}"
+                if not cand.exists():
+                    dest = cand
+                    break
+                seq += 1
+
+        try:
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            shutil.move(str(src_res), str(dest))
+        except Exception as e:
+            logger.error(f"[DELETE] 移动文件失败: {src_res} -> {dest} ({e})")
+            self._error(f"删除失败，移动文件出错: {e}", status=500)
+            return
+
+        removed_hashes: list[str] = []
+        cleaned = {"overrides": 0, "qualities": 0}
+        try:
+            with CacheDB(root) as db:
+                removed_hashes = db.delete_files([rel])
+                cleaned = db.cleanup_orphan_hash_data(removed_hashes)
+        except Exception as e:
+            # 文件已挪走，数据库清理失败不回滚，仅记录告警。
+            # 注意兜底范围有限：file_cache 残留条目会被下次扫描 prune_missing_files
+            # 清理，但 user_overrides / quality_cache 的孤儿记录不会，需另行手工清理。
+            logger.warning(f"[DELETE] 数据库清理失败: {rel} ({e})")
+
+        dest_rel = dest.relative_to(root).as_posix()
+        logger.info(
+            f"[DELETE] 已删除素材: {rel} -> {dest_rel} (hash={file_hash[:16]}...)"
+        )
+        self._json(
+            {
+                "ok": True,
+                "path": rel,
+                "hash": file_hash,
+                "deletedTo": dest_rel,
+                "removedHashes": len(removed_hashes),
+                "cleaned": cleaned,
+            }
+        )
 
     def _handle_post_quality_batch(self, data: dict[str, Any]) -> None:
         """批量质检：注册 job -> 后台 worker -> 立即返回 taskId"""
