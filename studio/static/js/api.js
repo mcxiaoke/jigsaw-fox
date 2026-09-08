@@ -66,6 +66,14 @@ export async function executeExport(payload) {
   return data;
 }
 
+// 导出进度状态快照 (只读轮询)。task 未找到时返回 { ok:false, found:false }，
+// 由调用方静默停止轮询并依赖 POST 自身结果，绝不抛错。
+export async function fetchExportStatus(taskId) {
+  const res = await fetch(`/api/export/status?task=${encodeURIComponent(taskId)}`);
+  const data = await res.json();
+  return data || { ok: false, found: false };
+}
+
 export async function previewExport(payload) {
   const res = await fetch("/api/export/preview", {
     method: "POST",

@@ -147,6 +147,7 @@ class DailyExporter(BaseExporter):
         # 预打包 ZIP 至临时文件以计算内容哈希 (图片并行转码，顺序写 zip 保持确定性)
         tmp_zip = Path(tempfile.gettempdir()) / f"_daily_{month}_tmp.zip"
         zip_quality = resolve_quality(self.data)
+        self.log(f"开始转码 {len(target_items)} 张图片 → {self.fmt} (quality={zip_quality}) ...", "info")
 
         zip_entries: list[tuple[Path, Path | None, str]] = []  # (src, tmp_f|None, arc_name)
         zip_tasks: list[dict[str, Any]] = []
@@ -157,6 +158,7 @@ class DailyExporter(BaseExporter):
                 zip_tasks.append({
                     "src": str(p),
                     "dst": str(tmp_conv),
+                    "label": arc_name,  # 进度日志展示用（避免暴露临时文件名）
                     "fmt": self.fmt,
                     "quality": zip_quality,
                     "need_src_hash": False,
@@ -164,7 +166,7 @@ class DailyExporter(BaseExporter):
                 })
             else:
                 zip_entries.append((p, None, arc_name))
-        zip_results = convert_images_parallel(zip_tasks)
+        zip_results = convert_images_parallel(zip_tasks, on_progress=self.report_progress)
 
         with zipfile.ZipFile(tmp_zip, "w", zipfile.ZIP_DEFLATED) as zf:
             res_i = 0

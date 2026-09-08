@@ -6,6 +6,7 @@ import {
   batchEvaluateQuality,
   checkHealth,
   executeExport,
+  fetchExportStatus,
   fetchQuality,
   fetchQualityStats,
   fetchTags,
@@ -178,6 +179,13 @@ const app = createApp({
     const isExporting = ref(false);
     const exportLogs = ref([]);
     const exportSummary = ref("");
+    // 导出进度 (转码 n/total)；仅执行中填充，用于按钮/面板实时提示
+    const exportProgress = ref("");
+    const exportProgressText = computed(() =>
+      exportProgress.value ? `正在导出 (${exportProgress.value})...` : "正在导出...",
+    );
+    // 本次导出已完成：停留在第③步预览视图 (统计/清单原样)，底部只留「关闭」
+    const exportDone = ref(false);
     // 确认导出前的必填校验错误（输出目录等），在第③步红条展示，避免只有一闪而过的 toast
     const exportError = ref("");
 
@@ -871,6 +879,8 @@ const app = createApp({
     const openExport = () => {
       exportSummary.value = "";
       exportLogs.value = [];
+      exportProgress.value = "";
+      exportDone.value = false;
       exportStep.value = 1;
       exportExcluded.value = new Set(); // 每次新导出会话清空上一次的剔除记录
       exportError.value = "";
@@ -886,15 +896,24 @@ const app = createApp({
       exportModalOpen.value = false;
     };
 
-    // 结果页「再导一次」：清空日志并回到第一步（避免误触重复导出）
+    // 结果态重新导出（当前 UI 不再暴露；重导=关闭后再打开，函数保留防回归/未来复用）
     const restartExport = () => {
       if (isExporting.value) return;
       exportLogs.value = [];
       exportSummary.value = "";
+      exportProgress.value = "";
+      exportDone.value = false;
       exportStep.value = 1;
     };
 
     const goExportStep = async (n) => {
+      // 完成态点击步骤条 = 开启新一轮配置，先清空上一次结果
+      if (exportDone.value) {
+        exportDone.value = false;
+        exportLogs.value = [];
+        exportSummary.value = "";
+        exportProgress.value = "";
+      }
       exportError.value = "";
       if (exportType.value === "event" || exportType.value === "collection") {
         if ((n === 2 || n === 3) && !exportConfig.value.title.trim()) {
@@ -1134,8 +1153,80 @@ const app = createApp({
       isExporting.value = true;
       exportLogs.value = [];
       exportSummary.value = "";
+      exportProgress.value = "";
+      exportDone.value = false;
+
+      // 进度感知：前端生成任务 id；POST 与状态轮询并行，
+      // 任一通道先到达终态即收尾 (finalize 幂等，后到者忽略)
+      const taskId =
+        "exp_" + Date.now().toString(36) + "_" + Math.random().toString(36).slice(2, 10);
+      let finalized = false;
+      let pollTimer = null;
+
+      const stopPolling = () => {
+        if (pollTimer !== null) {
+          clearTimeout(pollTimer);
+          pollTimer = null;
+        }
+      };
+
+      const rescanAfterSuccess = async () => {
+        try {
+          const freshData = await scanDirectory(srcDir.value.trim());
+          if (freshData && freshData.records) {
+            records.value = freshData.records.map((r) => {
+              r.tags = normalizeTags(r.tags);
+              return r;
+            });
+          }
+        } catch (_) {
+          // ignore
+        }
+      };
+
+      const finalize = (success, info) => {
+        if (finalized) return;
+        finalized = true;
+        stopPolling();
+        isExporting.value = false;
+        exportDone.value = true; // 完成后停留第③步预览视图，不跳转、不刷新统计
+        if (success) {
+          exportSummary.value = (info && info.summary) || "导出完成";
+          showToast("导出成功！");
+          rescanAfterSuccess();
+        } else {
+          const msg = (info && info.error) || "导出失败";
+          exportSummary.value = "";
+          exportLogs.value = (info && info.logs) || exportLogs.value;
+          showToast(`导出失败: ${msg}`);
+        }
+      };
+
+      const pollStatus = async () => {
+        let st = null;
+        try {
+          st = await fetchExportStatus(taskId);
+        } catch (_) {
+          return; // 网络错误：静默停止轮询，POST 自身结果兜底
+        }
+        if (!st || !st.found || finalized) return; // 任务不存在/已收尾：静默停止
+        if (st.state === "done") {
+          finalize(true, { summary: st.summary });
+          return;
+        }
+        if (st.state === "error") {
+          finalize(false, { error: st.error || "导出失败", logs: st.logs });
+          return;
+        }
+        if (Array.isArray(st.logs) && st.logs.length) exportLogs.value = st.logs;
+        exportProgress.value =
+          typeof st.total === "number" && st.total > 0 ? `${st.done}/${st.total}` : "";
+        pollTimer = setTimeout(pollStatus, 700);
+      };
+      pollTimer = setTimeout(pollStatus, 150);
 
       const payload = {
+        clientTaskId: taskId,
         type: exportType.value,
         srcDir: srcDir.value.trim(),
         outDir: outDir.value.trim(),
@@ -1171,31 +1262,25 @@ const app = createApp({
 
       try {
         const res = await executeExport(payload);
-        exportLogs.value = res.logs || [];
-        exportSummary.value = res.summary || "导出完成";
-        showToast("导出成功！");
-        exportStep.value = 4;
-
-        // 重新拉取以实时刷新卡片的已导出角标与统计计数
-        try {
-          const freshData = await scanDirectory(srcDir.value.trim());
-          if (freshData && freshData.records) {
-            records.value = freshData.records.map((r) => {
-              r.tags = normalizeTags(r.tags);
-              return r;
+        if (!finalized) {
+          if (res && res.ok) {
+            finalize(true, { summary: res.summary });
+          } else {
+            finalize(false, {
+              error: (res && res.error) || "导出失败",
+              logs: res && res.logs,
             });
           }
-        } catch (_) {
-          // ignore
         }
       } catch (err) {
-        exportLogs.value = err.logs || [
-          { t: new Date().toLocaleTimeString(), level: "err", msg: err.message },
-        ];
-        showToast(`导出失败: ${err.message}`);
-        exportStep.value = 4;
-      } finally {
-        isExporting.value = false;
+        if (!finalized) {
+          finalize(false, {
+            error: err.message,
+            logs:
+              err.logs ||
+              [{ t: new Date().toLocaleTimeString(), level: "err", msg: err.message }],
+          });
+        }
       }
     };
 
@@ -1371,6 +1456,8 @@ const app = createApp({
       isExporting,
       exportLogs,
       exportSummary,
+      exportProgressText,
+      exportDone,
       exportStep,
       orderGridEl,
       exportExcluded,

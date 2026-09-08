@@ -144,6 +144,105 @@ def setup_logger(
 setup_logger("INFO", DEFAULT_LOG_FILE)
 
 
+# ---------------------------------------------------------------------------
+# 导出任务状态注册表 (Export JobStore) — 仅服务「进度感知」只读观测通道
+# ---------------------------------------------------------------------------
+# 设计约束：
+#   - 不带 clientTaskId 的导出不注册，整条导出路径与旧版完全一致；
+#   - 所有读写持同一把锁；快照返回拷贝，绝无共享可变迭代；
+#   - 本表任何故障都不影响导出主流程 (写入口被调用方 try 保护/内部判空)。
+_JOB_LOCK = threading.Lock()
+_JOBS: dict[str, dict[str, Any]] = {}
+_JOB_MAX_KEEP = 50        # 最多保留最近 N 个任务
+_JOB_TTL_SECONDS = 300.0  # 终态任务保留时长 (惰性清理，无定时器)
+
+
+def _job_cleanup_locked(now: float) -> None:
+    """惰性清理：终态且超时的记录剔除；仍超上限时保留最近 N 条。须持锁调用。"""
+    if len(_JOBS) <= _JOB_MAX_KEEP:
+        return
+    expired = [
+        k for k, v in _JOBS.items()
+        if v.get("state") in ("done", "error")
+        and (now - float(v.get("created_at", 0))) >= _JOB_TTL_SECONDS
+    ]
+    for k in expired:
+        _JOBS.pop(k, None)
+    if len(_JOBS) > _JOB_MAX_KEEP:
+        overflow = len(_JOBS) - _JOB_MAX_KEEP
+        for k in sorted(_JOBS, key=lambda x: _JOBS[x].get("created_at", 0))[:overflow]:
+            _JOBS.pop(k, None)
+
+
+def _job_register(task_id: str) -> None:
+    if not task_id:
+        return
+    now = time.time()
+    with _JOB_LOCK:
+        _job_cleanup_locked(now)
+        _JOBS[task_id] = {
+            "state": "running",
+            "logs": [],
+            "done": 0,
+            "total": 0,
+            "summary": None,
+            "error": None,
+            "created_at": now,
+        }
+
+
+def _job_append_log(task_id: str, entry: dict[str, str]) -> None:
+    if not task_id:
+        return
+    with _JOB_LOCK:
+        job = _JOBS.get(task_id)
+        if job is not None and job.get("state") == "running":
+            job["logs"].append(entry)
+
+
+def _job_progress(task_id: str, done: int, total: int) -> None:
+    if not task_id:
+        return
+    with _JOB_LOCK:
+        job = _JOBS.get(task_id)
+        if job is not None:
+            job["done"] = int(done)
+            job["total"] = int(total)
+
+
+def _job_finish(task_id: str, summary: str | None = None, error: str | None = None) -> None:
+    if not task_id:
+        return
+    with _JOB_LOCK:
+        job = _JOBS.get(task_id)
+        if job is None:
+            return
+        if error is not None:
+            job["state"] = "error"
+            job["error"] = str(error)
+        else:
+            job["state"] = "done"
+            job["summary"] = summary or ""
+
+
+def _job_snapshot(task_id: str) -> dict[str, Any] | None:
+    """返回任务状态快照 (拷贝)；未知任务返回 None。"""
+    if not task_id:
+        return None
+    with _JOB_LOCK:
+        job = _JOBS.get(task_id)
+        if job is None:
+            return None
+        return {
+            "state": job.get("state", "running"),
+            "logs": list(job.get("logs", [])),
+            "done": job.get("done", 0),
+            "total": job.get("total", 0),
+            "summary": job.get("summary"),
+            "error": job.get("error"),
+        }
+
+
 class StudioRequestHandler(BaseHTTPRequestHandler):
     """请求处理器：路由分发、API 响应与静态资源托管"""
 
@@ -243,6 +342,10 @@ class StudioRequestHandler(BaseHTTPRequestHandler):
 
         if path == "/api/exported":
             self._handle_get_exported(qs)
+            return
+
+        if path == "/api/export/status":
+            self._handle_export_status(qs)
             return
 
         if path == "/api/thumb":
@@ -584,6 +687,17 @@ class StudioRequestHandler(BaseHTTPRequestHandler):
         ledger = load_exported_ledger(root)
         self._json({"ok": True, "ledger": ledger})
 
+    def _handle_export_status(self, qs: dict[str, list[str]]) -> None:
+        """导出任务进度状态快照 (只读观测通道，供前端轮询)"""
+        task_id = (qs.get("task") or [""])[0].strip()
+        snap = _job_snapshot(task_id)
+        if snap is None:
+            self._json({"ok": False, "found": False})
+            return
+        snap["ok"] = True
+        snap["found"] = True
+        self._json(snap)
+
     def _handle_post_tags(self, data: dict[str, Any]) -> None:
         """原子写回保存 tags.json"""
         dir_param = (data.get("dir") or "").strip()
@@ -772,13 +886,21 @@ class StudioRequestHandler(BaseHTTPRequestHandler):
         http_base = (data.get("httpBase") or "").strip()
 
         logs: list[dict[str, str]] = []
+        # 进度感知观测通道：仅当请求携带 clientTaskId 时注册；否则整条路径与旧版一致
+        task_id = str(data.get("clientTaskId") or "").strip()
+        _job_register(task_id)
 
         def log_fn(msg: str, level: str = "info") -> None:
-            logs.append({
+            entry = {
                 "t": dt.datetime.now().strftime("%H:%M:%S"),
                 "level": level,
                 "msg": msg,
-            })
+            }
+            logs.append(entry)
+            _job_append_log(task_id, entry)
+
+        def progress_fn(done: int, total: int) -> None:
+            _job_progress(task_id, done, total)
 
         if not src or not out:
             self._json({"ok": False, "error": "必须提供源目录 (srcDir) 与输出目录 (outDir)", "logs": logs}, 400)
@@ -794,7 +916,7 @@ class StudioRequestHandler(BaseHTTPRequestHandler):
         logger.info(f"[EXPORT] 收到导出请求: 类型={exp_type}, 分类={cat_id}, 源路径={src}, 输出路径={out}")
 
         try:
-            exporter = get_exporter(exp_type, data, src_p, out_p, http_base, log_fn)
+            exporter = get_exporter(exp_type, data, src_p, out_p, http_base, log_fn, progress_fn=progress_fn)
             exporter.validate()
             result = exporter.execute()
             result.logs = logs
@@ -803,8 +925,10 @@ class StudioRequestHandler(BaseHTTPRequestHandler):
                 ledger = load_exported_ledger(src_p)
                 res_dict["totalExported"] = ledger.get("total_exported", 0)
                 logger.info(f"[EXPORT] 导出成功: 输出文件={result.files}")
+                _job_finish(task_id, summary=result.summary)
             else:
                 logger.error(f"[EXPORT] 导出失败: {result.error}")
+                _job_finish(task_id, error=result.error)
             self._json(res_dict)
         except Exception as e:
             import traceback
@@ -812,6 +936,7 @@ class StudioRequestHandler(BaseHTTPRequestHandler):
             err_detail = traceback.format_exc().splitlines()[-1]
             log_fn(f"导出失败: {e} ({err_detail})", "err")
             logger.error(f"[EXPORT] 导出异常: {e}\n{traceback.format_exc()}")
+            _job_finish(task_id, error=str(e))
             self._json({
                 "ok": False,
                 "error": str(e),

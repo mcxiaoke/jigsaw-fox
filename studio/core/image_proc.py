@@ -291,11 +291,15 @@ def _default_export_workers() -> int:
 def convert_images_parallel(
     tasks: list[dict],
     workers: int | None = None,
+    on_progress=None,
 ) -> list[dict]:
     """并行批量转码一批图片。
 
     tasks: 元素与 _convert_one_parallel 的 job 相同。
     workers: 并行进程数；None 时按 _default_export_workers()。
+    on_progress: 可选进度回调 progress(done, total, current, ok)，每完成一张调用一次，
+                 current 为刚完成任务的 job dict (含 src/dst/fmt)，ok 为该任务是否成功；
+                 回调抛出的任何异常都会被吞掉，绝不中断转码。默认 None 无行为变化。
     返回与 tasks 顺序一一对应的结果列表；进程池不可用 (如受限环境) 时
     自动回退为串行执行，保证任何环境下行为与结果一致。
     """
@@ -303,17 +307,58 @@ def convert_images_parallel(
         return []
     n = workers or _default_export_workers()
     n = max(1, min(n, len(tasks)))
+    total = len(tasks)
+
     if n <= 1:
-        return [_convert_one_parallel(t) for t in tasks]
+        results: list[dict] = []
+        for done_i, t in enumerate(tasks, start=1):
+            r = _convert_one_parallel(t)
+            results.append(r)
+            if on_progress:
+                try:
+                    on_progress(done_i, total, t, bool(r.get("ok")))
+                except Exception:
+                    pass
+        return results
 
     try:
         import concurrent.futures as _cf
 
         with _cf.ProcessPoolExecutor(max_workers=n) as ex:
-            return list(ex.map(_convert_one_parallel, tasks))
+            future_map = {ex.submit(_convert_one_parallel, t): i for i, t in enumerate(tasks)}
+            results = [None] * total
+            done_count = 0
+            for fut in _cf.as_completed(future_map):
+                i = future_map[fut]
+                try:
+                    results[i] = fut.result()
+                except Exception as e:
+                    results[i] = {
+                        "ok": False,
+                        "err": str(e),
+                        "src_hash": "",
+                        "dst_hash": "",
+                        "dst_size": 0,
+                    }
+                done_count += 1
+                if on_progress:
+                    try:
+                        on_progress(done_count, total, tasks[i], bool(results[i].get("ok")))
+                    except Exception:
+                        pass
+            return results
     except Exception:
         # 进程池不可用 (spawn 受限/内存不足等) 时顺序兜底，绝不中断导出
-        return [_convert_one_parallel(t) for t in tasks]
+        results = []
+        for done_i, t in enumerate(tasks, start=1):
+            r = _convert_one_parallel(t)
+            results.append(r)
+            if on_progress:
+                try:
+                    on_progress(done_i, total, t, bool(r.get("ok")))
+                except Exception:
+                    pass
+        return results
 
 
 def validate_image(img_path: Path | str) -> tuple[bool, str | None]:

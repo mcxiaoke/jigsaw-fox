@@ -253,6 +253,8 @@ class MainExporter(BaseExporter):
             })
 
         # 4b. 多进程并行转码 (libwebp method=6 编码大图为耗时大头，图级并行提速数倍)
+        # 转码为耗时主体且期间无逐张日志，先打一条阶段标记日志，避免导出面板长时间静止
+        self.log(f"开始转码 {len(images)} 张图片 → {self.fmt} (quality={img_quality}) ...", "info")
         tasks = [{
             "src": str(pl["p"]),
             "dst": str(pl["dst"]),
@@ -261,7 +263,7 @@ class MainExporter(BaseExporter):
             "need_src_hash": not pl["src_hash"],
             "need_dst_hash": True,
         } for pl in plans]
-        results = convert_images_parallel(tasks)
+        results = convert_images_parallel(tasks, on_progress=self.report_progress)
         if len(results) != len(plans):
             raise RuntimeError("并行转码结果数量不一致，导出中止")
 

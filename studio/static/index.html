@@ -658,8 +658,8 @@
           </template>
         </div>
 
-        <!-- 控制台日志/结果 -->
-        <div class="export-result" v-if="exportLogs.length > 0 && exportStep === 4">
+        <!-- 控制台日志/结果：导出执行中实时滚动；完成后停留在预览视图并保留结果 -->
+        <div class="export-result" v-if="exportLogs.length > 0 && (exportDone || isExporting)">
           <div class="console-box">
             <div v-for="(l, i) in exportLogs" :key="i" class="log-line" :class="l.level">
               <span class="t">[{{ l.t }}]</span>
@@ -670,19 +670,23 @@
         </div>
 
         <div class="export-nav">
-          <button class="btn" @click="copyExportLogs" v-if="exportLogs.length > 0">📋 复制日志</button>
-          <button class="btn" @click="goPrevStep" :disabled="isExporting || exportStep === 1">← 上一步</button>
-          <button class="btn" @click="closeExport" :disabled="isExporting">关闭</button>
-          <button v-if="exportStep < 2" class="btn primary" :disabled="isExporting" @click="goExportStep(2)">
-            {{ previewLoading ? '⏳ 预检中…' : '下一步：顺序调整 →' }}
-          </button>
-          <button v-else-if="exportStep === 2" class="btn primary" :disabled="isExporting" @click="goExportStep(3)">下一步：导出前预览 →</button>
-          <button v-else-if="exportStep === 3" class="btn primary" :disabled="isExporting" @click="runExport">
-            <span v-if="isExporting">⏳ 正在导出...</span>
-            <span v-else>✅ 确认导出</span>
-          </button>
-          <!-- 结果页(第④步)：不再提供「确认导出」，防止误触重复导出覆盖产物 -->
-          <button v-else class="btn success" :disabled="isExporting" @click="restartExport">🔄 再导一次</button>
+          <!-- 本次导出已完成：界面保持预览原样，底部只留一个「关闭」 -->
+          <template v-if="exportDone">
+            <button class="btn" @click="closeExport">关闭</button>
+          </template>
+          <template v-else>
+            <button class="btn" @click="copyExportLogs" v-if="exportLogs.length > 0">📋 复制日志</button>
+            <button class="btn" @click="goPrevStep" :disabled="isExporting || exportStep === 1">← 上一步</button>
+            <button class="btn" @click="closeExport" :disabled="isExporting">关闭</button>
+            <button v-if="exportStep < 2" class="btn primary" :disabled="isExporting" @click="goExportStep(2)">
+              {{ previewLoading ? '⏳ 预检中…' : '下一步：顺序调整 →' }}
+            </button>
+            <button v-else-if="exportStep === 2" class="btn primary" :disabled="isExporting" @click="goExportStep(3)">下一步：导出前预览 →</button>
+            <button v-else-if="exportStep === 3" class="btn primary" :disabled="isExporting" @click="runExport">
+              <span v-if="isExporting">⏳ {{ exportProgressText }}</span>
+              <span v-else>✅ 确认导出</span>
+            </button>
+          </template>
         </div>
       </div>
     </div>

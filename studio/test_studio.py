@@ -1005,6 +1005,129 @@ class TestDuplicateHandling(unittest.TestCase):
             server.server_close()
 
 
+class TestExportJobStore(unittest.TestCase):
+    """导出进度观测通道：JobStore 内存状态表单元测试"""
+
+    def setUp(self):
+        from studio import server as srv
+        self.srv = srv
+        with srv._JOB_LOCK:
+            srv._JOBS.clear()
+
+    def test_register_snapshot_is_copy(self):
+        s = self.srv
+        s._job_register("job_a")
+        s._job_append_log("job_a", {"t": "00:00:01", "level": "info", "msg": "start"})
+        s._job_append_log("job_a", {"t": "00:00:02", "level": "info", "msg": "scan ok"})
+        s._job_progress("job_a", 3, 8)
+        snap = s._job_snapshot("job_a")
+        self.assertEqual(snap["state"], "running")
+        self.assertEqual(snap["done"], 3)
+        self.assertEqual(snap["total"], 8)
+        self.assertEqual([x["msg"] for x in snap["logs"]], ["start", "scan ok"])
+
+        # 快照必须为拷贝：外部修改不污染内部状态
+        snap["logs"].append({"t": "x", "level": "err", "msg": "mutate"})
+        snap["done"] = 99
+        snap2 = s._job_snapshot("job_a")
+        self.assertEqual(len(snap2["logs"]), 2)
+        self.assertEqual(snap2["done"], 3)
+
+    def test_log_frozen_after_terminal_and_error_state(self):
+        s = self.srv
+        s._job_register("job_b")
+        s._job_append_log("job_b", {"t": "t", "level": "info", "msg": "m1"})
+        s._job_finish("job_b", summary="已成功导出 8 个关卡")
+        self.assertEqual(s._job_snapshot("job_b")["state"], "done")
+        # 终态后不再追加日志
+        s._job_append_log("job_b", {"t": "t", "level": "err", "msg": "late"})
+        self.assertEqual(len(s._job_snapshot("job_b")["logs"]), 1)
+
+        s._job_register("job_c")
+        s._job_finish("job_c", error="boom")
+        snap = s._job_snapshot("job_c")
+        self.assertEqual(snap["state"], "error")
+        self.assertEqual(snap["error"], "boom")
+
+    def test_unknown_and_empty_task(self):
+        s = self.srv
+        self.assertIsNone(s._job_snapshot("no_such_task"))
+        # 空 task id 一律空操作，不产生记录
+        s._job_register("")
+        s._job_append_log("", {"t": "t", "level": "info", "msg": "x"})
+        s._job_finish("", summary="x")
+        self.assertEqual(len(s._JOBS), 0)
+
+    def test_cleanup_bounds(self):
+        import time
+        s = self.srv
+        # 塞入超过上限的过期终态任务
+        for i in range(60):
+            s._JOBS[f"stale_{i}"] = {
+                "state": "done", "logs": [], "done": 0, "total": 0,
+                "summary": "", "error": None,
+                "created_at": time.time() - 99999,
+            }
+        s._job_register("fresh_one")
+        self.assertLessEqual(len(s._JOBS), s._JOB_MAX_KEEP)
+        self.assertIn("fresh_one", s._JOBS)
+
+
+class TestExportStatusEndpoint(unittest.TestCase):
+    """导出进度观测通道：GET /api/export/status 真实起服端到端测试"""
+
+    def test_status_endpoint_live_progress(self):
+        from studio import server as srv
+        from studio.server import StudioRequestHandler, StudioServer
+        import threading
+        import time
+        import urllib.parse
+        import urllib.request
+
+        with srv._JOB_LOCK:
+            srv._JOBS.clear()
+
+        server = StudioServer(("127.0.0.1", 0), StudioRequestHandler)
+        port = server.server_address[1]
+        t = threading.Thread(target=server.serve_forever, daemon=True)
+        t.start()
+        time.sleep(0.1)
+        try:
+            task = "endpoint_live_1"
+            srv._job_register(task)
+            srv._job_append_log(task, {"t": "00:00:01", "level": "info", "msg": "收到导出请求"})
+            srv._job_append_log(task, {"t": "00:00:02", "level": "info", "msg": "开始转码"})
+            srv._job_progress(task, 5, 16)
+
+            url = f"http://127.0.0.1:{port}/api/export/status?task={urllib.parse.quote(task)}"
+            with urllib.request.urlopen(url) as resp:
+                data = json.loads(resp.read().decode("utf-8"))
+            self.assertTrue(data["found"])
+            self.assertEqual(data["state"], "running")
+            self.assertEqual(data["done"], 5)
+            self.assertEqual(data["total"], 16)
+            self.assertEqual(len(data["logs"]), 2)
+            self.assertEqual(data["logs"][-1]["msg"], "开始转码")
+
+            # 完成后再查：done + summary
+            srv._job_finish(task, summary="已成功导出 16 个关卡")
+            with urllib.request.urlopen(url) as resp:
+                data = json.loads(resp.read().decode("utf-8"))
+            self.assertEqual(data["state"], "done")
+            self.assertEqual(data["summary"], "已成功导出 16 个关卡")
+
+            # 未知任务 → found=false (HTTP 200，前端据此静默停止轮询)
+            with urllib.request.urlopen(
+                f"http://127.0.0.1:{port}/api/export/status?task=no_such"
+            ) as resp:
+                data = json.loads(resp.read().decode("utf-8"))
+            self.assertFalse(data["found"])
+            self.assertFalse(data["ok"])
+        finally:
+            server.shutdown()
+            server.server_close()
+
+
 if __name__ == "__main__":
     unittest.main()
 

@@ -71,6 +71,7 @@ class BaseExporter(ABC):
         out_p: Path,
         http_base: str,
         log_fn: Callable[[str, str], None],
+        progress_fn: Callable[[int, int], None] | None = None,
     ):
         self.data = data
         self.src_p = src_p
@@ -79,6 +80,34 @@ class BaseExporter(ABC):
         self.fmt = data.get("format", "original")
         self.rename_rule = data.get("rename", "none")
         self.log = log_fn
+        self.progress_fn = progress_fn
+
+    def report_progress(self, done: int, total: int, current: dict | None = None, ok: bool = True) -> None:
+        """上报单张图片转码进度（并行池每完成一张调用一次）。
+
+        current: 刚完成任务的信息 dict，含 src / dst（zip 场景额外用 label 提供归档展示名）。
+        无 progress_fn 订阅者时仍会输出逐张处理日志（self.log），保证导出面板实时滚动；
+        本方法内部任何异常一律吞掉，绝不影响导出主流程。
+        """
+        try:
+            if current and current.get("src"):
+                from pathlib import Path as _Path
+                src_name = _Path(str(current.get("src"))).name
+                disp_name = str(current.get("label") or current.get("dst") or "")
+                dst_name = _Path(disp_name).name if disp_name else ""
+                arrow = " ==> " if dst_name else ""
+                if ok:
+                    self.log(f"图片 {src_name}{arrow}{dst_name} ({done}/{total})", "info")
+                else:
+                    self.log(f"图片 {src_name}{arrow}{dst_name} 转码失败", "warn")
+        except Exception:
+            pass
+        if self.progress_fn is None:
+            return
+        try:
+            self.progress_fn(done, total)
+        except Exception:
+            pass
 
     @abstractmethod
     def validate(self) -> None:

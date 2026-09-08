@@ -30,10 +30,11 @@ def get_exporter(
     out_p: Path,
     http_base: str,
     log_fn: Callable[[str, str], None],
+    progress_fn: Callable[[int, int], None] | None = None,
 ) -> BaseExporter:
     """根据类型获取对应的导出器实例"""
     cls = EXPORTERS.get(exp_type.lower())
     if not cls:
         valid_types = ", ".join(EXPORTERS.keys())
         raise ValueError(f"未知的导出类型: '{exp_type}'，支持的类型包括: {valid_types}")
-    return cls(data, src_p, out_p, http_base, log_fn)
+    return cls(data, src_p, out_p, http_base, log_fn, progress_fn=progress_fn)
