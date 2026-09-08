@@ -25,7 +25,12 @@ from studio.core.export_tracker import (
     record_exports,
     save_exported_ledger,
 )
-from studio.core.image_proc import HAS_PIL, convert_image, generate_thumbnail_bytes, make_rename
+from studio.core.image_proc import (
+    HAS_PIL,
+    convert_image,
+    generate_thumbnail_bytes,
+    make_rename,
+)
 from studio.core.scanner import (
     compute_file_sha256,
     find_duplicate_groups,
@@ -165,7 +170,9 @@ class TestCoreAndExporters(unittest.TestCase):
         self.assertGreater(sample_info["size"], 0)
 
         # 合并扫描与智能推断 (带元数据注入)
-        records, stats = merge_scanned_images(images, self.src_dir, None, image_infos=image_infos)
+        records, stats = merge_scanned_images(
+            images, self.src_dir, None, image_infos=image_infos
+        )
         self.assertEqual(len(records), 3)
         self.assertEqual(records[0]["tags"], ["Pets"])
         self.assertEqual(records[0]["catalogs"], ["Pets"])
@@ -348,7 +355,9 @@ class TestCoreAndExporters(unittest.TestCase):
         self.assertEqual(col_data["items"][0]["id"], "test_col_2026")
         self.assertEqual(col_data["items"][0]["title"], "Masterpieces Vol 1")
         self.assertEqual(col_data["items"][0]["titleZh"], "名画系列第一辑")
-        self.assertEqual(col_data["items"][0]["desc"], "Classic masterpieces collection")
+        self.assertEqual(
+            col_data["items"][0]["desc"], "Classic masterpieces collection"
+        )
         self.assertEqual(col_data["items"][0]["descZh"], "精选传世名画合集")
         self.assertEqual(col_data["items"][0]["totalCount"], 3)
         self.assertIn("updatedAt", col_data["items"][0])
@@ -458,7 +467,9 @@ class TestHashAndReconciliation(unittest.TestCase):
 
         images = scan_images(self.src_dir)
         infos = scan_image_infos(images, self.src_dir)
-        records, stats = merge_scanned_images(images, self.src_dir, None, image_infos=infos)
+        records, stats = merge_scanned_images(
+            images, self.src_dir, None, image_infos=infos
+        )
 
         # 用户进行了精细的人工打标并确认复核
         records[0]["tags"] = ["Pets"]
@@ -479,10 +490,14 @@ class TestHashAndReconciliation(unittest.TestCase):
         # 3. 再次扫描目录并自动对齐
         tag_file = find_tags_file(self.src_dir)
         self.assertIsNotNone(tag_file)
-        loaded_raw, _ = normalize_records(json.loads(tag_file.read_text(encoding="utf-8")), self.src_dir)
+        loaded_raw, _ = normalize_records(
+            json.loads(tag_file.read_text(encoding="utf-8")), self.src_dir
+        )
         new_images = scan_images(self.src_dir)
         new_infos = scan_image_infos(new_images, self.src_dir)
-        new_records, new_stats = merge_scanned_images(new_images, self.src_dir, loaded_raw, image_infos=new_infos)
+        new_records, new_stats = merge_scanned_images(
+            new_images, self.src_dir, loaded_raw, image_infos=new_infos
+        )
 
         # 4. 验证引擎自动识别并完美继承
         self.assertEqual(len(new_records), 1)
@@ -508,6 +523,7 @@ class TestExporterTrackingAndDeduplication(unittest.TestCase):
 
         if HAS_PIL:
             from PIL import Image
+
             for i in range(1, 3):
                 im = Image.new("RGB", (60, 60), color=(50 * i, 100, 150))
                 im.save(self.src_dir / f"img_{i:02d}.jpg", "JPEG")
@@ -597,8 +613,7 @@ class TestScannerProgressAndStats(unittest.TestCase):
 
         # 第二次扫描传入缓存，测试命中
         hash_cache = {
-            r["path"]: (r["mtime"], r["size"], r["hash"])
-            for r in infos.values()
+            r["path"]: (r["mtime"], r["size"], r["hash"]) for r in infos.values()
         }
         stats2 = {}
         progress_events2 = []
@@ -651,6 +666,7 @@ class TestServerLogging(unittest.TestCase):
 
     def test_cli_argument_parser(self):
         import argparse
+
         parser = argparse.ArgumentParser()
         parser.add_argument("--loglevel", default="INFO")
         parser.add_argument("--debug", action="store_true")
@@ -684,6 +700,7 @@ class TestCacheDBAndQuality(unittest.TestCase):
         # 生成两个简单的测试图片
         if HAS_PIL:
             from PIL import Image
+
             # 丰富纹理图片
             im1 = Image.new("RGB", (200, 200), color=(120, 150, 200))
             for i in range(200):
@@ -821,9 +838,15 @@ class TestCacheDBAndQuality(unittest.TestCase):
                 self.assertTrue(s_data["ok"])
                 self.assertIn("total_files", s_data["stats"])
 
-            # 4. 批量质检 API
+            # 4. 批量质检 API (async with clientTaskId)
             batch_url = f"http://127.0.0.1:{port}/api/quality/batch"
-            post_body = json.dumps({"dir": str(self.test_dir), "limit": 10}).encode("utf-8")
+            post_body = json.dumps(
+                {
+                    "dir": str(self.test_dir),
+                    "limit": 10,
+                    "clientTaskId": "test_qc_task_001",
+                }
+            ).encode("utf-8")
             req = urllib.request.Request(
                 batch_url,
                 data=post_body,
@@ -833,8 +856,41 @@ class TestCacheDBAndQuality(unittest.TestCase):
             with urllib.request.urlopen(req) as resp:
                 b_data = json.loads(resp.read().decode("utf-8"))
                 self.assertTrue(b_data["ok"])
-                self.assertIn("count", b_data)
-                self.assertIn("items", b_data)
+                self.assertIn("taskId", b_data)
+                self.assertIn("total", b_data)
+                self.assertTrue(b_data["started"])
+
+            # 4b. 缺少 clientTaskId 应返回 400
+            no_task_body = json.dumps({"dir": str(self.test_dir), "limit": 5}).encode(
+                "utf-8"
+            )
+            req2 = urllib.request.Request(
+                batch_url,
+                data=no_task_body,
+                headers={"Content-Type": "application/json"},
+                method="POST",
+            )
+            try:
+                urllib.request.urlopen(req2)
+                self.fail("Should have raised HTTPError 400")
+            except urllib.error.HTTPError as e:
+                self.assertEqual(e.code, 400)
+
+            # 4c. 轮询 job status 直到完成
+            import time as _time
+
+            for _ in range(30):
+                status_url = (
+                    f"http://127.0.0.1:{port}/api/job/status?task=test_qc_task_001"
+                )
+                with urllib.request.urlopen(status_url) as resp:
+                    s_data = json.loads(resp.read().decode("utf-8"))
+                if s_data.get("state") in ("done", "error"):
+                    break
+                _time.sleep(0.2)
+            self.assertEqual(s_data.get("state"), "done")
+            self.assertIn("done", s_data)
+            self.assertIn("total", s_data)
 
         finally:
             server.shutdown()
@@ -860,6 +916,7 @@ class TestDuplicateHandling(unittest.TestCase):
 
         if HAS_PIL:
             from PIL import Image
+
             im1 = Image.new("RGB", (100, 100), color=(255, 0, 0))
             im1.save(p_cat, format="JPEG")
             # 制作完全相同的副本文件
@@ -890,16 +947,20 @@ class TestDuplicateHandling(unittest.TestCase):
         images = scan_images(self.src_dir)
         infos = scan_image_infos(images, self.src_dir)
         cat_hash = infos["Animals/cat.jpg"]["hash"]
-        existing = [{
-            "path": "Animals/cat.jpg",
-            "file": "cat.jpg",
-            "tags": ["Pets"],
-            "catalogs": ["Pets"],
-            "confidence": 1.0,
-            "hash": cat_hash,
-            "review_required": False,
-        }]
-        records, stats = merge_scanned_images(images, self.src_dir, existing, image_infos=infos)
+        existing = [
+            {
+                "path": "Animals/cat.jpg",
+                "file": "cat.jpg",
+                "tags": ["Pets"],
+                "catalogs": ["Pets"],
+                "confidence": 1.0,
+                "hash": cat_hash,
+                "review_required": False,
+            }
+        ]
+        records, stats = merge_scanned_images(
+            images, self.src_dir, existing, image_infos=infos
+        )
         self.assertEqual(len(records), 3)
 
         rec_map = {r["path"]: r for r in records}
@@ -1011,6 +1072,7 @@ class TestExportJobStore(unittest.TestCase):
 
     def setUp(self):
         from studio import server as srv
+
         self.srv = srv
         with srv._JOB_LOCK:
             srv._JOBS.clear()
@@ -1061,12 +1123,17 @@ class TestExportJobStore(unittest.TestCase):
 
     def test_cleanup_bounds(self):
         import time
+
         s = self.srv
         # 塞入超过上限的过期终态任务
         for i in range(60):
             s._JOBS[f"stale_{i}"] = {
-                "state": "done", "logs": [], "done": 0, "total": 0,
-                "summary": "", "error": None,
+                "state": "done",
+                "logs": [],
+                "done": 0,
+                "total": 0,
+                "summary": "",
+                "error": None,
                 "created_at": time.time() - 99999,
             }
         s._job_register("fresh_one")
@@ -1096,8 +1163,12 @@ class TestExportStatusEndpoint(unittest.TestCase):
         try:
             task = "endpoint_live_1"
             srv._job_register(task)
-            srv._job_append_log(task, {"t": "00:00:01", "level": "info", "msg": "收到导出请求"})
-            srv._job_append_log(task, {"t": "00:00:02", "level": "info", "msg": "开始转码"})
+            srv._job_append_log(
+                task, {"t": "00:00:01", "level": "info", "msg": "收到导出请求"}
+            )
+            srv._job_append_log(
+                task, {"t": "00:00:02", "level": "info", "msg": "开始转码"}
+            )
             srv._job_progress(task, 5, 16)
 
             url = f"http://127.0.0.1:{port}/api/export/status?task={urllib.parse.quote(task)}"
@@ -1146,6 +1217,7 @@ class TestTrialExportNonPollution(unittest.TestCase):
         # 造几个测试图
         if HAS_PIL:
             from PIL import Image
+
             cat_dir = self.src_dir / "Cats"
             cat_dir.mkdir()
             for i in range(1, 4):
@@ -1176,8 +1248,11 @@ class TestTrialExportNonPollution(unittest.TestCase):
     def _assert_studio_unchanged(self, before: dict) -> None:
         """断言 .studio 快照未变：既有文件内容/存在性/修改时间一致，且无新增文件。"""
         after = self._studio_snapshot()
-        self.assertEqual(set(before.keys()), set(after.keys()),
-                         "试导出不应新增/删除 .studio 内的任何持久化文件")
+        self.assertEqual(
+            set(before.keys()),
+            set(after.keys()),
+            "试导出不应新增/删除 .studio 内的任何持久化文件",
+        )
         for rel, (exists, content, mtime) in before.items():
             self.assertTrue(after[rel][0], f"{rel} 不应被删除")
             self.assertEqual(after[rel][1], content, f"{rel} 内容不应改变")
@@ -1189,8 +1264,13 @@ class TestTrialExportNonPollution(unittest.TestCase):
 
         exporter = get_exporter(
             exp_type="main",
-            data={"trial": True, "startOrder": 101, "version": 5,
-                  "format": "webp" if HAS_PIL else "original", "rename": "sequence"},
+            data={
+                "trial": True,
+                "startOrder": 101,
+                "version": 5,
+                "format": "webp" if HAS_PIL else "original",
+                "rename": "sequence",
+            },
             src_p=self.src_dir,
             out_p=self.out_dir,
             http_base="http://trial.local/data",
@@ -1209,13 +1289,20 @@ class TestTrialExportNonPollution(unittest.TestCase):
         webp_list = list(images_dir.glob("*.webp"))
         self.assertEqual(len(webp_list), 3)
         self.assertTrue((exporter._build_root / "manifest.json").exists())
-        self.assertTrue((exporter._build_root / "_trial_meta" / "ledger_delta.json").exists())
-        self.assertTrue((exporter._build_root / "_trial_meta" / "source_map.json").exists())
+        self.assertTrue(
+            (exporter._build_root / "_trial_meta" / "ledger_delta.json").exists()
+        )
+        self.assertTrue(
+            (exporter._build_root / "_trial_meta" / "source_map.json").exists()
+        )
         # 不得触碰正式 outDir
-        self.assertFalse((self.out_dir / "main").exists(),
-                         "试导出不得在正式 outDir 下产生 main 目录")
-        self.assertFalse((self.out_dir / "manifest.json").exists(),
-                         "试导出不得在正式 outDir 下产生 manifest.json")
+        self.assertFalse(
+            (self.out_dir / "main").exists(), "试导出不得在正式 outDir 下产生 main 目录"
+        )
+        self.assertFalse(
+            (self.out_dir / "manifest.json").exists(),
+            "试导出不得在正式 outDir 下产生 manifest.json",
+        )
         # .studio 零污染
         self._assert_studio_unchanged(before)
         # 返回 wouldCommit
@@ -1227,8 +1314,12 @@ class TestTrialExportNonPollution(unittest.TestCase):
         before = self._studio_snapshot()
         exporter = get_exporter(
             exp_type="daily",
-            data={"trial": True, "month": "202609",
-                  "format": "webp" if HAS_PIL else "original", "rename": "date"},
+            data={
+                "trial": True,
+                "month": "202609",
+                "format": "webp" if HAS_PIL else "original",
+                "rename": "date",
+            },
             src_p=self.src_dir,
             out_p=self.out_dir,
             http_base="http://trial.local/data",
@@ -1239,7 +1330,9 @@ class TestTrialExportNonPollution(unittest.TestCase):
 
         self.assertTrue(result.success)
         self.assertTrue((exporter._build_root / "daily" / "index.json").exists())
-        self.assertTrue((exporter._build_root / "_trial_meta" / "ledger_delta.json").exists())
+        self.assertTrue(
+            (exporter._build_root / "_trial_meta" / "ledger_delta.json").exists()
+        )
         self.assertFalse((self.out_dir / "daily").exists())
         self.assertFalse((self.out_dir / "manifest.json").exists())
         self._assert_studio_unchanged(before)
@@ -1248,8 +1341,12 @@ class TestTrialExportNonPollution(unittest.TestCase):
         """对照组：正式导出确实会写 .studio (账本+release+logs)，证明快照断言有区分度。"""
         exporter = get_exporter(
             exp_type="main",
-            data={"startOrder": 101, "version": 5,
-                  "format": "webp" if HAS_PIL else "original", "rename": "sequence"},
+            data={
+                "startOrder": 101,
+                "version": 5,
+                "format": "webp" if HAS_PIL else "original",
+                "rename": "sequence",
+            },
             src_p=self.src_dir,
             out_p=self.out_dir,
             http_base="http://trial.local/data",
@@ -1261,7 +1358,9 @@ class TestTrialExportNonPollution(unittest.TestCase):
         self.assertFalse(exporter.is_trial)
         # 正式导出后 .studio 出现账本与 release 产物
         self.assertTrue((self.src_dir / ".studio" / "ledger" / "exports.json").exists())
-        self.assertTrue((self.src_dir / ".studio" / "release" / "main" / "index.json").exists())
+        self.assertTrue(
+            (self.src_dir / ".studio" / "release" / "main" / "index.json").exists()
+        )
         self.assertTrue((self.src_dir / ".studio" / "logs" / "exports.jsonl").exists())
         # 正式产物在 outDir
         self.assertTrue((self.out_dir / "main" / "index.json").exists())
@@ -1269,5 +1368,3 @@ class TestTrialExportNonPollution(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-
-

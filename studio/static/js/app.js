@@ -4,10 +4,12 @@
 
 import {
   batchEvaluateQuality,
+  cancelQualityJob,
   checkHealth,
   executeExport,
-  fetchExportStatus,
+  fetchJobStatus,
   fetchQuality,
+  fetchQualityScores,
   fetchQualityStats,
   fetchTags,
   fetchTaxonomy,
@@ -105,6 +107,9 @@ const app = createApp({
     const hideExported = ref(false);
     const onlyDuplicates = ref(false);
     const filterGrade = ref(""); // '' | 'S' | 'A' | 'B' | 'C' | 'F' | 'unscored'
+    const filterScoreMin = ref(""); // 分数下限, 空=不限
+    const filterScoreMax = ref(""); // 分数上限, 空=不限
+    const filterUpgradeable = ref(false); // 仅看 smart crop 可升级图片
     const searchQuery = ref("");
     const sortBy = ref("name"); // 'name' | 'quality' | 'mtime' | 'confidence' | 'size' | 'dimension'
     const sortOrder = ref("asc");
@@ -121,6 +126,18 @@ const app = createApp({
     });
     const unscoredCount = computed(() => records.value.filter((r) => !r.quality).length);
     const scoredCount = computed(() => records.value.filter((r) => !!r.quality).length);
+
+    // 质检后台 job 状态
+    const qcTaskId = ref("");
+    const qcProgress = ref({ done: 0, total: 0 });
+    const qcLogs = ref([]);
+    let qcPollTimer = null;
+
+    const qcProgressPercent = computed(() => {
+      const { done, total } = qcProgress.value;
+      if (!total || total <= 0) return 0;
+      return Math.min(100, Math.round((done / total) * 100));
+    });
     const initialZoom = (() => {
       try {
         const saved = parseInt(localStorage.getItem("studio_cardZoom"), 10);
@@ -481,6 +498,25 @@ const app = createApp({
         }
       }
 
+      // 4.5 分数区间过滤
+      if (filterScoreMin.value !== "") {
+        const minVal = Number(filterScoreMin.value);
+        if (!isNaN(minVal)) {
+          list = list.filter((r) => r.quality && r.quality.score >= minVal);
+        }
+      }
+      if (filterScoreMax.value !== "") {
+        const maxVal = Number(filterScoreMax.value);
+        if (!isNaN(maxVal)) {
+          list = list.filter((r) => r.quality && r.quality.score <= maxVal);
+        }
+      }
+
+      // 4.6 可升级过滤 (smart crop score_boosted)
+      if (filterUpgradeable.value) {
+        list = list.filter((r) => r.quality && r.quality.details && r.quality.details.score_boosted === true);
+      }
+
       // 5. 搜索关键词过滤
       const q = searchQuery.value.trim().toLowerCase();
       if (q) {
@@ -549,6 +585,30 @@ const app = createApp({
         return filteredRecords.value[viewerIndex.value];
       }
       return null;
+    });
+
+    // Smart crop 裁切框 overlay 样式: 基于原图尺寸百分比定位
+    const cropOverlayStyle = computed(() => {
+      const item = currentViewerItem.value;
+      if (!item || !item.quality || !item.quality.details || !item.quality.details.crop_box) {
+        return {};
+      }
+      const imgW = item.width || 0;
+      const imgH = item.height || 0;
+      if (!imgW || !imgH) return {};
+      const cb = item.quality.details.crop_box;
+      if (!Array.isArray(cb) || cb.length !== 4) return {};
+      const [x0, y0, x1, y1] = cb;
+      const leftPct = (x0 / imgW) * 100;
+      const topPct = (y0 / imgH) * 100;
+      const widthPct = ((x1 - x0) / imgW) * 100;
+      const heightPct = ((y1 - y0) / imgH) * 100;
+      return {
+        left: leftPct + "%",
+        top: topPct + "%",
+        width: widthPct + "%",
+        height: heightPct + "%",
+      };
     });
 
     // -----------------------------------------------------------------------
@@ -627,43 +687,167 @@ const app = createApp({
       }
     };
 
-    const triggerBatchQuality = async () => {
+    const stopQcPolling = () => {
+      if (qcPollTimer !== null) {
+        clearTimeout(qcPollTimer);
+        qcPollTimer = null;
+      }
+    };
+
+    const finalizeQualityJob = async (success, info) => {
+      stopQcPolling();
+      isBatchEvaluating.value = false;
+      if (success) {
+        const msg = (info && info.summary) || "质检完成";
+        showToast(msg);
+        // 轻量刷新：只从 SQLite 拉取质检分数，merge 到已有 records，不触发文件系统 rescan
+        try {
+          const data = await fetchQualityScores(srcDir.value.trim());
+          if (data.scores) {
+            for (const r of records.value) {
+              const rel = (r.relPath || r.path || "").replace(/\\/g, "/");
+              const q = data.scores[rel];
+              if (q) {
+                r.quality = q;
+              } else if (!r.quality) {
+                r.quality = null;
+              }
+            }
+          }
+          if (data.stats) {
+            qualitySummary.value = data.stats;
+          } else {
+            refreshQualitySummary();
+          }
+        } catch (_) {
+          refreshQualitySummary();
+        }
+      } else {
+        const errMsg = (info && info.error) || "质检失败";
+        showToast(errMsg === "cancelled" ? "质检已取消" : `质检失败: ${errMsg}`);
+      }
+      qcTaskId.value = "";
+      qcProgress.value = { done: 0, total: 0 };
+      qcLogs.value = [];
+      try {
+        localStorage.removeItem("activeQualityTask");
+      } catch (_) {}
+    };
+
+    const pollQualityStatus = async () => {
+      if (!qcTaskId.value) return;
+      let st = null;
+      try {
+        st = await fetchJobStatus(qcTaskId.value);
+      } catch (_) {
+        return;
+      }
+      if (!st || !st.found) {
+        // job 丢失（超时/重启）：rescan 装配已落库结果
+        await finalizeQualityJob(true, { summary: "任务恢复: 已从缓存装配结果" });
+        return;
+      }
+      qcProgress.value = { done: st.done || 0, total: st.total || 0 };
+      if (st.logs && st.logs.length > 0) {
+        qcLogs.value = st.logs.slice(-20);
+      }
+      if (st.state === "done") {
+        await finalizeQualityJob(true, { summary: st.summary || "质检完成" });
+      } else if (st.state === "error") {
+        await finalizeQualityJob(false, { error: st.error || "未知错误" });
+      } else {
+        // running: 继续轮询
+        qcPollTimer = setTimeout(pollQualityStatus, 700);
+      }
+    };
+
+    const triggerBatchQuality = async (force = false) => {
       if (!srcDir.value.trim()) {
         showToast("请先指定图片源目录");
         return;
       }
-      const unscored = records.value.filter((r) => !r.quality);
-      if (unscored.length === 0) {
+      if (isBatchEvaluating.value) {
+        showToast("质检任务进行中，请等待完成或取消");
+        return;
+      }
+      const unscored = force ? records.value : records.value.filter((r) => !r.quality);
+      if (unscored.length === 0 && !force) {
         showToast("当前所有图片均已完成质检评分");
         return;
       }
 
+      const taskId = "qc_" + Date.now().toString(36) + "_" + Math.random().toString(36).slice(2, 10);
       isBatchEvaluating.value = true;
-      showToast(`开始批量质检 (待评: ${unscored.length} 张)...`);
+      qcTaskId.value = taskId;
+      qcProgress.value = { done: 0, total: unscored.length };
+      qcLogs.value = [];
+
       try {
-        const res = await batchEvaluateQuality(srcDir.value.trim(), 30);
-        if (res.items && res.items.length > 0) {
-          const map = new Map(res.items.map((it) => [it.path, it.quality]));
-          for (const r of records.value) {
-            if (map.has(r.path)) {
-              r.quality = map.get(r.path);
-            }
-          }
-          if (res.stats) {
-            qualitySummary.value = res.stats;
-          } else {
-            refreshQualitySummary();
-          }
-          showToast(`批量质检完成: 成功评估 ${res.items.length} 张图片`);
-        } else {
-          showToast("没有更多待质检的图片");
+        localStorage.setItem("activeQualityTask", JSON.stringify({
+          taskId,
+          dir: srcDir.value.trim(),
+        }));
+      } catch (_) {}
+
+      showToast(`开始批量质检 (待评: ${unscored.length} 张)...`);
+
+      try {
+        const res = await batchEvaluateQuality(
+          srcDir.value.trim(), 500, [], force, taskId
+        );
+        if (res.total !== undefined) {
+          qcProgress.value = { done: 0, total: res.total };
         }
+        // 启动轮询
+        qcPollTimer = setTimeout(pollQualityStatus, 700);
       } catch (err) {
         console.error("[批量质检]", err);
-        showToast(`批量质检异常: ${err.message}`);
-      } finally {
-        isBatchEvaluating.value = false;
+        await finalizeQualityJob(false, { error: err.message });
       }
+    };
+
+    const cancelQuality = async () => {
+      if (!qcTaskId.value) return;
+      try {
+        await cancelQualityJob(qcTaskId.value);
+        showToast("正在取消质检任务...");
+      } catch (err) {
+        console.error("[取消质检]", err);
+        showToast(`取消失败: ${err.message}`);
+      }
+    };
+
+    const resumeQualityJob = async () => {
+      let saved = null;
+      try {
+        saved = JSON.parse(localStorage.getItem("activeQualityTask") || "null");
+      } catch (_) {}
+      if (!saved || !saved.taskId) return;
+      if (saved.dir !== srcDir.value.trim()) return;
+
+      // 检查 job 是否仍在
+      try {
+        const st = await fetchJobStatus(saved.taskId);
+        if (st && st.found && st.state === "running") {
+          qcTaskId.value = saved.taskId;
+          isBatchEvaluating.value = true;
+          qcProgress.value = { done: st.done || 0, total: st.total || 0 };
+          qcLogs.value = (st.logs || []).slice(-20);
+          qcPollTimer = setTimeout(pollQualityStatus, 700);
+        } else {
+          // job 已结束或丢失，清理并 rescan
+          localStorage.removeItem("activeQualityTask");
+          try {
+            const freshData = await scanDirectory(srcDir.value.trim());
+            if (freshData && freshData.records) {
+              records.value = freshData.records.map((r) => {
+                r.tags = normalizeTags(r.tags);
+                return r;
+              });
+            }
+          } catch (_) {}
+        }
+      } catch (_) {}
     };
 
     const doSave = async () => {
@@ -1299,7 +1483,7 @@ const app = createApp({
       const pollStatus = async () => {
         let st = null;
         try {
-          st = await fetchExportStatus(taskId);
+          st = await fetchJobStatus(taskId);
         } catch (_) {
           return; // 网络错误：静默停止轮询，POST 自身结果兜底
         }
@@ -1498,6 +1682,9 @@ const app = createApp({
           selectAllFiltered();
         }
       });
+
+      // 尝试恢复未完成的质检任务
+      resumeQualityJob();
     });
 
     const thumbUrl = (path, size = 360) => {
@@ -1598,6 +1785,7 @@ const app = createApp({
       resetStartOrderForType,
       viewerModalOpen,
       currentViewerItem,
+      cropOverlayStyle,
       toast,
       getThumbUrl: thumbUrl,
       getFileUrl: fileUrl,
@@ -1634,6 +1822,9 @@ const app = createApp({
       lastTrialDir,
       copyExportLogs,
       filterGrade,
+      filterScoreMin,
+      filterScoreMax,
+      filterUpgradeable,
       isEvaluatingQuality,
       isBatchEvaluating,
       qualitySummary,
@@ -1641,6 +1832,12 @@ const app = createApp({
       scoredCount,
       evalSingleQuality,
       triggerBatchQuality,
+      cancelQuality,
+      resumeQualityJob,
+      qcTaskId,
+      qcProgress,
+      qcProgressPercent,
+      qcLogs,
       hasRatio,
       toggleRatio,
       isUnselectable,

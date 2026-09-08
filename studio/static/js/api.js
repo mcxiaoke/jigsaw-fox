@@ -69,7 +69,12 @@ export async function executeExport(payload) {
 // 导出进度状态快照 (只读轮询)。task 未找到时返回 { ok:false, found:false }，
 // 由调用方静默停止轮询并依赖 POST 自身结果，绝不抛错。
 export async function fetchExportStatus(taskId) {
-  const res = await fetch(`/api/export/status?task=${encodeURIComponent(taskId)}`);
+  return fetchJobStatus(taskId);
+}
+
+// 统一任务状态查询 (导出与质检共用)
+export async function fetchJobStatus(taskId) {
+  const res = await fetch(`/api/job/status?task=${encodeURIComponent(taskId)}`);
   const data = await res.json();
   return data || { ok: false, found: false };
 }
@@ -124,15 +129,32 @@ export async function fetchQualityStats(dir) {
   return data;
 }
 
-export async function batchEvaluateQuality(dir, limit = 50, paths = []) {
+export async function fetchQualityScores(dir) {
+  const res = await fetch(`/api/quality/scores?dir=${encodeURIComponent(dir)}`);
+  const data = await res.json();
+  if (!res.ok || !data.ok) throw new Error(data.error || "获取质检分数失败");
+  return data;
+}
+
+export async function batchEvaluateQuality(dir, limit = 50, paths = [], force = false, clientTaskId = "") {
   const res = await fetch("/api/quality/batch", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ dir, limit, paths }),
+    body: JSON.stringify({ dir, limit, paths, force, clientTaskId }),
   });
   const data = await res.json();
-  if (!res.ok || !data.ok) throw new Error(data.error || "批量质检执行失败");
+  if (!res.ok || !data.ok) throw new Error(data.error || "批量质检启动失败");
   return data;
+}
+
+export async function cancelQualityJob(taskId) {
+  const res = await fetch("/api/quality/cancel", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ task: taskId }),
+  });
+  const data = await res.json();
+  return data || { ok: false };
 }
 
 function jsonStringifySafe(obj) {

@@ -13,12 +13,14 @@ import hashlib
 import json
 import logging
 import mimetypes
+import os
 import socket
 import sys
 import threading
 import time
 import urllib.parse
 import webbrowser
+from concurrent.futures import ThreadPoolExecutor as _Pool
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
@@ -66,6 +68,8 @@ from studio.taxonomy import (
 )
 
 STATIC_DIR = Path(__file__).parent / "static"
+
+
 def _default_log_file() -> Path:
     """默认日志文件按日期命名 (temp/studio-YYYYMMDD.log)，每天一个新文件，不做大小轮转。"""
     stamp = dt.date.today().strftime("%Y%m%d")
@@ -159,7 +163,7 @@ setup_logger("INFO", DEFAULT_LOG_FILE)
 #   - 本表任何故障都不影响导出主流程 (写入口被调用方 try 保护/内部判空)。
 _JOB_LOCK = threading.Lock()
 _JOBS: dict[str, dict[str, Any]] = {}
-_JOB_MAX_KEEP = 50        # 最多保留最近 N 个任务
+_JOB_MAX_KEEP = 50  # 最多保留最近 N 个任务
 _JOB_TTL_SECONDS = 300.0  # 终态任务保留时长 (惰性清理，无定时器)
 
 
@@ -168,7 +172,8 @@ def _job_cleanup_locked(now: float) -> None:
     if len(_JOBS) <= _JOB_MAX_KEEP:
         return
     expired = [
-        k for k, v in _JOBS.items()
+        k
+        for k, v in _JOBS.items()
         if v.get("state") in ("done", "error")
         and (now - float(v.get("created_at", 0))) >= _JOB_TTL_SECONDS
     ]
@@ -216,7 +221,9 @@ def _job_progress(task_id: str, done: int, total: int) -> None:
             job["total"] = int(total)
 
 
-def _job_finish(task_id: str, summary: str | None = None, error: str | None = None) -> None:
+def _job_finish(
+    task_id: str, summary: str | None = None, error: str | None = None
+) -> None:
     if not task_id:
         return
     with _JOB_LOCK:
@@ -247,6 +254,106 @@ def _job_snapshot(task_id: str) -> dict[str, Any] | None:
             "summary": job.get("summary"),
             "error": job.get("error"),
         }
+
+
+def _job_cancel(task_id: str) -> bool:
+    """标记任务为取消；worker 在子批间检查并退出。返回是否成功标记。"""
+    if not task_id:
+        return False
+    with _JOB_LOCK:
+        job = _JOBS.get(task_id)
+        if job is None:
+            return False
+        if job.get("state") != "running":
+            return False
+        job["cancel"] = True
+        return True
+
+
+def _job_is_cancelled(task_id: str) -> bool:
+    """检查任务是否被取消。"""
+    if not task_id:
+        return False
+    with _JOB_LOCK:
+        job = _JOBS.get(task_id)
+        return bool(job and job.get("cancel"))
+
+
+# ---------------------------------------------------------------------------
+# 质检后台 worker
+# ---------------------------------------------------------------------------
+
+_QUALITY_SUB_BATCH = 50  # 子批大小
+
+
+def _run_quality_job(
+    root: Path,
+    targets: list[tuple[Path, str, str]],
+    task_id: str,
+    max_workers: int | None = None,
+) -> None:
+    """
+    质检后台 worker：子批循环 -> evaluate_images_batch -> 落库 -> 进度回写。
+    targets: [(full_path, rel_path, hash)]
+    """
+    total = len(targets)
+    if total == 0:
+        _job_finish(task_id, summary="无待质检图片")
+        return
+
+    _job_progress(task_id, 0, total)
+    workers = max_workers or max(4, (os.cpu_count() or 8) - 4)
+    done = 0
+
+    logger.info("[QUALITY] %s 开始: 共 %d 张, %d 线程", task_id, total, workers)
+
+    with CacheDB(root) as db:
+        for i in range(0, total, _QUALITY_SUB_BATCH):
+            if _job_is_cancelled(task_id):
+                _job_finish(task_id, error="cancelled")
+                logger.info("[QUALITY] %s 已取消: %d/%d", task_id, done, total)
+                return
+
+            sub = targets[i : i + _QUALITY_SUB_BATCH]
+            sub_paths = [t[0] for t in sub]
+
+            logger.info(
+                "[QUALITY] %s 进度: %d/%d (剩余 %d)",
+                task_id,
+                done,
+                total,
+                total - done,
+            )
+
+            try:
+                results = evaluate_images_batch(sub_paths, max_workers=workers)
+            except Exception as e:
+                logger.error("[QUALITY] %s 子批异常: %s", task_id, e)
+                results = []
+
+            rows = []
+            for idx, res in enumerate(results):
+                if idx < len(sub):
+                    _, rel, file_h = sub[idx]
+                    h = file_h or compute_file_sha256(sub[idx][0])
+                    rows.append((h, res))
+
+            if rows:
+                db.save_qualities_batch(rows)
+
+            done += len(sub)
+            _job_progress(task_id, done, total)
+            _job_append_log(
+                task_id,
+                {
+                    "t": dt.datetime.now().strftime("%H:%M:%S"),
+                    "level": "info",
+                    "msg": f"已评估 {done}/{total} 张",
+                },
+            )
+
+    logger.info("[QUALITY] %s 完成: %d/%d 张", task_id, done, total)
+    _job_finish(task_id, summary=f"质检完成: {done}/{total} 张")
 
 
 class StudioRequestHandler(BaseHTTPRequestHandler):
@@ -280,7 +387,6 @@ class StudioRequestHandler(BaseHTTPRequestHandler):
         else:
             logger.info(f"[HTTP] {msg}")
 
-
     def _cors(self) -> None:
         self.send_header("Access-Control-Allow-Origin", "*")
         self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
@@ -313,7 +419,9 @@ class StudioRequestHandler(BaseHTTPRequestHandler):
 
         # 1. 首页与静态文件
         if path in ("/", "/index.html"):
-            self._serve_static_file(STATIC_DIR / "index.html", "text/html; charset=utf-8")
+            self._serve_static_file(
+                STATIC_DIR / "index.html", "text/html; charset=utf-8"
+            )
             return
 
         if path == "/favicon.ico":
@@ -350,8 +458,8 @@ class StudioRequestHandler(BaseHTTPRequestHandler):
             self._handle_get_exported(qs)
             return
 
-        if path == "/api/export/status":
-            self._handle_export_status(qs)
+        if path in ("/api/export/status", "/api/job/status"):
+            self._handle_job_status(qs)
             return
 
         if path == "/api/thumb":
@@ -368,6 +476,10 @@ class StudioRequestHandler(BaseHTTPRequestHandler):
 
         if path == "/api/quality/stats":
             self._handle_get_quality_stats(qs)
+            return
+
+        if path == "/api/quality/scores":
+            self._handle_get_quality_scores(qs)
             return
 
         # 兜底查找静态文件
@@ -410,6 +522,10 @@ class StudioRequestHandler(BaseHTTPRequestHandler):
             self._handle_post_quality_batch(data)
             return
 
+        if path == "/api/quality/cancel":
+            self._handle_quality_cancel(data)
+            return
+
         self.send_error(404, f"Not Found POST: {path}")
 
     # -----------------------------------------------------------------------
@@ -417,17 +533,19 @@ class StudioRequestHandler(BaseHTTPRequestHandler):
     # -----------------------------------------------------------------------
     def _handle_taxonomy(self) -> None:
         """返回完整的分类法元数据（前端单一事实源）"""
-        self._json({
-            "ok": True,
-            "tags": MAIN_TAGS,
-            "main_tags": MAIN_TAGS,
-            "catalogs": MAIN_TAGS,
-            "specific_tags": MAIN_TAGS,
-            "tag_zh": TAG_ZH,
-            "catalog_to_tags": CATALOG_TO_TAGS_MAP,
-            "tag_to_catalogs": TAG_TO_CATALOGS,
-            "all_canonical_tags": ALL_CANONICAL_TAGS,
-        })
+        self._json(
+            {
+                "ok": True,
+                "tags": MAIN_TAGS,
+                "main_tags": MAIN_TAGS,
+                "catalogs": MAIN_TAGS,
+                "specific_tags": MAIN_TAGS,
+                "tag_zh": TAG_ZH,
+                "catalog_to_tags": CATALOG_TO_TAGS_MAP,
+                "tag_to_catalogs": TAG_TO_CATALOGS,
+                "all_canonical_tags": ALL_CANONICAL_TAGS,
+            }
+        )
 
     def _handle_scan(self, qs: dict[str, list[str]]) -> None:
         """扫描指定目录下的图片，并加载或推断标签与防重导出状态"""
@@ -451,7 +569,9 @@ class StudioRequestHandler(BaseHTTPRequestHandler):
 
         with CacheDB(root) as db:
             # 优先加载 SQLite 算力缓存，确保哪怕未点保存也能 0ms 秒级恢复
-            hash_cache: dict[str, tuple[int, int, str, int, int, str]] = dict(db.load_file_cache())
+            hash_cache: dict[str, tuple[int, int, str, int, int, str]] = dict(
+                db.load_file_cache()
+            )
 
             if tag_file:
                 raw_data, err = load_tags_file(tag_file)
@@ -471,16 +591,25 @@ class StudioRequestHandler(BaseHTTPRequestHandler):
 
             images = scan_images(root)
             total_images = len(images)
-            logger.info(f"[SCAN] 开始扫描目录: {root.resolve()} (发现 {total_images:,} 个图片文件)")
+            logger.info(
+                f"[SCAN] 开始扫描目录: {root.resolve()} (发现 {total_images:,} 个图片文件)"
+            )
 
             scan_stats: dict[str, Any] = {}
             start_time = time.time()
             last_log_time = 0.0
 
-            def _on_progress(completed: int, total: int, cache_hits: int, new_hashes: int) -> None:
+            def _on_progress(
+                completed: int, total: int, cache_hits: int, new_hashes: int
+            ) -> None:
                 nonlocal last_log_time
                 now = time.time()
-                if completed == 1 or completed == total or completed % 500 == 0 or (now - last_log_time >= 1.0):
+                if (
+                    completed == 1
+                    or completed == total
+                    or completed % 500 == 0
+                    or (now - last_log_time >= 1.0)
+                ):
                     last_log_time = now
                     pct = (completed / total * 100) if total else 100.0
                     logger.info(
@@ -502,7 +631,9 @@ class StudioRequestHandler(BaseHTTPRequestHandler):
             db.upsert_files(list(image_infos.values()))
             db.prune_missing_files(list(image_infos.keys()))
 
-            records, stats = merge_scanned_images(images, root, existing_records, image_infos=image_infos)
+            records, stats = merge_scanned_images(
+                images, root, existing_records, image_infos=image_infos
+            )
             img_infos = list(image_infos.values())
 
             # 读取 exported.json 账本并关联到每条记录
@@ -553,8 +684,14 @@ class StudioRequestHandler(BaseHTTPRequestHandler):
                     logger.warning(f"[DUP] ── 组 {idx} [SHA-256: {h[:16]}...]:")
                     for it in group:
                         p_name = it.get("path") or it.get("file")
-                        real_tags = [t for t in (it.get("tags") or []) if t.lower() != "others"]
-                        tag_str = f"[{', '.join(real_tags)}]" if real_tags else "[未分类/无标签]"
+                        real_tags = [
+                            t for t in (it.get("tags") or []) if t.lower() != "others"
+                        ]
+                        tag_str = (
+                            f"[{', '.join(real_tags)}]"
+                            if real_tags
+                            else "[未分类/无标签]"
+                        )
                         logger.warning(f"[DUP]    • {p_name} (标签: {tag_str})")
             else:
                 logger.info("[SCAN] 重复性检查: 未发现内容重复的文件 (0 重复)")
@@ -590,17 +727,19 @@ class StudioRequestHandler(BaseHTTPRequestHandler):
                 f"[SCAN] 重复统计: 存在 {stats['duplicateGroups']} 组重复素材，共计 {stats['duplicateCount']} 个文件"
             )
 
-        self._json({
-            "ok": True,
-            "dir": str(root.resolve()),
-            "tagFile": str(tag_file.resolve()) if tag_file else None,
-            "tagFormat": format_name,
-            "records": records,
-            "stats": stats,
-            "images": img_infos,
-            "total": len(img_infos),
-            "totalExported": exp_ledger.get("total_exported", 0),
-        })
+        self._json(
+            {
+                "ok": True,
+                "dir": str(root.resolve()),
+                "tagFile": str(tag_file.resolve()) if tag_file else None,
+                "tagFormat": format_name,
+                "records": records,
+                "stats": stats,
+                "images": img_infos,
+                "total": len(img_infos),
+                "totalExported": exp_ledger.get("total_exported", 0),
+            }
+        )
 
     def _resolve_image_path(self, path_s: str, qs: dict[str, list[str]]) -> Path | None:
         """多策略路径解析：直接绝对路径、基于 ?dir 参数或上次扫描根目录"""
@@ -630,7 +769,10 @@ class StudioRequestHandler(BaseHTTPRequestHandler):
                 pass
 
         # 3. 回退与上次成功扫描的目录拼接
-        if StudioRequestHandler.current_root_dir and StudioRequestHandler.current_root_dir.is_dir():
+        if (
+            StudioRequestHandler.current_root_dir
+            and StudioRequestHandler.current_root_dir.is_dir()
+        ):
             try:
                 for cand in candidates:
                     joined = StudioRequestHandler.current_root_dir / cand
@@ -693,8 +835,8 @@ class StudioRequestHandler(BaseHTTPRequestHandler):
         ledger = load_exported_ledger(root)
         self._json({"ok": True, "ledger": ledger})
 
-    def _handle_export_status(self, qs: dict[str, list[str]]) -> None:
-        """导出任务进度状态快照 (只读观测通道，供前端轮询)"""
+    def _handle_job_status(self, qs: dict[str, list[str]]) -> None:
+        """任务进度状态快照 (只读观测通道，供前端轮询)；导出与质检共用"""
         task_id = (qs.get("task") or [""])[0].strip()
         snap = _job_snapshot(task_id)
         if snap is None:
@@ -737,7 +879,11 @@ class StudioRequestHandler(BaseHTTPRequestHandler):
             self._error(f"图片不存在或无法访问: {path_s}", status=404)
             return
 
-        root = Path(dir_param).resolve() if dir_param else (StudioRequestHandler.current_root_dir or img_path.parent)
+        root = (
+            Path(dir_param).resolve()
+            if dir_param
+            else (StudioRequestHandler.current_root_dir or img_path.parent)
+        )
 
         with CacheDB(root) as db:
             file_hash = hash_s
@@ -751,7 +897,14 @@ class StudioRequestHandler(BaseHTTPRequestHandler):
             if not force and file_hash:
                 cached = db.get_quality(file_hash)
                 if cached:
-                    self._json({"ok": True, "hash": file_hash, "quality": cached, "cached": True})
+                    self._json(
+                        {
+                            "ok": True,
+                            "hash": file_hash,
+                            "quality": cached,
+                            "cached": True,
+                        }
+                    )
                     return
 
             # 现场计算并入库
@@ -759,7 +912,9 @@ class StudioRequestHandler(BaseHTTPRequestHandler):
                 res = evaluate_image(img_path)
                 if file_hash:
                     db.save_quality(file_hash, res)
-                self._json({"ok": True, "hash": file_hash, "quality": res, "cached": False})
+                self._json(
+                    {"ok": True, "hash": file_hash, "quality": res, "cached": False}
+                )
             except Exception as e:
                 logger.error(f"[QUALITY] 质检计算异常 ({path_s}): {e}")
                 self._error(f"质检计算失败: {e}", status=500)
@@ -767,23 +922,55 @@ class StudioRequestHandler(BaseHTTPRequestHandler):
     def _handle_get_quality_stats(self, qs: dict[str, list[str]]) -> None:
         """获取当前工作目录的质检统计总览"""
         dir_param = (qs.get("dir") or [""])[0].strip()
-        root = Path(dir_param).resolve() if dir_param else StudioRequestHandler.current_root_dir
+        root = (
+            Path(dir_param).resolve()
+            if dir_param
+            else StudioRequestHandler.current_root_dir
+        )
         if not root or not root.is_dir():
             self._error("缺少有效目录 ?dir 参数")
             return
         with CacheDB(root) as db:
             self._json({"ok": True, "stats": db.get_stats()})
 
+    def _handle_get_quality_scores(self, qs: dict[str, list[str]]) -> None:
+        """轻量端点：纯 SQLite 查询返回 {path: quality}，不碰文件系统"""
+        dir_param = (qs.get("dir") or [""])[0].strip()
+        root = (
+            Path(dir_param).resolve()
+            if dir_param
+            else StudioRequestHandler.current_root_dir
+        )
+        if not root or not root.is_dir():
+            self._error("缺少有效目录 ?dir 参数")
+            return
+        with CacheDB(root) as db:
+            scores = db.get_all_quality_scores()
+            stats = db.get_stats()
+        self._json({"ok": True, "scores": scores, "stats": stats})
+
     def _handle_post_quality_batch(self, data: dict[str, Any]) -> None:
-        """批量对未评分图片执行 OpenCV 物理质检与裁剪建议计算"""
+        """批量质检：注册 job -> 后台 worker -> 立即返回 taskId"""
         dir_param = (data.get("dir") or "").strip()
-        root = Path(dir_param).resolve() if dir_param else StudioRequestHandler.current_root_dir
+        root = (
+            Path(dir_param).resolve()
+            if dir_param
+            else StudioRequestHandler.current_root_dir
+        )
         if not root or not root.is_dir():
             self._error("缺少有效目录 dir 参数", status=400)
             return
 
+        client_task_id = (data.get("clientTaskId") or "").strip()
+        if not client_task_id:
+            self._error("缺少 clientTaskId 参数", status=400)
+            return
+
         paths = data.get("paths") or []
-        limit = max(1, min(int(data.get("limit") or 20), 200))
+        limit = max(1, min(int(data.get("limit") or 500), 2000))
+        force = bool(data.get("force"))
+        max_workers_raw = int(data.get("maxWorkers") or 0)
+        max_workers = max_workers_raw if 1 <= max_workers_raw <= 24 else None
 
         with CacheDB(root) as db:
             targets: list[tuple[Path, str, str]] = []  # (full_path, rel_path, hash)
@@ -793,6 +980,12 @@ class StudioRequestHandler(BaseHTTPRequestHandler):
                     if p and p.is_file():
                         rel = p.relative_to(root).as_posix().replace("\\", "/")
                         targets.append((p, rel, ""))
+            elif force:
+                all_items = db.get_all_items(limit=limit)
+                for rel, h in all_items:
+                    p = root / rel
+                    if p.is_file():
+                        targets.append((p, rel, h))
             else:
                 unscored = db.get_unscored_items(limit=limit)
                 for rel, h in unscored:
@@ -800,27 +993,49 @@ class StudioRequestHandler(BaseHTTPRequestHandler):
                     if p.is_file():
                         targets.append((p, rel, h))
 
-            results: list[dict[str, Any]] = []
-            for p, rel, h in targets:
-                file_h = h or compute_file_sha256(p)
-                try:
-                    q_res = evaluate_image(p)
-                    db.save_quality(file_h, q_res)
-                    results.append({
-                        "path": rel,
-                        "hash": file_h,
-                        "quality": q_res,
-                    })
-                except Exception as e:
-                    logger.error(f"[QUALITY] 批量计算异常 ({rel}): {e}")
+        total = len(targets)
 
-            logger.info(f"[QUALITY] 批量质检完成: 成功评估 {len(results)}/{len(targets)} 张图片")
-            self._json({
+        # 并发拦截：已有质检任务在跑时拒绝新请求
+        with _JOB_LOCK:
+            running = [k for k, v in _JOBS.items() if v.get("state") == "running"]
+        if running:
+            self._error(
+                f"质检任务正在进行中: {running[0]}, 请等待完成或先取消",
+                status=409,
+            )
+            return
+
+        _job_register(client_task_id)
+        _job_progress(client_task_id, 0, total)
+
+        _Pool(max_workers=1).submit(
+            _run_quality_job, root, targets, client_task_id, max_workers
+        )
+
+        logger.info(
+            "[QUALITY] 质检任务已启动: task=%s, total=%d, force=%s, workers=%s",
+            client_task_id,
+            total,
+            force,
+            max_workers or "auto",
+        )
+        self._json(
+            {
                 "ok": True,
-                "count": len(results),
-                "items": results,
-                "stats": db.get_stats(),
-            })
+                "taskId": client_task_id,
+                "total": total,
+                "started": True,
+            }
+        )
+
+    def _handle_quality_cancel(self, data: dict[str, Any]) -> None:
+        """取消进行中的质检任务"""
+        task_id = (data.get("task") or "").strip()
+        if not task_id:
+            self._error("缺少 task 参数", status=400)
+            return
+        ok = _job_cancel(task_id)
+        self._json({"ok": ok, "taskId": task_id})
 
     def _handle_thumb(self, qs: dict[str, list[str]]) -> None:
         """缩略图输出 (带 HTTP 强缓存与 304 协商缓存)"""
@@ -927,7 +1142,14 @@ class StudioRequestHandler(BaseHTTPRequestHandler):
             _job_progress(task_id, done, total)
 
         if not src or not out:
-            self._json({"ok": False, "error": "必须提供源目录 (srcDir) 与输出目录 (outDir)", "logs": logs}, 400)
+            self._json(
+                {
+                    "ok": False,
+                    "error": "必须提供源目录 (srcDir) 与输出目录 (outDir)",
+                    "logs": logs,
+                },
+                400,
+            )
             return
 
         src_p = Path(src)
@@ -937,10 +1159,14 @@ class StudioRequestHandler(BaseHTTPRequestHandler):
         log_fn(f"开始导出任务: [{exp_type.upper()}] (分类: {cat_id})")
         log_fn(f"源路径: {src}")
         log_fn(f"目标路径: {out}")
-        logger.info(f"[EXPORT] 收到导出请求: 类型={exp_type}, 分类={cat_id}, 源路径={src}, 输出路径={out}")
+        logger.info(
+            f"[EXPORT] 收到导出请求: 类型={exp_type}, 分类={cat_id}, 源路径={src}, 输出路径={out}"
+        )
 
         try:
-            exporter = get_exporter(exp_type, data, src_p, out_p, http_base, log_fn, progress_fn=progress_fn)
+            exporter = get_exporter(
+                exp_type, data, src_p, out_p, http_base, log_fn, progress_fn=progress_fn
+            )
             exporter.validate()
             result = exporter.execute()
             result.logs = logs
@@ -967,11 +1193,14 @@ class StudioRequestHandler(BaseHTTPRequestHandler):
             log_fn(f"导出失败: {e} ({err_detail})", "err")
             logger.error(f"[EXPORT] 导出异常: {e}\n{traceback.format_exc()}")
             _job_finish(task_id, error=str(e))
-            self._json({
-                "ok": False,
-                "error": str(e),
-                "logs": logs,
-            }, status=500)
+            self._json(
+                {
+                    "ok": False,
+                    "error": str(e),
+                    "logs": logs,
+                },
+                status=500,
+            )
 
     def _handle_export_preview(self, data: dict[str, Any]) -> None:
         """导出前只读预检：按排序方式返回图片清单 + 统计 + 建议起始序号/版本 (不写盘)"""
@@ -995,10 +1224,15 @@ class StudioRequestHandler(BaseHTTPRequestHandler):
         exclude_exported = bool(data.get("excludeExported"))
         # 第②步 ✕ 剔除的图片：预览与导出必须同口径
         excluded_raw = data.get("excludedPaths")
-        excluded = {
-            str(p).replace("\\", "/").strip().lower()
-            for p in excluded_raw if str(p).strip()
-        } if isinstance(excluded_raw, list) else set()
+        excluded = (
+            {
+                str(p).replace("\\", "/").strip().lower()
+                for p in excluded_raw
+                if str(p).strip()
+            }
+            if isinstance(excluded_raw, list)
+            else set()
+        )
         fmt = (data.get("format") or "webp").strip().lower()
         try:
             quality = int(data.get("quality", 70))
@@ -1008,12 +1242,28 @@ class StudioRequestHandler(BaseHTTPRequestHandler):
 
         # 1. 校选图范围 + 排序
         images = scan_images(root)
-        if selected_paths and isinstance(selected_paths, list) and len(selected_paths) > 0:
-            selected_set = {str(p).replace("\\", "/").strip().lower() for p in selected_paths}
-            images = [p for p in images if p.relative_to(root).as_posix().lower() in selected_set]
+        if (
+            selected_paths
+            and isinstance(selected_paths, list)
+            and len(selected_paths) > 0
+        ):
+            selected_set = {
+                str(p).replace("\\", "/").strip().lower() for p in selected_paths
+            }
+            images = [
+                p
+                for p in images
+                if p.relative_to(root).as_posix().lower() in selected_set
+            ]
         if excluded:
-            images = [p for p in images if p.relative_to(root).as_posix().lower() not in excluded]
-        manual_order = build_manual_order(root, data.get("manualOrder") or selected_paths)
+            images = [
+                p
+                for p in images
+                if p.relative_to(root).as_posix().lower() not in excluded
+            ]
+        manual_order = build_manual_order(
+            root, data.get("manualOrder") or selected_paths
+        )
         images = sort_images(images, sort_by, manual_order=manual_order)
 
         # 2. 标签与哈希来源：前端传入 records 优先，否则退回源目录 tags 文件
@@ -1051,7 +1301,9 @@ class StudioRequestHandler(BaseHTTPRequestHandler):
             rec = rec_by_rel.get(rel) or rec_by_name.get(p.name) or {}
             tags = rec.get("tags") or []
             # 无标签一律落成规范兜底标签 [Others]，与导出器/前端保持同一口径
-            norm = [normalize_token(t) for t in tags if normalize_token(t)] or [OTHERS_TAG]
+            norm = [normalize_token(t) for t in tags if normalize_token(t)] or [
+                OTHERS_TAG
+            ]
             h = (rec.get("hash") or "").strip().lower()
             if not h:
                 try:
@@ -1075,15 +1327,19 @@ class StudioRequestHandler(BaseHTTPRequestHandler):
                 tag_counter[tg] = tag_counter.get(tg, 0) + 1
             dir_counter[dir1] = dir_counter.get(dir1, 0) + 1
             prev = exp_map.get(h) or exp_map.get(rel)
-            ordered.append({
-                "rel": rel,
-                "file": p.name,
-                "tags": norm,
-                "dir": dir1,
-                "size": size,
-                "isExported": is_exp,
-                "prevTarget": (prev.get("target") if isinstance(prev, dict) else None),
-            })
+            ordered.append(
+                {
+                    "rel": rel,
+                    "file": p.name,
+                    "tags": norm,
+                    "dir": dir1,
+                    "size": size,
+                    "isExported": is_exp,
+                    "prevTarget": (
+                        prev.get("target") if isinstance(prev, dict) else None
+                    ),
+                }
+            )
 
         # 5. 建议值 (根据 outDir/main/index.json 与源侧账本)
         suggested: dict[str, Any] = {
@@ -1120,13 +1376,15 @@ class StudioRequestHandler(BaseHTTPRequestHandler):
         if exp_type == "main" and suggested.get("maxOrder", 0) > 0:
             stats["suggestedStartOrder"] = suggested["suggestedStartOrder"]
 
-        self._json({
-            "ok": True,
-            "type": exp_type,
-            "ordered": ordered,
-            "stats": stats,
-            "suggested": suggested,
-        })
+        self._json(
+            {
+                "ok": True,
+                "type": exp_type,
+                "ordered": ordered,
+                "stats": stats,
+                "suggested": suggested,
+            }
+        )
 
     def _serve_static_file(self, p: Path, ctype: str) -> None:
         if not p.exists() or not p.is_file():
@@ -1151,7 +1409,9 @@ class StudioServer(ThreadingHTTPServer):
 
     daemon_threads = True
 
-    def __init__(self, server_address: tuple[str, int], RequestHandlerClass: type) -> None:
+    def __init__(
+        self, server_address: tuple[str, int], RequestHandlerClass: type
+    ) -> None:
         if sys.platform == "win32":
             self.allow_reuse_address = False
         super().__init__(server_address, RequestHandlerClass)
@@ -1219,13 +1479,24 @@ def run_server(
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Content Studio — 拼图内容打包工作室")
-    parser.add_argument("--host", default="127.0.0.1", help="监听地址 (默认: 127.0.0.1)")
+    parser.add_argument(
+        "--host", default="127.0.0.1", help="监听地址 (默认: 127.0.0.1)"
+    )
     parser.add_argument("--port", type=int, default=5188, help="监听端口 (默认: 5188)")
     parser.add_argument("--open", action="store_true", help="启动后自动在浏览器打开")
     parser.add_argument(
         "--loglevel",
         default="INFO",
-        choices=["DEBUG", "INFO", "WARNING", "ERROR", "debug", "info", "warning", "error"],
+        choices=[
+            "DEBUG",
+            "INFO",
+            "WARNING",
+            "ERROR",
+            "debug",
+            "info",
+            "warning",
+            "error",
+        ],
         help="控制台日志级别 (默认: INFO)",
     )
     parser.add_argument(

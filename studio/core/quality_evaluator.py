@@ -12,6 +12,7 @@ import json
 import os
 import subprocess
 import sys
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Any
 import logging
@@ -34,11 +35,27 @@ try:
     import cv2
     import numpy as np
     from PIL import Image, ImageOps
+
+    from studio.core.crop_compute import (
+        AUTO_FAMILIES,
+        build_ratio_pool,
+        compute_content_box,
+        expand_ratio_families,
+        select_aspect,
+        smart_aspect_crop_box,
+    )
+
+    # 质检候选比例池: 与导出侧 AUTO_FAMILIES 一致 (1:1 + 4:3, 含横竖镜像)
+    QUALITY_EVAL_RATIO_POOL = build_ratio_pool(
+        expand_ratio_families(list(AUTO_FAMILIES))
+    )
+
     HAS_CV2 = True
 except ImportError:
     HAS_CV2 = False
     try:
         from PIL import Image, ImageOps, ImageStat
+
         HAS_PIL = True
     except ImportError:
         HAS_PIL = False
@@ -48,10 +65,13 @@ except ImportError:
 # OpenCV 核心物理质检评估器 (In-Process)
 # ==============================================================================
 
+
 class PhysicalEvaluator:
     """基于 OpenCV 的物理特征与死区切片评估器"""
 
-    def __init__(self, grid_rows: int = 8, grid_cols: int = 8, eval_max_dim: int = 640) -> None:
+    def __init__(
+        self, grid_rows: int = 8, grid_cols: int = 8, eval_max_dim: int = 640
+    ) -> None:
         self.grid_rows = grid_rows
         self.grid_cols = grid_cols
         self.eval_max_dim = eval_max_dim
@@ -75,14 +95,28 @@ class PhysicalEvaluator:
             if orig_w < 64 or orig_h < 64:
                 return self._empty_result("分辨率过小，无法进行拼图质检")
 
+            # Smart crop: 模拟导出管线, 按 1:1+2:3 ratio 计算裁切框
+            smart_crop_info = self._compute_smart_crop(pil_img)
+
             rgb_arr = np.array(pil_img)
             bgr_arr = cv2.cvtColor(rgb_arr, cv2.COLOR_RGB2BGR)
 
-            return self.evaluate_image_bgr(bgr_arr, orig_w=orig_w, orig_h=orig_h)
+            return self.evaluate_image_bgr(
+                bgr_arr,
+                orig_w=orig_w,
+                orig_h=orig_h,
+                smart_crop_info=smart_crop_info,
+            )
         except Exception as e:
             return self._empty_result(f"图像评估异常: {e}")
 
-    def evaluate_image_bgr(self, bgr_arr: np.ndarray, orig_w: int, orig_h: int) -> dict[str, Any]:
+    def evaluate_image_bgr(
+        self,
+        bgr_arr: np.ndarray,
+        orig_w: int,
+        orig_h: int,
+        smart_crop_info: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
         h, w = bgr_arr.shape[:2]
         # 降采样加速
         if max(h, w) > self.eval_max_dim:
@@ -118,20 +152,41 @@ class PhysicalEvaluator:
 
         # 裁剪建议与提分潜力
         crop_suggestion, can_upgrade, potential_score = self._evaluate_crop(
-            grid_matrix, total_dead_ratio, core_dead_ratio, border_dead_ratio, orig_w, orig_h
+            grid_matrix,
+            total_dead_ratio,
+            core_dead_ratio,
+            border_dead_ratio,
+            orig_w,
+            orig_h,
         )
 
         # 最大推荐切片档位
-        max_grid_tier = self._recommend_max_grid(orig_w, orig_h, laplacian_var, core_dead_ratio)
+        max_grid_tier = self._recommend_max_grid(
+            orig_w, orig_h, laplacian_var, core_dead_ratio
+        )
 
         # 综合打分
-        score, grade, status, diagnostics = self._compute_score(
+        score, grade, status, diagnostics, score_boosted = self._compute_score(
             laplacian_var=laplacian_var,
             core_dead_ratio=core_dead_ratio,
             border_dead_ratio=border_dead_ratio,
             color_entropy=color_entropy,
             spatial_balance=spatial_balance,
+            smart_crop_info=smart_crop_info,
         )
+
+        # 若 smart crop 提分, 更新裁切建议为精确描述
+        if smart_crop_info:
+            cw_val = smart_crop_info.get("crop_w", 0)
+            ch_val = smart_crop_info.get("crop_h", 0)
+            ratio_label = smart_crop_info.get("crop_ratio", "")
+            ss_val = smart_crop_info.get("subject_short_side", 0)
+            crop_suggestion = (
+                f"\u2702\ufe0f \u5efa\u8bae {ratio_label} \u88c1\u5207 \u2192 "
+                f"{cw_val}\u00d7{ch_val}px (\u4e3b\u4f53\u77ed\u8fb9{ss_val}px)"
+            )
+            if score_boosted:
+                can_upgrade = True
 
         return {
             "score": score,
@@ -155,6 +210,22 @@ class PhysicalEvaluator:
                 "grid_rows": self.grid_rows,
                 "grid_cols": self.grid_cols,
                 "grid_matrix": grid_matrix,
+                # Smart crop 字段 (旧缓存为空, 前端兼容)
+                "crop_box": smart_crop_info.get("crop_box")
+                if smart_crop_info
+                else None,
+                "content_box": smart_crop_info.get("content_box")
+                if smart_crop_info
+                else None,
+                "crop_ratio": smart_crop_info.get("crop_ratio")
+                if smart_crop_info
+                else None,
+                "subject_short_side": smart_crop_info.get("subject_short_side")
+                if smart_crop_info
+                else None,
+                "crop_w": smart_crop_info.get("crop_w") if smart_crop_info else None,
+                "crop_h": smart_crop_info.get("crop_h") if smart_crop_info else None,
+                "score_boosted": score_boosted,
             },
         }
 
@@ -190,7 +261,12 @@ class PhysicalEvaluator:
 
                 is_dead = var < 18.0 and edge_energy < 4.5
                 is_flat = var < 45.0 and edge_energy < 8.0
-                is_border = (r == 0 or r == self.grid_rows - 1 or c == 0 or c == self.grid_cols - 1)
+                is_border = (
+                    r == 0
+                    or r == self.grid_rows - 1
+                    or c == 0
+                    or c == self.grid_cols - 1
+                )
 
                 if is_dead:
                     total_dead_count += 1
@@ -201,15 +277,17 @@ class PhysicalEvaluator:
                 if is_flat:
                     flat_count += 1
 
-                row_list.append({
-                    "r": r,
-                    "c": c,
-                    "is_border": is_border,
-                    "var": round(var, 1),
-                    "edge": round(edge_energy, 1),
-                    "is_dead": is_dead,
-                    "is_flat": is_flat,
-                })
+                row_list.append(
+                    {
+                        "r": r,
+                        "c": c,
+                        "is_border": is_border,
+                        "var": round(var, 1),
+                        "edge": round(edge_energy, 1),
+                        "is_dead": is_dead,
+                        "is_flat": is_flat,
+                    }
+                )
             matrix.append(row_list)
 
         total_dead_ratio = total_dead_count / total_cells
@@ -221,7 +299,14 @@ class PhysicalEvaluator:
         cv_val = float(np.std(cell_variances) / mean_var)
         spatial_balance = float(np.clip(100 - cv_val * 35, 10, 100))
 
-        return matrix, total_dead_ratio, core_dead_ratio, border_dead_ratio, flat_ratio, spatial_balance
+        return (
+            matrix,
+            total_dead_ratio,
+            core_dead_ratio,
+            border_dead_ratio,
+            flat_ratio,
+            spatial_balance,
+        )
 
     def _analyze_color(self, hsv: np.ndarray) -> tuple[float, float]:
         h_channel = hsv[:, :, 0]
@@ -241,7 +326,9 @@ class PhysicalEvaluator:
     def _extract_palette(self, img_bgr: np.ndarray, num_colors: int = 5) -> list[str]:
         try:
             small = cv2.resize(img_bgr, (64, 64), interpolation=cv2.INTER_AREA)
-            rgb_pixels = cv2.cvtColor(small, cv2.COLOR_BGR2RGB).reshape(-1, 3).astype(np.float32)
+            rgb_pixels = (
+                cv2.cvtColor(small, cv2.COLOR_BGR2RGB).reshape(-1, 3).astype(np.float32)
+            )
             criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 10, 1.0)
             flags = cv2.KMEANS_RANDOM_CENTERS
             _, _, centers = cv2.kmeans(rgb_pixels, num_colors, None, criteria, 3, flags)
@@ -252,6 +339,46 @@ class PhysicalEvaluator:
             return hex_colors
         except Exception:
             return ["#3b82f6", "#10b981", "#f59e0b", "#ef4444", "#6366f1"]
+
+    def _compute_smart_crop(self, pil_img: Any) -> dict[str, Any] | None:
+        """模拟导出管线的 smart crop, 按 1:1+2:3 ratio 计算裁切框.
+
+        复用 crop_compute 的 compute_content_box -> select_aspect -> smart_aspect_crop_box,
+        与导出侧算法完全一致, 保证质检评分与最终导出结果口径统一.
+
+        Returns:
+            dict with content_box, crop_box, crop_ratio, subject_short_side, crop_w, crop_h
+            None if computation fails or modules unavailable.
+        """
+        try:
+            W, H = pil_img.size
+            content_box = compute_content_box(pil_img, detector="usm")
+            if not content_box or len(content_box) != 4:
+                return None
+            cx0, cy0, cx1, cy1 = content_box
+            cw, ch = cx1 - cx0, cy1 - cy0
+            if cw <= 0 or ch <= 0:
+                return None
+            content_aspect = cw / ch
+            target_val, target_label = select_aspect(
+                content_aspect, QUALITY_EVAL_RATIO_POOL
+            )
+            crop_box = smart_aspect_crop_box(pil_img, content_box, target_val)
+            bx0, by0, bx1, by1 = crop_box
+            crop_w = int(bx1 - bx0)
+            crop_h = int(by1 - by0)
+            subject_short_side = min(crop_w, crop_h)
+            return {
+                "content_box": [int(cx0), int(cy0), int(cx1), int(cy1)],
+                "crop_box": [int(bx0), int(by0), int(bx1), int(by1)],
+                "crop_ratio": target_label,
+                "subject_short_side": subject_short_side,
+                "crop_w": crop_w,
+                "crop_h": crop_h,
+            }
+        except Exception as e:
+            logger.debug("[quality] smart crop compute failed: %s", e)
+            return None
 
     def _evaluate_crop(
         self,
@@ -291,13 +418,19 @@ class PhysicalEvaluator:
 
         if can_upgrade and has_margin:
             potential = int(min(95, 75 + (1.0 - core_dead_ratio) * 20))
-            return f"建议{' + '.join(suggestions)}，适玩度可升至 ~{potential}分", True, potential
+            return (
+                f"建议{' + '.join(suggestions)}，适玩度可升至 ~{potential}分",
+                True,
+                potential,
+            )
         elif core_dead_ratio > 0.15:
             return "内部核心存在大面积纯色死区，无法通过边缘裁剪消除", False, 0
         else:
             return "四周有少量平坦区，核心区域良好", False, 0
 
-    def _recommend_max_grid(self, w: int, h: int, laplacian_var: float, core_dead_ratio: float) -> str:
+    def _recommend_max_grid(
+        self, w: int, h: int, laplacian_var: float, core_dead_ratio: float
+    ) -> str:
         max_dim = max(w, h)
         if max_dim >= 2500 and laplacian_var > 600 and core_dead_ratio <= 0.03:
             return "300 块 (20x15) / 225 块 (15x15) 宗师级"
@@ -315,7 +448,8 @@ class PhysicalEvaluator:
         border_dead_ratio: float,
         color_entropy: float,
         spatial_balance: float,
-    ) -> tuple[int, str, str, list[str]]:
+        smart_crop_info: dict[str, Any] | None = None,
+    ) -> tuple[int, str, str, list[str], bool]:
         diagnostics = []
         texture_score = np.clip(np.log10(laplacian_var + 1.0) / 3.5 * 35.0, 0, 35)
         color_score = np.clip((color_entropy / 4.0) * 30.0, 0, 30)
@@ -331,13 +465,32 @@ class PhysicalEvaluator:
         if border_dead_ratio > 0.10:
             penalties += (border_dead_ratio - 0.10) * 40.0
             if border_dead_ratio > 0.25:
-                diagnostics.append(f"四周边框存在单色区 ({border_dead_ratio * 100:.1f}%)")
+                diagnostics.append(
+                    f"四周边框存在单色区 ({border_dead_ratio * 100:.1f}%)"
+                )
 
         if laplacian_var < 50.0:
             penalties += (50.0 - laplacian_var) * 0.5
             diagnostics.append(f"画面清晰度偏低/虚化 (Laplacian: {laplacian_var:.1f})")
 
         final_score = int(np.clip(base_score - penalties, 0, 100))
+        score_boosted = False
+
+        # Smart crop 提分: 边框死区高但裁切后主体完整且短边>=1200px
+        if smart_crop_info:
+            subject_ss = smart_crop_info.get("subject_short_side", 0)
+            if (
+                subject_ss >= 1200
+                and border_dead_ratio >= 0.15
+                and core_dead_ratio < 0.08
+            ):
+                boost = min(penalties * 0.6, 20)
+                final_score = int(np.clip(final_score + boost, 0, 100))
+                score_boosted = True
+                ratio_label = smart_crop_info.get("crop_ratio", "")
+                diagnostics.append(
+                    f"Smart crop 提分: {ratio_label} 裁切后主体短边 {subject_ss}px, +{int(boost)}分"
+                )
 
         if core_dead_ratio >= 0.22 or final_score < 45 or laplacian_var < 25.0:
             grade, status = "F", "FAIL"
@@ -350,7 +503,7 @@ class PhysicalEvaluator:
         else:
             grade, status = "C", "WARN"
 
-        return final_score, grade, status, diagnostics
+        return final_score, grade, status, diagnostics, score_boosted
 
     def _empty_result(self, msg: str) -> dict[str, Any]:
         return {
@@ -372,6 +525,7 @@ class PhysicalEvaluator:
 # ==============================================================================
 # Pillow 优雅降级评估器 (No-OpenCV Fallback)
 # ==============================================================================
+
 
 def _evaluate_with_pillow(img_path: Path | str) -> dict[str, Any]:
     """若无法使用 OpenCV，使用 Pillow 纯 Python 计算网格方差与死区估算"""
@@ -404,7 +558,9 @@ def _evaluate_with_pillow(img_path: Path | str) -> dict[str, Any]:
         max_dim = max(w, h)
         if max_dim > 640:
             scale = 640 / max_dim
-            im = im.resize((max(int(w * scale), 1), max(int(h * scale), 1)), Image.Resampling.BOX)
+            im = im.resize(
+                (max(int(w * scale), 1), max(int(h * scale), 1)), Image.Resampling.BOX
+            )
         rw, rh = im.size
 
         gray = im.convert("L")
@@ -424,14 +580,16 @@ def _evaluate_with_pillow(img_path: Path | str) -> dict[str, Any]:
                 st = ImageStat.Stat(cell)
                 var = st.var[0] if st.var else 0.0
                 is_dead = var < 25.0
-                is_border = (r == 0 or r == 7 or c == 0 or c == 7)
+                is_border = r == 0 or r == 7 or c == 0 or c == 7
                 if is_dead:
                     dead_cells += 1
                     if is_border:
                         border_dead += 1
                     else:
                         core_dead += 1
-                row_list.append({"r": r, "c": c, "is_dead": is_dead, "var": round(var, 1)})
+                row_list.append(
+                    {"r": r, "c": c, "is_dead": is_dead, "var": round(var, 1)}
+                )
             matrix.append(row_list)
 
         total_ratio = dead_cells / 64.0
@@ -488,6 +646,7 @@ def _evaluate_with_pillow(img_path: Path | str) -> dict[str, Any]:
 # 环境感知统一评估入口 (Unified API)
 # ==============================================================================
 
+
 def evaluate_image(img_path: Path | str, eval_max_dim: int = 640) -> dict[str, Any]:
     """
     统一图像质检入口：
@@ -529,24 +688,65 @@ def evaluate_image(img_path: Path | str, eval_max_dim: int = 640) -> dict[str, A
     return _evaluate_with_pillow(img_path)
 
 
-def evaluate_images_batch(paths: list[Path | str], eval_max_dim: int = 640) -> list[dict[str, Any]]:
-    """批量评估列表"""
+def evaluate_images_batch(
+    paths: list[Path | str],
+    eval_max_dim: int = 640,
+    max_workers: int | None = None,
+) -> list[dict[str, Any]]:
+    """
+    批量评估列表，子批内并行。
+
+    - HAS_CV2=True:  ThreadPool 并行 (OpenCV C 层释放 GIL，有真实并行收益)
+    - HAS_CV2=False: 并行多个 venv 子进程 (subprocess.run 释放 GIL，ThreadPool 可并行等待)
+    - 均无:          Pillow 串行降级
+    """
+    if not paths:
+        return []
+
     logger.info("[quality] 批量质检开始: 共 %d 张", len(paths))
+
+    workers = max_workers or max(4, (os.cpu_count() or 8) - 4)
+
     if HAS_CV2:
         evaluator = PhysicalEvaluator(eval_max_dim=eval_max_dim)
-        return [evaluator.evaluate_path(p) for p in paths]
+        with ThreadPoolExecutor(max_workers=workers) as pool:
+            results = list(pool.map(evaluator.evaluate_path, paths))
+        logger.info(
+            "[quality] 批量质检完成: %d 张 (cv2 ThreadPool x%d)", len(results), workers
+        )
+        return results
 
     if VENV_PYTHON.is_file():
+        return _evaluate_batch_parallel_subprocess(paths, eval_max_dim, workers)
+
+    results = [_evaluate_with_pillow(p) for p in paths]
+    logger.info("[quality] 批量质检完成: %d 张 (降级 Pillow 模式)", len(results))
+    return results
+
+
+def _evaluate_batch_parallel_subprocess(
+    paths: list[Path | str],
+    eval_max_dim: int,
+    workers: int,
+) -> list[dict[str, Any]]:
+    """并行多个 venv 子进程，每个子进程处理一个 chunk"""
+    chunk_size = max(1, len(paths) // workers)
+    chunks = [paths[i : i + chunk_size] for i in range(0, len(paths), chunk_size)]
+
+    def run_chunk(chunk: list[Path | str]) -> list[dict[str, Any]]:
+        cmd = [
+            str(VENV_PYTHON),
+            "-m",
+            "studio.core.quality_evaluator",
+            "--batch",
+        ]
+        input_json = json.dumps(
+            [str(Path(p).resolve()) for p in chunk], ensure_ascii=False
+        )
+        env = os.environ.copy()
+        env["PYTHONIOENCODING"] = "utf-8"
+        timeout = max(60, len(chunk) * 2)
         try:
-            cmd = [
-                str(VENV_PYTHON),
-                "-m",
-                "studio.core.quality_evaluator",
-                "--batch",
-            ]
-            input_json = json.dumps([str(Path(p).resolve()) for p in paths], ensure_ascii=False)
-            env = os.environ.copy()
-            env["PYTHONIOENCODING"] = "utf-8"
             proc = subprocess.run(
                 cmd,
                 input=input_json,
@@ -555,15 +755,30 @@ def evaluate_images_batch(paths: list[Path | str], eval_max_dim: int = 640) -> l
                 encoding="utf-8",
                 errors="replace",
                 env=env,
-                timeout=60,
+                timeout=timeout,
             )
             if proc.returncode == 0 and proc.stdout.strip():
                 return json.loads(proc.stdout.strip())
-        except Exception:
-            pass
+            logger.warning(
+                "[quality] 子进程 chunk 失败 (rc=%d): %s",
+                proc.returncode,
+                proc.stderr[:200],
+            )
+        except subprocess.TimeoutExpired:
+            logger.warning(
+                "[quality] 子进程 chunk 超时 (%d 张, timeout=%ds)", len(chunk), timeout
+            )
+        except Exception as e:
+            logger.warning("[quality] 子进程 chunk 异常: %s", e)
+        return []
 
-    results = [_evaluate_with_pillow(p) for p in paths]
-    logger.info("[quality] 批量质检完成: %d 张 (降级 Pillow 模式)", len(results))
+    with ThreadPoolExecutor(max_workers=len(chunks)) as pool:
+        chunk_results = list(pool.map(run_chunk, chunks))
+
+    results = [item for chunk in chunk_results for item in chunk]
+    logger.info(
+        "[quality] 批量质检完成: %d 张 (venv 子进程 x%d)", len(results), len(chunks)
+    )
     return results
 
 

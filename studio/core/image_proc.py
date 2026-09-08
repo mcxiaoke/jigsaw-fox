@@ -42,6 +42,7 @@ def report_pil_warnings(ref: object) -> Iterator[None]:
             w.category.__name__,
         )
 
+
 try:
     from PIL import Image, ImageOps  # type: ignore
 
@@ -69,7 +70,9 @@ except Exception:  # noqa: BLE001  numpy 缺失等任何导入失败都降级
     HAS_CROP_COMPUTE = False
 
 # 服务端缩略图磁盘缓存目录 (优先存放于源工作区 srcDir/.studio/cache/thumbs/)
-DEFAULT_THUMB_CACHE_DIR = Path(__file__).resolve().parent.parent.parent / "temp" / "studio_cache" / "thumbs"
+DEFAULT_THUMB_CACHE_DIR = (
+    Path(__file__).resolve().parent.parent.parent / "temp" / "studio_cache" / "thumbs"
+)
 THUMB_CACHE_DIR = DEFAULT_THUMB_CACHE_DIR
 
 
@@ -88,7 +91,9 @@ def _find_studio_cache_dir(p: Path) -> Path | None:
     return None
 
 
-def get_thumb_cache_path(img_path: Path, size: int, cache_dir: Path | None = None) -> Path | None:
+def get_thumb_cache_path(
+    img_path: Path, size: int, cache_dir: Path | None = None
+) -> Path | None:
     """计算缩略图唯一缓存路径 (优先存放于素材源目录的 .studio/cache/thumbs，保障自包含时光机)。"""
     try:
         st = img_path.stat()
@@ -157,11 +162,17 @@ def generate_thumbnail_bytes(
                     if cache_path:
                         try:
                             cache_path.parent.mkdir(parents=True, exist_ok=True)
-                            tmp_cache = cache_path.with_suffix(f".tmp_{os.getpid()}_{threading.get_ident()}")
+                            tmp_cache = cache_path.with_suffix(
+                                f".tmp_{os.getpid()}_{threading.get_ident()}"
+                            )
                             tmp_cache.write_bytes(data)
                             tmp_cache.replace(cache_path)
                         except Exception as e:
-                            _logger.warning("[image_proc] 缩略图缓存写入失败: %s (%s)", cache_path, e)
+                            _logger.warning(
+                                "[image_proc] 缩略图缓存写入失败: %s (%s)",
+                                cache_path,
+                                e,
+                            )
 
                     return data, "image/jpeg"
             except Exception as e:
@@ -253,7 +264,11 @@ def normalize_export_image(
     返回 (ok, err, meta)。源图长边 < long_target 时阻断：ok=False、err 为阻断提示、meta=None。
     """
     if not HAS_CROP_COMPUTE:
-        return False, "规格化算法依赖 numpy 缺失（请安装 numpy），无法执行规格化导出", None
+        return (
+            False,
+            "规格化算法依赖 numpy 缺失（请安装 numpy），无法执行规格化导出",
+            None,
+        )
     with report_pil_warnings(src_path):
         try:
             dst_path.parent.mkdir(parents=True, exist_ok=True)
@@ -264,14 +279,18 @@ def normalize_export_image(
                     pass
                 W, H = im.size
                 if max(W, H) < long_target:
-                    return False, (
-                        f"源图长边不足: 长边 {max(W, H)}px < 目标 {long_target}px，导出被阻断"
-                        f"（官方只发布高清图，请更换更高分辨率素材）"
-                    ), None
+                    return (
+                        False,
+                        (
+                            f"源图长边不足: 长边 {max(W, H)}px < 目标 {long_target}px，导出被阻断"
+                            f"（官方只发布高清图，请更换更高分辨率素材）"
+                        ),
+                        None,
+                    )
 
                 # 1. (可选) 去背景内容感知框定
                 if trim_background:
-                    content_box = compute_content_box(im)
+                    content_box = compute_content_box(im, detector="usm")
                 else:
                     content_box = (0, 0, W, H)
                 cw = max(1, content_box[2] - content_box[0])
@@ -317,7 +336,10 @@ def normalize_export_image(
 
                 ow, oh = out.size
                 meta = {
-                    "ratio_family": "/".join(sorted({str(r).strip() for r in (target_ratios or ())})) or "auto",
+                    "ratio_family": "/".join(
+                        sorted({str(r).strip() for r in (target_ratios or ())})
+                    )
+                    or "auto",
                     "ratio": label,
                     "mode": mode,
                     "orig_size": [W, H],
@@ -345,7 +367,9 @@ def make_rename(
       - 'sequence': 三位数字序号，如 001.webp, 101.webp
       - 'date': 结合月份或当前日期，如 20260901.webp 或 20260904_001.webp
     """
-    target_ext = f".{fmt}" if (fmt and fmt != "original") else Path(original_name).suffix
+    target_ext = (
+        f".{fmt}" if (fmt and fmt != "original") else Path(original_name).suffix
+    )
 
     if rule == "sequence":
         return f"{idx:03d}{target_ext}"
@@ -417,7 +441,9 @@ def _convert_one_parallel(job: dict) -> dict:
         "ok": ok,
         "err": err,
         "src_hash": sha256_file(src) if job.get("need_src_hash") else "",
-        "dst_hash": sha256_file(dst) if job.get("need_dst_hash") and dst.exists() else "",
+        "dst_hash": sha256_file(dst)
+        if job.get("need_dst_hash") and dst.exists()
+        else "",
         "dst_size": dst.stat().st_size if dst.exists() else 0,
         "normalize": meta,
     }
@@ -472,7 +498,9 @@ def convert_images_parallel(
         import concurrent.futures as _cf
 
         with _cf.ProcessPoolExecutor(max_workers=n) as ex:
-            future_map = {ex.submit(_convert_one_parallel, t): i for i, t in enumerate(tasks)}
+            future_map = {
+                ex.submit(_convert_one_parallel, t): i for i, t in enumerate(tasks)
+            }
             results = [None] * total
             done_count = 0
             for fut in _cf.as_completed(future_map):
@@ -491,7 +519,13 @@ def convert_images_parallel(
                 done_count += 1
                 if on_progress:
                     try:
-                        on_progress(done_count, total, tasks[i], bool(results[i].get("ok")), results[i])
+                        on_progress(
+                            done_count,
+                            total,
+                            tasks[i],
+                            bool(results[i].get("ok")),
+                            results[i],
+                        )
                     except Exception:
                         pass
             return results
@@ -535,4 +569,3 @@ def validate_image(img_path: Path | str) -> tuple[bool, str | None]:
             return False, f"图片数据损坏或格式不可识别 ({p.name}): {e}"
 
     return True, None
-
