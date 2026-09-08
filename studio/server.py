@@ -66,7 +66,13 @@ from studio.taxonomy import (
 )
 
 STATIC_DIR = Path(__file__).parent / "static"
-DEFAULT_LOG_FILE = _root_dir / "temp" / "studio.log"
+def _default_log_file() -> Path:
+    """默认日志文件按日期命名 (temp/studio-YYYYMMDD.log)，每天一个新文件，不做大小轮转。"""
+    stamp = dt.date.today().strftime("%Y%m%d")
+    return _root_dir / "temp" / f"studio-{stamp}.log"
+
+
+DEFAULT_LOG_FILE = _default_log_file()
 
 logger = logging.getLogger("studio")
 
@@ -100,7 +106,7 @@ def setup_logger(
     """
     配置 Content Studio 服务端日志：
     - 控制台输出：遵循请求级别 (默认为 INFO，启用 --debug 时为 DEBUG)
-    - 文件日志输出：默认保存到 temp/studio.log，完整记录 DEBUG+ 级别便于排错
+    - 文件日志输出：默认保存到 temp/studio-YYYYMMDD.log（按日期命名，每天一个新文件），完整记录 DEBUG+ 级别便于排错
     """
     level = getattr(logging, str(level_name).upper(), logging.INFO)
     logger.setLevel(logging.DEBUG)
@@ -890,6 +896,17 @@ class StudioRequestHandler(BaseHTTPRequestHandler):
         task_id = str(data.get("clientTaskId") or "").strip()
         _job_register(task_id)
 
+        # 导出器 self.log(...) 的级别映射到 Python logging 级别
+        _EXPORT_LOG_LEVELS = {
+            "debug": logging.DEBUG,
+            "info": logging.INFO,
+            "ok": logging.INFO,
+            "warn": logging.WARNING,
+            "warning": logging.WARNING,
+            "err": logging.ERROR,
+            "error": logging.ERROR,
+        }
+
         def log_fn(msg: str, level: str = "info") -> None:
             entry = {
                 "t": dt.datetime.now().strftime("%H:%M:%S"),
@@ -898,6 +915,13 @@ class StudioRequestHandler(BaseHTTPRequestHandler):
             }
             logs.append(entry)
             _job_append_log(task_id, entry)
+            # 同步转发到 Python logger，使完整导出过程（逐张转码、index 写入、
+            # 账本更新等）落盘到 temp/studio-YYYYMMDD.log（按日期命名），任务结束后仍可回溯。
+            logger.log(
+                _EXPORT_LOG_LEVELS.get(level, logging.INFO),
+                "[EXPORT] %s",
+                msg,
+            )
 
         def progress_fn(done: int, total: int) -> None:
             _job_progress(task_id, done, total)

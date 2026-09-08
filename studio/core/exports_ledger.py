@@ -13,6 +13,9 @@ import json
 from pathlib import Path
 import threading
 from typing import Any
+import logging
+
+logger = logging.getLogger(__name__)
 
 from studio.core.workspace import StudioWorkspace
 
@@ -61,12 +64,13 @@ class ExportsLedger:
                     self.records = list(data.get("records", []))
                 else:
                     self.records = []
-            except Exception:
+            except Exception as e:
+                logger.error("[ledger] 账本解析失败，将重置为空: %s (%s)", self.ledger_file, e)
                 try:
                     corrupt_backup = self.ledger_file.with_suffix(".corrupt")
                     shutil.copy2(self.ledger_file, corrupt_backup)
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.warning("[ledger] 账本损坏副本备份失败: %s (%s)", self.ledger_file, e)
                 self.records = []
 
             self._rebuild_indices()
@@ -140,7 +144,8 @@ class ExportsLedger:
             self._rebuild_indices()
             self._save_unlocked()
             return True
-        except Exception:
+        except Exception as e:
+            logger.warning("[ledger] 旧版 exported.json 迁移失败，跳过: %s", e)
             return False
 
     def _rebuild_indices(self) -> None:
@@ -308,6 +313,7 @@ class ExportsLedger:
 
             self._rebuild_indices()
             self._save_unlocked()
+            logger.info("[ledger] 已追加 %d 条导出记录到账本", added_count)
 
         return added_count
 
@@ -321,8 +327,8 @@ class ExportsLedger:
                         o = int(r["order"])
                         if o > max_o:
                             max_o = o
-                    except Exception:
-                        pass
+                    except Exception as e:
+                        logger.warning("[ledger] order 解析异常，已跳过: %s (%s)", r.get("recordId"), e)
             return max_o
 
     def get_active_record(self, logical_id: str) -> dict[str, Any] | None:

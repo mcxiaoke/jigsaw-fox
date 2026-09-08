@@ -14,14 +14,17 @@ import subprocess
 import sys
 from pathlib import Path
 from typing import Any
+import logging
+
+logger = logging.getLogger(__name__)
 
 # 解决 Windows 控制台与管道中文字符编码
 if sys.platform == "win32":
     try:
         sys.stdout.reconfigure(encoding="utf-8")
         sys.stderr.reconfigure(encoding="utf-8")
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug("无法重配置标准流编码 (win32): %s", e)
 
 # 备用 Python 虚拟环境解释器（预装 opencv-python / numpy）
 VENV_PYTHON = Path(r"C:\Home\Develop\venv\Scripts\python.exe")
@@ -492,6 +495,7 @@ def evaluate_image(img_path: Path | str, eval_max_dim: int = 640) -> dict[str, A
     2. 进程无 cv2 但检测到 venv Python: 唤起 venv 子进程使用完整 OpenCV 计算
     3. 均无: 使用 Pillow 计算降级指标，绝不崩溃
     """
+    logger.debug("[quality] 评估单张: %s (HAS_CV2=%s)", img_path, HAS_CV2)
     if HAS_CV2:
         return PhysicalEvaluator(eval_max_dim=eval_max_dim).evaluate_path(img_path)
 
@@ -527,6 +531,7 @@ def evaluate_image(img_path: Path | str, eval_max_dim: int = 640) -> dict[str, A
 
 def evaluate_images_batch(paths: list[Path | str], eval_max_dim: int = 640) -> list[dict[str, Any]]:
     """批量评估列表"""
+    logger.info("[quality] 批量质检开始: 共 %d 张", len(paths))
     if HAS_CV2:
         evaluator = PhysicalEvaluator(eval_max_dim=eval_max_dim)
         return [evaluator.evaluate_path(p) for p in paths]
@@ -557,7 +562,9 @@ def evaluate_images_batch(paths: list[Path | str], eval_max_dim: int = 640) -> l
         except Exception:
             pass
 
-    return [_evaluate_with_pillow(p) for p in paths]
+    results = [_evaluate_with_pillow(p) for p in paths]
+    logger.info("[quality] 批量质检完成: %d 张 (降级 Pillow 模式)", len(results))
+    return results
 
 
 # ==============================================================================

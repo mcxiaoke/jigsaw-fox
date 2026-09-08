@@ -9,6 +9,9 @@ from __future__ import annotations
 import json
 from pathlib import Path
 from typing import Any
+import logging
+
+logger = logging.getLogger(__name__)
 
 from studio.core.scanner import find_tags_file
 from studio.core.workspace import StudioWorkspace
@@ -29,6 +32,7 @@ def load_tags_file(path: Path | str) -> tuple[Any, str | None]:
         data = json.loads(p.read_text(encoding="utf-8"))
         return data, None
     except Exception as e:
+        logger.warning("[tags] 读取 tags.json 失败: %s (%s)", p, e)
         return None, str(e)
 
 
@@ -434,6 +438,8 @@ def save_tags_file(root: str | Path, records: list[dict[str, Any]], target_file:
         except Exception:
             rel_dest = str(dest)
         ws.log_operation("tag_save", path=rel_dest, count=len(out_list))
+        logger.info("[tags] 已保存 tags.json: %s (记录数=%d)", dest.resolve(), len(out_list))
         return True, str(dest.resolve()), len(out_list)
     except Exception as e:
+        logger.error("[tags] 保存 tags.json 失败: %s (%s)", dest, e)
         return False, str(e), 0

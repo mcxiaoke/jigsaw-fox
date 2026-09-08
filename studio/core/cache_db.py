@@ -13,6 +13,9 @@ import sqlite3
 import threading
 from pathlib import Path
 from typing import Any, Iterable
+import logging
+
+logger = logging.getLogger(__name__)
 
 from studio.core.workspace import StudioWorkspace
 
@@ -203,8 +206,8 @@ class CacheDB:
                     if row["details_json"]:
                         try:
                             details = json.loads(row["details_json"])
-                        except Exception:
-                            pass
+                        except Exception as e:
+                            logger.warning("[cache_db] 质检详情 JSON 解析失败，跳过: %s", e)
                     result[h] = {
                         "score": row["score"],
                         "grade": row["grade"],

@@ -68,7 +68,7 @@ python studio/server.py --port 5200 --host 127.0.0.1 --open
 # 启用详细 DEBUG 调试日志 (在终端输出完整调试信息)
 python studio/server.py --debug
 
-# 指定日志级别与日志持久化路径 (默认保存在 temp/studio.log)
+# 指定日志级别与日志持久化路径 (默认按日期命名保存在 temp/studio-YYYYMMDD.log)
 python studio/server.py --loglevel DEBUG --logfile temp/my_studio.log
 ```
 

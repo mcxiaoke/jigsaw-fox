@@ -103,12 +103,14 @@ def generate_thumbnail_bytes(
     # 1. 优先命中服务端磁盘缓存 (避免重复解压缩与缩放)
     cache_path = get_thumb_cache_path(p, size, cache_dir=cache_dir)
     if cache_path and cache_path.exists():
+        _logger.debug("[image_proc] 缩略图缓存命中: %s (size=%d)", p, size)
         try:
             return cache_path.read_bytes(), "image/jpeg"
         except Exception:
             pass
 
     if HAS_PIL:
+        _logger.debug("[image_proc] 生成缩略图: %s (size=%d)", p, size)
         with report_pil_warnings(p):
             try:
                 with Image.open(p) as im:
@@ -139,12 +141,12 @@ def generate_thumbnail_bytes(
                             tmp_cache = cache_path.with_suffix(f".tmp_{os.getpid()}_{threading.get_ident()}")
                             tmp_cache.write_bytes(data)
                             tmp_cache.replace(cache_path)
-                        except Exception:
-                            pass
+                        except Exception as e:
+                            _logger.warning("[image_proc] 缩略图缓存写入失败: %s (%s)", cache_path, e)
 
                     return data, "image/jpeg"
             except Exception as e:
-                sys.stderr.write(f"[image_proc] thumbnail error for {p}: {e}\n")
+                _logger.warning("[image_proc] 生成缩略图失败: %s (%s)", p, e)
 
     # 兜底直接读取原图
     ctype, _ = mimetypes.guess_type(str(p))

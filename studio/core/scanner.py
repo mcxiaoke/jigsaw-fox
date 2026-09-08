@@ -12,6 +12,7 @@ import os
 import re
 from pathlib import Path
 from typing import Any, Callable
+import logging
 
 try:
     from PIL import Image
@@ -21,6 +22,8 @@ except ImportError:
     HAS_PIL = False
 
 from studio.core.image_proc import report_pil_warnings
+
+logger = logging.getLogger(__name__)
 
 IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".webp", ".bmp", ".gif", ".tif", ".tiff"}
 IGNORE_DIRS = {".git", ".svn", ".idea", ".vscode", "__pycache__", "node_modules", "temp", "tmp"}
@@ -193,7 +196,8 @@ def get_image_info(p: Path, root: Path, file_hash: str | None = None) -> dict[st
             "aspect_ratio": aspect_ratio,
             "orientation": orientation,
         }
-    except Exception:
+    except Exception as e:
+        logger.warning("[scanner] get_image_info 失败，跳过该文件: %s (%s)", p, e)
         return None
 
 
@@ -307,6 +311,11 @@ def scan_image_infos(
             "new_hashes": new_hashes,
             "errors": errors,
         })
+
+    logger.info(
+        "[scanner] 元数据扫描完成: 总数=%d, 缓存命中=%d, 新哈希=%d, 失败=%d",
+        total, cache_hits, new_hashes, errors,
+    )
 
     return infos
 

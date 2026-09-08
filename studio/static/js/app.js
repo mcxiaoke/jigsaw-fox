@@ -320,6 +320,7 @@ const app = createApp({
           }
         }
       } catch (e) {
+        console.error("[预览预检]", e);
         previewState.value.error = e.message || "预检失败";
       } finally {
         previewState.value.loading = false;
@@ -531,6 +532,7 @@ const app = createApp({
         }
         showToast(`扫描成功: 共发现 ${res.total || records.value.length} 张图片`);
       } catch (err) {
+        console.error("[扫描目录]", err);
         showToast(`扫描失败: ${err.message}`);
       } finally {
         isScanning.value = false;
@@ -573,6 +575,7 @@ const app = createApp({
           showToast(`质检完成: ${item.file} -> ${data.quality.grade}级 (${data.quality.score}分)`);
         }
       } catch (err) {
+        console.error("[单张质检]", err);
         showToast(`质检失败: ${err.message}`);
       } finally {
         isEvaluatingQuality.value = false;
@@ -611,6 +614,7 @@ const app = createApp({
           showToast("没有更多待质检的图片");
         }
       } catch (err) {
+        console.error("[批量质检]", err);
         showToast(`批量质检异常: ${err.message}`);
       } finally {
         isBatchEvaluating.value = false;
@@ -631,6 +635,7 @@ const app = createApp({
         const res = await saveTags(srcDir.value.trim(), records.value);
         showToast(`已成功保存 tags.json (共 ${res.count} 条记录)`);
       } catch (err) {
+        console.error("[保存tags]", err);
         showToast(`保存失败: ${err.message}`);
       } finally {
         isSaving.value = false;
@@ -1273,6 +1278,7 @@ const app = createApp({
           }
         }
       } catch (err) {
+        console.error("[导出]", err);
         if (!finalized) {
           finalize(false, {
             error: err.message,
@@ -1357,6 +1363,7 @@ const app = createApp({
         catalogToTags.value = tax.catalog_to_tags || {};
         tagToCatalogs.value = tax.tag_to_catalogs || {};
       } catch (err) {
+        console.error("[初始化分类体系]", err);
         if (window.TAXONOMY && window.TAXONOMY.main_tags) {
           mainTags.value = window.TAXONOMY.main_tags || [];
           catalogs.value = mainTags.value;

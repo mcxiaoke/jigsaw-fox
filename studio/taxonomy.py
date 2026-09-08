@@ -11,6 +11,9 @@ from __future__ import annotations
 import re
 from pathlib import Path
 from typing import Any
+import logging
+
+logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 # 1. 核心主 Tags (17 个核心分类)
@@ -611,8 +614,8 @@ def infer_tags_from_path(path: str | Path, root: Path | None = None) -> list[str
     if root is not None:
         try:
             p = p.relative_to(root)
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug("路径不属于 root，按原路径处理: %s (%s)", p, e)
 
     # 目录层级（从最靠近文件的父目录向上遍历）
     parent_dirs = list(p.parts[:-1]) if len(p.parts) > 1 else []

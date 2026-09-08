@@ -14,6 +14,9 @@ from pathlib import Path
 import shutil
 import threading
 from typing import Any
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class StudioWorkspace:
@@ -72,8 +75,8 @@ class StudioWorkspace:
         if legacy_tags.exists() and legacy_tags.is_file() and not self.tags_file.exists():
             try:
                 shutil.copy2(legacy_tags, self.tags_file)
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning("[workspace] 迁移旧版 tags.json 失败: %s (%s)", legacy_tags, e)
 
         # 2. 迁移 .studio.db -> .studio/cache/studio.db (包含 WAL/SHM 文件)
         legacy_db = self.src_dir / ".studio.db"
@@ -84,8 +87,8 @@ class StudioWorkspace:
                     leg_side = self.src_dir / f".studio.db{ext}"
                     if leg_side.exists():
                         shutil.move(str(leg_side), str(self.cache_dir / f"studio.db{ext}"))
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning("[workspace] 迁移旧版 .studio.db 失败: %s (%s)", legacy_db, e)
 
     def log_operation(self, action: str, **kwargs: Any) -> None:
         """记录业务操作流水 (operations.jsonl)，如打标变更"""
