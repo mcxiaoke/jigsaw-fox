@@ -1,0 +1,161 @@
+{
+  "schema": 1,
+  "_doc": [
+    "多平台 assets 发布/取用的唯一真源。发布脚本与 app 端读同一份定义。",
+    "核心约定：内容产物(dist)里所有 URL 一律是相对 canonical key，永不写平台绝对地址。",
+    "平台差异全部收敛到本文件的 channels[].base + rules。",
+    "",
+    "canonical key = 相对 dist 根的 POSIX 路径，例如：",
+    "  manifest.json / main/index.json / main/images/101.webp",
+    "  daily/zips/202609.zip / events/packs/evt_ocean_adventure.zip",
+    "",
+    "key -> URL 映射算法（app 与脚本必须一致）：",
+    "  1. 命中 rules 中第一条 prefixSets 前缀匹配的规则，否则用默认规则(base=channel.base, layout=preserve)",
+    "  2. layout=preserve -> rule.base + key",
+    "  3. layout=flatten  -> rule.base + basename(key)   (Release 资产是扁平命名空间)",
+    "",
+    "状态（2026-09-08 修订）：活动通道只保留 r2cdn/r2pub/github/gitee；",
+    "  modelscope 暂时禁用（token git push 鉴权异常，HTTP Basic Access denied），cn/global 均 0，修复后恢复；",
+    "  jsdelivr 仅作 manifest.json 的路由 URL 备份（manifestBackup=true），不参与内容分发与竞速。"
+  ],
+
+  "dist": {
+    "root": "C:/Home/Temp/jigsawdata_build/out",
+    "stage": "C:/Home/Temp/jigsawdata_build/stage",
+    "publishRoot": "C:/Home/Temp/jigsawdata_build/stage",
+    "sourceNote": "root=out/（studio 原生导出，所有 URL 已是相对 key）；stage=normalize 注入 zipKey 后的发布源；publish/verify 统一只读 publishRoot(stage)。",
+    "excludeNames": [".dl_check", ".ms_upload_cache"],
+    "inheritAttributes": true,
+    "_inheritNote": "把根 .gitattributes 复制到每个模块目录（daily/events/collections/main），确保 ModelScope 的 LFS 覆盖规则在子目录也生效。"
+  },
+
+  "prefixSets": {
+    "zip": ["daily/zips/", "events/packs/", "collections/packs/"]
+  },
+
+  "releaseTag": "assets",
+  "_releaseTagNote": [
+    "固定的『移动标签』，不随内容版本变化。这样 channels 里的 zip base 永久稳定，",
+    "内容更新不需要改通道表、不需要发 app 版本。",
+    "安全前提：studio 重导时 zip 文件名自带 -r{rev}（daily/202609-r2.zip、packs/col_x-r2.zip），",
+    "文件名不可变 => Release 资产只追加不覆盖，CDN 可长缓存。"
+  ],
+
+  "channels": [
+    {
+      "id": "gitee",
+      "label": "Gitee raw + Gitee Release",
+      "base": "https://gitee.com/macitee/jigsaw-data/raw/master/",
+      "rules": [
+        {
+          "set": "zip",
+          "base": "https://gitee.com/macitee/jigsaw-data/releases/download/{tag}/",
+          "layout": "flatten"
+        }
+      ],
+      "cn": 1,
+      "global": 3,
+      "publish": {
+        "driver": "git",
+        "remote": "https://gitee.com/macitee/jigsaw-data.git",
+        "zipsInRepo": false,
+        "release": "gitee"
+      },
+      "notes": "国内实测 raw 与 Release 均通。Release 上传优先用 gitee.exe 登录态（方案 A），无令牌；API 令牌（gitee_publish.py）作兜底。"
+    },
+    {
+      "id": "r2cdn",
+      "label": "Cloudflare R2 自定义域（全栈：json+图片+zip 同一 base）",
+      "base": "https://jigsawdata.umao.top/",
+      "rules": [],
+      "cn": 2,
+      "global": 1,
+      "publish": {
+        "driver": "rclone",
+        "target": "r2:jigsaw-data",
+        "zipsInRepo": true
+      },
+      "notes": "唯一无需 flatten 特例的通道，全栈内容同一 base；作为国内外统一兜底主力。旧端 zipUrl 建议固定指向本通道。"
+    },
+    {
+      "id": "modelscope",
+      "label": "ModelScope 数据集 resolve（暂时禁用）",
+      "base": "https://modelscope.cn/datasets/scocahh/jigsaw-data/resolve/master/",
+      "rules": [
+        {
+          "set": "zip",
+          "base": "https://jigsawdata.umao.top/",
+          "layout": "preserve"
+        }
+      ],
+      "cn": 0,
+      "global": 0,
+      "disabled": true,
+      "disabledReason": "token git push 鉴权异常（HTTP Basic Access denied），暂时禁用；修复后恢复 cn 排名并启用。",
+      "publish": {
+        "driver": "git",
+        "remote": "https://modelscope.cn/datasets/scocahh/jigsaw-data.git",
+        "zipsInRepo": false,
+        "release": null,
+        "forcePush": true
+      },
+      "notes": [
+        "ModelScope 无 Release 概念。恢复后仅镜像 json+webp，zip 走 R2（rules 已指向 jigsawdata.umao.top）。",
+        "远端默认 .gitattributes 会把 *.json/*.webp/*.zip 全部塞进 LFS，",
+        "必须用 dist 内自带的 .gitattributes 覆盖掉（-filter），否则 app 会拉到 LFS 指针文本。",
+        "阶段二若要 zip 也进 modelscope，再单独开 LFS worktree。"
+      ]
+    },
+    {
+      "id": "jsdelivr",
+      "label": "jsDelivr(GitHub) —— 仅 manifest.json 路由 URL 备份",
+      "base": "https://fastly.jsdelivr.net/gh/mcxiaoke/jigsaw-data@master/",
+      "rules": [],
+      "cn": 0,
+      "global": 0,
+      "manifestBackup": true,
+      "publish": {
+        "driver": "none",
+        "sharesWith": "github"
+      },
+      "notes": [
+        "仅作 manifest 获取的兜底路由（base + manifest.json），不参与内容分发与竞速，不合成 zip 镜像。",
+        "原因：jsDelivr @branch 有缓存延迟且不能加速 Release 资产。"
+      ]
+    },
+    {
+      "id": "github",
+      "label": "GitHub raw + GitHub Release",
+      "base": "https://raw.githubusercontent.com/mcxiaoke/jigsaw-data/master/",
+      "rules": [
+        {
+          "set": "zip",
+          "base": "https://github.com/mcxiaoke/jigsaw-data/releases/download/{tag}/",
+          "layout": "flatten"
+        }
+      ],
+      "cn": 0,
+      "global": 2,
+      "publish": {
+        "driver": "git",
+        "remote": "https://github.com/mcxiaoke/jigsaw-data.git",
+        "zipsInRepo": false,
+        "release": "github"
+      },
+      "notes": "本机(国内)实测 github.com Release 下载连接被重置，故 cn=0 禁用；海外可用。上传用 gh release upload --clobber（幂等）。"
+    },
+    {
+      "id": "r2pub",
+      "label": "Cloudflare R2 r2.dev 兜底域",
+      "base": "https://pub-41cf228a82e748e18c0e54cc4f696fa0.r2.dev/",
+      "rules": [],
+      "cn": 3,
+      "global": 4,
+      "publish": {
+        "driver": "none",
+        "sharesWith": "r2cdn"
+      },
+      "notes": "Cloudflare 对 *.r2.dev 有速率限制且声明不用于生产，仅作最后兜底。"
+    }
+  ]
+}
