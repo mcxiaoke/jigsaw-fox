@@ -482,6 +482,10 @@ class StudioRequestHandler(BaseHTTPRequestHandler):
             self._handle_get_quality_scores(qs)
             return
 
+        if path == "/api/crop/manual":
+            self._handle_get_manual_crops(qs)
+            return
+
         # 兜底查找静态文件
         cand = STATIC_DIR / path.lstrip("/")
         if cand.exists() and cand.is_file():
@@ -524,6 +528,10 @@ class StudioRequestHandler(BaseHTTPRequestHandler):
 
         if path == "/api/quality/cancel":
             self._handle_quality_cancel(data)
+            return
+
+        if path == "/api/crop/manual":
+            self._handle_post_manual_crop(data)
             return
 
         self.send_error(404, f"Not Found POST: {path}")
@@ -949,6 +957,113 @@ class StudioRequestHandler(BaseHTTPRequestHandler):
             stats = db.get_stats()
         self._json({"ok": True, "scores": scores, "stats": stats})
 
+    # ------------------------------------------------------------------
+    # 手动裁切框 API
+    # ------------------------------------------------------------------
+
+    def _handle_get_manual_crops(self, qs: dict[str, list[str]]) -> None:
+        """GET /api/crop/manual?dir=... — 批量返回所有用户手动裁切框"""
+        dir_param = (qs.get("dir") or [""])[0].strip()
+        root = (
+            Path(dir_param).resolve()
+            if dir_param
+            else StudioRequestHandler.current_root_dir
+        )
+        if not root or not root.is_dir():
+            self._error("缺少有效目录 ?dir 参数")
+            return
+        with CacheDB(root) as db:
+            overrides = db.get_all_user_overrides()
+        # 只返回有裁切框的条目
+        crops = {h: o for h, o in overrides.items() if o.get("has_crop")}
+        logger.info(f"[MANUAL_CROP] GET overrides: dir={root}, count={len(crops)}")
+        self._json({"ok": True, "overrides": crops})
+
+    def _handle_post_manual_crop(self, data: dict[str, Any]) -> None:
+        """POST /api/crop/manual — 保存或更新用户手动裁切框"""
+        hash_val = (data.get("hash") or "").strip().lower()
+        if not hash_val:
+            self._error("缺少 hash 参数", status=400)
+            return
+
+        dir_param = (data.get("dir") or "").strip()
+        root = (
+            Path(dir_param).resolve()
+            if dir_param
+            else StudioRequestHandler.current_root_dir
+        )
+        if not root or not root.is_dir():
+            self._error("缺少有效目录 dir 参数", status=400)
+            return
+
+        x0 = data.get("x0")
+        y0 = data.get("y0")
+        x1 = data.get("x1")
+        y1 = data.get("y1")
+        ratio = data.get("ratio") or ""
+
+        # 校验百分比范围
+        coords = []
+        for v in (x0, y0, x1, y1):
+            if v is not None:
+                fv = float(v)
+                if not (0.0 <= fv <= 1.0):
+                    self._error(f"裁切框坐标必须在 0.0~1.0 范围内: {v}", status=400)
+                    return
+                coords.append(fv)
+            else:
+                coords.append(None)
+
+        crop_box = None
+        if all(c is not None for c in coords):
+            if coords[2] <= coords[0] or coords[3] <= coords[1]:
+                self._error("裁切框 x1/y1 必须大于 x0/y0", status=400)
+                return
+            crop_box = (coords[0], coords[1], coords[2], coords[3])
+
+        with CacheDB(root) as db:
+            ok = db.set_user_override(hash_val, crop_box=crop_box, crop_ratio=ratio)
+        logger.info(
+            f"[MANUAL_CROP] POST save: hash={hash_val[:16]}... "
+            f"box=({coords[0]:.4f},{coords[1]:.4f},{coords[2]:.4f},{coords[3]:.4f}) "
+            f"ratio={ratio} ok={ok}"
+        )
+        self._json({"ok": ok})
+
+    def do_DELETE(self) -> None:
+        """DELETE 路由分发"""
+        parsed = urllib.parse.urlparse(self.path)
+        path = parsed.path
+        qs = urllib.parse.parse_qs(parsed.query)
+
+        if path == "/api/crop/manual":
+            self._handle_delete_manual_crop(qs)
+            return
+
+        self.send_error(404, f"Not Found DELETE: {path}")
+
+    def _handle_delete_manual_crop(self, qs: dict[str, list[str]]) -> None:
+        """DELETE /api/crop/manual?hash=... — 删除用户手动裁切框"""
+        hash_val = (qs.get("hash") or [""])[0].strip().lower()
+        if not hash_val:
+            self._error("缺少 hash 参数", status=400)
+            return
+
+        dir_param = (qs.get("dir") or [""])[0].strip()
+        root = (
+            Path(dir_param).resolve()
+            if dir_param
+            else StudioRequestHandler.current_root_dir
+        )
+        if not root or not root.is_dir():
+            self._error("缺少有效目录 dir 参数", status=400)
+            return
+
+        with CacheDB(root) as db:
+            ok = db.delete_user_override(hash_val)
+        logger.info(f"[MANUAL_CROP] DELETE: hash={hash_val[:16]}... ok={ok}")
+        self._json({"ok": ok})
+
     def _handle_post_quality_batch(self, data: dict[str, Any]) -> None:
         """批量质检：注册 job -> 后台 worker -> 立即返回 taskId"""
         dir_param = (data.get("dir") or "").strip()
@@ -1162,6 +1277,28 @@ class StudioRequestHandler(BaseHTTPRequestHandler):
         logger.info(
             f"[EXPORT] 收到导出请求: 类型={exp_type}, 分类={cat_id}, 源路径={src}, 输出路径={out}"
         )
+
+        # 查询用户手动裁切框，注入 data 供 exporter 在构建转码任务时按 hash 查找
+        try:
+            with CacheDB(src_p) as _db:
+                _overrides = _db.get_all_user_overrides()
+            manual_boxes = {}
+            for h, o in _overrides.items():
+                if o.get("has_crop"):
+                    manual_boxes[h] = (
+                        o["crop_x0"],
+                        o["crop_y0"],
+                        o["crop_x1"],
+                        o["crop_y1"],
+                    )
+            if manual_boxes:
+                data["manual_boxes"] = manual_boxes
+                log_fn(
+                    f"检测到 {len(manual_boxes)} 张图片有手动裁切框，导出时将优先使用",
+                    "info",
+                )
+        except Exception as e:
+            logger.warning(f"[EXPORT] 查询手动裁切框失败（不影响导出）: {e}")
 
         try:
             exporter = get_exporter(

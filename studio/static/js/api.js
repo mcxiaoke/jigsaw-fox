@@ -157,6 +157,45 @@ export async function cancelQualityJob(taskId) {
   return data || { ok: false };
 }
 
+// 手动裁切框 API
+export async function fetchManualCrops(dir) {
+  const res = await fetch(`/api/crop/manual?dir=${encodeURIComponent(dir)}`);
+  const data = await res.json();
+  if (!res.ok || !data.ok) throw new Error(data.error || "获取手动裁切框失败");
+  return data;
+}
+
+export async function saveManualCrop(hash, box, ratio, dir = "") {
+  const res = await fetch("/api/crop/manual", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      hash,
+      dir,
+      x0: box.x0,
+      y0: box.y0,
+      x1: box.x1,
+      y1: box.y1,
+      ratio,
+    }),
+  });
+  const data = await res.json();
+  if (!res.ok || !data.ok) throw new Error(data.error || "保存裁切框失败");
+  return data;
+}
+
+export async function deleteManualCrop(hash, dir = "") {
+  const params = new URLSearchParams();
+  params.set("hash", hash);
+  if (dir) params.set("dir", dir);
+  const res = await fetch(`/api/crop/manual?${params.toString()}`, {
+    method: "DELETE",
+  });
+  const data = await res.json();
+  if (!res.ok || !data.ok) throw new Error(data.error || "删除裁切框失败");
+  return data;
+}
+
 function jsonStringifySafe(obj) {
   // 紧凑序列化：导出 payload 可能携带上万条 slim 记录，
   // 缩进格式会令请求体体积近乎翻倍（实测 3000 张 ~2.1MB → ~1.1MB）

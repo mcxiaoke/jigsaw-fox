@@ -50,10 +50,17 @@ class MainExporter(BaseExporter):
         build_root = self._write_root(ws)
 
         selected_paths = self.data.get("selectedPaths")
-        if selected_paths and isinstance(selected_paths, list) and len(selected_paths) > 0:
-            selected_set = {str(p).replace("\\", "/").strip().lower() for p in selected_paths}
+        if (
+            selected_paths
+            and isinstance(selected_paths, list)
+            and len(selected_paths) > 0
+        ):
+            selected_set = {
+                str(p).replace("\\", "/").strip().lower() for p in selected_paths
+            }
             images = [
-                p for p in scan_images(self.src_p)
+                p
+                for p in scan_images(self.src_p)
                 if p.relative_to(self.src_p).as_posix().lower() in selected_set
             ]
             self.log(f"已按指定范围载入 {len(images)} 张待导出图片", "info")
@@ -65,8 +72,15 @@ class MainExporter(BaseExporter):
         excluded = resolve_excluded(self.data)
         if excluded:
             before = len(images)
-            images = [p for p in images if p.relative_to(self.src_p).as_posix().lower() not in excluded]
-            self.log(f"已剔除 {before - len(images)} 张在第②步手动移除的图片，剩余 {len(images)} 张", "info")
+            images = [
+                p
+                for p in images
+                if p.relative_to(self.src_p).as_posix().lower() not in excluded
+            ]
+            self.log(
+                f"已剔除 {before - len(images)} 张在第②步手动移除的图片，剩余 {len(images)} 张",
+                "info",
+            )
             if not images:
                 raise ValueError("所有图片均已被手动剔除，无可导出内容")
 
@@ -75,7 +89,9 @@ class MainExporter(BaseExporter):
 
         # 0. 排序：确定导出顺序 (= order 分配顺序 / 关卡编号顺序)
         sort_by = (self.data.get("sortBy") or "name_asc").strip().lower()
-        manual_order = build_manual_order(self.src_p, self.data.get("manualOrder") or selected_paths)
+        manual_order = build_manual_order(
+            self.src_p, self.data.get("manualOrder") or selected_paths
+        )
         images = sort_images(images, sort_by, manual_order=manual_order)
         self.log(f"已按排序策略 [{sort_by}] 排定 {len(images)} 张图片顺序", "info")
 
@@ -95,7 +111,9 @@ class MainExporter(BaseExporter):
         for r in records:
             key = (r.get("path") or r.get("file") or "").replace("\\", "/")
             tags = r.get("tags") or ["Others"]
-            norm_tags = [normalize_token(t) for t in tags if normalize_token(t)] or ["Others"]
+            norm_tags = [normalize_token(t) for t in tags if normalize_token(t)] or [
+                "Others"
+            ]
             tag_map[key] = norm_tags
             tag_map[Path(key).name] = norm_tags
             if r.get("hash"):
@@ -110,16 +128,25 @@ class MainExporter(BaseExporter):
                 excluded_cnt = 0
                 for p in images:
                     rel = p.relative_to(self.src_p).as_posix().replace("\\", "/")
-                    h = hash_map.get(rel) or hash_map.get(p.name) or compute_file_sha256(p)
+                    h = (
+                        hash_map.get(rel)
+                        or hash_map.get(p.name)
+                        or compute_file_sha256(p)
+                    )
                     if h in exported_hashes:
                         excluded_cnt += 1
                     else:
                         filtered_images.append(p)
                 if excluded_cnt > 0:
-                    self.log(f"已自动排除 {excluded_cnt} 张已导出的历史图片，剩余 {len(filtered_images)} 张待处理", "info")
+                    self.log(
+                        f"已自动排除 {excluded_cnt} 张已导出的历史图片，剩余 {len(filtered_images)} 张待处理",
+                        "info",
+                    )
                 images = filtered_images
                 if not images:
-                    raise ValueError("所选范围内的图片均已在历史批次中导出，无新图片可供导出")
+                    raise ValueError(
+                        "所选范围内的图片均已在历史批次中导出，无新图片可供导出"
+                    )
 
         # 0. 待导出图片格式与完整性硬拦截校验 (损坏/0字节立即中止)
         for p in images:
@@ -141,14 +168,29 @@ class MainExporter(BaseExporter):
         seen_hashes: dict[str, list[str]] = {}
         for p in images:
             rel = p.relative_to(self.src_p).as_posix().replace("\\", "/")
-            h = (hash_map.get(rel) or hash_map.get(p.name) or compute_file_sha256(p) or "").strip().lower()
+            h = (
+                (
+                    hash_map.get(rel)
+                    or hash_map.get(p.name)
+                    or compute_file_sha256(p)
+                    or ""
+                )
+                .strip()
+                .lower()
+            )
             if h:
                 seen_hashes.setdefault(h, []).append(rel)
 
         dup_groups = {h: paths for h, paths in seen_hashes.items() if len(paths) >= 2}
         if dup_groups:
-            self.log(f"导出已被安全中止: 待导出图片列表中发现 {len(dup_groups)} 组内容完全相同的重复文件！", "err")
-            detail_lines = [f"  • 重复组 [Hash: {h[:12]}...]: {', '.join(paths)}" for h, paths in dup_groups.items()]
+            self.log(
+                f"导出已被安全中止: 待导出图片列表中发现 {len(dup_groups)} 组内容完全相同的重复文件！",
+                "err",
+            )
+            detail_lines = [
+                f"  • 重复组 [Hash: {h[:12]}...]: {', '.join(paths)}"
+                for h, paths in dup_groups.items()
+            ]
             raise ValueError(
                 f"待导出图片列表中存在 {len(dup_groups)} 组内容完全相同的重复图片，导出已被安全拦截！\n"
                 f"为避免主线关卡重复，请先在素材库中清理或替换重复文件后再执行导出。\n"
@@ -157,7 +199,7 @@ class MainExporter(BaseExporter):
 
         # 2. 输出目录拓扑准备 (写构建根：正式 outDir，试导出 outDir/_trial_{ts})
         src_main_dir = ws.release_dir / "main"  # 读状态源 (release 镜像)
-        write_main_dir = build_root / "main"    # 写构建根
+        write_main_dir = build_root / "main"  # 写构建根
         batches_dir = write_main_dir / "batches"
         images_dir = write_main_dir / "images"
         batches_dir.mkdir(parents=True, exist_ok=True)
@@ -165,7 +207,9 @@ class MainExporter(BaseExporter):
 
         # 读取已有 index.json 获取版本与批次信息 (统一 items 键) —— 一律从 release 状态源读
         src_index_path = src_main_dir / "index.json"
-        index_json_path = write_main_dir / "index.json"  # 写路径 (正式=release，试导出=构建根)
+        index_json_path = (
+            write_main_dir / "index.json"
+        )  # 写路径 (正式=release，试导出=构建根)
         existing_index: dict[str, Any] = {}
         existing_batches: list[dict[str, Any]] = []
         existing_version = 0
@@ -176,10 +220,16 @@ class MainExporter(BaseExporter):
             try:
                 existing_index = json.loads(src_index_path.read_text(encoding="utf-8"))
                 if isinstance(existing_index, dict):
-                    existing_batches = existing_index.get("items") or existing_index.get("batches") or []
+                    existing_batches = (
+                        existing_index.get("items")
+                        or existing_index.get("batches")
+                        or []
+                    )
                     existing_version = int(existing_index.get("version", 0))
                     existing_total_count = int(existing_index.get("totalCount", 0))
-                    existing_max_order = max(existing_max_order, int(existing_index.get("maxOrder", 0)))
+                    existing_max_order = max(
+                        existing_max_order, int(existing_index.get("maxOrder", 0))
+                    )
             except Exception:
                 pass
 
@@ -188,7 +238,11 @@ class MainExporter(BaseExporter):
         if start_order_input is not None and str(start_order_input).strip() != "":
             start_order = int(start_order_input)
             # 防覆盖防护：显式传入的起始序号不得小于等于当前最大序号，除非是补丁修订
-            if not self.data.get("isPatch") and existing_max_order > 0 and start_order <= existing_max_order:
+            if (
+                not self.data.get("isPatch")
+                and existing_max_order > 0
+                and start_order <= existing_max_order
+            ):
                 raise ValueError(
                     f"起始关卡序号 {start_order} 必须大于当前最大序号 {existing_max_order}，"
                     f"请从 {existing_max_order + 1} 开始，避免覆盖已导出的关卡"
@@ -212,10 +266,21 @@ class MainExporter(BaseExporter):
         is_patch = bool(self.data.get("isPatch", False))
         for idx, p in enumerate(images):
             rel = p.relative_to(self.src_p).as_posix().replace("\\", "/")
-            h = (hash_map.get(rel) or hash_map.get(p.name) or compute_file_sha256(p) or "").strip().lower()
+            h = (
+                (
+                    hash_map.get(rel)
+                    or hash_map.get(p.name)
+                    or compute_file_sha256(p)
+                    or ""
+                )
+                .strip()
+                .lower()
+            )
             order = start_order + idx
             logical_id = f"main:{order}"
-            conflict, msg, sev = ledger.check_history_duplicate(h, module="main", logical_id=logical_id)
+            conflict, msg, sev = ledger.check_history_duplicate(
+                h, module="main", logical_id=logical_id
+            )
             if conflict:
                 if sev == "error":
                     self.log(f"导出中止: {msg} (文件: {p.name})", "err")
@@ -258,31 +323,55 @@ class MainExporter(BaseExporter):
                 supersedes_id = None
 
             src_hash = hash_map.get(rel) or hash_map.get(p.name) or ""
-            plans.append({
-                "p": p,
-                "rel": rel,
-                "tags": tags,
-                "order": order,
-                "logical_id": logical_id,
-                "img_name": img_name,
-                "dst": images_dir / img_name,
-                "rev": rev,
-                "supersedes_id": supersedes_id,
-                "src_hash": src_hash,
-            })
+            plans.append(
+                {
+                    "p": p,
+                    "rel": rel,
+                    "tags": tags,
+                    "order": order,
+                    "logical_id": logical_id,
+                    "img_name": img_name,
+                    "dst": images_dir / img_name,
+                    "rev": rev,
+                    "supersedes_id": supersedes_id,
+                    "src_hash": src_hash,
+                }
+            )
 
         # 4b. 多进程并行转码 (libwebp method=6 编码大图为耗时大头，图级并行提速数倍)
         # 转码为耗时主体且期间无逐张日志，先打一条阶段标记日志，避免导出面板长时间静止
-        self.log(f"开始转码 {len(images)} 张图片 → {self.fmt} (quality={img_quality}) ...", "info")
-        tasks = [{
-            "src": str(pl["p"]),
-            "dst": str(pl["dst"]),
-            "fmt": self.fmt,
-            "quality": img_quality,
-            "need_src_hash": not pl["src_hash"],
-            "need_dst_hash": True,
-            **({"normalize": normalize_spec} if normalize_spec else {}),
-        } for pl in plans]
+        self.log(
+            f"开始转码 {len(images)} 张图片 → {self.fmt} (quality={img_quality}) ...",
+            "info",
+        )
+        manual_boxes = self.data.get("manual_boxes") or {}
+        tasks = [
+            {
+                "src": str(pl["p"]),
+                "dst": str(pl["dst"]),
+                "fmt": self.fmt,
+                "quality": img_quality,
+                "need_src_hash": not pl["src_hash"],
+                "need_dst_hash": True,
+                **(
+                    {
+                        "normalize": {
+                            **normalize_spec,
+                            **(
+                                {"manual_box_pct": manual_boxes[pl["src_hash"]]}
+                                if normalize_spec
+                                and pl["src_hash"]
+                                and pl["src_hash"] in manual_boxes
+                                else {}
+                            ),
+                        }
+                    }
+                    if normalize_spec
+                    else {}
+                ),
+            }
+            for pl in plans
+        ]
         results = convert_images_parallel(tasks, on_progress=self.report_progress)
         if len(results) != len(plans):
             raise RuntimeError("并行转码结果数量不一致，导出中止")
@@ -299,31 +388,43 @@ class MainExporter(BaseExporter):
             img_name = pl["img_name"]
             img_hash = res.get("dst_hash") or ""
 
-            batch_levels.append({
-                "id": logical_id,
-                "order": order,
-                "url": f"../images/{img_name}",
-                "tags": pl["tags"],
-                "hash": img_hash,
-                "addedAt": now_str,
-            })
+            batch_levels.append(
+                {
+                    "id": logical_id,
+                    "order": order,
+                    "url": f"../images/{img_name}",
+                    "tags": pl["tags"],
+                    "hash": img_hash,
+                    "addedAt": now_str,
+                }
+            )
 
-            exported_items.append({
-                "sourceHash": pl["src_hash"] or res.get("src_hash") or "",
-                "sourcePath": pl["rel"],
-                "sourceSize": pl["p"].stat().st_size if pl["p"].exists() else 0,
-                "module": "main",
-                "logicalId": logical_id,
-                "order": order,
-                "batchId": batch_id,
-                "targetFile": f"main/images/{img_name}",
-                "targetHash": img_hash,
-                "revision": pl["rev"],
-                "supersedes": pl["supersedes_id"],
-                **({"normalize": res.get("normalize")} if res.get("normalize") else {}),
-            })
+            exported_items.append(
+                {
+                    "sourceHash": pl["src_hash"] or res.get("src_hash") or "",
+                    "sourcePath": pl["rel"],
+                    "sourceSize": pl["p"].stat().st_size if pl["p"].exists() else 0,
+                    "module": "main",
+                    "logicalId": logical_id,
+                    "order": order,
+                    "batchId": batch_id,
+                    "targetFile": f"main/images/{img_name}",
+                    "targetHash": img_hash,
+                    "revision": pl["rev"],
+                    "supersedes": pl["supersedes_id"],
+                    **(
+                        {"normalize": res.get("normalize")}
+                        if res.get("normalize")
+                        else {}
+                    ),
+                }
+            )
 
-        self.log(f"图片处理完成: {converted_count}/{len(images)}" + (f", {len(errors)} 失败" if errors else ""), "ok")
+        self.log(
+            f"图片处理完成: {converted_count}/{len(images)}"
+            + (f", {len(errors)} 失败" if errors else ""),
+            "ok",
+        )
 
         # 5. 写入不可变批次文件 batches/batch_xxx.json (统一 items 键)
         batch_payload: dict[str, Any] = {
@@ -340,7 +441,9 @@ class MainExporter(BaseExporter):
 
         batch_file = batches_dir / f"{batch_id}.json"
         tmp_batch = batch_file.with_suffix(".tmp")
-        tmp_batch.write_text(json.dumps(batch_payload, ensure_ascii=False, indent=2), encoding="utf-8")
+        tmp_batch.write_text(
+            json.dumps(batch_payload, ensure_ascii=False, indent=2), encoding="utf-8"
+        )
         tmp_batch.replace(batch_file)
         self.log(f"分卷批次已写入: {batch_id}.json ({len(batch_levels)} 个关卡)", "ok")
 
@@ -358,7 +461,11 @@ class MainExporter(BaseExporter):
             batch_entry["levelsAffected"] = batch_payload["levelsAffected"]
 
         existing_batches.append(batch_entry)
-        new_total_count = existing_total_count + len(batch_levels) if not is_patch else existing_total_count
+        new_total_count = (
+            existing_total_count + len(batch_levels)
+            if not is_patch
+            else existing_total_count
+        )
         new_max_order = max(existing_max_order, start_order + len(batch_levels) - 1)
 
         index_payload = {
@@ -370,9 +477,14 @@ class MainExporter(BaseExporter):
             "items": existing_batches,
         }
         tmp_idx = index_json_path.with_suffix(".tmp")
-        tmp_idx.write_text(json.dumps(index_payload, ensure_ascii=False, indent=2), encoding="utf-8")
+        tmp_idx.write_text(
+            json.dumps(index_payload, ensure_ascii=False, indent=2), encoding="utf-8"
+        )
         tmp_idx.replace(index_json_path)
-        self.log(f"主线索引 index.json 已更新: version={version}, batches={len(existing_batches)}", "ok")
+        self.log(
+            f"主线索引 index.json 已更新: version={version}, batches={len(existing_batches)}",
+            "ok",
+        )
 
         # 7. 两阶段发布：正式导出才拷贝 release 镜像至 outDir；试导出时转录已直接写入构建根
         copied_files: list[str] = []
@@ -380,8 +492,7 @@ class MainExporter(BaseExporter):
             copied_files = ws.copy_release_to_out("main", self.out_p)
         else:
             copied_files = [
-                str(p.resolve())
-                for p in build_root.rglob("*") if p.is_file()
+                str(p.resolve()) for p in build_root.rglob("*") if p.is_file()
             ]
 
         # 8. 更新根 manifest.json (试导出只写构建根内快照，传 ws=None 掐断 release 镜像)
@@ -446,11 +557,15 @@ class MainExporter(BaseExporter):
                 "startOrder": start_order,
                 "endOrder": start_order + len(images) - 1,
                 "version": version,
-                "ids": [f"main:{o}" for o in range(start_order, start_order + len(images))],
+                "ids": [
+                    f"main:{o}" for o in range(start_order, start_order + len(images))
+                ],
             }
             summary = f"[试导出] 未提交 main 批次 trial_{self._trial_ts}（{len(images)} 关）[正式将分配 main:{start_order}~main:{start_order + len(images) - 1}, version={version}]"
         else:
-            summary = f"已成功导出 {len(images)} 个关卡至分卷 {batch_id} (version={version})"
+            summary = (
+                f"已成功导出 {len(images)} 个关卡至分卷 {batch_id} (version={version})"
+            )
 
         return ExportResult(
             success=True,

@@ -256,11 +256,14 @@ def normalize_export_image(
     long_target: int = DEFAULT_LONG_TARGET,
     crop_mode: str = "smart",
     trim_background: bool = True,
+    manual_box_pct: tuple[float, float, float, float] | None = None,
 ) -> tuple[bool, str | None, dict | None]:
     """规格化导出：打开 → EXIF 校正 → 长边阻断 → (可选)去背景框定 → 比例裁切 → 长边缩放 → 转码写盘。
 
     target_ratios: 比例族数组，元素为 "auto" / "1:1" / "4:3" / "2:3"；"auto" 并入默认池(1:1+4:3族)。
     crop_mode: "smart" 主体感知 / "center" 居中 / "none" 不裁切(仅缩放)。
+    manual_box_pct: 用户手动裁切框百分比 (x0, y0, x1, y1) 范围 0.0~1.0。设置时直接用作 crop_box，
+                    跳过 compute_content_box + select_aspect + smart_aspect_crop_box。
     返回 (ok, err, meta)。源图长边 < long_target 时阻断：ok=False、err 为阻断提示、meta=None。
     """
     if not HAS_CROP_COMPUTE:
@@ -288,29 +291,47 @@ def normalize_export_image(
                         None,
                     )
 
-                # 1. (可选) 去背景内容感知框定
-                if trim_background:
-                    content_box = compute_content_box(im, detector="usm")
+                if manual_box_pct:
+                    # 用户手动裁切框: 百分比→像素，直接用作 crop_box
+                    x0 = int(manual_box_pct[0] * W)
+                    y0 = int(manual_box_pct[1] * H)
+                    x1 = int(manual_box_pct[2] * W)
+                    y1 = int(manual_box_pct[3] * H)
+                    # 安全裁剪到图像边界
+                    x0 = max(0, min(x0, W))
+                    y0 = max(0, min(y0, H))
+                    x1 = max(0, min(x1, W))
+                    y1 = max(0, min(y1, H))
+                    if x1 - x0 < 10 or y1 - y0 < 10:
+                        return False, "手动裁切框过小，导出被阻断", None
+                    crop_box = (x0, y0, x1, y1)
+                    content_box = crop_box
+                    mode = "manual"
+                    label = "manual"
                 else:
-                    content_box = (0, 0, W, H)
-                cw = max(1, content_box[2] - content_box[0])
-                ch = max(1, content_box[3] - content_box[1])
-                content_aspect = cw / ch
+                    # 1. (可选) 去背景内容感知框定
+                    if trim_background:
+                        content_box = compute_content_box(im, detector="usm")
+                    else:
+                        content_box = (0, 0, W, H)
+                    cw = max(1, content_box[2] - content_box[0])
+                    ch = max(1, content_box[3] - content_box[1])
+                    content_aspect = cw / ch
 
-                # 2. 比例自适应选档（按最小损失，content_box 口径；横竖朝向由镜像自适应）
-                pool = build_ratio_pool(expand_ratio_families(list(target_ratios)))
-                target, label = select_aspect(content_aspect, ratio_pool=pool)
+                    # 2. 比例自适应选档（按最小损失，content_box 口径；横竖朝向由镜像自适应）
+                    pool = build_ratio_pool(expand_ratio_families(list(target_ratios)))
+                    target, label = select_aspect(content_aspect, ratio_pool=pool)
 
-                # 3. 裁窗定位
-                if crop_mode == "smart":
-                    crop_box = smart_aspect_crop_box(im, content_box, target)
-                    mode = "smart"
-                elif crop_mode == "center":
-                    crop_box = aspect_crop_box(content_box, target)
-                    mode = "center"
-                else:  # none
-                    crop_box = (0, 0, W, H)
-                    mode = "none"
+                    # 3. 裁窗定位
+                    if crop_mode == "smart":
+                        crop_box = smart_aspect_crop_box(im, content_box, target)
+                        mode = "smart"
+                    elif crop_mode == "center":
+                        crop_box = aspect_crop_box(content_box, target)
+                        mode = "center"
+                    else:  # none
+                        crop_box = (0, 0, W, H)
+                        mode = "none"
 
                 # 4. 长边缩放（只缩小不放大）
                 out = resize_long(im.crop(crop_box), long_target)
@@ -413,8 +434,9 @@ def _convert_one_parallel(job: dict) -> dict:
 
     job: {"src": str, "dst": str, "fmt": str, "quality": int,
           "need_src_hash": bool, "need_dst_hash": bool,
-          "normalize": optional {target_ratios, long_target, crop_mode, trim_background}}
+          "normalize": optional {target_ratios, long_target, crop_mode, trim_background, manual_box_pct}}
     携带 "normalize" 时走规格化（比例裁切+长边缩放）；否则退化为现有 convert_image。
+    normalize.manual_box_pct 为用户手动裁切框百分比 (x0, y0, x1, y1) 0.0~1.0，设置时跳过自动裁切。
     返回: {"ok": bool, "err": str | None, "src_hash": str, "dst_hash": str,
            "dst_size": int, "normalize": dict|None}
     """
@@ -425,6 +447,11 @@ def _convert_one_parallel(job: dict) -> dict:
     normalize = job.get("normalize") or None
     meta = None
     if normalize and fmt.lower() != "original":
+        mbp = normalize.get("manual_box_pct")
+        # 手动裁切框百分比转 tuple（JSON round-trip 会变 list）
+        mbp_tuple = (
+            tuple(mbp) if isinstance(mbp, (list, tuple)) and len(mbp) == 4 else None
+        )
         ok, err, meta = normalize_export_image(
             src,
             dst,
@@ -434,6 +461,7 @@ def _convert_one_parallel(job: dict) -> dict:
             long_target=int(normalize.get("long_target") or DEFAULT_LONG_TARGET),
             crop_mode=str(normalize.get("crop_mode") or "smart"),
             trim_background=bool(normalize.get("trim_background", True)),
+            manual_box_pct=mbp_tuple,
         )
     else:
         ok, err = convert_image(src, dst, fmt, quality=quality)

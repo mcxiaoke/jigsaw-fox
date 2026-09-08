@@ -43,7 +43,9 @@ class DailyExporter(BaseExporter):
     def validate(self) -> None:
         month = (self.data.get("month") or self.data.get("YYYYMM") or "").strip()
         if not re.match(r"^\d{6}$", month):
-            raise ValueError(f"月份格式必须为 6 位数字 YYYYMM，例如 202609，当前为: {month}")
+            raise ValueError(
+                f"月份格式必须为 6 位数字 YYYYMM，例如 202609，当前为: {month}"
+            )
         if not self.src_p.exists() or not self.src_p.is_dir():
             raise ValueError(f"源目录不存在: {self.src_p}")
 
@@ -54,13 +56,23 @@ class DailyExporter(BaseExporter):
         build_root = self._write_root(ws)
 
         selected_paths = self.data.get("selectedPaths")
-        if selected_paths and isinstance(selected_paths, list) and len(selected_paths) > 0:
-            selected_set = {str(p).replace("\\", "/").strip().lower() for p in selected_paths}
+        if (
+            selected_paths
+            and isinstance(selected_paths, list)
+            and len(selected_paths) > 0
+        ):
+            selected_set = {
+                str(p).replace("\\", "/").strip().lower() for p in selected_paths
+            }
             images = [
-                p for p in scan_images(self.src_p)
+                p
+                for p in scan_images(self.src_p)
                 if p.relative_to(self.src_p).as_posix().lower() in selected_set
             ]
-            self.log(f"已按指定范围载入 {len(images)} 张待打包图片，目标月份: {month}", "info")
+            self.log(
+                f"已按指定范围载入 {len(images)} 张待打包图片，目标月份: {month}",
+                "info",
+            )
         else:
             images = scan_images(self.src_p)
             self.log(f"扫描源目录获得 {len(images)} 张图片，目标月份: {month}", "info")
@@ -69,8 +81,15 @@ class DailyExporter(BaseExporter):
         excluded = resolve_excluded(self.data)
         if excluded:
             before = len(images)
-            images = [p for p in images if p.relative_to(self.src_p).as_posix().lower() not in excluded]
-            self.log(f"已剔除 {before - len(images)} 张在第②步手动移除的图片，剩余 {len(images)} 张", "info")
+            images = [
+                p
+                for p in images
+                if p.relative_to(self.src_p).as_posix().lower() not in excluded
+            ]
+            self.log(
+                f"已剔除 {before - len(images)} 张在第②步手动移除的图片，剩余 {len(images)} 张",
+                "info",
+            )
             if not images:
                 raise ValueError("所有图片均已被手动剔除，无可打包内容")
 
@@ -79,7 +98,9 @@ class DailyExporter(BaseExporter):
 
         # 0. 排序：确定打包/分配日期的顺序
         sort_by = (self.data.get("sortBy") or "name_asc").strip().lower()
-        manual_order = build_manual_order(self.src_p, self.data.get("manualOrder") or selected_paths)
+        manual_order = build_manual_order(
+            self.src_p, self.data.get("manualOrder") or selected_paths
+        )
         images = sort_images(images, sort_by, manual_order=manual_order)
         self.log(f"已按排序策略 [{sort_by}] 排定 {len(images)} 张图片顺序", "info")
 
@@ -100,7 +121,11 @@ class DailyExporter(BaseExporter):
             else:
                 arc_name = make_rename(p.name, idx, self.rename_rule, self.fmt, month)
 
-            logical_id = f"daily:{arc_name[:8]}" if re.match(r"^\d{8}", arc_name) else f"daily:{month}_{idx:02d}"
+            logical_id = (
+                f"daily:{arc_name[:8]}"
+                if re.match(r"^\d{8}", arc_name)
+                else f"daily:{month}_{idx:02d}"
+            )
 
             rel = p.relative_to(self.src_p).as_posix().replace("\\", "/")
             h = compute_file_sha256(p).strip().lower()
@@ -111,8 +136,14 @@ class DailyExporter(BaseExporter):
 
         dup_groups = {h: paths for h, paths in seen_hashes.items() if len(paths) >= 2}
         if dup_groups:
-            self.log(f"导出已被安全中止: 待导出图片列表中发现 {len(dup_groups)} 组内容完全相同的重复文件！", "err")
-            detail_lines = [f"  • 重复组 [Hash: {h[:12]}...]: {', '.join(paths)}" for h, paths in dup_groups.items()]
+            self.log(
+                f"导出已被安全中止: 待导出图片列表中发现 {len(dup_groups)} 组内容完全相同的重复文件！",
+                "err",
+            )
+            detail_lines = [
+                f"  • 重复组 [Hash: {h[:12]}...]: {', '.join(paths)}"
+                for h, paths in dup_groups.items()
+            ]
             raise ValueError(
                 f"待导出图片列表中存在 {len(dup_groups)} 组内容完全相同的重复图片，导出已被安全拦截！\n"
                 f"每日挑战必须保持日历天数完整，请先在素材库中清理或替换重复文件后再执行导出。\n"
@@ -162,38 +193,78 @@ class DailyExporter(BaseExporter):
             except Exception:
                 existing_months = []
 
-        prev_month = next((m for m in existing_months if isinstance(m, dict) and m.get("month") == month), None)
+        prev_month = next(
+            (
+                m
+                for m in existing_months
+                if isinstance(m, dict) and m.get("month") == month
+            ),
+            None,
+        )
 
         # 预打包 ZIP 至临时文件以计算内容哈希 (图片并行转码，顺序写 zip 保持确定性)
         tmp_zip = Path(tempfile.gettempdir()) / f"_daily_{month}_tmp.zip"
         zip_quality = resolve_quality(self.data)
-        self.log(f"开始转码 {len(target_items)} 张图片 → {self.fmt} (quality={zip_quality}) ...", "info")
+        self.log(
+            f"开始转码 {len(target_items)} 张图片 → {self.fmt} (quality={zip_quality}) ...",
+            "info",
+        )
 
-        zip_entries: list[tuple[Path, Path | None, str]] = []  # (src, tmp_f|None, arc_name)
+        zip_entries: list[
+            tuple[Path, Path | None, str]
+        ] = []  # (src, tmp_f|None, arc_name)
         zip_tasks: list[dict[str, Any]] = []
-        for idx, (p, arc_name, logical_id, file_hash) in enumerate(target_items, start=1):
+        manual_boxes = self.data.get("manual_boxes") or {}
+        for idx, (p, arc_name, logical_id, file_hash) in enumerate(
+            target_items, start=1
+        ):
             if self.fmt != "original" and HAS_PIL:
-                tmp_conv = Path(tempfile.gettempdir()) / f"_daily_{month}_{idx:03d}_{arc_name}"
+                tmp_conv = (
+                    Path(tempfile.gettempdir()) / f"_daily_{month}_{idx:03d}_{arc_name}"
+                )
                 zip_entries.append((p, tmp_conv, arc_name))
-                zip_tasks.append({
-                    "src": str(p),
-                    "dst": str(tmp_conv),
-                    "label": arc_name,  # 进度日志展示用（避免暴露临时文件名）
-                    "fmt": self.fmt,
-                    "quality": zip_quality,
-                    "need_src_hash": False,
-                    "need_dst_hash": False,
-                    **({"normalize": normalize_spec} if normalize_spec else {}),
-                })
+                zip_tasks.append(
+                    {
+                        "src": str(p),
+                        "dst": str(tmp_conv),
+                        "label": arc_name,  # 进度日志展示用（避免暴露临时文件名）
+                        "fmt": self.fmt,
+                        "quality": zip_quality,
+                        "need_src_hash": False,
+                        "need_dst_hash": False,
+                        **(
+                            {
+                                "normalize": {
+                                    **normalize_spec,
+                                    **(
+                                        {"manual_box_pct": manual_boxes[file_hash]}
+                                        if normalize_spec
+                                        and file_hash
+                                        and file_hash in manual_boxes
+                                        else {}
+                                    ),
+                                }
+                            }
+                            if normalize_spec
+                            else {}
+                        ),
+                    }
+                )
             else:
                 zip_entries.append((p, None, arc_name))
-        zip_results = convert_images_parallel(zip_tasks, on_progress=self.report_progress)
+        zip_results = convert_images_parallel(
+            zip_tasks, on_progress=self.report_progress
+        )
 
         with zipfile.ZipFile(tmp_zip, "w", zipfile.ZIP_DEFLATED) as zf:
             res_i = 0
             for p, tmp_conv, arc_name in zip_entries:
                 if tmp_conv is not None:
-                    ok = bool(zip_results[res_i].get("ok")) if res_i < len(zip_results) else False
+                    ok = (
+                        bool(zip_results[res_i].get("ok"))
+                        if res_i < len(zip_results)
+                        else False
+                    )
                     res_i += 1
                     if ok and tmp_conv.exists():
                         zf.write(tmp_conv, arcname=arc_name)
@@ -217,7 +288,10 @@ class DailyExporter(BaseExporter):
         zip_file_name = f"{month}-r{rev}.zip" if rev > 1 else f"{month}.zip"
         zip_path = zips_dir / zip_file_name
         tmp_zip.replace(zip_path)
-        self.log(f"ZIP 归档生成完成: {zip_path.name} ({zip_size:,} bytes, hash: {zip_hash[:8]}...)", "ok")
+        self.log(
+            f"ZIP 归档生成完成: {zip_path.name} ({zip_size:,} bytes, hash: {zip_hash[:8]}...)",
+            "ok",
+        )
 
         exported_items: list[dict[str, Any]] = []
         # 规格化元数据按源路径归档（zip 转码任务结果对齐 source 路径）
@@ -262,7 +336,9 @@ class DailyExporter(BaseExporter):
         if not found:
             existing_months.insert(0, month_entry)
 
-        new_version = existing_version + 1 if existing_version > 0 else len(existing_months)
+        new_version = (
+            existing_version + 1 if existing_version > 0 else len(existing_months)
+        )
         index_payload = {
             "module": "daily",
             "version": new_version,
@@ -272,9 +348,14 @@ class DailyExporter(BaseExporter):
         }
 
         tmp_idx = index_json_path.with_suffix(".tmp")
-        tmp_idx.write_text(json.dumps(index_payload, ensure_ascii=False, indent=2), encoding="utf-8")
+        tmp_idx.write_text(
+            json.dumps(index_payload, ensure_ascii=False, indent=2), encoding="utf-8"
+        )
         tmp_idx.replace(index_json_path)
-        self.log(f"daily/index.json 写入成功 (version={new_version}, count={len(images)})", "ok")
+        self.log(
+            f"daily/index.json 写入成功 (version={new_version}, count={len(images)})",
+            "ok",
+        )
 
         # 5. 两阶段发布：正式导出才拷贝 release 镜像至 outDir；试导出时转录已直接写入构建根
         copied_files: list[str] = []
@@ -282,8 +363,7 @@ class DailyExporter(BaseExporter):
             copied_files = ws.copy_release_to_out("daily", self.out_p)
         else:
             copied_files = [
-                str(p.resolve())
-                for p in build_root.rglob("*") if p.is_file()
+                str(p.resolve()) for p in build_root.rglob("*") if p.is_file()
             ]
 
         # 6. 更新 manifest.json (试导出只写构建根内快照，传 ws=None 掐断 release 镜像)
@@ -321,7 +401,9 @@ class DailyExporter(BaseExporter):
                 norm = norm_map.get(str(p.resolve()))
                 if norm:
                     entry["normalize"] = norm
-                source_map[p.relative_to(self.src_p).as_posix().replace("\\", "/")] = entry
+                source_map[p.relative_to(self.src_p).as_posix().replace("\\", "/")] = (
+                    entry
+                )
             self._write_trial_meta(source_map, exported_items, logs=[])
 
         # 7. 记录权威账本与导出流水 (仅正式导出)

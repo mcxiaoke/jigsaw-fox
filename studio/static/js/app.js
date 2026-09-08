@@ -8,14 +8,17 @@ import {
   checkHealth,
   executeExport,
   fetchJobStatus,
+  fetchManualCrops,
   fetchQuality,
   fetchQualityScores,
   fetchQualityStats,
   fetchTags,
   fetchTaxonomy,
+  deleteManualCrop as deleteManualCropApi,
   getFileUrl,
   getThumbUrl,
   previewExport,
+  saveManualCrop as saveManualCropApi,
   saveTags,
   scanDirectory,
 } from "./api.js";
@@ -239,6 +242,28 @@ const app = createApp({
     // 大图预览
     const viewerModalOpen = ref(false);
     const viewerIndex = ref(0);
+
+    // -----------------------------------------------------------------------
+    // 手动裁切框 (Cropper.js) 状态
+    // -----------------------------------------------------------------------
+    const cropMode = ref(false); // 是否在裁切模式
+    const cropAspectRatio = ref(1); // 当前比例: 1 / 0.75 / 1.3333 / 0(自由)
+    const isSavingCrop = ref(false);
+    const manualCropCache = ref({}); // {hash: {crop_x0, crop_y0, crop_x1, crop_y1, crop_ratio}}
+    const cropPixelW = ref(0);
+    const cropPixelH = ref(0);
+    let cropperInstance = null;
+
+    // 裁切框实时像素尺寸文本（低于 1200px 时标红警告）
+    const MIN_SIDE = 1200;
+    const cropPixelText = computed(() => {
+      const w = cropPixelW.value;
+      const h = cropPixelH.value;
+      if (!w || !h) return "";
+      const tooSmall = Math.min(w, h) < MIN_SIDE;
+      const label = `${w} × ${h} px`;
+      return tooSmall ? `⚠ ${label} (短边 < ${MIN_SIDE})` : label;
+    });
 
     // -----------------------------------------------------------------------
     // 导出三步流状态 (配置 → 顺序调整 → 预览)
@@ -611,6 +636,36 @@ const app = createApp({
       };
     });
 
+    // 手动裁切框: 当前 viewer 图片是否有手动裁切框
+    const hasManualCrop = computed(() => {
+      const item = currentViewerItem.value;
+      if (!item || !item.hash) return false;
+      const entry = manualCropCache.value[item.hash];
+      return !!(entry && entry.crop_x0 != null);
+    });
+
+    // 手动裁切框 overlay 样式 (蓝色框)
+    const manualCropOverlayStyle = computed(() => {
+      const item = currentViewerItem.value;
+      if (!item || !item.hash) return {};
+      const entry = manualCropCache.value[item.hash];
+      if (!entry || entry.crop_x0 == null) return {};
+      return {
+        left: (entry.crop_x0 * 100) + "%",
+        top: (entry.crop_y0 * 100) + "%",
+        width: ((entry.crop_x1 - entry.crop_x0) * 100) + "%",
+        height: ((entry.crop_y1 - entry.crop_y0) * 100) + "%",
+      };
+    });
+
+    // 手动裁切框比例标签
+    const manualCropRatio = computed(() => {
+      const item = currentViewerItem.value;
+      if (!item || !item.hash) return "";
+      const entry = manualCropCache.value[item.hash];
+      return entry ? (entry.crop_ratio || "") : "";
+    });
+
     // -----------------------------------------------------------------------
     // 交互操作逻辑
     // -----------------------------------------------------------------------
@@ -636,6 +691,8 @@ const app = createApp({
           refreshQualitySummary();
         }
         showToast(`扫描成功: 共发现 ${res.total || records.value.length} 张图片`);
+        // 后台拉取手动裁切框 (不阻塞 UI)
+        fetchManualCropsAfterScan();
       } catch (err) {
         console.error("[扫描目录]", err);
         showToast(`扫描失败: ${err.message}`);
@@ -1094,26 +1151,230 @@ const app = createApp({
       if (idx !== -1) {
         viewerIndex.value = idx;
         viewerModalOpen.value = true;
+        syncViewerImg();
       }
     };
 
     const closeViewer = () => {
+      if (cropMode.value) exitCropMode(false);
       viewerModalOpen.value = false;
     };
 
+    // 同步 wrapper 尺寸到 img 实际渲染尺寸，确保 overlay 百分比定位准确
+    // 根因：CSS inline-block wrapper 的 max-height: 100% 在 flex 容器内不生效（循环高度依赖），
+    // 导致竖图溢出、overlay 百分比错位。改由 JS 设定 img max-height + wrapper 宽高。
+    const syncViewerImg = () => {
+      nextTick(() => {
+        const content = document.querySelector(".viewer-content");
+        const img = document.querySelector(".viewer-img");
+        const wrapper = document.querySelector(".viewer-img-wrapper");
+        if (!content || !img || !wrapper) return;
+        // 1. 设定 img max-height = viewer-content 高度，让图片缩放适配
+        img.style.maxHeight = content.clientHeight + "px";
+        // 2. 等 img 重新布局后，同步 wrapper 尺寸
+        requestAnimationFrame(() => {
+          const w = img.offsetWidth;
+          const h = img.offsetHeight;
+          if (w > 0 && h > 0) {
+            wrapper.style.width = w + "px";
+            wrapper.style.height = h + "px";
+          }
+        });
+      });
+    };
+
     const prevViewer = () => {
+      if (cropMode.value) exitCropMode(false);
       if (viewerIndex.value > 0) {
         viewerIndex.value--;
       } else {
         viewerIndex.value = filteredRecords.value.length - 1;
       }
+      syncViewerImg();
     };
 
     const nextViewer = () => {
+      if (cropMode.value) exitCropMode(false);
       if (viewerIndex.value < filteredRecords.value.length - 1) {
         viewerIndex.value++;
       } else {
         viewerIndex.value = 0;
+      }
+      syncViewerImg();
+    };
+
+    // -----------------------------------------------------------------------
+    // 手动裁切框 (Cropper.js v1) 交互逻辑
+    // -----------------------------------------------------------------------
+    const initCropper = () => {
+      if (typeof window.Cropper === "undefined") {
+        showToast("Cropper.js 未加载，请检查网络连接");
+        return;
+      }
+      const img = document.querySelector(".viewer-img");
+      if (!img || !img.complete) {
+        // 图片未加载完成时等 onload
+        img.addEventListener("load", () => initCropper(), { once: true });
+        return;
+      }
+      // 清理旧实例
+      if (cropperInstance) {
+        try { cropperInstance.destroy(); } catch (_) {}
+        cropperInstance = null;
+      }
+      const opts = {
+        viewMode: 1,
+        autoCropArea: 0.9,
+        movable: true,
+        zoomable: false,
+        rotatable: false,
+        scalable: false,
+        background: false,
+        responsive: true,
+      };
+      // 预载已有手动裁切框
+      const item = currentViewerItem.value;
+      if (item && item.hash) {
+        const entry = manualCropCache.value[item.hash];
+        if (entry && entry.crop_x0 != null && item.width && item.height) {
+          opts.data = {
+            x: entry.crop_x0 * item.width,
+            y: entry.crop_y0 * item.height,
+            width: (entry.crop_x1 - entry.crop_x0) * item.width,
+            height: (entry.crop_y1 - entry.crop_y0) * item.height,
+          };
+        }
+      }
+      if (cropAspectRatio.value > 0) {
+        opts.aspectRatio = cropAspectRatio.value;
+      }
+      opts.crop = (event) => {
+        if (!cropperInstance) return;
+        const d = cropperInstance.getData(true);
+        cropPixelW.value = Math.round(d.width);
+        cropPixelH.value = Math.round(d.height);
+      };
+      cropperInstance = new window.Cropper(img, opts);
+    };
+
+    const enterCropMode = () => {
+      if (!currentViewerItem.value) return;
+      cropMode.value = true;
+      nextTick(() => initCropper());
+    };
+
+    const exitCropMode = (save) => {
+      if (cropperInstance) {
+        if (save) {
+          // save 由 saveManualCrop 单独处理, 这里只销毁
+        }
+        try { cropperInstance.destroy(); } catch (_) {}
+        cropperInstance = null;
+      }
+      cropMode.value = false;
+      cropPixelW.value = 0;
+      cropPixelH.value = 0;
+    };
+
+    const setCropRatio = (ratio) => {
+      cropAspectRatio.value = ratio;
+      if (cropperInstance) {
+        if (ratio > 0) {
+          cropperInstance.setAspectRatio(ratio);
+        } else {
+          cropperInstance.setAspectRatio(NaN);
+        }
+      }
+    };
+
+    const saveManualCrop = async () => {
+      if (!cropperInstance || !currentViewerItem.value) return;
+      const item = currentViewerItem.value;
+      if (!item.hash) {
+        showToast("无法获取图片哈希，请重新扫描目录");
+        return;
+      }
+      const data = cropperInstance.getData(true);
+      const imgData = cropperInstance.getImageData();
+      if (!imgData.naturalWidth || !imgData.naturalHeight) {
+        showToast("无法获取图片尺寸");
+        return;
+      }
+      const box = {
+        x0: data.x / imgData.naturalWidth,
+        y0: data.y / imgData.naturalHeight,
+        x1: (data.x + data.width) / imgData.naturalWidth,
+        y1: (data.y + data.height) / imgData.naturalHeight,
+      };
+      // 比例字符串
+      let ratioStr = "";
+      if (cropAspectRatio.value === 1) ratioStr = "1:1";
+      else if (Math.abs(cropAspectRatio.value - 0.75) < 0.01) ratioStr = "3:4";
+      else if (Math.abs(cropAspectRatio.value - 1.3333) < 0.01) ratioStr = "4:3";
+      else if (cropAspectRatio.value === 0) ratioStr = "free";
+
+      isSavingCrop.value = true;
+      console.log("[MANUAL_CROP] saveManualCrop:", {
+        hash: item.hash,
+        file: item.file,
+        naturalW: imgData.naturalWidth,
+        naturalH: imgData.naturalHeight,
+        cropData: data,
+        box,
+        ratioStr,
+      });
+      try {
+        const res = await saveManualCropApi(item.hash, box, ratioStr, srcDir.value.trim());
+        if (res.ok) {
+          manualCropCache.value = {
+            ...manualCropCache.value,
+            [item.hash]: {
+              crop_x0: box.x0, crop_y0: box.y0,
+              crop_x1: box.x1, crop_y1: box.y1,
+              crop_ratio: ratioStr,
+            },
+          };
+          item.manualCrop = true;
+          showToast("裁切框已保存");
+          exitCropMode(false);
+        }
+      } catch (err) {
+        showToast("保存失败: " + err.message);
+      } finally {
+        isSavingCrop.value = false;
+      }
+    };
+
+    const deleteManualCrop = async () => {
+      const item = currentViewerItem.value;
+      if (!item || !item.hash) return;
+      console.log("[MANUAL_CROP] deleteManualCrop:", { hash: item.hash, file: item.file });
+      try {
+        const res = await deleteManualCropApi(item.hash, srcDir.value.trim());
+        if (res.ok) {
+          const next = { ...manualCropCache.value };
+          delete next[item.hash];
+          manualCropCache.value = next;
+          item.manualCrop = false;
+          showToast("手动裁切框已删除");
+          exitCropMode(false);
+        }
+      } catch (err) {
+        showToast("删除失败: " + err.message);
+      }
+    };
+
+    // 扫描后拉取手动裁切框缓存
+    const fetchManualCropsAfterScan = async () => {
+      if (!srcDir.value.trim()) return;
+      try {
+        const data = await fetchManualCrops(srcDir.value.trim());
+        manualCropCache.value = data.overrides || {};
+        for (const r of records.value) {
+          r.manualCrop = !!(r.hash && manualCropCache.value[r.hash]);
+        }
+      } catch (err) {
+        console.error("[获取手动裁切框]", err);
       }
     };
 
@@ -1683,6 +1944,11 @@ const app = createApp({
         }
       });
 
+      // 窗口缩放时同步 viewer 图片尺寸
+      window.addEventListener("resize", () => {
+        if (viewerModalOpen.value) syncViewerImg();
+      });
+
       // 尝试恢复未完成的质检任务
       resumeQualityJob();
     });
@@ -1807,6 +2073,7 @@ const app = createApp({
       batchSetReviewed,
       openViewer,
       closeViewer,
+      syncViewerImg,
       prevViewer,
       nextViewer,
       toggleViewerTag,
@@ -1841,6 +2108,19 @@ const app = createApp({
       hasRatio,
       toggleRatio,
       isUnselectable,
+      // 手动裁切框
+      cropMode,
+      cropAspectRatio,
+      isSavingCrop,
+      cropPixelText,
+      hasManualCrop,
+      manualCropOverlayStyle,
+      manualCropRatio,
+      enterCropMode,
+      exitCropMode,
+      setCropRatio,
+      saveManualCrop,
+      deleteManualCrop,
     };
   },
 });

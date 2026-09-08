@@ -77,13 +77,23 @@ class PackExporterBase(BaseExporter):
 
         # 1. 扫描与选图过滤
         selected_paths = self.data.get("selectedPaths")
-        if selected_paths and isinstance(selected_paths, list) and len(selected_paths) > 0:
-            selected_set = {str(p).replace("\\", "/").strip().lower() for p in selected_paths}
+        if (
+            selected_paths
+            and isinstance(selected_paths, list)
+            and len(selected_paths) > 0
+        ):
+            selected_set = {
+                str(p).replace("\\", "/").strip().lower() for p in selected_paths
+            }
             images = [
-                p for p in scan_images(self.src_p)
+                p
+                for p in scan_images(self.src_p)
                 if p.relative_to(self.src_p).as_posix().lower() in selected_set
             ]
-            self.log(f"已按指定范围载入 {len(images)} 张待打包图片，目标 ID: {pack_id}", "info")
+            self.log(
+                f"已按指定范围载入 {len(images)} 张待打包图片，目标 ID: {pack_id}",
+                "info",
+            )
         else:
             images = scan_images(self.src_p)
             self.log(f"扫描源目录获得 {len(images)} 张图片，目标 ID: {pack_id}", "info")
@@ -92,8 +102,15 @@ class PackExporterBase(BaseExporter):
         excluded = resolve_excluded(self.data)
         if excluded:
             before = len(images)
-            images = [p for p in images if p.relative_to(self.src_p).as_posix().lower() not in excluded]
-            self.log(f"已剔除 {before - len(images)} 张在第②步手动移除的图片，剩余 {len(images)} 张", "info")
+            images = [
+                p
+                for p in images
+                if p.relative_to(self.src_p).as_posix().lower() not in excluded
+            ]
+            self.log(
+                f"已剔除 {before - len(images)} 张在第②步手动移除的图片，剩余 {len(images)} 张",
+                "info",
+            )
             if not images:
                 raise ValueError("所有图片均已被手动剔除，无可导出内容")
 
@@ -102,7 +119,9 @@ class PackExporterBase(BaseExporter):
 
         # 0. 排序：确定打包内序号顺序 (确定性)
         sort_by = (self.data.get("sortBy") or "name_asc").strip().lower()
-        manual_order = build_manual_order(self.src_p, self.data.get("manualOrder") or selected_paths)
+        manual_order = build_manual_order(
+            self.src_p, self.data.get("manualOrder") or selected_paths
+        )
         images = sort_images(images, sort_by, manual_order=manual_order)
         self.log(f"已按排序策略 [{sort_by}] 排定 {len(images)} 张图片顺序", "info")
 
@@ -112,7 +131,9 @@ class PackExporterBase(BaseExporter):
             if not is_valid:
                 rel_p = p.relative_to(self.src_p).as_posix()
                 self.log(f"导出中止: 图片损坏或格式无效: {rel_p} ({err_msg})", "err")
-                raise ValueError(f"待导出图片中存在损坏或格式无效的文件: {rel_p} ({err_msg})")
+                raise ValueError(
+                    f"待导出图片中存在损坏或格式无效的文件: {rel_p} ({err_msg})"
+                )
 
         # 2a. 规格化：长边 <2160 阻断（仅在规格化激活时生效，向后兼容旧调用）
         normalize_spec = resolve_normalize(self.data)
@@ -137,23 +158,36 @@ class PackExporterBase(BaseExporter):
                     else:
                         filtered_images.append(p)
                 if excluded_cnt > 0:
-                    self.log(f"已自动排除 {excluded_cnt} 张已导出的历史图片，剩余 {len(filtered_images)} 张待打包", "info")
+                    self.log(
+                        f"已自动排除 {excluded_cnt} 张已导出的历史图片，剩余 {len(filtered_images)} 张待打包",
+                        "info",
+                    )
                 images = filtered_images
                 if not images:
-                    raise ValueError("所选范围内的图片均已在历史批次中导出，无新图片可供导出")
+                    raise ValueError(
+                        "所选范围内的图片均已在历史批次中导出，无新图片可供导出"
+                    )
 
         # 4. 查重拦截：严禁同批次内部重复
         seen_hashes: dict[str, list[str]] = {}
+        pack_hash_map: dict[str, str] = {}  # rel_path -> hash, 供 manual_box 查找
         for p in images:
             rel = p.relative_to(self.src_p).as_posix().replace("\\", "/")
             h = compute_file_sha256(p).strip().lower()
+            pack_hash_map[rel] = h
             if h:
                 seen_hashes.setdefault(h, []).append(rel)
 
         dup_groups = {h: paths for h, paths in seen_hashes.items() if len(paths) >= 2}
         if dup_groups:
-            self.log(f"导出已被安全中止: 待导出列表中发现 {len(dup_groups)} 组完全相同的重复图片！", "err")
-            detail_lines = [f"  • 重复组 [Hash: {h[:12]}...]: {', '.join(paths)}" for h, paths in dup_groups.items()]
+            self.log(
+                f"导出已被安全中止: 待导出列表中发现 {len(dup_groups)} 组完全相同的重复图片！",
+                "err",
+            )
+            detail_lines = [
+                f"  • 重复组 [Hash: {h[:12]}...]: {', '.join(paths)}"
+                for h, paths in dup_groups.items()
+            ]
             raise ValueError(
                 f"待导出图片列表中存在 {len(dup_groups)} 组内容完全相同的重复图片，导出已被安全拦截！\n"
                 + "\n".join(detail_lines)
@@ -196,39 +230,80 @@ class PackExporterBase(BaseExporter):
             except Exception:
                 existing_items = []
 
-        prev_item = next((it for it in existing_items if isinstance(it, dict) and it.get("id") == pack_id), None)
+        prev_item = next(
+            (
+                it
+                for it in existing_items
+                if isinstance(it, dict) and it.get("id") == pack_id
+            ),
+            None,
+        )
 
         # 预打包 ZIP 到临时文件以确定内容哈希 (图片并行转码，再顺序写 zip 保持确定性)
         tmp_zip = Path(tempfile.gettempdir()) / f"_{self.module}_{pack_id}_tmp.zip"
         zip_quality = resolve_quality(self.data)
-        self.log(f"开始转码 {len(images)} 张图片 → {self.fmt} (quality={zip_quality}) ...", "info")
+        self.log(
+            f"开始转码 {len(images)} 张图片 → {self.fmt} (quality={zip_quality}) ...",
+            "info",
+        )
 
-        zip_entries: list[tuple[Path, Path | None, str]] = []  # (src, tmp_f|None, arc_name)
+        zip_entries: list[
+            tuple[Path, Path | None, str]
+        ] = []  # (src, tmp_f|None, arc_name)
         zip_tasks: list[dict[str, Any]] = []
+        manual_boxes = self.data.get("manual_boxes") or {}
         for idx, p in enumerate(images, start=1):
             arc_name = make_rename(p.name, idx, self.rename_rule, self.fmt)
+            rel_p = p.relative_to(self.src_p).as_posix().replace("\\", "/")
+            img_hash = pack_hash_map.get(rel_p, "")
             if self.fmt != "original" and HAS_PIL:
-                tmp_f = Path(tempfile.gettempdir()) / f"_{self.module}_{pack_id}_{idx}_{arc_name}"
+                tmp_f = (
+                    Path(tempfile.gettempdir())
+                    / f"_{self.module}_{pack_id}_{idx}_{arc_name}"
+                )
                 zip_entries.append((p, tmp_f, arc_name))
-                zip_tasks.append({
-                    "src": str(p),
-                    "dst": str(tmp_f),
-                    "label": arc_name,  # 进度日志展示用（避免暴露临时文件名）
-                    "fmt": self.fmt,
-                    "quality": zip_quality,
-                    "need_src_hash": False,
-                    "need_dst_hash": False,
-                    **({"normalize": normalize_spec} if normalize_spec else {}),
-                })
+                zip_tasks.append(
+                    {
+                        "src": str(p),
+                        "dst": str(tmp_f),
+                        "label": arc_name,  # 进度日志展示用（避免暴露临时文件名）
+                        "fmt": self.fmt,
+                        "quality": zip_quality,
+                        "need_src_hash": False,
+                        "need_dst_hash": False,
+                        **(
+                            {
+                                "normalize": {
+                                    **normalize_spec,
+                                    **(
+                                        {"manual_box_pct": manual_boxes[img_hash]}
+                                        if normalize_spec
+                                        and img_hash
+                                        and img_hash in manual_boxes
+                                        else {}
+                                    ),
+                                }
+                            }
+                            if normalize_spec
+                            else {}
+                        ),
+                    }
+                )
             else:
                 zip_entries.append((p, None, arc_name))
-        zip_results = convert_images_parallel(zip_tasks, on_progress=self.report_progress)
+        zip_results = convert_images_parallel(
+            zip_tasks, on_progress=self.report_progress
+        )
 
         with zipfile.ZipFile(tmp_zip, "w", zipfile.ZIP_DEFLATED) as zf:
             res_i = 0
             for p, tmp_f, arc_name in zip_entries:
                 if tmp_f is not None:
-                    ok = bool(zip_results[res_i].get("ok")) if res_i < len(zip_results) else False
+                    ok = (
+                        bool(zip_results[res_i].get("ok"))
+                        if res_i < len(zip_results)
+                        else False
+                    )
                     res_i += 1
                     if ok and tmp_f.exists():
                         zf.write(tmp_f, arcname=arc_name)
@@ -262,7 +337,10 @@ class PackExporterBase(BaseExporter):
         cover_path = covers_dir / cover_file_name
 
         tmp_zip.replace(zip_path)
-        self.log(f"ZIP 归档生成完毕: {zip_path.name} ({zip_size:,} bytes, hash: {zip_hash[:8]}...)", "ok")
+        self.log(
+            f"ZIP 归档生成完毕: {zip_path.name} ({zip_size:,} bytes, hash: {zip_hash[:8]}...)",
+            "ok",
+        )
 
         exported_items: list[dict[str, Any]] = []
         now_str = dt.datetime.now(dt.timezone.utc).isoformat().replace("+00:00", "Z")
@@ -291,7 +369,9 @@ class PackExporterBase(BaseExporter):
             exported_items.append(entry)
 
         # 生成封面图并双重校验完整性
-        ok_cov, err_cov = convert_image(images[0], cover_path, "webp", quality=zip_quality)
+        ok_cov, err_cov = convert_image(
+            images[0], cover_path, "webp", quality=zip_quality
+        )
         if not ok_cov:
             self.log(f"封面生成失败: {err_cov}", "err")
             raise ValueError(f"封面图生成失败 ({images[0].name}): {err_cov}")
@@ -333,7 +413,9 @@ class PackExporterBase(BaseExporter):
         if not found:
             existing_items.append(item_entry)
 
-        new_version = existing_version + 1 if existing_version > 0 else len(existing_items)
+        new_version = (
+            existing_version + 1 if existing_version > 0 else len(existing_items)
+        )
         index_payload = {
             "module": self.module,
             "version": new_version,
@@ -342,9 +424,14 @@ class PackExporterBase(BaseExporter):
         }
 
         tmp_idx = index_json_path.with_suffix(".tmp")
-        tmp_idx.write_text(json.dumps(index_payload, ensure_ascii=False, indent=2), encoding="utf-8")
+        tmp_idx.write_text(
+            json.dumps(index_payload, ensure_ascii=False, indent=2), encoding="utf-8"
+        )
         tmp_idx.replace(index_json_path)
-        self.log(f"{self.module}/index.json 写入成功 (version={new_version}, items={len(existing_items)})", "ok")
+        self.log(
+            f"{self.module}/index.json 写入成功 (version={new_version}, items={len(existing_items)})",
+            "ok",
+        )
 
         # 8. 两阶段发布：正式导出才拷贝 release 镜像至 outDir；试导出时转录已直接写入构建根
         copied_files: list[str] = []
@@ -352,8 +439,7 @@ class PackExporterBase(BaseExporter):
             copied_files = ws.copy_release_to_out(self.module, self.out_p)
         else:
             copied_files = [
-                str(p.resolve())
-                for p in build_root.rglob("*") if p.is_file()
+                str(p.resolve()) for p in build_root.rglob("*") if p.is_file()
             ]
 
         # 9. 更新根 manifest.json (试导出只写构建根内快照，传 ws=None 掐断 release 镜像)

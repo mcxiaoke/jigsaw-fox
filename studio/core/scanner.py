@@ -26,7 +26,9 @@ from studio.core.image_proc import DEFAULT_LONG_TARGET, report_pil_warnings
 logger = logging.getLogger(__name__)
 
 IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".webp", ".bmp", ".gif", ".tif", ".tiff"}
-IGNORE_DIRS = {".git", ".svn", ".idea", ".vscode", "__pycache__", "node_modules", "temp", "tmp"}
+# 扫描时忽略的目录名（匹配大小写不敏感，见下方 filter）
+IGNORE_DIRS = {".git", ".svn", ".idea", ".vscode", "__pycache__",
+               "node_modules", "temp", "tmp", "deleted"}
 
 
 def scan_images(root: str | Path) -> list[Path]:
@@ -40,8 +42,10 @@ def scan_images(root: str | Path) -> list[Path]:
 
     images: list[Path] = []
     for root_dir, dirs, files in os.walk(r):
-        # 过滤忽略目录
-        dirs[:] = [d for d in dirs if not d.startswith(".") and d not in IGNORE_DIRS]
+        # 过滤忽略目录：跳过隐藏目录(.)与忽略名单(大小写不敏感)
+        dirs[:] = [d for d in dirs
+                   if not d.startswith(".")
+                   and d.lower() not in IGNORE_DIRS]
         for f in files:
             if f.startswith("."):
                 continue
