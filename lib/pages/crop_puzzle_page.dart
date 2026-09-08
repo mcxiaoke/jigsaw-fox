@@ -388,7 +388,6 @@ class _CropPuzzlePageState extends State<CropPuzzlePage> {
 
       final customItem = CustomPuzzleItem(
         id: 'ugc_${DateTime.now().millisecondsSinceEpoch}',
-        title: '我的自制拼图',
         imagePathOrUrl: file.path,
         isLocalFile: true,
         difficulty: _selectedDifficulty,

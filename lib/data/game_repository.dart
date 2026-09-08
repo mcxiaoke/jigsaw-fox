@@ -8,6 +8,7 @@ import 'package:jigsawpuzzle/data/models/level_item.dart';
 import 'package:jigsawpuzzle/data/progress_store.dart';
 import 'package:jigsawpuzzle/data/snapshot_store.dart';
 import 'package:jigsawpuzzle/data/storage_manager.dart';
+import 'package:jigsawpuzzle/l10n/gen/strings.g.dart';
 import 'package:jigsawpuzzle/logic/download_manager.dart';
 import 'package:jigsawpuzzle/logic/image_source.dart';
 import 'package:jigsawpuzzle/logic/models/puzzle_state.dart';
@@ -183,7 +184,9 @@ class GameRepository {
         LevelItem(
           id: 'level_$i',
           index: i,
-          title: '第 $i 关',
+          title: LocaleSettings.instance.currentTranslations.game.titleLevel(
+            index: i,
+          ),
           assetPath: assetPath,
           difficulty: diff,
           isUnlocked: true,
@@ -235,7 +238,6 @@ class GameRepository {
       final samples = [
         CustomPuzzleItem(
           id: 'sample_01',
-          title: '巴黎埃菲尔铁塔晨曦',
           imagePathOrUrl: assetSamples[0],
           isLocalFile: false,
           sourcePlatform: '网络',
@@ -244,7 +246,6 @@ class GameRepository {
         ),
         CustomPuzzleItem(
           id: 'sample_02',
-          title: '午后阳光与香浓拿铁',
           imagePathOrUrl: assetSamples[1],
           isLocalFile: false,
           sourcePlatform: '网络',
@@ -253,7 +254,6 @@ class GameRepository {
         ),
         CustomPuzzleItem(
           id: 'sample_03',
-          title: '草地上奔跑的小柴犬',
           imagePathOrUrl: assetSamples[2],
           isLocalFile: false,
           sourcePlatform: '网络',
@@ -326,7 +326,7 @@ class GameRepository {
   /// Adds a new user custom puzzle.
   Future<void> addCustomPuzzle(CustomPuzzleItem item) async {
     AppLogger.repo.info(
-      'addCustomPuzzle id=${item.id} title=${item.title} isLocal=${item.isLocalFile}',
+      'addCustomPuzzle id=${item.id} isLocal=${item.isLocalFile}',
     );
     _customPuzzles.insert(0, item);
     customPuzzlesNotifier.value = List.unmodifiable(_customPuzzles);

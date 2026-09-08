@@ -191,9 +191,10 @@ void main() {
       expect(GameRepository.instance.customPuzzles, hasLength(3));
       expect(sm.state.get('custom:presetsInitialized'), isTrue);
       // 元数据以 custom:{id} 逐条落盘
+      // 自制关卡去掉了虚假 title，默认为空字符串
       expect(
         getJson(sm.collections, 'custom:sample_01')?['title'],
-        '巴黎埃菲尔铁塔晨曦',
+        '',
       );
       final keys = sm.collections.keys
           .cast<String>()

@@ -4,6 +4,7 @@ import 'dart:typed_data';
 import 'dart:ui' as ui;
 import 'package:archive/archive.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:jigsawpuzzle/l10n/gen/strings.g.dart';
 import 'package:jigsawpuzzle/logic/content/models/canonical_id.dart';
 import 'package:jigsawpuzzle/logic/content/pipelines/pack_content_pipeline.dart';
 import 'package:path/path.dart' as p;
@@ -77,7 +78,10 @@ void main() {
         expect(pack.levelCount, equals(3));
         expect(pack.sourceType, equals('local_file'));
         expect(pack.sourceOrigin, equals(zipPath));
-        expect(pack.displaySource, equals('相册 / 本地'));
+        expect(
+          pack.displaySource,
+          equals(LocaleSettings.instance.currentTranslations.source.album),
+        );
         expect(File(pack.coverPath).existsSync(), isTrue);
 
         // 验证关卡 Canonical ID

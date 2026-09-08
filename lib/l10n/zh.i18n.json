@@ -501,6 +501,7 @@
     "badgeCleared": "已通关",
     "deleteTitle": "删除自制拼图",
     "deleteDesc": "确定要永久删除「{title}」吗？删除后不可恢复。",
+    "deleteDescGeneric": "确定要永久删除此自制拼图吗？删除后不可恢复。",
     "deleteConfirm": "确定删除",
     "deleteTooltip": "删除此自制拼图",
     "favAdd": "加入收藏",

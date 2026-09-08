@@ -670,6 +670,7 @@ class _Translations$chooseDifficulty$zh extends Translations$chooseDifficulty$en
 	@override String get badgeCleared => '已通关';
 	@override String get deleteTitle => '删除自制拼图';
 	@override String deleteDesc({required Object title}) => '确定要永久删除「${title}」吗？删除后不可恢复。';
+	@override String get deleteDescGeneric => '确定要永久删除此自制拼图吗？删除后不可恢复。';
 	@override String get deleteConfirm => '确定删除';
 	@override String get deleteTooltip => '删除此自制拼图';
 	@override String get favAdd => '加入收藏';
@@ -1611,6 +1612,7 @@ extension on TranslationsZh {
 			'chooseDifficulty.badgeCleared' => '已通关',
 			'chooseDifficulty.deleteTitle' => '删除自制拼图',
 			'chooseDifficulty.deleteDesc' => ({required Object title}) => '确定要永久删除「${title}」吗？删除后不可恢复。',
+			'chooseDifficulty.deleteDescGeneric' => '确定要永久删除此自制拼图吗？删除后不可恢复。',
 			'chooseDifficulty.deleteConfirm' => '确定删除',
 			'chooseDifficulty.deleteTooltip' => '删除此自制拼图',
 			'chooseDifficulty.favAdd' => '加入收藏',

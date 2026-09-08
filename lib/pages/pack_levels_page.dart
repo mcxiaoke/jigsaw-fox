@@ -117,7 +117,7 @@ class _PackLevelsPageState extends State<PackLevelsPage> {
       GameToast.show(
         context,
         icon: PhosphorIconsRegular.warning,
-        message: '关卡图片文件不存在',
+        message: t.pack.imageMissing,
         type: GameToastType.error,
       );
       return;
@@ -129,7 +129,7 @@ class _PackLevelsPageState extends State<PackLevelsPage> {
       context: context,
       canonicalId: canonicalId,
       fallbackDifficulty: _defaultDiff,
-      title: '${widget.pack.title} · 第 ${level.order} 关',
+      title: t.levels.titleOf(title: widget.pack.title, index: level.order),
       imageBytes: bytes,
     );
     if (resumeResult != null) {
@@ -265,7 +265,7 @@ class _PackLevelsPageState extends State<PackLevelsPage> {
         centerTitle: true,
         actions: [
           IconButton(
-            tooltip: '删除此图包',
+            tooltip: t.pack.deleteTooltip,
             icon: Icon(PhosphorIconsRegular.trash, color: palette.error),
             onPressed: _confirmDeletePack,
           ),
@@ -366,7 +366,7 @@ class _PackLevelsPageState extends State<PackLevelsPage> {
                 child: Padding(
                   padding: const EdgeInsets.symmetric(vertical: 40),
                   child: Text(
-                    '此图包中暂无关卡图片',
+                    t.pack.emptyLevels,
                     style: styles.caption.copyWith(color: palette.disabledText),
                   ),
                 ),

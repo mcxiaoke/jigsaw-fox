@@ -1299,6 +1299,9 @@ class Translations$chooseDifficulty$en {
 	/// en: 'Delete "{title}" permanently? This cannot be undone.'
 	String deleteDesc({required Object title}) => 'Delete "${title}" permanently? This cannot be undone.';
 
+	/// en: 'Delete this custom puzzle permanently? This cannot be undone.'
+	String get deleteDescGeneric => 'Delete this custom puzzle permanently? This cannot be undone.';
+
 	/// en: 'Delete'
 	String get deleteConfirm => 'Delete';
 
@@ -2525,6 +2528,7 @@ extension on Translations {
 			'chooseDifficulty.badgeCleared' => 'Cleared',
 			'chooseDifficulty.deleteTitle' => 'Delete Custom Puzzle',
 			'chooseDifficulty.deleteDesc' => ({required Object title}) => 'Delete "${title}" permanently? This cannot be undone.',
+			'chooseDifficulty.deleteDescGeneric' => 'Delete this custom puzzle permanently? This cannot be undone.',
 			'chooseDifficulty.deleteConfirm' => 'Delete',
 			'chooseDifficulty.deleteTooltip' => 'Delete this custom puzzle',
 			'chooseDifficulty.favAdd' => 'Add to favorites',

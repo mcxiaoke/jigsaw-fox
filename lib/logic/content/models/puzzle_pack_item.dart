@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'package:jigsawpuzzle/l10n/gen/strings.g.dart';
 
 /// 扩展图包元数据模型 (支持本地与网络导入溯源)
 @immutable
@@ -6,7 +7,13 @@ class PuzzlePackItem {
   const PuzzlePackItem({
     required this.id,
     required this.title,
-    required this.coverPath, required this.levelCount, required this.fileSizeBytes, required this.importedAt, required this.sourceType, required this.sourceOrigin, this.description = '',
+    required this.coverPath,
+    required this.levelCount,
+    required this.fileSizeBytes,
+    required this.importedAt,
+    required this.sourceType,
+    required this.sourceOrigin,
+    this.description = '',
     this.author = '',
     this.tags = const [],
   });
@@ -74,10 +81,11 @@ class PuzzlePackItem {
 
   /// 规范合规的来源显示 (防侵权)
   String get displaySource {
+    final tr = LocaleSettings.instance.currentTranslations.source;
     if (sourceType == 'local_file') {
-      return '相册 / 本地';
+      return tr.album;
     }
-    return '网络';
+    return tr.online;
   }
 
   Map<String, dynamic> toJson() {

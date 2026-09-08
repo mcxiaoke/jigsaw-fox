@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'package:jigsawpuzzle/l10n/gen/strings.g.dart';
 import 'package:jigsawpuzzle/utils/locale_helper.dart';
 
 /// 图集下载状态枚举
@@ -170,12 +171,13 @@ class PuzzleCollectionItem {
 
   /// 规范的类别显示文本
   String get displayTypeLabel {
+    final tr = LocaleSettings.instance.currentTranslations.collections;
     switch (collectionType.toLowerCase()) {
       case 'event':
-        return '限时活动';
+        return tr.typeEvent;
       case 'official':
       default:
-        return '官方图集';
+        return tr.typeOfficial;
     }
   }
 

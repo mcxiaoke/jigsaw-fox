@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:jigsawpuzzle/data/progress_store.dart';
 import 'package:jigsawpuzzle/data/snapshot_store.dart';
+import 'package:jigsawpuzzle/l10n/gen/strings.g.dart';
 import 'package:jigsawpuzzle/logic/models/puzzle_state.dart';
 import 'package:jigsawpuzzle/logic/puzzle_model.dart';
 import 'package:jigsawpuzzle/services/app_logger.dart';
@@ -155,7 +156,8 @@ class ResumeHelper {
         return PuzzleDifficulty(
           rows: r,
           cols: c,
-          label: '$c × $r (${r * c} 块)',
+          label: LocaleSettings.instance.currentTranslations.difficulty
+              .pieceCount(cols: c, rows: r, count: r * c),
         );
       }
     }

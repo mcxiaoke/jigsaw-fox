@@ -502,6 +502,7 @@
     "badgeCleared": "Cleared",
     "deleteTitle": "Delete Custom Puzzle",
     "deleteDesc": "Delete \"{title}\" permanently? This cannot be undone.",
+    "deleteDescGeneric": "Delete this custom puzzle permanently? This cannot be undone.",
     "deleteConfirm": "Delete",
     "deleteTooltip": "Delete this custom puzzle",
     "favAdd": "Add to favorites",

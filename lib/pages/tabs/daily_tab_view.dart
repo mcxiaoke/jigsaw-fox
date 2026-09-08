@@ -241,9 +241,9 @@ class _DailyTabViewState extends State<DailyTabView> {
     );
     if (level.isTimeLocked) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('⏳ 未到解锁时间，敬请期待！'),
-          duration: Duration(seconds: 2),
+        SnackBar(
+          content: Text(t.daily.notUnlocked),
+          duration: const Duration(seconds: 2),
         ),
       );
       return;

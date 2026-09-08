@@ -713,7 +713,10 @@ class _MyCenterTabViewState extends State<MyCenterTabView> {
     required String emptyEmoji,
     required String emptyTitle,
     required String emptySub,
-    required AppPalette palette, required AppTextStyles styles, required _MyTabType tabType, String? actionButtonText,
+    required AppPalette palette,
+    required AppTextStyles styles,
+    required _MyTabType tabType,
+    String? actionButtonText,
     VoidCallback? onAction,
   }) {
     if (items.isEmpty) {
@@ -895,18 +898,22 @@ class _MyCenterTabViewState extends State<MyCenterTabView> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Text(
-                      card.title,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 13,
-                        fontWeight: FontWeight.bold,
-                        shadows: [Shadow(color: Colors.black54, blurRadius: 4)],
+                    if (card.title.isNotEmpty) ...[
+                      Text(
+                        card.title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 13,
+                          fontWeight: FontWeight.bold,
+                          shadows: [
+                            Shadow(color: Colors.black54, blurRadius: 4),
+                          ],
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: 2),
+                      const SizedBox(height: 2),
+                    ],
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [

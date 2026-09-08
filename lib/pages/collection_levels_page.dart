@@ -79,19 +79,21 @@ class _CollectionLevelsPageState extends State<CollectionLevelsPage> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text('清理「${_currentCollection.displayTitle}」'),
+        title: Text(
+          t.collections.clearTitle(title: _currentCollection.displayTitle),
+        ),
         content: Text(
-          '确定要清理已下载的本地资源吗？\n清理后可释放 ${_currentCollection.displayFileSize} 磁盘空间。您随时可以重新下载。',
+          t.collections.clearDesc(size: _currentCollection.displayFileSize),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(false),
-            child: const Text('取消'),
+            child: Text(t.common.cancel),
           ),
           FilledButton(
             style: FilledButton.styleFrom(backgroundColor: palette.error),
             onPressed: () => Navigator.of(ctx).pop(true),
-            child: const Text('确认清理'),
+            child: Text(t.collections.confirmClear),
           ),
         ],
       ),
@@ -106,7 +108,7 @@ class _CollectionLevelsPageState extends State<CollectionLevelsPage> {
           GameToast.show(
             context,
             icon: PhosphorIconsRegular.trash,
-            message: '已释放图集本地存储空间',
+            message: t.collections.toastCleared,
             type: GameToastType.success,
           );
           Navigator.of(context).pop();
@@ -114,7 +116,7 @@ class _CollectionLevelsPageState extends State<CollectionLevelsPage> {
           GameToast.show(
             context,
             icon: PhosphorIconsRegular.warning,
-            message: '清理失败，请重试',
+            message: t.collections.toastClearFailed,
             type: GameToastType.error,
           );
         }
@@ -173,8 +175,8 @@ class _CollectionLevelsPageState extends State<CollectionLevelsPage> {
     if (!mounted) return;
     final fallbackDiff = PuzzleDifficulty.presets.firstWhere(
       (d) => SnapshotStore.difficultyKeyFor(d) == progress.activeDifficultyKey,
-      orElse: () => const PuzzleDifficulty(
-        label: '4 × 4 (16 块)',
+      orElse: () => PuzzleDifficulty(
+        label: t.difficulty.pieceCount(cols: 4, rows: 4, count: 16),
         rows: 4,
         cols: 4,
         recommended: true,
@@ -188,7 +190,10 @@ class _CollectionLevelsPageState extends State<CollectionLevelsPage> {
         canonicalId: canonicalId,
         fallbackDifficulty: fallbackDiff,
         isCompleted: progress.isCompleted,
-        title: '${_currentCollection.title} · 第 $index 关',
+        title: t.levels.titleOf(
+          title: _currentCollection.displayTitle,
+          index: index,
+        ),
         imageBytes: imgBytes,
         onClearRepo: (dkey) async {
           await ResumeHelper.clearResume(canonicalId, dkey);
@@ -225,7 +230,10 @@ class _CollectionLevelsPageState extends State<CollectionLevelsPage> {
       initialDifficulty: fallbackDiff,
       completedPieceCounts: progress.completedPieceCounts.toSet(),
       canonicalId: canonicalId,
-      title: '${_currentCollection.title} · 第 $index 关',
+      title: t.levels.titleOf(
+        title: _currentCollection.displayTitle,
+        index: index,
+      ),
       sourcePlatform: _currentCollection.displayTypeLabel,
       savedProgressPercent: progress.hasSnapshot
           ? progress.progressPercent
@@ -293,7 +301,7 @@ class _CollectionLevelsPageState extends State<CollectionLevelsPage> {
           if (_currentCollection.isLocalDownloaded &&
               _currentCollection.isZipType)
             IconButton(
-              tooltip: '释放图集存储空间',
+              tooltip: t.collections.freeTooltip,
               icon: Icon(
                 PhosphorIconsRegular.trash,
                 color: palette.secondaryText,
@@ -317,7 +325,7 @@ class _CollectionLevelsPageState extends State<CollectionLevelsPage> {
                   ),
                   const SizedBox(height: 12),
                   Text(
-                    '暂无可用关卡',
+                    t.levels.empty,
                     style: styles.body.copyWith(color: palette.secondaryText),
                   ),
                   const SizedBox(height: 12),
@@ -327,7 +335,7 @@ class _CollectionLevelsPageState extends State<CollectionLevelsPage> {
                       foregroundColor: palette.surface,
                     ),
                     onPressed: _loadLevels,
-                    child: const Text('重试加载'),
+                    child: Text(t.levels.retryLoad),
                   ),
                 ],
               ),
@@ -370,8 +378,15 @@ class _CollectionLevelsPageState extends State<CollectionLevelsPage> {
                                 ),
                                 const SizedBox(height: 6),
                                 Text(
-                                  '共 ${_levels.length} 个关卡'
-                                  '${_currentCollection.displayFileSize.isNotEmpty ? ' · ${_currentCollection.displayFileSize}' : ''}',
+                                  _currentCollection.displayFileSize.isNotEmpty
+                                      ? t.levels.countWithSize(
+                                          count: _levels.length,
+                                          size: _currentCollection
+                                              .displayFileSize,
+                                        )
+                                      : t.levels.countLabel(
+                                          count: _levels.length,
+                                        ),
                                   style: styles.caption.copyWith(
                                     fontSize: 11.5,
                                   ),

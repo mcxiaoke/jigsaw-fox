@@ -5,7 +5,7 @@ import 'package:jigsawpuzzle/logic/puzzle_model.dart';
 class CustomPuzzleItem {
   const CustomPuzzleItem({
     required this.id,
-    required this.title,
+    this.title = '',
     required this.imagePathOrUrl,
     required this.isLocalFile,
     required this.difficulty,
@@ -26,7 +26,8 @@ class CustomPuzzleItem {
     final diff = PuzzleDifficulty.presets.firstWhere(
       (d) => d.rows == rows && d.cols == cols,
       orElse: () => PuzzleDifficulty(
-        label: '$cols × $rows (${rows * cols} 块)',
+        label: LocaleSettings.instance.currentTranslations.difficulty
+            .pieceCount(cols: cols, rows: rows, count: rows * cols),
         rows: rows,
         cols: cols,
       ),
@@ -60,9 +61,12 @@ class CustomPuzzleItem {
           : (derivedSourceType == 'online' ? 'online' : 'album');
     }
 
+    final rawTitle = json['title'] as String? ?? '';
+    final cleanTitle = isFakeTitle(rawTitle) ? '' : rawTitle;
+
     return CustomPuzzleItem(
       id: json['id'] as String,
-      title: json['title'] as String,
+      title: cleanTitle,
       imagePathOrUrl: imagePathOrUrl,
       isLocalFile: isLocal,
       difficulty: diff,
@@ -187,4 +191,18 @@ class CustomPuzzleItem {
     'sourcePlatform': sourcePlatform,
     if (sourceUrl != null) 'sourceUrl': sourceUrl,
   };
+
+  /// 校验是否属于虚假/系统硬编码填充的关卡标题
+  static bool isFakeTitle(String? title) {
+    if (title == null) return true;
+    final t = title.trim();
+    return t.isEmpty ||
+        t == '我的自制拼图' ||
+        t == '自制拼图' ||
+        t == '巴黎埃菲尔铁塔晨曦' ||
+        t == '午后阳光与香浓拿铁' ||
+        t == '草地上奔跑的小柴犬' ||
+        t == 'My Custom Puzzle' ||
+        t == 'Custom Puzzle';
+  }
 }

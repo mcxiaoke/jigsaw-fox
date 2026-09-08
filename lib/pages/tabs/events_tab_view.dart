@@ -61,20 +61,20 @@ class _EventsTabViewState extends State<EventsTabView> {
                         const Text('🦊', style: TextStyle(fontSize: 48)),
                         const SizedBox(height: 8),
                         Text(
-                          '小狐狸没找到正在进行的活动',
+                          t.events.emptyTitle,
                           style: styles.body.copyWith(
                             color: palette.secondaryText,
                           ),
                         ),
                         const SizedBox(height: 4),
-                        Text('下拉刷新或稍后再来看看吧', style: styles.caption),
+                        Text(t.events.emptyHint, style: styles.caption),
                         const SizedBox(height: 12),
                         ElevatedButton.icon(
                           icon: const Icon(
                             PhosphorIconsRegular.arrowClockwise,
                             size: 16,
                           ),
-                          label: const Text('刷新同步'),
+                          label: Text(t.common.sync),
                           style: ElevatedButton.styleFrom(
                             backgroundColor: palette.brand,
                             foregroundColor: palette.surface,
@@ -189,7 +189,9 @@ class _EventsTabViewState extends State<EventsTabView> {
                         ),
                         const SizedBox(width: 4),
                         Text(
-                          event.isActive ? '限时进行中' : '往期活动',
+                          event.isActive
+                              ? t.events.badgeActive
+                              : t.events.badgePast,
                           style: const TextStyle(
                             color: Colors.white,
                             fontSize: 11,
@@ -214,7 +216,9 @@ class _EventsTabViewState extends State<EventsTabView> {
                       borderRadius: BorderRadius.circular(10),
                     ),
                     child: Text(
-                      event.isZipType ? '离线整包' : '在线精选',
+                      event.isZipType
+                          ? t.events.badgeZip
+                          : t.events.badgeOnline,
                       style: const TextStyle(
                         color: Colors.white70,
                         fontSize: 10,
@@ -255,7 +259,7 @@ class _EventsTabViewState extends State<EventsTabView> {
                       child: Text(
                         event.displayDesc.isNotEmpty
                             ? event.displayDesc
-                            : '精彩专题拼图挑战',
+                            : t.events.descFallback,
                         style: styles.caption.copyWith(height: 1.3),
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,

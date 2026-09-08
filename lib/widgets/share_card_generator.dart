@@ -17,7 +17,12 @@ import 'package:phosphoricons_flutter/phosphoricons_flutter.dart';
 /// Roadmap P3 5.3: Social Share Card Generator
 class ShareCardGenerator extends StatefulWidget {
   const ShareCardGenerator({
-    required this.imageBytes, required this.elapsedSeconds, required this.pieceCount, required this.starCount, required this.stepCount, super.key,
+    required this.imageBytes,
+    required this.elapsedSeconds,
+    required this.pieceCount,
+    required this.starCount,
+    required this.stepCount,
+    super.key,
     this.levelTitle,
   });
 
@@ -363,7 +368,7 @@ class _ShareCardGeneratorState extends State<ShareCardGenerator>
                                     mainAxisAlignment: MainAxisAlignment.center,
                                     children: [
                                       Text(
-                                        '\u{1F98A} 异形拼图',
+                                        '\u{1F98A} ${t.app.title}',
                                         style: styles.caption.copyWith(
                                           color: palette.secondaryText,
                                           fontSize: 12,

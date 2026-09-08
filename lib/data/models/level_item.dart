@@ -1,3 +1,4 @@
+import 'package:jigsawpuzzle/l10n/gen/strings.g.dart';
 import 'package:jigsawpuzzle/logic/puzzle_model.dart';
 
 /// Represents a level item in the 100-level main gallery.
@@ -27,7 +28,8 @@ class LevelItem {
     final diff = PuzzleDifficulty.presets.firstWhere(
       (d) => d.rows == rows && d.cols == cols,
       orElse: () => PuzzleDifficulty(
-        label: '$cols × $rows (${rows * cols} 块)',
+        label: LocaleSettings.instance.currentTranslations.difficulty
+            .pieceCount(cols: cols, rows: rows, count: rows * cols),
         rows: rows,
         cols: cols,
       ),

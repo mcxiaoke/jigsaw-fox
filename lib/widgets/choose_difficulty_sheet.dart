@@ -4,6 +4,7 @@ import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:jigsawpuzzle/data/favorite_store.dart';
 import 'package:jigsawpuzzle/data/game_repository.dart';
+import 'package:jigsawpuzzle/data/models/custom_puzzle_item.dart';
 import 'package:jigsawpuzzle/data/snapshot_store.dart';
 import 'package:jigsawpuzzle/l10n/gen/strings.g.dart';
 import 'package:jigsawpuzzle/logic/content/models/canonical_id.dart';
@@ -310,7 +311,12 @@ class _ChooseDifficultySheetState extends State<ChooseDifficultySheet> {
             Text(t.chooseDifficulty.deleteTitle),
           ],
         ),
-        content: Text(t.chooseDifficulty.deleteDesc(title: widget.title)),
+        content: Text(
+          (widget.title.isNotEmpty &&
+                  !CustomPuzzleItem.isFakeTitle(widget.title))
+              ? t.chooseDifficulty.deleteDesc(title: widget.title)
+              : t.chooseDifficulty.deleteDescGeneric,
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(false),
@@ -387,6 +393,7 @@ class _ChooseDifficultySheetState extends State<ChooseDifficultySheet> {
               style: styles.h3.copyWith(fontSize: 17),
             ),
             if (widget.title.isNotEmpty &&
+                !CustomPuzzleItem.isFakeTitle(widget.title) &&
                 widget.title !=
                     LocaleSettings
                         .instance
