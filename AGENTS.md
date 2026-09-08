@@ -1,5 +1,16 @@
 # CLAUDE.md — 开发与安全须知
 
+## 项目结构
+- `lib/` — Flutter 游戏主项目（拼图游戏核心逻辑与 UI）
+- `studio/` — 素材处理工作室（图片切割、资源导出等工具）
+- `scripts/` — 通用构建/部署/维护脚本（Python/Shell/Dart）
+- `deploy/` — 部署相关脚本与配置
+- `integration_test/` — 集成测试
+- `test/` — 单元/Widget 测试
+- `docs/` — 项目文档与变更日志
+- `assets/` — 静态资源（图片、字体、音频）
+- `data/` — 本地数据/配置文件
+- `temp/` — 临时脚本和代码和数据
 ## 环境路径
 - `PUB_CACHE`: Flutter|Dart包缓存路径看这里 `./dart_tool/package_config.json`
 - 查找工具和开发环境和软件包用 Everything Cli工具 `es.exe` 直接搜索，禁止大范围find
