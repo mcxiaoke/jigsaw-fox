@@ -1088,7 +1088,7 @@ class StudioRequestHandler(BaseHTTPRequestHandler):
         # 5. 建议值 (根据 outDir/main/index.json 与源侧账本)
         suggested: dict[str, Any] = {
             "maxOrder": max_order,
-            "suggestedStartOrder": (max_order + 1) if max_order > 0 else 101,
+            "suggestedStartOrder": (max_order + 1) if max_order > 0 else 1,
             "suggestedVersion": 0,
         }
         if exp_type == "main" and out_p:

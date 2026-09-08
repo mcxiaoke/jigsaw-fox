@@ -195,7 +195,7 @@ class MainExporter(BaseExporter):
                     f"（如需修正已有关卡，请使用补丁模式 isPatch）。"
                 )
         else:
-            start_order = (existing_max_order + 1) if existing_max_order > 0 else 101
+            start_order = (existing_max_order + 1) if existing_max_order > 0 else 1
 
         version_input = self.data.get("version")
         if version_input not in (None, ""):
@@ -203,7 +203,7 @@ class MainExporter(BaseExporter):
         elif existing_version > 0:
             version = existing_version + 1
         else:
-            # 首次导出版本号从 1 开始（与前端「下版本 1」提示一致；101 是起始序号不是版本号）
+            # 首次导出版本号从 1 开始（与前端「下版本 1」提示一致；起始序号同样从 1 起，不再用 101 偏移，避免与已停用的内置 demo 1~100 段混淆）
             version = 1
 
         batch_id = self.data.get("batchId") or f"batch_{len(existing_batches) + 1:03d}"

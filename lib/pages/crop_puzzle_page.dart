@@ -303,14 +303,15 @@ class _CropPuzzlePageState extends State<CropPuzzlePage> {
       final realCropW = viewportSize.width / (baseScale * currentScale);
       final realCropH = viewportSize.height / (baseScale * currentScale);
 
-      // 3. 短边最大 2160 上限限制 (4K 视网膜安全线，防止超大图引起显存暴涨)
-      const maxShortSide = 2160.0;
-      final shortSide = min(realCropW, realCropH);
+      // 3. 落盘统一收敛为长边 1920（与 studio 导出规格一致，仅缩小不放大）。
+      //    crop 交互过程不限制最大（用户可自由选取大图选区），仅在保存时缩放，
+      //    避免超大图引起显存暴涨；长宽比保持不变。
+      final longSide = max(realCropW, realCropH);
       var targetW = realCropW;
       var targetH = realCropH;
 
-      if (shortSide > maxShortSide) {
-        final factor = maxShortSide / shortSide;
+      if (longSide > kMaxExportLongSidePixels) {
+        final factor = kMaxExportLongSidePixels / longSide;
         targetW = realCropW * factor;
         targetH = realCropH * factor;
       }

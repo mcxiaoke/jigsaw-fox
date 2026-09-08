@@ -2,6 +2,13 @@ import 'dart:math' as math;
 
 import 'package:jigsawpuzzle/l10n/gen/strings.g.dart';
 
+/// 关卡图片导出长边上限像素。
+///
+/// 与 studio 侧 `image_proc.DEFAULT_LONG_TARGET = 1920` 对齐：网络关卡由 studio 导出时
+/// 即保证长边 ≤1920；自制 / UGC 在保存关卡时统一缩放至长边 1920（仅缩小不放大），
+/// 使三类图源（网络 / 相册导入 / 自制）的输出尺寸口径一致。
+const double kMaxExportLongSidePixels = 1920;
+
 /// Representation of a difficulty tier with UI metadata.
 class DifficultyTier {
   const DifficultyTier({
