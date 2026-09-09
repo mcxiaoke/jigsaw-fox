@@ -201,6 +201,7 @@ def _job_register(task_id: str) -> None:
             "logs": [],
             "done": 0,
             "total": 0,
+            "failed": 0,
             "summary": None,
             "error": None,
             "created_at": now,
@@ -216,7 +217,7 @@ def _job_append_log(task_id: str, entry: dict[str, str]) -> None:
             job["logs"].append(entry)
 
 
-def _job_progress(task_id: str, done: int, total: int) -> None:
+def _job_progress(task_id: str, done: int, total: int, failed: int = 0) -> None:
     if not task_id:
         return
     with _JOB_LOCK:
@@ -224,6 +225,8 @@ def _job_progress(task_id: str, done: int, total: int) -> None:
         if job is not None:
             job["done"] = int(done)
             job["total"] = int(total)
+            if failed:
+                job["failed"] = int(failed)
 
 
 def _job_finish(
@@ -256,6 +259,7 @@ def _job_snapshot(task_id: str) -> dict[str, Any] | None:
             "logs": list(job.get("logs", [])),
             "done": job.get("done", 0),
             "total": job.get("total", 0),
+            "failed": job.get("failed", 0),
             "summary": job.get("summary"),
             "error": job.get("error"),
         }
@@ -309,6 +313,8 @@ def _run_quality_job(
     _job_progress(task_id, 0, total)
     workers = max_workers or max(4, (os.cpu_count() or 8) - 4)
     done = 0
+    failed = 0  # 评估异常导致整批丢失的图片数（进度照走但数据缺失，必须可见）
+    consecutive_batch_failures = 0  # 连续整批失败计数（≥2 视为环境故障，中止任务）
 
     logger.info("[QUALITY] %s 开始: 共 %d 张, %d 线程", task_id, total, workers)
 
@@ -336,6 +342,36 @@ def _run_quality_job(
                 logger.error("[QUALITY] %s 子批异常: %s", task_id, e)
                 results = []
 
+            if not results:
+                # 整批评估失败（环境故障如 venv/cv2 崩溃）：进度照走，但计入失败
+                # 并累计连续失败；连续 2 个整批全失败即中止，绝不伪装成"质检完成"
+                failed += len(sub)
+                consecutive_batch_failures += 1
+                _job_append_log(
+                    task_id,
+                    {
+                        "t": dt.datetime.now().strftime("%H:%M:%S"),
+                        "level": "warn",
+                        "msg": f"警告: 本批 {len(sub)} 张评估全部失败 (连续第 {consecutive_batch_failures} 批), 累计失败 {failed} 张",
+                    },
+                )
+                if consecutive_batch_failures >= 2:
+                    logger.error(
+                        "[QUALITY] %s 连续 %d 个子批全部失败，中止质检任务",
+                        task_id,
+                        consecutive_batch_failures,
+                    )
+                    _job_finish(
+                        task_id,
+                        error=f"质检环境异常: 连续 {consecutive_batch_failures} 个批次评估全部失败 (累计 {failed} 张)，任务已中止。请检查 OpenCV/Pillow 环境后重试。",
+                    )
+                    return
+                done += len(sub)
+                _job_progress(task_id, done, total, failed=failed)
+                continue
+
+            consecutive_batch_failures = 0
+
             rows = []
             for idx, res in enumerate(results):
                 if idx < len(sub):
@@ -347,7 +383,7 @@ def _run_quality_job(
                 db.save_qualities_batch(rows)
 
             done += len(sub)
-            _job_progress(task_id, done, total)
+            _job_progress(task_id, done, total, failed=failed)
             _job_append_log(
                 task_id,
                 {
@@ -358,7 +394,13 @@ def _run_quality_job(
             )
 
     logger.info("[QUALITY] %s 完成: %d/%d 张", task_id, done, total)
-    _job_finish(task_id, summary=f"质检完成: {done}/{total} 张")
+    if failed > 0:
+        _job_finish(
+            task_id,
+            summary=f"质检完成: {done}/{total} 张 (其中 {failed} 张评估失败，无评分数据)",
+        )
+    else:
+        _job_finish(task_id, summary=f"质检完成: {done}/{total} 张")
 
 
 class StudioRequestHandler(BaseHTTPRequestHandler):
@@ -884,10 +926,17 @@ class StudioRequestHandler(BaseHTTPRequestHandler):
             self._error(f"目录不存在: {dir_param}", status=404)
             return
 
-        ok, msg, saved, auto_skipped = save_tags_file(root, records)
+        tag_warnings: list[str] = []
+        ok, msg, saved, auto_skipped = save_tags_file(root, records, warnings_out=tag_warnings)
         if ok:
             logger.info(f"[TAGS] 保存成功: 文件={msg}, 手动={saved}, 自动跳过={auto_skipped}")
-            self._json({"ok": True, "file": msg, "saved": saved, "autoSkipped": auto_skipped})
+            self._json({
+                "ok": True,
+                "file": msg,
+                "saved": saved,
+                "autoSkipped": auto_skipped,
+                **({"warning": tag_warnings[0]} if tag_warnings else {}),
+            })
         else:
             logger.error(f"[TAGS] 保存失败: {msg}")
             self._error(f"保存失败: {msg}", status=500)
@@ -1700,6 +1749,50 @@ class StudioServer(ThreadingHTTPServer):
         super().server_bind()
 
 
+def _require_export_environment() -> None:
+    """启动时强校验运行环境：当前解释器必须具备 Pillow + OpenCV + numpy。
+
+    禁止静默降级：cv2 缺失时旧逻辑会依次回退到 venv 子进程 / Pillow 评估，
+    三种口径的评分完全不同，用户会看到分数漂移却不知原因。此处 fail-fast：
+    环境不满足直接退出，绝不带病启动。
+    """
+    missing: list[str] = []
+    try:
+        import cv2  # noqa: F401
+    except ImportError:
+        missing.append("opencv-python")
+    try:
+        import numpy  # noqa: F401
+    except ImportError:
+        missing.append("numpy")
+    try:
+        import PIL  # noqa: F401
+    except ImportError:
+        missing.append("Pillow")
+
+    if missing:
+        err_msg = (
+            f"\n=======================================================\n"
+            f"  [错误] Python 环境不满足启动要求，服务已退出！\n"
+            f"\n"
+            f"  当前解释器: {sys.executable}\n"
+            f"  缺失依赖: {', '.join(missing)}\n"
+            f"\n"
+            f"  Content Studio 禁止质检评估器静默降级（cv2/venv/Pillow 三种口径\n"
+            f"  评分不一致，会造成分数漂移且不可察觉），因此强制要求当前 Python\n"
+            f"  同时具备 OpenCV + numpy + Pillow。\n"
+            f"\n"
+            f"  修复方法 (任选其一):\n"
+            f"    1. 安装缺失依赖后重新启动:\n"
+            f"       {sys.executable} -m pip install {' '.join(missing)}\n"
+            f"    2. 使用已配置完整依赖的解释器启动:\n"
+            f"       C:\\Home\\Develop\\venv\\Scripts\\python.exe studio/server.py\n"
+            f"=======================================================\n"
+        )
+        sys.stderr.write(err_msg)
+        raise SystemExit(1)
+
+
 def run_server(
     host: str = "127.0.0.1",
     port: int = 5188,
@@ -1708,6 +1801,7 @@ def run_server(
     logfile: Path | str | None = DEFAULT_LOG_FILE,
 ) -> None:
     """启动本地 HTTP 服务器 (多线程并发处理缩略图与 API)"""
+    _require_export_environment()
     setup_logger(level_name=loglevel, logfile=logfile)
     server_addr = (host, port)
 

@@ -163,6 +163,9 @@ const app = createApp({
     // 质检状态与汇总
     const isEvaluatingQuality = ref(false);
     const isBatchEvaluating = ref(false);
+    // 轮询健康：连续失败计数 + 判死标记（判死后 UI 提供"重新连接"按钮）
+    const qcPollLost = ref(false);
+    const qcPollRetries = ref(0);
     const qualitySummary = ref({
       total_files: 0,
       total_scored: 0,
@@ -197,8 +200,7 @@ const app = createApp({
     const qcProgressPercent = computed(() => {
       const { done, total } = qcProgress.value;
       if (!total || total <= 0) return 0;
-      return Math.min(100, Math.round((done / total) * 100));
-    });
+      return Math.min(100, Math.round((done / total) * 100));    });
     const initialZoom = (() => {
       try {
         const saved = parseInt(localStorage.getItem("studio_cardZoom"), 10);
@@ -270,6 +272,16 @@ const app = createApp({
     const formalConfirmChecked = ref(false);
     // 导出进度 (转码 n/total)；仅执行中填充，用于按钮/面板实时提示
     const exportProgress = ref("");
+    // 导出轮询健康：连续失败计数 + 判死标记（判死后 UI 提供"重新连接"按钮）
+    const exportPollLost = ref(false);
+    const exportPollRetries = ref(0);
+    const EXPORT_POLL_MAX_RETRY = 10;
+    // 导出重连钩子：runExport 每次执行时注入当前任务的 pollStatus 闭包；
+    // setup 级 reconnectExportPoll 供模板调用（任务未运行时为空操作）
+    let exportPollReconnector = null;
+    const reconnectExportPoll = () => {
+      if (exportPollReconnector) exportPollReconnector();
+    };
     const exportProgressText = computed(() =>
       exportProgress.value ? `正在导出 (${exportProgress.value})...` : "正在导出...",
     );
@@ -869,6 +881,8 @@ const app = createApp({
     const finalizeQualityJob = async (success, info) => {
       stopQcPolling();
       isBatchEvaluating.value = false;
+      qcPollLost.value = false;
+      qcPollRetries.value = 0;
       if (success) {
         const msg = (info && info.summary) || "质检完成";
         showToast(msg);
@@ -899,11 +913,25 @@ const app = createApp({
         showToast(errMsg === "cancelled" ? "质检已取消" : `质检失败: ${errMsg}`);
       }
       qcTaskId.value = "";
-      qcProgress.value = { done: 0, total: 0 };
+      qcProgress.value = { done: 0, total: 0, failed: 0 };
       qcLogs.value = [];
       try {
         localStorage.removeItem("activeQualityTask");
       } catch (_) {}
+    };
+
+    // 轮询容错：连续失败 N 次才判死（网络抖动/服务重启瞬间自动恢复），
+    // 判死后置 qcPollLost，UI 提供"重新连接"按钮（后端 clientTaskId 支持重新挂载）
+    const QC_POLL_MAX_RETRY = 10;
+    const QC_POLL_RETRY_INTERVAL = 3000;
+    const reconnectQualityJob = () => {
+      // 重新连接：按当前 qcTaskId 重新挂载轮询（job 仍在后端运行）
+      qcPollLost.value = false;
+      qcPollRetries.value = 0;
+      if (qcTaskId.value) {
+        stopQcPolling();
+        qcPollTimer = setTimeout(pollQualityStatus, 0);
+      }
     };
 
     const pollQualityStatus = async () => {
@@ -911,7 +939,16 @@ const app = createApp({
       let st = null;
       try {
         st = await fetchJobStatus(qcTaskId.value);
+        qcPollRetries.value = 0; // 成功即复位失败计数
       } catch (_) {
+        qcPollRetries.value++;
+        if (qcPollRetries.value >= QC_POLL_MAX_RETRY) {
+          qcPollLost.value = true;
+          showToast(`轮询已中断 (连续 ${QC_POLL_MAX_RETRY} 次失败)，任务可能仍在后台运行，请点击"重新连接"恢复`);
+          return;
+        }
+        showToast(`轮询中断，正在重试 (${qcPollRetries.value}/${QC_POLL_MAX_RETRY})...`);
+        qcPollTimer = setTimeout(pollQualityStatus, QC_POLL_RETRY_INTERVAL);
         return;
       }
       if (!st || !st.found) {
@@ -919,7 +956,7 @@ const app = createApp({
         await finalizeQualityJob(true, { summary: "任务恢复: 已从缓存装配结果" });
         return;
       }
-      qcProgress.value = { done: st.done || 0, total: st.total || 0 };
+      qcProgress.value = { done: st.done || 0, total: st.total || 0, failed: st.failed || 0 };
       if (st.logs && st.logs.length > 0) {
         qcLogs.value = st.logs.slice(-20);
       }
@@ -951,8 +988,10 @@ const app = createApp({
       const taskId = "qc_" + Date.now().toString(36) + "_" + Math.random().toString(36).slice(2, 10);
       isBatchEvaluating.value = true;
       qcTaskId.value = taskId;
-      qcProgress.value = { done: 0, total: unscored.length };
+      qcProgress.value = { done: 0, total: unscored.length, failed: 0 };
       qcLogs.value = [];
+      qcPollLost.value = false;
+      qcPollRetries.value = 0;
 
       try {
         localStorage.setItem("activeQualityTask", JSON.stringify({
@@ -1003,8 +1042,10 @@ const app = createApp({
         if (st && st.found && st.state === "running") {
           qcTaskId.value = saved.taskId;
           isBatchEvaluating.value = true;
-          qcProgress.value = { done: st.done || 0, total: st.total || 0 };
+          qcProgress.value = { done: st.done || 0, total: st.total || 0, failed: st.failed || 0 };
           qcLogs.value = (st.logs || []).slice(-20);
+          qcPollLost.value = false;
+          qcPollRetries.value = 0;
           qcPollTimer = setTimeout(pollQualityStatus, 700);
         } else {
           // job 已结束或丢失，清理并 rescan
@@ -1056,7 +1097,11 @@ const app = createApp({
         cancelAutoSaveRetry();
         const autoSkipped = Number(res.autoSkipped || 0);
         const saved = Number(res.saved ?? res.count ?? records.value.length);
-        if (!silent) {
+        // 后端告警（如旧 tags.json 损坏、手工标记可能丢失）：长时展示，不静默
+        if (res.warning) {
+          showToast(`⚠ ${res.warning}`);
+          console.warn("[保存tags][warning]", res.warning);
+        } else if (!silent) {
           if (autoSkipped > 0) {
             showToast(`已保存 tags.json：手动 ${saved} 条（自动识别 ${autoSkipped} 条未落盘，读取时重算）`);
           } else {
@@ -1949,6 +1994,8 @@ const app = createApp({
         finalized = true;
         stopPolling();
         isExporting.value = false;
+        exportPollLost.value = false;
+        exportPollRetries.value = 0;
         exportDone.value = true; // 完成后停留第③步预览视图，不跳转、不刷新统计
         if (success) {
           exportSummary.value = (info && info.summary) || "导出完成";
@@ -1975,8 +2022,19 @@ const app = createApp({
         let st = null;
         try {
           st = await fetchJobStatus(taskId);
+          exportPollRetries.value = 0;
         } catch (_) {
-          return; // 网络错误：静默停止轮询，POST 自身结果兜底
+          // 网络错误：连续失败 N 次才判死（服务重启/抖动自动恢复），
+          // 判死后置 exportPollLost，UI 提供"重新连接"按钮
+          exportPollRetries.value++;
+          if (exportPollRetries.value >= EXPORT_POLL_MAX_RETRY) {
+            exportPollLost.value = true;
+            showToast(`导出轮询已中断 (连续 ${EXPORT_POLL_MAX_RETRY} 次失败)，任务可能仍在后台运行，请点击"重新连接"恢复`);
+            return;
+          }
+          showToast(`导出轮询中断，正在重试 (${exportPollRetries.value}/${EXPORT_POLL_MAX_RETRY})...`);
+          pollTimer = setTimeout(pollStatus, 3000);
+          return;
         }
         if (!st || !st.found || finalized) return; // 任务不存在/已收尾：静默停止
         if (st.state === "done") {
@@ -1997,6 +2055,16 @@ const app = createApp({
         pollTimer = setTimeout(pollStatus, 700);
       };
       pollTimer = setTimeout(pollStatus, 150);
+
+      const reconnectExportPoll = () => {
+        // 重新连接导出轮询：POST 结果兜底仍在（startExport 的 await 不受影响）
+        if (finalized || isExporting.value !== true) return;
+        exportPollLost.value = false;
+        exportPollRetries.value = 0;
+        stopPolling();
+        pollTimer = setTimeout(pollStatus, 0);
+      };
+      exportPollReconnector = reconnectExportPoll;
 
       const payload = {
         clientTaskId: taskId,
@@ -2303,6 +2371,8 @@ const app = createApp({
       restartExport,
       onOutputChange,
       exportError,
+      exportPollLost,
+      reconnectExportPoll,
       persistConfig,
       resetStartOrderForType,
       viewerModalOpen,
@@ -2365,6 +2435,8 @@ const app = createApp({
       qcProgress,
       qcProgressPercent,
       qcLogs,
+      qcPollLost,
+      reconnectQualityJob,
       hasRatio,
       toggleRatio,
       isUnselectable,

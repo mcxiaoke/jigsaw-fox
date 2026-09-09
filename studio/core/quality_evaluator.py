@@ -651,10 +651,11 @@ def _evaluate_with_pillow(img_path: Path | str) -> dict[str, Any]:
 
 def evaluate_image(img_path: Path | str, eval_max_dim: int = 640) -> dict[str, Any]:
     """
-    统一图像质检入口：
+    统一图像质检入口（无降级策略）：
     1. 进程具备 cv2: 直接在进程内高效计算 (~15ms)
     2. 进程无 cv2 但检测到 venv Python: 唤起 venv 子进程使用完整 OpenCV 计算
-    3. 均无: 使用 Pillow 计算降级指标，绝不崩溃
+    3. 均无: 抛出 RuntimeError —— 服务启动时已强制校验环境，
+       禁止静默降级到 Pillow（评分口径不同会造成分数漂移且不可察觉）
     """
     logger.debug("[quality] 评估单张: %s (HAS_CV2=%s)", img_path, HAS_CV2)
     if HAS_CV2:
@@ -686,8 +687,10 @@ def evaluate_image(img_path: Path | str, eval_max_dim: int = 640) -> dict[str, A
         except Exception:
             pass
 
-    # 降级至 Pillow
-    return _evaluate_with_pillow(img_path)
+    raise RuntimeError(
+        f"质检环境不可用: 进程缺少 OpenCV 且 venv 子进程评估失败 ({img_path.name})。"
+        f"已禁止降级到 Pillow 评估（评分口径不一致）。请用带 opencv-python 的 Python 启动服务。"
+    )
 
 
 def evaluate_images_batch(
@@ -696,11 +699,11 @@ def evaluate_images_batch(
     max_workers: int | None = None,
 ) -> list[dict[str, Any]]:
     """
-    批量评估列表，子批内并行。
+    批量评估列表，子批内并行（无降级策略）。
 
     - HAS_CV2=True:  ThreadPool 并行 (OpenCV C 层释放 GIL，有真实并行收益)
     - HAS_CV2=False: 并行多个 venv 子进程 (subprocess.run 释放 GIL，ThreadPool 可并行等待)
-    - 均无:          Pillow 串行降级
+    - venv 也不可用: 抛出 RuntimeError，绝不静默降级到 Pillow
     """
     if not paths:
         return []
@@ -721,9 +724,11 @@ def evaluate_images_batch(
     if VENV_PYTHON.is_file():
         return _evaluate_batch_parallel_subprocess(paths, eval_max_dim, workers)
 
-    results = [_evaluate_with_pillow(p) for p in paths]
-    logger.info("[quality] 批量质检完成: %d 张 (降级 Pillow 模式)", len(results))
-    return results
+    raise RuntimeError(
+        "质检环境不可用: 进程缺少 OpenCV 且未找到 venv 解释器 "
+        f"({VENV_PYTHON})。已禁止降级到 Pillow 评估（评分口径不一致）。"
+        f"请用带 opencv-python 的 Python 启动服务。"
+    )
 
 
 def _evaluate_batch_parallel_subprocess(

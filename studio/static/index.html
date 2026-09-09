@@ -295,7 +295,11 @@
             <div class="q-progress-bar" :style="{ width: qcProgressPercent + '%' }"></div>
           </div>
           <span style="font-size: 11px; color: var(--text-muted, #888);">{{ qcProgressPercent }}%</span>
+          <span v-if="qcProgress.failed > 0" style="font-size: 11px; color: #d97706;">失败 {{ qcProgress.failed }}</span>
         </span>
+        <button v-if="isBatchEvaluating && qcPollLost" class="btn sm" style="border-color: #f59e0b; color: #b45309;" @click="reconnectQualityJob" title="轮询因网络中断已停止，后端任务可能仍在运行，点击重新挂载进度">
+          🔄 重新连接质检任务
+        </button>
 
         <!-- 批量标签修改选择器 -->
         <select v-model="batchTagTarget" style="border: 1px solid var(--line); border-radius: 4px; padding: 4px 8px; font-size: 12px;">
@@ -794,6 +798,9 @@
 
         <!-- 控制台日志/结果：导出执行中实时滚动；完成后停留在预览视图并保留结果 -->
         <div class="export-result" v-if="exportLogs.length > 0 && (exportDone || isExporting)">
+          <button v-if="isExporting && exportPollLost" class="btn sm" style="margin-bottom:8px; border-color: #f59e0b; color: #b45309;" @click="reconnectExportPoll" title="轮询因网络中断已停止，后端导出任务可能仍在运行，点击重新挂载进度">
+            🔄 重新连接导出任务
+          </button>
           <div class="console-box">
             <div v-for="(l, i) in exportLogs" :key="i" class="log-line" :class="l.level">
               <span class="t">[{{ l.t }}]</span>

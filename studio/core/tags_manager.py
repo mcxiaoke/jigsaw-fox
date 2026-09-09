@@ -474,7 +474,7 @@ def merge_scanned_images(
 
 
 
-def save_tags_file(root: str | Path, records: list[dict[str, Any]], target_file: Path | None = None) -> tuple[bool, str, int, int]:
+def save_tags_file(root: str | Path, records: list[dict[str, Any]], target_file: Path | None = None, warnings_out: list[str] | None = None) -> tuple[bool, str, int, int]:
     """
     原子安全保存 tags.json —— 手动增量(delta)格式。
     仅持久化「人工打标/复核」的记录；目录名可自动推导出的标签(Cats->Pets 等)不落盘，
@@ -495,6 +495,7 @@ def save_tags_file(root: str | Path, records: list[dict[str, Any]], target_file:
     hash_map: dict[str, str] = {}
     sha_map: dict[str, str] = {}
     existing_delta_keys: set[str] = set()
+    corrupt_warning: str | None = None
     if dest.exists():
         try:
             old_raw = json.loads(dest.read_text(encoding="utf-8"))
@@ -517,8 +518,27 @@ def save_tags_file(root: str | Path, records: list[dict[str, Any]], target_file:
                     if hk:
                         existing_delta_keys.add(hk)
                     existing_delta_keys.add("path:" + pk)
-        except Exception:
-            pass
+        except Exception as e:
+            # 旧文件损坏时严禁静默丢弃：existing_delta_keys 为空会导致「一旦手动
+            # 永不归零」的权威标记全部丢失，自动标注将覆盖手工修正且不可逆。
+            # 保留损坏现场并向上告警，让用户在数据被覆盖前有机会干预。
+            ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+            corrupt_backup = dest.with_name(f"{dest.name}.corrupt-{ts}")
+            try:
+                dest.replace(corrupt_backup)
+                corrupt_warning = (
+                    f"已有 tags.json 损坏 (已保留现场: {corrupt_backup.name})，"
+                    f"其中的手工标注权威标记可能丢失: {e}"
+                )
+            except Exception as backup_err:
+                corrupt_warning = f"已有 tags.json 损坏且备份失败 ({backup_err})，手工标注权威标记可能丢失: {e}"
+            if corrupt_warning and warnings_out is not None:
+                warnings_out.append(corrupt_warning)
+            logger.error(
+                "[tags] 读取旧 tags.json 失败: %s (%s) —— 手工标注权威标记可能丢失",
+                dest,
+                e,
+            )
 
     now_iso = datetime.now().isoformat(timespec="seconds")
     out_list: list[dict[str, Any]] = []
