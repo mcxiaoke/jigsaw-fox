@@ -43,12 +43,24 @@
     };
 
     window.addEventListener('error', function (e) {
-      window.renderFatalError(e.message, e.filename, e.lineno, e.colno, e.error);
+      // 应用挂载完成前：异常视为致命（防白屏全屏提示）；
+      // 挂载完成后：仅记录到日志（logger.js 已接管 console），不打断用户操作
+      if (!window.__STUDIO_APP_MOUNTED__) {
+        window.renderFatalError(e.message, e.filename, e.lineno, e.colno, e.error);
+      } else if (window.StdLog) {
+        var where = e.filename ? (e.filename + ':' + e.lineno + ':' + e.colno) : '';
+        window.StdLog.error('[window.error] ' + (e.message || 'Script Error') + (where ? ' @ ' + where : ''));
+      }
     });
     window.addEventListener('unhandledrejection', function (e) {
       var reason = e.reason || 'Unhandled Promise Rejection';
       var msg = typeof reason === 'object' ? (reason.message || JSON.stringify(reason)) : String(reason);
-      window.renderFatalError(msg, 'promise', 0, 0, reason);
+      if (!window.__STUDIO_APP_MOUNTED__) {
+        window.renderFatalError(msg, 'promise', 0, 0, reason);
+      } else if (window.StdLog) {
+        // 游离 Promise 拒绝大多数是非致命（局部刷新失败等），降级为日志 + 轻提示
+        window.StdLog.error('[unhandledrejection] ' + msg);
+      }
     });
   </script>
   <script src="/static/js/logger.js"></script>
@@ -1087,10 +1099,11 @@
       </div>
     </div>
 
-    <!-- Toast 轻提示 -->
-    <div v-if="toast.show" class="toast-msg">
-      <span>🔔</span>
+    <!-- Toast 轻提示：error 红 / warn 橙 / info 深色；error/warn 可手动关闭 -->
+    <div v-if="toast.show" class="toast-msg" :class="'toast-' + (toast.level || 'info')">
+      <span>{{ (toast.level === 'error' ? '🚫' : toast.level === 'warn' ? '⚠️' : '🔔') }}</span>
       <span>{{ toast.text }}</span>
+      <button v-if="toast.level === 'error' || toast.level === 'warn'" class="toast-close" @click="dismissToast" title="关闭提示">✕</button>
     </div>
   </div>
 

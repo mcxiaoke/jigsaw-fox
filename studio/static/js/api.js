@@ -2,6 +2,18 @@
  * studio.static.js.api — REST API 请求客户端
  */
 
+// 统一 JSON 解析兜底：服务端返回非 JSON（如代理错误页/HTML/空响应）时，
+// 抛出可诊断的错误而不是晦涩的 "Unexpected token < in JSON"
+async function parseJson(res, context) {
+  try {
+    return await res.json();
+  } catch (_) {
+    throw new Error(
+      `${context || "请求"}响应不是有效 JSON (HTTP ${res.status})，服务可能未正常运行`
+    );
+  }
+}
+
 export async function checkHealth(timeoutMs = 4000) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
@@ -22,20 +34,20 @@ export async function checkHealth(timeoutMs = 4000) {
 
 export async function fetchTaxonomy() {
   const res = await fetch("/api/taxonomy");
-  if (!res.ok) throw new Error("获取分类体系元数据失败");
-  return await res.json();
+  if (!res.ok) throw new Error("获取分类体系元数据失败 (HTTP " + res.status + ")");
+  return await parseJson(res, "获取分类体系");
 }
 
 export async function scanDirectory(dir) {
   const res = await fetch(`/api/scan?dir=${encodeURIComponent(dir)}`);
-  const data = await res.json();
+  const data = await parseJson(res, "目录扫描");
   if (!res.ok || !data.ok) throw new Error(data.error || "目录扫描失败");
   return data;
 }
 
 export async function fetchTags(dir) {
   const res = await fetch(`/api/tags?dir=${encodeURIComponent(dir)}`);
-  const data = await res.json();
+  const data = await parseJson(res, "读取 tags");
   if (!res.ok || !data.ok) throw new Error(data.error || "读取 tags.json 失败");
   return data;
 }
@@ -46,7 +58,7 @@ export async function saveTags(dir, records) {
     headers: { "Content-Type": "application/json" },
     body: jsonStringifySafe({ dir, records }),
   });
-  const data = await res.json();
+  const data = await parseJson(res, "保存 tags");
   if (!res.ok || !data.ok) throw new Error(data.error || "保存 tags.json 失败");
   return data;
 }
@@ -57,7 +69,7 @@ export async function executeExport(payload) {
     headers: { "Content-Type": "application/json" },
     body: jsonStringifySafe(payload),
   });
-  const data = await res.json();
+  const data = await parseJson(res, "导出");
   if (!res.ok || !data.ok) {
     const err = new Error(data.error || "导出失败");
     err.logs = data.logs || [];
@@ -75,8 +87,13 @@ export async function fetchExportStatus(taskId) {
 // 统一任务状态查询 (导出与质检共用)
 export async function fetchJobStatus(taskId) {
   const res = await fetch(`/api/job/status?task=${encodeURIComponent(taskId)}`);
-  const data = await res.json();
-  return data || { ok: false, found: false };
+  try {
+    const data = await res.json();
+    return data || { ok: false, found: false };
+  } catch (_) {
+    // 轮询通道对非 JSON 响应静默降级：调用方按"任务未找到"处理，由重试机制兜底
+    return { ok: false, found: false };
+  }
 }
 
 export async function previewExport(payload) {
@@ -85,7 +102,7 @@ export async function previewExport(payload) {
     headers: { "Content-Type": "application/json" },
     body: jsonStringifySafe(payload),
   });
-  const data = await res.json();
+  const data = await parseJson(res, "导出预检");
   if (!res.ok || !data.ok) throw new Error(data.error || "导出预检失败");
   return data;
 }
@@ -117,21 +134,21 @@ export async function fetchQuality(path, hash = "", dir = "", force = false) {
   if (dir) params.set("dir", dir);
   if (force) params.set("force", "1");
   const res = await fetch(`/api/quality?${params.toString()}`);
-  const data = await res.json();
+  const data = await parseJson(res, "获取质检数据");
   if (!res.ok || !data.ok) throw new Error(data.error || "获取质检数据失败");
   return data;
 }
 
 export async function fetchQualityStats(dir) {
   const res = await fetch(`/api/quality/stats?dir=${encodeURIComponent(dir)}`);
-  const data = await res.json();
+  const data = await parseJson(res, "获取质检统计");
   if (!res.ok || !data.ok) throw new Error(data.error || "获取质检统计失败");
   return data;
 }
 
 export async function fetchQualityScores(dir) {
   const res = await fetch(`/api/quality/scores?dir=${encodeURIComponent(dir)}`);
-  const data = await res.json();
+  const data = await parseJson(res, "获取质检分数");
   if (!res.ok || !data.ok) throw new Error(data.error || "获取质检分数失败");
   return data;
 }
@@ -142,7 +159,7 @@ export async function batchEvaluateQuality(dir, limit = 50, paths = [], force = 
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ dir, limit, paths, force, clientTaskId }),
   });
-  const data = await res.json();
+  const data = await parseJson(res, "批量质检启动");
   if (!res.ok || !data.ok) throw new Error(data.error || "批量质检启动失败");
   return data;
 }
@@ -153,14 +170,14 @@ export async function cancelQualityJob(taskId) {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ task: taskId }),
   });
-  const data = await res.json();
+  const data = await res.json().catch(() => ({ ok: false }));
   return data || { ok: false };
 }
 
 // 手动裁切框 API
 export async function fetchManualCrops(dir) {
   const res = await fetch(`/api/crop/manual?dir=${encodeURIComponent(dir)}`);
-  const data = await res.json();
+  const data = await parseJson(res, "获取手动裁切框");
   if (!res.ok || !data.ok) throw new Error(data.error || "获取手动裁切框失败");
   return data;
 }
@@ -179,7 +196,7 @@ export async function saveManualCrop(hash, box, ratio, dir = "") {
       ratio,
     }),
   });
-  const data = await res.json();
+  const data = await parseJson(res, "保存裁切框");
   if (!res.ok || !data.ok) throw new Error(data.error || "保存裁切框失败");
   return data;
 }
@@ -206,7 +223,7 @@ export async function deleteManualCrop(hash, dir = "") {
   const res = await fetch(`/api/crop/manual?${params.toString()}`, {
     method: "DELETE",
   });
-  const data = await res.json();
+  const data = await parseJson(res, "删除裁切框");
   if (!res.ok || !data.ok) throw new Error(data.error || "删除裁切框失败");
   return data;
 }

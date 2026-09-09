@@ -1003,6 +1003,26 @@ button, input, select, textarea { font: inherit; color: inherit; }
   from { transform: translateY(100%); opacity: 0; }
   to { transform: translateY(0); opacity: 1; }
 }
+.toast-error {
+  background: #7f1d1d;
+  border: 1px solid #ef4444;
+}
+.toast-warn {
+  background: #78350f;
+  border: 1px solid #f59e0b;
+}
+.toast-close {
+  background: transparent;
+  border: none;
+  color: #cbd5e1;
+  font-size: 13px;
+  cursor: pointer;
+  padding: 0 2px;
+  line-height: 1;
+}
+.toast-close:hover {
+  color: #fff;
+}
 
 /* 质检评级与适玩度样式 */
 .card-quality-badge {

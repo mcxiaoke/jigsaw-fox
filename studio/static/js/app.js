@@ -477,7 +477,7 @@ const app = createApp({
           }
         }
       } catch (e) {
-        console.error("[预览预检]", e);
+        stdError("[预览预检]", e);
         previewState.value.error = e.message || "预检失败";
       } finally {
         previewState.value.loading = false;
@@ -492,15 +492,48 @@ const app = createApp({
       }
     };
 
-    // Toast 提示
+    // -----------------------------------------------------------------------
+    // 统一日志助手：双写日志面板 (StdLog) 与浏览器控制台。
+    // error/warn 全部进面板（右下角"📜 日志"），不再只存在于 DevTools；
+    // 关键操作的 info 由各业务点调用 stdInfo 记录。
+    // -----------------------------------------------------------------------
+    const stdError = (...args) => {
+      if (window.StdLog) StdLog.error(...args);
+      else console.error(...args);
+    };
+    const stdWarn = (...args) => {
+      if (window.StdLog) StdLog.warn(...args);
+      else console.warn(...args);
+    };
+    const stdInfo = (...args) => {
+      if (window.StdLog) StdLog.info(...args);
+      else console.info(...args);
+    };
+
+    // Toast 提示：error/warn 级别长驻展示（8s/5s）且同步写入 StdLog 面板；
+    // info 级别保持原 2.5s 轻提示。所有提示均双写 console（logger.js 已接管）。
     const toast = ref({ show: false, text: "", timer: null });
-    const showToast = (text) => {
+    const showToast = (text, level = "info") => {
+      const isErr = level === "error";
+      const isWarn = level === "warn";
+      const duration = isErr ? 8000 : isWarn ? 5000 : 2500;
       if (toast.value.timer) clearTimeout(toast.value.timer);
       toast.value.text = text;
+      toast.value.level = level;
       toast.value.show = true;
       toast.value.timer = setTimeout(() => {
         toast.value.show = false;
-      }, 2500);
+      }, duration);
+      // 双写日志面板与浏览器控制台：错误可见性不再受 toast 时长限制
+      if (isErr) {
+        window.StdLog ? StdLog.error("[toast] " + text) : console.error("[toast] " + text);
+      } else if (isWarn) {
+        window.StdLog ? StdLog.warn("[toast] " + text) : console.warn("[toast] " + text);
+      }
+    };
+    const dismissToast = () => {
+      if (toast.value.timer) clearTimeout(toast.value.timer);
+      toast.value.show = false;
     };
 
     // -----------------------------------------------------------------------
@@ -818,11 +851,12 @@ const app = createApp({
           refreshQualitySummary();
         }
         showToast(`扫描成功: 共发现 ${res.total || records.value.length} 张图片`);
+        stdInfo(`[扫描] 完成: 共 ${res.total || records.value.length} 张 (源目录: ${srcDir.value.trim()})`);
         // 后台拉取手动裁切框 (不阻塞 UI)
         fetchManualCropsAfterScan();
       } catch (err) {
-        console.error("[扫描目录]", err);
-        showToast(`扫描失败: ${err.message}`);
+        stdError("[扫描目录]", err);
+        showToast(`扫描失败: ${err.message}`, "error");
       } finally {
         isScanning.value = false;
       }
@@ -864,8 +898,8 @@ const app = createApp({
           showToast(`质检完成: ${item.file} -> ${data.quality.grade}级 (${data.quality.score}分)`);
         }
       } catch (err) {
-        console.error("[单张质检]", err);
-        showToast(`质检失败: ${err.message}`);
+        stdError("[单张质检]", err);
+        showToast(`质检失败: ${err.message}`, "error");
       } finally {
         isEvaluatingQuality.value = false;
       }
@@ -886,6 +920,7 @@ const app = createApp({
       if (success) {
         const msg = (info && info.summary) || "质检完成";
         showToast(msg);
+        stdInfo(`[质检] 任务收尾: ${msg}`);
         // 轻量刷新：只从 SQLite 拉取质检分数，merge 到已有 records，不触发文件系统 rescan
         try {
           const data = await fetchQualityScores(srcDir.value.trim());
@@ -910,7 +945,7 @@ const app = createApp({
         }
       } else {
         const errMsg = (info && info.error) || "质检失败";
-        showToast(errMsg === "cancelled" ? "质检已取消" : `质检失败: ${errMsg}`);
+        showToast(errMsg === "质检已取消" ? "质检已取消" : `质检失败: ${errMsg}`);
       }
       qcTaskId.value = "";
       qcProgress.value = { done: 0, total: 0, failed: 0 };
@@ -944,10 +979,10 @@ const app = createApp({
         qcPollRetries.value++;
         if (qcPollRetries.value >= QC_POLL_MAX_RETRY) {
           qcPollLost.value = true;
-          showToast(`轮询已中断 (连续 ${QC_POLL_MAX_RETRY} 次失败)，任务可能仍在后台运行，请点击"重新连接"恢复`);
+          showToast(`轮询已中断 (连续 ${QC_POLL_MAX_RETRY} 次失败)，任务可能仍在后台运行，请点击"重新连接"恢复`, "error");
           return;
         }
-        showToast(`轮询中断，正在重试 (${qcPollRetries.value}/${QC_POLL_MAX_RETRY})...`);
+        showToast(`轮询中断，正在重试 (${qcPollRetries.value}/${QC_POLL_MAX_RETRY})...`, "warn");
         qcPollTimer = setTimeout(pollQualityStatus, QC_POLL_RETRY_INTERVAL);
         return;
       }
@@ -962,6 +997,9 @@ const app = createApp({
       }
       if (st.state === "done") {
         await finalizeQualityJob(true, { summary: st.summary || "质检完成" });
+      } else if (st.state === "cancelled" || st.error === "cancelled") {
+        // 用户主动取消：正常终态，提示"已取消"而非红色失败
+        await finalizeQualityJob(true, { summary: "质检已取消" });
       } else if (st.state === "error") {
         await finalizeQualityJob(false, { error: st.error || "未知错误" });
       } else {
@@ -1001,6 +1039,7 @@ const app = createApp({
       } catch (_) {}
 
       showToast(`开始批量质检 (待评: ${unscored.length} 张)...`);
+      stdInfo(`[质检] 批量任务启动: ${taskId}, 待评 ${unscored.length} 张`);
 
       try {
         const res = await batchEvaluateQuality(
@@ -1012,7 +1051,7 @@ const app = createApp({
         // 启动轮询
         qcPollTimer = setTimeout(pollQualityStatus, 700);
       } catch (err) {
-        console.error("[批量质检]", err);
+        stdError("[批量质检]", err);
         await finalizeQualityJob(false, { error: err.message });
       }
     };
@@ -1023,8 +1062,8 @@ const app = createApp({
         await cancelQualityJob(qcTaskId.value);
         showToast("正在取消质检任务...");
       } catch (err) {
-        console.error("[取消质检]", err);
-        showToast(`取消失败: ${err.message}`);
+        stdError("[取消质检]", err);
+        showToast(`取消失败: ${err.message}`, "error");
       }
     };
 
@@ -1099,20 +1138,22 @@ const app = createApp({
         const saved = Number(res.saved ?? res.count ?? records.value.length);
         // 后端告警（如旧 tags.json 损坏、手工标记可能丢失）：长时展示，不静默
         if (res.warning) {
-          showToast(`⚠ ${res.warning}`);
-          console.warn("[保存tags][warning]", res.warning);
+          showToast(`⚠ ${res.warning}`, "warn");
+          stdWarn("[保存tags][warning]", res.warning);
         } else if (!silent) {
           if (autoSkipped > 0) {
             showToast(`已保存 tags.json：手动 ${saved} 条（自动识别 ${autoSkipped} 条未落盘，读取时重算）`);
+            stdInfo(`[保存] tags.json 落盘成功: 手动 ${saved} 条, 自动跳过 ${autoSkipped} 条`);
           } else {
             showToast(`已保存 tags.json (共 ${saved} 条手动记录)`);
+          stdInfo(`[保存] tags.json 落盘成功: 手动 ${saved} 条`);
           }
         }
       } catch (err) {
-        console.error("[保存tags]", err);
+        stdError("[保存tags]", err);
         // 自动保存失败也必须告知用户，避免手动 tag 静默丢失；
         // 同时登记失败并按指数退避自动重试，不再依赖用户记得手动点保存
-        showToast(`保存失败: ${err.message}（将自动重试，也可手动点击保存）`);
+        showToast(`保存失败: ${err.message}（将自动重试，也可手动点击保存）`, "error");
         scheduleAutoSaveRetry();
       } finally {
         isSaving.value = false;
@@ -1253,6 +1294,13 @@ const app = createApp({
         showToast("请先在网格中勾选图片");
         return;
       }
+      // 大批量防呆：影响面超过 20 张时二次确认（误操作覆盖标签成本极高）
+      if (selectedCount.value > 20) {
+        const ok = window.confirm(
+          `即将把 ${selectedCount.value} 张图片的标签【覆盖设置为】[${tagZh.value[targetTag] || targetTag}]。\n覆盖会清除这些图片原有的全部标签，确定继续吗？`
+        );
+        if (!ok) return;
+      }
       let count = 0;
       for (const r of records.value) {
         if (selectedSet.value.has(r.path)) {
@@ -1262,6 +1310,7 @@ const app = createApp({
         }
       }
       showToast(`已将 ${count} 张图片的标签覆盖设置为 [${tagZh.value[targetTag] || targetTag}]`);
+      stdInfo(`[打标] Set: ${count} 张 -> [${targetTag}]`);
     };
 
     const batchAddTag = (targetTag) => {
@@ -1294,6 +1343,13 @@ const app = createApp({
         showToast("请先在网格中勾选图片");
         return;
       }
+      // 大批量防呆：影响面超过 20 张时二次确认
+      if (selectedCount.value > 20) {
+        const ok = window.confirm(
+          `即将从 ${selectedCount.value} 张图片中【移除】标签 [${tagZh.value[targetTag] || targetTag}]，确定继续吗？`
+        );
+        if (!ok) return;
+      }
       let count = 0;
       for (const r of records.value) {
         if (selectedSet.value.has(r.path)) {
@@ -1314,12 +1370,20 @@ const app = createApp({
 
     const batchClearTags = () => {
       if (selectedCount.value === 0) return;
+      // 大批量防呆：重置为 Others 会抹掉原标签，超过 20 张时二次确认
+      if (selectedCount.value > 20) {
+        const ok = window.confirm(
+          `即将把 ${selectedCount.value} 张图片的标签【重置为 [Others]】（清除原标签），确定继续吗？`
+        );
+        if (!ok) return;
+      }
       for (const r of records.value) {
         if (selectedSet.value.has(r.path)) {
           applyTags(r, [OTHERS]);
         }
       }
       showToast(`已将选中的 ${selectedCount.value} 张图片重置为 [Others]`);
+      stdInfo(`[打标] Clear: ${selectedCount.value} 张 -> [Others]`);
     };
 
     // -----------------------------------------------------------------------
@@ -1399,6 +1463,7 @@ const app = createApp({
         }
         deleteConfirmOpen.value = false;
         showToast("已删除，文件已移动到 Deleted/ 目录");
+        stdInfo("[删除] 已软删除: " + removedPath);
         // 3) 修正 viewer 指针：列表空则关闭，越界则收敛到末位
         if (filteredRecords.value.length === 0) {
           closeViewer();
@@ -1414,8 +1479,8 @@ const app = createApp({
         });
       } catch (err) {
         // 失败时保留确认框，便于用户看到原因后重试
-        showToast("删除失败: " + err.message);
-        console.error("[DELETE] 删除失败:", removedPath, err);
+        showToast("删除失败: " + err.message, "error");
+        stdError("[DELETE] 删除失败:", removedPath, err);
       } finally {
         isDeletingImage.value = false;
       }
@@ -1614,7 +1679,7 @@ const app = createApp({
           exitCropMode(false);
         }
       } catch (err) {
-        showToast("保存失败: " + err.message);
+        showToast("保存失败: " + err.message, "error");
       } finally {
         isSavingCrop.value = false;
       }
@@ -1649,7 +1714,7 @@ const app = createApp({
           r.manualCrop = !!(r.hash && manualCropCache.value[r.hash]);
         }
       } catch (err) {
-        console.error("[获取手动裁切框]", err);
+        stdError("[获取手动裁切框]", err);
       }
     };
 
@@ -1953,6 +2018,7 @@ const app = createApp({
         return;
       }
       persistConfig();
+      stdInfo(`[导出] 任务启动: type=${exportType.value}, format=${exportConfig.value.format}, 试导出=${Boolean(exportConfig.value.trial)}`);
       isExporting.value = true;
       exportLogs.value = [];
       exportSummary.value = "";
@@ -2005,6 +2071,7 @@ const app = createApp({
             showToast("试导出完成：未写入账本/ID/清单，未部署");
           } else {
             showToast("导出成功！");
+            stdInfo("[导出] 正式导出成功: " + exportSummary.value);
           }
           // 试导出不触碰账本，跳过重新扫描，避免用户误以为失败
           if (!(info && info.skipRescan)) {
@@ -2014,7 +2081,7 @@ const app = createApp({
           const msg = (info && info.error) || "导出失败";
           exportSummary.value = "";
           exportLogs.value = (info && info.logs) || exportLogs.value;
-          showToast(`导出失败: ${msg}`);
+          showToast(`导出失败: ${msg}`, "error");
         }
       };
 
@@ -2029,10 +2096,10 @@ const app = createApp({
           exportPollRetries.value++;
           if (exportPollRetries.value >= EXPORT_POLL_MAX_RETRY) {
             exportPollLost.value = true;
-            showToast(`导出轮询已中断 (连续 ${EXPORT_POLL_MAX_RETRY} 次失败)，任务可能仍在后台运行，请点击"重新连接"恢复`);
+            showToast(`导出轮询已中断 (连续 ${EXPORT_POLL_MAX_RETRY} 次失败)，任务可能仍在后台运行，请点击"重新连接"恢复`, "error");
             return;
           }
-          showToast(`导出轮询中断，正在重试 (${exportPollRetries.value}/${EXPORT_POLL_MAX_RETRY})...`);
+          showToast(`导出轮询中断，正在重试 (${exportPollRetries.value}/${EXPORT_POLL_MAX_RETRY})...`, "warn");
           pollTimer = setTimeout(pollStatus, 3000);
           return;
         }
@@ -2125,7 +2192,7 @@ const app = createApp({
           }
         }
       } catch (err) {
-        console.error("[导出]", err);
+        stdError("[导出]", err);
         if (!finalized) {
           finalize(false, {
             error: err.message,
@@ -2210,14 +2277,14 @@ const app = createApp({
         catalogToTags.value = tax.catalog_to_tags || {};
         tagToCatalogs.value = tax.tag_to_catalogs || {};
       } catch (err) {
-        console.error("[初始化分类体系]", err);
+        stdError("[初始化分类体系]", err);
         if (window.TAXONOMY && window.TAXONOMY.main_tags) {
           mainTags.value = window.TAXONOMY.main_tags || [];
           catalogs.value = mainTags.value;
           specificTags.value = mainTags.value;
           tagZh.value = window.TAXONOMY.tag_zh || {};
         } else {
-          showToast(`初始化分类体系失败: ${err.message}`);
+          showToast(`初始化分类体系失败: ${err.message}`, "error");
         }
       }
 
@@ -2380,6 +2447,7 @@ const app = createApp({
       cropOverlayStyle,
       contentOverlayStyle,
       toast,
+      dismissToast,
       getThumbUrl: thumbUrl,
       getFileUrl: fileUrl,
       doScan,
@@ -2458,10 +2526,13 @@ const app = createApp({
 });
 
 app.config.errorHandler = (err, vm, info) => {
-  console.error('[Studio Vue Error]:', err, info);
+  stdError('[Studio Vue Error]:', err, info);
   if (typeof window.renderFatalError === 'function') {
     window.renderFatalError(err ? (err.message || String(err)) : 'Vue Component Error', 'VueComponent', 0, 0, err);
   }
 };
 
 window.__STUDIO_VM__ = app.mount("#app");
+// 挂载完成标记：此后 window.error / unhandledrejection 不再触发全屏 fatal，
+// 降级为 StdLog 记录（index.html 守卫读取此标记）
+window.__STUDIO_APP_MOUNTED__ = true;

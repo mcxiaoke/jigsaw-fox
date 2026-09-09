@@ -128,7 +128,31 @@ setTimeout(async () => {{
     const exceptions = [];
     ws.onopen = () => {{
       ws.send(JSON.stringify({{ id: 1, method: 'Runtime.enable' }}));
-      setTimeout(() => {{
+      // 第 1 步：轮询等待 Vue 挂载完成（__STUDIO_VM__ 就绪，最多 12s）。
+      // 机器负载高时固定延时会将"还没挂载完"误判为"挂载失败"——先等挂载，
+      // 等待结束后再发正式采样请求 (id=2)。
+      const waitMounted = "(() => new Promise(resolve => {{" +
+        "const started = Date.now();" +
+        "const poll = () => {{" +
+        "  if (window.__STUDIO_VM__ || Date.now() - started > 12000) resolve();" +
+        "  else setTimeout(poll, 150);" +
+        "}};" +
+        "poll();" +
+        "}}))()";
+      ws.send(JSON.stringify({{
+        id: 3,
+        method: 'Runtime.evaluate',
+        params: {{ expression: waitMounted, awaitPromise: true }}
+      }}));
+    }};
+    ws.onmessage = (event) => {{
+      const msg = JSON.parse(event.data);
+      if (msg.method === 'Runtime.consoleAPICalled' && msg.params.type === 'error') {{
+        consoleErrors.push(msg.params.args.map(a => a.value || a.description).join(' '));
+      }} else if (msg.method === 'Runtime.exceptionThrown') {{
+        exceptions.push(JSON.stringify(msg.params.exceptionDetails));
+      }} else if (msg.id === 3) {{
+        // 挂载等待完成（或 12s 超时）：现在发正式采样
         const browserExpr = "(() => {{" +
           "const app = document.getElementById('app');" +
           "const grid = document.querySelector('.image-grid');" +
@@ -189,14 +213,6 @@ setTimeout(async () => {{
           method: 'Runtime.evaluate',
           params: {{ expression: browserExpr, awaitPromise: true }}
         }}));
-      }}, 1600);
-    }};
-    ws.onmessage = (event) => {{
-      const msg = JSON.parse(event.data);
-      if (msg.method === 'Runtime.consoleAPICalled' && msg.params.type === 'error') {{
-        consoleErrors.push(msg.params.args.map(a => a.value || a.description).join(' '));
-      }} else if (msg.method === 'Runtime.exceptionThrown') {{
-        exceptions.push(JSON.stringify(msg.params.exceptionDetails));
       }} else if (msg.id === 2) {{
         const evalVal = JSON.parse(msg.result?.result?.value || '{{}}');
         console.log(JSON.stringify({{

@@ -24,11 +24,11 @@
 
 ## 🟡 中优先级
 
-### 5. 批量打标无撤销快照
-- **位置**：`studio/static/js/app.js` `batchSetTag` / `batchAddTag` / `batchRemoveTag` / `batchClearTags`
-- **现状**：批量操作直接循环 `applyTags` 覆盖，无快照无 undo。全选 5000 张误点一次 Clear 无法恢复（"原来的值是什么"已不可知）。
-- **修法**：操作前 `const snapshot = new Map(selectedRecords.map(r => [r.path, r.tags.slice()]))`；成功后 toast 常驻（约 10s）"已修改 N 张 · 撤销"，点击按快照恢复并重新 persist。单张打标可低成本复用。
-- **验收**：批量 Set 后点撤销，标签恢复原状且落盘。
+### ~~5. 批量打标无撤销快照~~ ✅ 部分完成 2026-09-09（二次确认防呆）
+- **实现**：批量 Set / Remove / Clear 超过 20 张时弹二次确认（明示张数与动作语义）；Add 仅追加不加确认。完整撤销快照方案仍保留为后续可选项。
+
+### ~~8. 用户主动取消的质检任务显示为 error~~ ✅ 已完成 2026-09-09
+- **实现**：`_job_finish` 新增 cancelled 参数，取消走 `state="cancelled"`；前端识别并显示"质检已取消"。端到端验证通过。
 
 ### 6. `/api/scan` 同步执行且一次性返回全量数据
 - **位置**：`studio/server.py:567-767`（`_handle_scan`）
@@ -42,11 +42,8 @@
 - **修法**：检查 + 注册放进同一次 `_JOB_LOCK` 持有期；`clientTaskId` 已存在且未终态时幂等返回现任务 task_id。
 - **验收**：并发双击批量质检只产生一个任务。
 
-### 8. 用户主动取消的质检任务显示为 error
-- **位置**：`studio/server.py:318`（`_job_finish(task_id, error="cancelled")`）
-- **现状**：取消走 error 通道，用户主动取消却看到红色"任务失败"。
-- **修法**：增加 `state="cancelled"`；或约定结构化错误码 `{"code": "cancelled"}`。前端同步识别。
-- **验收**：取消质检后 UI 显示"已取消"而非失败。
+### ~~8. 用户主动取消的质检任务显示为 error~~ ✅ 已完成 2026-09-09
+- **实现**：`_job_finish` 新增 cancelled 参数，取消走 `state="cancelled"`；前端识别并显示"质检已取消"。端到端验证通过。
 
 ### 9. 扫描 prune 以单次可见性删除缓存，外部移动即丢哈希
 - **位置**：`studio/server.py:649`（`_handle_scan` → `db.prune_missing_files`）
@@ -66,11 +63,8 @@
 - **修法**：`tempfile.mkstemp()` 或名称加 `os.getpid()` + 随机串；结束清理。（成本极低，两个文件各改一行）
 - **验收**：双进程并发导出同月 daily，产物各自完整。
 
-### 12. 游离 Promise 拒绝触发全屏 fatal + api.js 无 JSON 兜底
-- **位置**：`studio/static/index.html:48`（全局 `unhandledrejection` → `renderFatalError`）、`studio/static/js/api.js`（L31/L39/L79/L89 等 `res.json()` 无 catch）
-- **现状**：mount 完成后任何非致命 rejection（如 `fetchManualCropsAfterScan` 的 console.error 路径）都渲染全屏红框盖掉打标界面；api.js 响应非 JSON 时报错信息不可诊断。
-- **修法**：fatal 全屏只保留给应用初始化失败（app 未 mount），mount 后降级为 toast + 日志；api.js 统一包 `res.json().catch(() => ({ ok:false, error:"响应不是有效 JSON (HTTP <status>)" }))`（可参考 `deleteImage` 的既有写法）。
-- **验收**：手动触发一个未捕获 rejection，不再出现全屏红框。
+### ~~12. 游离 Promise 拒绝触发全屏 fatal + api.js 无 JSON 兜底~~ ✅ 已完成 2026-09-09
+- **实现**：fatal 全屏收窄到挂载完成前（`__STUDIO_APP_MOUNTED__` 标记）；mount 后的 error/rejection 降级为 StdLog 记录。`api.js` 新增 `parseJson` 统一兜底，全部 `res.json()` 调用点改造，`fetchJobStatus` 非 JSON 静默降级由轮询重试兜底。
 
 ### 13. tags 保存为全量 POST
 - **位置**：`studio/static/js/app.js` `buildSaveRecords()`；后端 `/api/tags` 保存接口
@@ -112,9 +106,8 @@
 
 ## 🟢 低优先级
 
-### 19. 错误 toast 2.5s 太短且单例互相覆盖
-- **位置**：`studio/static/js/app.js` `showToast`（约 L485）
-- **修法**：错误级 toast ≥6s 且可手动关闭，或引入堆叠 toast；错误文案保留"查看日志"入口（logger 已有环形缓冲）。
+### ~~19. 错误 toast 2.5s 太短且单例互相覆盖~~ ✅ 已完成 2026-09-09
+- **实现**：showToast 支持级别——error 红 8s / warn 橙 5s（可手动关闭）/ info 2.5s；error/warn 同步写入 StdLog 面板；13 处失败提示调用升级为对应级别。堆叠 toast 仍为可选项。
 
 ### 20. 审计流水写入失败静默 + JSONL 无轮转
 - **位置**：`studio/core/workspace.py`（audit 写入路径）
@@ -158,7 +151,7 @@
 
 ## 建议的下一批
 
-~~**#1 + #2 + #5 + #11**（质检静默失败、轮询假死、批量撤销、临时文件唯一后缀）~~ —— #1/#2 已于 2026-09-09 完成，#4 升级为"禁止降级"一并完成。**当前建议下一批：#5（批量撤销）+ #11（临时文件唯一后缀）+ #8（cancelled 状态）**。
+~~**#1 + #2 + #5 + #11**~~ —— 高优先级 4 项与 #5(防呆)/#8/#12/#19 已完成（2026-09-09）。**当前建议下一批：#11（临时文件唯一后缀，两行改动）+ #3 剩余部分（tags.json 损坏）已完 → 顺延为 #7（JobStore 并发 TOCTOU）+ #18（预览竞态）**。
 
 ## 已知良好设计（勿误改）
 

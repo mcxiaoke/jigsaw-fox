@@ -230,7 +230,10 @@ def _job_progress(task_id: str, done: int, total: int, failed: int = 0) -> None:
 
 
 def _job_finish(
-    task_id: str, summary: str | None = None, error: str | None = None
+    task_id: str,
+    summary: str | None = None,
+    error: str | None = None,
+    cancelled: bool = False,
 ) -> None:
     if not task_id:
         return
@@ -238,7 +241,10 @@ def _job_finish(
         job = _JOBS.get(task_id)
         if job is None:
             return
-        if error is not None:
+        if cancelled:
+            # 用户主动取消是正常终态，与失败区分：前端据此显示"已取消"而非红色报错
+            job["state"] = "cancelled"
+        elif error is not None:
             job["state"] = "error"
             job["error"] = str(error)
         else:
@@ -321,7 +327,7 @@ def _run_quality_job(
     with CacheDB(root) as db:
         for i in range(0, total, _QUALITY_SUB_BATCH):
             if _job_is_cancelled(task_id):
-                _job_finish(task_id, error="cancelled")
+                _job_finish(task_id, cancelled=True)
                 logger.info("[QUALITY] %s 已取消: %d/%d", task_id, done, total)
                 return
 
