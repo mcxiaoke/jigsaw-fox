@@ -107,6 +107,7 @@ class MainExporter(BaseExporter):
                 records, _ = normalize_records(raw, self.src_p)
 
         tag_map: dict[str, list[str]] = {}
+        manual_map: dict[str, bool] = {}
         hash_map: dict[str, str] = {}
         for r in records:
             key = (r.get("path") or r.get("file") or "").replace("\\", "/")
@@ -116,6 +117,8 @@ class MainExporter(BaseExporter):
             ]
             tag_map[key] = norm_tags
             tag_map[Path(key).name] = norm_tags
+            manual_map[key] = bool(r.get("is_manual"))
+            manual_map[Path(key).name] = bool(r.get("is_manual"))
             if r.get("hash"):
                 hash_map[key] = r["hash"]
                 hash_map[Path(key).name] = r["hash"]
@@ -301,8 +304,10 @@ class MainExporter(BaseExporter):
         for idx, p in enumerate(images):
             rel = p.relative_to(self.src_p).as_posix().replace("\\", "/")
             tags = tag_map.get(rel) or tag_map.get(p.name)
-            # 兜底标签统一为规范形式，路径推断只在「未分类/无标签」时介入
-            if not tags or tags == [OTHERS_TAG] or tags == [OTHERS_TAG.lower()]:
+            is_manual = manual_map.get(rel) or manual_map.get(p.name)
+            # 兜底标签统一为规范形式；路径推断仅在「无该记录 且 非手动」时介入
+            # 用户手动(含清空为 Others / 空)是显式选择，一律禁止覆盖
+            if not tags and not is_manual:
                 guessed = guess_tags_from_path(p, root=self.src_p)
                 if guessed:
                     tags = guessed

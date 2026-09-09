@@ -73,11 +73,20 @@ const app = createApp({
       return out.length ? out : [OTHERS];
     };
     const isOthers = (r) => !!(r && Array.isArray(r.tags) && r.tags.includes(OTHERS));
+    // 复核=纯派生信号(打标工作队列)：未打标(Others) 或 低置信 即"待复核"，不设手动开关
+    const deriveReview = (r) => {
+      if (!r) return false;
+      const conf = Number(r.confidence);
+      const lowConf = r.confidence != null && !Number.isNaN(conf) && conf > 0 && conf < 0.75;
+      return isOthers(r) || lowConf;
+    };
     // 写入标签并同步 catalogs / 待复核态，保证不变量恒成立
-    const applyTags = (r, tags, reviewRequired) => {
+    const applyTags = (r, tags) => {
       r.tags = normalizeTags(tags);
       r.catalogs = [...r.tags];
-      r.review_required = reviewRequired === undefined ? isOthers(r) : reviewRequired;
+      r.review_required = deriveReview(r); // 复核纯派生，不再允许手动切换
+      r.is_manual = true; // 显式手动标记：打标/清空/追加/移除/重置/单改可经此路径都标记为手动(权威)
+      scheduleAutoSave(); // 每次手动操作自动保存，用户无需再手动点击
     };
 
     // -----------------------------------------------------------------------
@@ -325,7 +334,21 @@ const app = createApp({
         file: r.file,
         hash: r.hash || "",
         tags: r.tags || [],
+        is_manual: !!r.is_manual,
         exported: !!r.exported,
+      }));
+
+    // 保存用瘦身载荷：仅回传 save_tags_file 真正消费的字段(path/hash/tags/is_manual/
+    // subject/scene/reason)，避免自动保存频繁把 width/height/quality 等重对象塞进请求体
+    const buildSaveRecords = () =>
+      records.value.map((r) => ({
+        path: r.path,
+        hash: r.hash || "",
+        tags: r.tags || [],
+        is_manual: !!r.is_manual,
+        subject: r.subject || "",
+        scene: r.scene || "",
+        reason: r.reason || "",
       }));
 
     // 规格化目标比例族选择（多选，互斥于"自动"预设自动池 1:1+4:3）
@@ -908,6 +931,36 @@ const app = createApp({
       } catch (_) {}
     };
 
+    let autoSaveTimer = null;
+    const persistTags = async (silent = false) => {
+      if (!srcDir.value.trim() || records.value.length === 0) return;
+      isSaving.value = true;
+      try {
+        const res = await saveTags(srcDir.value.trim(), buildSaveRecords());
+        const autoSkipped = Number(res.autoSkipped || 0);
+        const saved = Number(res.saved ?? res.count ?? records.value.length);
+        if (!silent) {
+          if (autoSkipped > 0) {
+            showToast(`已保存 tags.json：手动 ${saved} 条（自动识别 ${autoSkipped} 条未落盘，读取时重算）`);
+          } else {
+            showToast(`已保存 tags.json (共 ${saved} 条手动记录)`);
+          }
+        }
+      } catch (err) {
+        console.error("[保存tags]", err);
+        // 自动保存失败也必须告知用户，避免手动 tag 静默丢失
+        showToast(`保存失败: ${err.message}（请手动点击保存重试）`);
+      } finally {
+        isSaving.value = false;
+      }
+    };
+
+    // 自动保存：任何手动打标/清空操作后防抖落盘，杜绝"忘了点保存"。手动按钮兜底。
+    const scheduleAutoSave = () => {
+      clearTimeout(autoSaveTimer);
+      autoSaveTimer = setTimeout(() => persistTags(true), 600);
+    };
+
     const doSave = async () => {
       if (!srcDir.value.trim()) {
         showToast("请先指定图片源目录");
@@ -917,16 +970,8 @@ const app = createApp({
         showToast("当前没有需要保存的打标记录");
         return;
       }
-      isSaving.value = true;
-      try {
-        const res = await saveTags(srcDir.value.trim(), records.value);
-        showToast(`已成功保存 tags.json (共 ${res.count} 条记录)`);
-      } catch (err) {
-        console.error("[保存tags]", err);
-        showToast(`保存失败: ${err.message}`);
-      } finally {
-        isSaving.value = false;
-      }
+      clearTimeout(autoSaveTimer);
+      await persistTags(false);
     };
 
     // 选择控制
@@ -1045,7 +1090,7 @@ const app = createApp({
       for (const r of records.value) {
         if (selectedSet.value.has(r.path)) {
           // 覆盖为 Others 时保持 ["Others"] 规范形式，review_required 由不变量推导
-          applyTags(r, [targetTag], isOthersTag(targetTag));
+          applyTags(r, [targetTag]);
           count++;
         }
       }
@@ -1090,7 +1135,7 @@ const app = createApp({
           const tags = before.filter((t) => t !== targetTag);
           // 移空即退回规范兜底桶 ["Others"]（不变量保证非空）
           if (tags.length === 0) {
-            applyTags(r, [OTHERS], true);
+            applyTags(r, [OTHERS]);
           } else {
             applyTags(r, tags);
           }
@@ -1104,22 +1149,10 @@ const app = createApp({
       if (selectedCount.value === 0) return;
       for (const r of records.value) {
         if (selectedSet.value.has(r.path)) {
-          applyTags(r, [OTHERS], true);
+          applyTags(r, [OTHERS]);
         }
       }
-      showToast(`已将选中的 ${selectedCount.value} 张图片重置为 [Others] 并标记待复核`);
-    };
-
-    const batchSetReviewed = (isReviewed) => {
-      if (selectedCount.value === 0) return;
-      for (const r of records.value) {
-        if (selectedSet.value.has(r.path)) {
-          r.review_required = !isReviewed;
-        }
-      }
-      showToast(
-        `已将选中的 ${selectedCount.value} 张图片标记为 [${isReviewed ? "已复核" : "待复核"}]`
-      );
+      showToast(`已将选中的 ${selectedCount.value} 张图片重置为 [Others]`);
     };
 
     // -----------------------------------------------------------------------
@@ -1149,11 +1182,6 @@ const app = createApp({
         tags.push(tagId);
       }
       applyTags(item, tags);
-    };
-
-    const toggleViewerReview = () => {
-      if (!currentViewerItem.value) return;
-      currentViewerItem.value.review_required = !currentViewerItem.value.review_required;
     };
 
     // -----------------------------------------------------------------------
@@ -2157,14 +2185,12 @@ const app = createApp({
       batchAddTag,
       batchRemoveTag,
       batchClearTags,
-      batchSetReviewed,
       openViewer,
       closeViewer,
       syncViewerImg,
       prevViewer,
       nextViewer,
       toggleViewerTag,
-      toggleViewerReview,
       deleteConfirmOpen,
       isDeletingImage,
       canDeleteViewerItem,

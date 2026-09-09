@@ -53,6 +53,7 @@ from studio.taxonomy import (
     ALL_CANONICAL_TAGS,
     CATALOG_DEFS,
     CATALOG_TO_TAGS_MAP,
+    OTHERS_TAG,
     SPECIFIC_TAG_DEFS,
     TAG_TO_CATALOGS,
     TAG_ZH,
@@ -181,24 +182,171 @@ class TestCoreAndExporters(unittest.TestCase):
         self.assertEqual(records[0]["height"], 100)
         self.assertEqual(records[0]["format"], "JPEG")
 
-        # 保存 tags.json (持久化元数据)
-        ok, dest_file, count = save_tags_file(self.src_dir, records)
+        # 保存 tags.json (delta 格式)：纯目录名自动标签(Cats->Pets)应被裁剪为近空文件
+        ok, dest_file, saved, auto_skipped = save_tags_file(self.src_dir, records)
         self.assertTrue(ok)
-        self.assertEqual(count, 3)
+        self.assertEqual(saved, 0)              # 全为自动标签，无手动增量
+        self.assertEqual(auto_skipped, 3)
         self.assertTrue(Path(dest_file).exists())
 
-        # 重新读取归一化 (校验元数据完整回载)
         tag_file = find_tags_file(self.src_dir)
         self.assertIsNotNone(tag_file)
         loaded = json.loads(tag_file.read_text(encoding="utf-8"))
+        self.assertEqual(loaded["records"], [])  # 自动标签全部不落盘
+        self.assertEqual(loaded["$schema"], "jigsaw-tags-delta-v1")
+
+        # 手动改一条标签(推翻目录名推测 Cats->Pets) → 应作为 delta 落盘
+        records[0]["tags"] = ["People"]
+        records[0]["subject"] = "肖像"
+        ok2, _, saved2, auto_skipped2 = save_tags_file(self.src_dir, records)
+        self.assertTrue(ok2)
+        self.assertEqual(saved2, 1)
+        self.assertEqual(auto_skipped2, 2)
+
         norm_records, fmt_name = normalize_records(loaded, self.src_dir)
-        self.assertEqual(fmt_name, "list")
-        self.assertEqual(len(norm_records), 3)
+        self.assertEqual(fmt_name, "delta")
+        self.assertEqual(len(norm_records), 0)  # 首次保存后为空
+
+        # 手动改一条标签(推翻目录名推测 Cats->Pets) → 应作为 delta 落盘
+        records[0]["tags"] = ["People"]
+        records[0]["subject"] = "肖像"
+        ok2, _, saved2, auto_skipped2 = save_tags_file(self.src_dir, records)
+        self.assertTrue(ok2)
+        self.assertEqual(saved2, 1)
+        self.assertEqual(auto_skipped2, 2)
+
+        loaded2 = json.loads(tag_file.read_text(encoding="utf-8"))
+        self.assertEqual(len(loaded2["records"]), 1)
+        norm_records, fmt_name = normalize_records(loaded2, self.src_dir)
+        self.assertEqual(fmt_name, "delta")
+        self.assertEqual(len(norm_records), 1)
+        self.assertEqual(norm_records[0]["tags"], ["People"])
+        self.assertEqual(norm_records[0]["subject"], "肖像")
+        self.assertEqual(norm_records[0]["path"], records[0]["path"])
+
+    def test_manual_tag_never_auto_reset(self):
+        """一旦手动打标(hash 身份)成为 delta，即使后续标签与目录名自动基准一致也不会被裁剪归零。"""
+        if not HAS_PIL:
+            self.skipTest("Pillow not installed")
+
+        # setUp 已创建 Cats/ 下 3 张图(目录基准 Pets)
+        images = scan_images(self.src_dir)
+        infos = scan_image_infos(images, self.src_dir)
+        records, _ = merge_scanned_images(images, self.src_dir, None, image_infos=infos)
+        self.assertEqual(len(records), 3)
+        # 先手动推翻为 People(Cats->Pets 基准不同) ⇒ 仅 records[0] 成为 delta
+        records[0]["tags"] = ["People"]
+        ok, _, saved, _ = save_tags_file(self.src_dir, records)
+        self.assertTrue(ok)
+        self.assertEqual(saved, 1)
+
+        # 手动改回与基准一致(People->Pets)，但已是 delta，按 hash 身份应保留，不被 auto_skipped 裁掉
+        records[0]["tags"] = ["Pets"]
+        ok2, _, saved2, auto_skipped2 = save_tags_file(self.src_dir, records)
+        self.assertTrue(ok2)
+        self.assertEqual(saved2, 1)
+        self.assertEqual(auto_skipped2, 2)  # 其余 2 条仍为纯自动标签被跳过
+
+        loaded = json.loads(find_tags_file(self.src_dir).read_text(encoding="utf-8"))
+        norm_records, _ = normalize_records(loaded, self.src_dir)
+        self.assertEqual(len(norm_records), 1)
         self.assertEqual(norm_records[0]["tags"], ["Pets"])
-        self.assertEqual(norm_records[0]["width"], 100)
-        self.assertEqual(norm_records[0]["height"], 100)
-        self.assertEqual(norm_records[0]["format"], "JPEG")
-        self.assertGreater(norm_records[0]["size"], 0)
+
+    def test_backend_manual_tag_operations(self):
+        """后端为手动 tag 权威的兜底：
+        覆盖/追加/移除/重置 以及 多次操作、多张图片，逐一落盘后不变量必须保持（手动不被自动覆盖）。
+        setUp 已建 Cats/ 下 3 张图（目录基准 Pets）。
+        """
+        if not HAS_PIL:
+            self.skipTest("Pillow not installed")
+
+        def scan_merge():
+            img = scan_images(self.src_dir)
+            infos = scan_image_infos(img, self.src_dir)
+            tf = find_tags_file(self.src_dir)
+            existing = None
+            if tf and tf.exists():
+                existing, _ = normalize_records(
+                    json.loads(tf.read_text(encoding="utf-8")), self.src_dir
+                )
+            return merge_scanned_images(img, self.src_dir, existing, image_infos=infos)[0]
+
+        def by_rel(recs):
+            return {r["path"].replace("\\", "/"): r for r in recs}
+
+        def delta_records(by_tag=False):
+            raw = json.loads(find_tags_file(self.src_dir).read_text(encoding="utf-8"))
+            return {
+                d["path"]: d for d in raw.get("records", [])
+            } if by_tag else raw.get("records", [])
+
+        # 初始：3 张自动推断为 Pets（目录 Cats）
+        base = by_rel(scan_merge())
+        rels = sorted(base.keys())
+        self.assertEqual(len(rels), 3)
+
+        # 1) 覆盖：多张图片（rel0、rel1）手动覆盖为 People，rel2 不动
+        recs = scan_merge()
+        for rel in rels[:2]:
+            recs[rels.index(rel)]["tags"] = ["People"]
+            recs[rels.index(rel)]["is_manual"] = True
+        ok, _, saved, auto = save_tags_file(self.src_dir, recs)
+        self.assertTrue(ok)
+        self.assertEqual(saved, 2)          # 两张手动覆盖落盘
+        self.assertEqual(auto, 1)           # 剩一张自动(Pets)跳过
+        self.assertEqual(len(delta_records()), 2)
+        dr = delta_records(by_tag=True)
+        self.assertEqual(dr[rels[0]]["manual_tags"], ["People"])
+        self.assertEqual(dr[rels[0]]["type"], "manual")
+
+        # 2) 追加：对 rel0 追加 Holidays -> ["People","Holidays"]
+        recs = scan_merge()
+        for r in recs:
+            r["is_manual"] = r["path"] in (rels[0], rels[1])  # 保持已手动的标记
+        recs[rels.index(rels[0])]["tags"] = ["People", "Holidays"]
+        ok, _, saved, _ = save_tags_file(self.src_dir, recs)
+        self.assertTrue(ok)
+        dr = delta_records(by_tag=True)
+        self.assertEqual(dr[rels[0]]["manual_tags"], ["People", "Holidays"])
+        self.assertEqual(dr[rels[1]]["manual_tags"], ["People"])
+        self.assertEqual(len(delta_records()), 2)  # 仍是两条（rel0 更新，不新增）
+
+        # 3) 移除：从 rel0 移除 People -> ["Holidays"]
+        recs = scan_merge()
+        for r in recs:
+            r["is_manual"] = r["path"] in (rels[0], rels[1])
+        recs[rels.index(rels[0])]["tags"] = ["Holidays"]
+        ok, _, _, _ = save_tags_file(self.src_dir, recs)
+        self.assertTrue(ok)
+        dr = delta_records(by_tag=True)
+        self.assertEqual(dr[rels[0]]["manual_tags"], ["Holidays"])
+
+        # 4) 重置/清空：rel0 -> [Others]（目录 Cats 会被推断为 Pets，手动清空必须保留为 Others）
+        recs = scan_merge()
+        for r in recs:
+            r["is_manual"] = r["path"] in (rels[0], rels[1])
+        recs[rels.index(rels[0])]["tags"] = [OTHERS_TAG]
+        ok, _, _, _ = save_tags_file(self.src_dir, recs)
+        self.assertTrue(ok)
+        dr = delta_records(by_tag=True)
+        self.assertEqual(dr[rels[0]]["manual_tags"], [OTHERS_TAG])
+        self.assertEqual(dr[rels[0]]["type"], "manual")
+
+        # 5) 多次操作后重读/合并：手动记录与自动记录正确区分，手动不被自动覆盖
+        loaded_raw, _ = normalize_records(
+            json.loads(find_tags_file(self.src_dir).read_text(encoding="utf-8")),
+            self.src_dir,
+        )
+        new_images = scan_images(self.src_dir)
+        new_infos = scan_image_infos(new_images, self.src_dir)
+        merged, _ = merge_scanned_images(new_images, self.src_dir, loaded_raw, image_infos=new_infos)
+        m = by_rel(merged)
+        self.assertEqual(m[rels[0]]["tags"], [OTHERS_TAG])  # 手动清空，未被覆盖为 Pets
+        self.assertTrue(m[rels[0]]["is_manual"])
+        self.assertEqual(m[rels[1]]["tags"], ["People"])    # 手动覆盖保留
+        self.assertTrue(m[rels[1]]["is_manual"])
+        self.assertEqual(m[rels[2]]["tags"], ["Pets"])      # 未操作 → 保持自动
+        self.assertFalse(m[rels[2]]["is_manual"])
 
     def test_main_exporter(self):
         logs = []
@@ -509,6 +657,77 @@ class TestHashAndReconciliation(unittest.TestCase):
         self.assertEqual(new_records[0]["subject"], "波斯猫")
         self.assertEqual(new_records[0]["scene"], "室内木地板")
         self.assertFalse(new_records[0]["review_required"])
+
+    def test_manual_cleared_to_others_not_overridden(self):
+        """用户手动清空为 Others[OTHERS_TAG]，必须始终保留手动选择，绝不能被自动推断覆盖。"""
+        if not HAS_PIL:
+            self.skipTest("Pillow not installed")
+        from PIL import Image
+
+        # 目录 Nature/Mountains/ 自动推断为 Landscapes
+        dir_p = self.src_dir / "Nature" / "Mountains"
+        dir_p.mkdir(parents=True)
+        img = Image.new("RGB", (200, 200), color=(10, 200, 30))
+        img_p = dir_p / "peak.jpg"
+        img.save(img_p, "JPEG")
+
+        # 首次扫描 → 自动推断为 Landscapes，无手动 → 保存落盘时应裁剪掉(自动)
+        images = scan_images(self.src_dir)
+        infos = scan_image_infos(images, self.src_dir)
+        records, _ = merge_scanned_images(images, self.src_dir, None, image_infos=infos)
+        ok, _, saved, auto_skipped = save_tags_file(self.src_dir, records)
+        self.assertTrue(ok)
+        self.assertEqual(saved, 0)  # 全为自动 → 近空
+        self.assertEqual(auto_skipped, 1)
+
+        # 用户手动把它清空成未分类(OTHERS) → 必须成为 delta 落盘
+        records[0]["tags"] = [OTHERS_TAG]
+        ok2, _, saved2, _ = save_tags_file(self.src_dir, records)
+        self.assertTrue(ok2)
+        self.assertEqual(saved2, 1)
+
+        # 再次扫描 → tags 必须保留手动选择[OTHERS_TAG]，不会被目录推断的[Landscapes]覆盖
+        tag_file = find_tags_file(self.src_dir)
+        loaded_raw, _ = normalize_records(json.loads(tag_file.read_text(encoding="utf-8")), self.src_dir)
+        new_images = scan_images(self.src_dir)
+        new_infos = scan_image_infos(new_images, self.src_dir)
+        new_records, _ = merge_scanned_images(new_images, self.src_dir, loaded_raw, image_infos=new_infos)
+        self.assertEqual(len(new_records), 1)
+        self.assertEqual(new_records[0]["tags"], [OTHERS_TAG])  # 手动选择被保留，没被自动覆盖
+        self.assertTrue(new_records[0]["is_manual"])
+
+        # 落盘的 delta 必须带 type="manual"，且 manual_tags=[Others](显式清空)
+        delta = json.loads(tag_file.read_text(encoding="utf-8"))
+        self.assertEqual(len(delta["records"]), 1)
+        self.assertEqual(delta["records"][0]["type"], "manual")
+        self.assertEqual(delta["records"][0]["manual_tags"], [OTHERS_TAG])
+
+    def test_manual_flag_persists_noop_clear(self):
+        """is_manual 标记应让「no-op」手动动作也落盘：目录本就推断为 Others、用户显式清空，虽与自动相同也须持久化。"""
+        if not HAS_PIL:
+            self.skipTest("Pillow not installed")
+        from PIL import Image
+
+        # 目录不可解析 → 自动基准就是 Others
+        dir_p = self.src_dir / "zz_unknown"
+        dir_p.mkdir(parents=True)
+        Image.new("RGB", (100, 100), color=(5, 5, 200)).save(dir_p / "x.jpg", "JPEG")
+
+        images = scan_images(self.src_dir)
+        infos = scan_image_infos(images, self.src_dir)
+        records, _ = merge_scanned_images(images, self.src_dir, None, image_infos=infos)
+        self.assertEqual(records[0]["tags"], [OTHERS_TAG])  # 纯自动 = Others，与手动清空外观相同
+
+        # 仅设 is_manual 标记、标签不变(与自动一致) → 必须落盘(saved=1)
+        records[0]["is_manual"] = True
+        ok, _, saved, auto_skipped = save_tags_file(self.src_dir, records)
+        self.assertTrue(ok)
+        self.assertEqual(saved, 1)       # 手动标记使"看起来像自动"的 no-op 也持久化
+        self.assertEqual(auto_skipped, 0)
+
+        delta = json.loads(find_tags_file(self.src_dir).read_text(encoding="utf-8"))
+        self.assertEqual(len(delta["records"]), 1)
+        self.assertEqual(delta["records"][0]["manual_tags"], [OTHERS_TAG])
 
 
 class TestExporterTrackingAndDeduplication(unittest.TestCase):

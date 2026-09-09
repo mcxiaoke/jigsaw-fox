@@ -602,6 +602,17 @@ button, input, select, textarea { font: inherit; color: inherit; }
   color: #dc2626;
   border-color: #fecaca;
 }
+.tag-badge.tag-manual {
+  background: #fff7ed;
+  color: #9a3412;
+  border-color: #fed7aa;
+}
+/* 存在手动标签的卡片：给整行加一条左侧链接线，一眼区分自动/手动 */
+.card-tags.has-manual {
+  padding-left: 4px;
+  border-left: 3px solid #f59e0b;
+  margin-left: -1px;
+}
 
 /* 模态框 */
 .modal-mask {

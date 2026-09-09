@@ -884,10 +884,10 @@ class StudioRequestHandler(BaseHTTPRequestHandler):
             self._error(f"目录不存在: {dir_param}", status=404)
             return
 
-        ok, msg, count = save_tags_file(root, records)
+        ok, msg, saved, auto_skipped = save_tags_file(root, records)
         if ok:
-            logger.info(f"[TAGS] 保存成功: 文件={msg}, 记录数={count}")
-            self._json({"ok": True, "file": msg, "count": count})
+            logger.info(f"[TAGS] 保存成功: 文件={msg}, 手动={saved}, 自动跳过={auto_skipped}")
+            self._json({"ok": True, "file": msg, "saved": saved, "autoSkipped": auto_skipped})
         else:
             logger.error(f"[TAGS] 保存失败: {msg}")
             self._error(f"保存失败: {msg}", status=500)

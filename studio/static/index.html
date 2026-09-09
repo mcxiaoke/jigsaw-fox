@@ -339,12 +339,6 @@
         <button class="btn sm" :disabled="selectedCount === 0" @click="batchClearTags">
           重置
         </button>
-        <button class="btn sm" :disabled="selectedCount === 0" @click="batchSetReviewed(true)">
-          ✔ 已复核
-        </button>
-        <button class="btn sm" :disabled="selectedCount === 0" @click="batchSetReviewed(false)">
-          ⚠ 待复核
-        </button>
       </div>
     </div>
 
@@ -463,7 +457,12 @@
               </span>
               <span class="meta-exported" v-if="item.exported" :title="getExportTooltip(item.exported)">✔ 已导出</span>
             </div>
-            <div class="card-tags">
+            <div class="card-tags" :class="{ 'has-manual': item.is_manual }">
+              <span
+                v-if="item.is_manual"
+                class="tag-badge tag-manual"
+                title="手动标签(权威)：人工打标/清空，不会被目录名自动推断覆盖"
+              >✍️ 手</span>
               <span
                 v-for="t in item.tags"
                 :key="t"
@@ -1042,16 +1041,6 @@
             </div>
           </div>
 
-          <div class="viewer-review-action">
-            <button
-              class="btn sm"
-              :class="currentViewerItem.review_required ? 'warn' : 'success'"
-              @click="toggleViewerReview"
-            >
-              <span v-if="currentViewerItem.review_required">⚠ 标记已复核</span>
-              <span v-else>✔ 标记待复核</span>
-            </button>
-          </div>
         </div>
       </div>
     </div>

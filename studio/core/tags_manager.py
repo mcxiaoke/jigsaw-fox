@@ -7,6 +7,7 @@ studio.core.tags_manager — tags.json 统一读取、清洗、合并与原子�
 from __future__ import annotations
 
 import json
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 import logging
@@ -36,13 +37,91 @@ def load_tags_file(path: Path | str) -> tuple[Any, str | None]:
         return None, str(e)
 
 
+# tags.json 增量(Delta)格式标志，见 docs/tags-delta-store-design-20260909.md
+DELTA_SCHEMA = "jigsaw-tags-delta-v1"
+
+# merge_scanned_images 会给记录自动写入的 reason 前缀——切勿当作人工备注落盘
+_AUTO_REASON_PREFIXES = ("智能推断", "未打标", "自动继承", "自动对齐")
+
+
+def _is_auto_reason(reason: Any) -> bool:
+    """判断 reason 是否为引擎自动生成(未打标/智能推断/继承/对齐)，而非人工备注。"""
+    r = str(reason or "").strip()
+    if not r:
+        return True
+    return any(r.startswith(p) for p in _AUTO_REASON_PREFIXES)
+
+
+def _is_delta_format(raw_data: Any) -> bool:
+    """判断是否为手动增量(delta)格式：顶层带 $schema 标记，或 records/items 含 manual_tags。"""
+    if isinstance(raw_data, dict):
+        if str(raw_data.get("$schema") or raw_data.get("_schema") or "").startswith("jigsaw-tags-delta"):
+            return True
+        items = raw_data.get("records") or raw_data.get("images") or []
+        if isinstance(items, list) and items and isinstance(items[0], dict):
+            return "manual_tags" in items[0]
+        return False
+    if isinstance(raw_data, list):
+        return bool(raw_data) and isinstance(raw_data[0], dict) and "manual_tags" in raw_data[0]
+    return False
+
+
+def _records_from_delta(raw_data: Any, root: Path) -> list[dict[str, Any]]:
+    """
+    解析手动增量(delta)格式 tags.json。
+    每条 delta 的 manual_tags 即该记录的最终有效标签（整体覆盖目录名自动基准），
+    直接还原为带完整 tags 的标准记录，供 merge/消费方使用。
+    """
+    if isinstance(raw_data, dict):
+        items = raw_data.get("records") or raw_data.get("images") or []
+    elif isinstance(raw_data, list):
+        items = raw_data
+    else:
+        items = []
+
+    records: list[dict[str, Any]] = []
+    for it in items:
+        if not isinstance(it, dict):
+            continue
+        rel = (it.get("path") or it.get("file") or "").replace("\\", "/")
+        if not rel:
+            continue
+        tags: list[str] = []
+        for t in it.get("manual_tags") or []:
+            canon = normalize_token(str(t)) or str(t).strip().lower()
+            if canon and canon not in tags:
+                tags.append(canon)
+        tags = tags or ["Others"]
+        rec = {
+            "path": rel,
+            "file": Path(rel).name,
+            "tags": tags,
+            "catalogs": get_catalogs_for_tags(tags),
+            "confidence": float(it.get("confidence", 0.9) or 0.9),
+            "review_required": bool(it.get("review_required", False)) or (tags == ["Others"]),
+            "subject": it.get("subject", "") or "",
+            "scene": it.get("scene", "") or "",
+            "reason": it.get("reason", "") or "",
+            "hash": it.get("hash") or "",
+            "sha1": it.get("sha1") or "",
+            "model": it.get("model") or "manual",
+            "is_manual": True,   # 手动权威标记：下游对齐/兜底必须尊重，不得用自动标签覆盖
+        }
+        records.append(rec)
+    records.sort(key=lambda r: r["path"].lower())
+    return records
+
+
 def normalize_records(raw_data: Any, root: Path) -> tuple[list[dict[str, Any]], str]:
     """
     兼容归一化各种 tags.json 格式:
+      0. 手动增量(delta)格式: 返回值仅含「人工打标/复核」的记录(manual_tags 即最终标签)
       1. 列表格式: list[{path/file, tags/tag, confidence, ...}]
       2. 字典格式: {"images": [...]} 或 {"records": [...]}
     返回: (标准化 records 列表, 格式名称)
     """
+    if _is_delta_format(raw_data):
+        return _records_from_delta(raw_data, root), "delta"
     records: list[dict[str, Any]] = []
 
     def _extract_tags(item: dict[str, Any], rel_path: str) -> list[str]:
@@ -106,6 +185,7 @@ def normalize_records(raw_data: Any, root: Path) -> tuple[list[dict[str, Any]], 
             "hash": item.get("hash") or item.get("sha256", ""),
             "sha1": item.get("sha1", ""),
             "model": item.get("model", ""),
+            "is_manual": bool(item.get("is_manual")),
         }
         if item.get("exported"):
             rec["exported"] = item["exported"]
@@ -223,16 +303,26 @@ def merge_scanned_images(
 
     # 建立已有记录中有效真实标签的 Hash 映射库 (用于自动继承)
     hash_donor_map: dict[str, dict[str, Any]] = {}
+
+    def _offer_donor(rec: dict[str, Any]) -> None:
+        """登记候选捐赠者；同一 Hash 下手动记录优先于自动记录。"""
+        h = (rec.get("hash") or "").strip().lower()
+        if not h or not extract_real_tags(rec.get("tags")):
+            return
+        if h in hash_donor_map:
+            cur = hash_donor_map[h]
+            # 已有手动则忽略自动候选；当前自动且候选手动则升级为手动
+            if cur.get("is_manual") and not rec.get("is_manual"):
+                return
+            if not cur.get("is_manual") and rec.get("is_manual"):
+                hash_donor_map[h] = rec
+            return
+        hash_donor_map[h] = rec
+
     for r in active_records:
-        h = (r.get("hash") or "").strip().lower()
-        if h and extract_real_tags(r.get("tags")):
-            if h not in hash_donor_map:
-                hash_donor_map[h] = r
+        _offer_donor(r)
     for o in orphan_records:
-        h = (o.get("hash") or "").strip().lower()
-        if h and extract_real_tags(o.get("tags")):
-            if h not in hash_donor_map:
-                hash_donor_map[h] = o
+        _offer_donor(o)
 
     # 4. 真正的新增图片：优先从同 Hash 已有图片自动继承真实标签，无法继承则推断初始标签
     for rel in remaining_unmapped:
@@ -259,6 +349,7 @@ def merge_scanned_images(
                 "hash": file_hash,
                 "sha1": donor.get("sha1", ""),
                 "model": "inherited",
+                "is_manual": bool(donor.get("is_manual")),
                 "width": info.get("width", 0),
                 "height": info.get("height", 0),
                 "format": info.get("format", ""),
@@ -287,6 +378,7 @@ def merge_scanned_images(
                 "hash": file_hash,
                 "sha1": "",
                 "model": "rule",
+                "is_manual": False,
                 "width": info.get("width", 0),
                 "height": info.get("height", 0),
                 "format": info.get("format", ""),
@@ -309,22 +401,48 @@ def merge_scanned_images(
             records_by_hash.setdefault(h, []).append(r)
 
     for h, group in records_by_hash.items():
-        if len(group) >= 2:
-            all_real_tags: list[str] = []
+        if len(group) < 2:
+            continue
+        # 手动权威：只要组内含手动记录，一律以手动标签为准，自动副本对齐到手动；手动成员永不改动
+        manuals = [it for it in group if it.get("is_manual")]
+        if manuals:
+            manual_real: list[str] = []
+            any_manual_untagged = False
+            for m in manuals:
+                real = extract_real_tags(m.get("tags"))
+                if real:
+                    for t in real:
+                        if t not in manual_real:
+                            manual_real.append(t)
+                else:
+                    any_manual_untagged = True
+            target = manual_real if manual_real else [OTHERS_TAG]
             for item in group:
-                for t in extract_real_tags(item.get("tags")):
-                    if t not in all_real_tags:
-                        all_real_tags.append(t)
-            if all_real_tags:
-                all_cats = get_catalogs_for_tags(all_real_tags)
-                for item in group:
-                    cur_real = extract_real_tags(item.get("tags"))
-                    if set(cur_real) != set(all_real_tags):
-                        item["tags"] = list(all_real_tags)
-                        item["catalogs"] = list(all_cats)
-                        item["confidence"] = max(float(item.get("confidence", 0.0)), 0.9)
-                        item["review_required"] = False
-                        item["reason"] = "自动对齐同内容图片标签"
+                if item.get("is_manual"):
+                    continue  # 尊重手动选择，绝不被自动标签覆盖
+                item["tags"] = list(target)
+                item["catalogs"] = list(get_catalogs_for_tags(target))
+                item["confidence"] = max(float(item.get("confidence", 0.0)), 0.9)
+                item["review_required"] = bool(any_manual_untagged) or (target == [OTHERS_TAG])
+                item["reason"] = "对齐手动标签"
+            continue
+
+        # 无手动成员：保持原有全自动 union 对齐语义
+        all_real_tags: list[str] = []
+        for item in group:
+            for t in extract_real_tags(item.get("tags")):
+                if t not in all_real_tags:
+                    all_real_tags.append(t)
+        if all_real_tags:
+            all_cats = get_catalogs_for_tags(all_real_tags)
+            for item in group:
+                cur_real = extract_real_tags(item.get("tags"))
+                if set(cur_real) != set(all_real_tags):
+                    item["tags"] = list(all_real_tags)
+                    item["catalogs"] = list(all_cats)
+                    item["confidence"] = max(float(item.get("confidence", 0.0)), 0.9)
+                    item["review_required"] = False
+                    item["reason"] = "自动对齐同内容图片标签"
 
     # 按相对路径小写排序保持稳定
     active_records.sort(key=lambda r: r["path"].lower())
@@ -356,88 +474,122 @@ def merge_scanned_images(
 
 
 
-def save_tags_file(root: str | Path, records: list[dict[str, Any]], target_file: Path | None = None) -> tuple[bool, str, int]:
+def save_tags_file(root: str | Path, records: list[dict[str, Any]], target_file: Path | None = None) -> tuple[bool, str, int, int]:
     """
-    原子安全保存 tags.json。
+    原子安全保存 tags.json —— 手动增量(delta)格式。
+    仅持久化「人工打标/复核」的记录；目录名可自动推导出的标签(Cats->Pets 等)不落盘，
+    读取时由扫描/merge 从路径重算，文件因此显著变小、可读性与 diff 更清晰。
+
+    判定规则(应落盘即成为 delta)：
+      - 已存在的 delta(一旦手动、永不自动归零)：按 hash 身份保留/更新；
+      - 全新记录：最终标签 ≠ 目录名基准标签，或含人工备注(subject/scene/reason)时落盘；
+      - 否则为纯自动记录，跳过(计入 auto_skipped)。
     写入 .tmp 文件校验无误后再原子替换，杜绝断电损坏。
-    返回: (success: bool, filepath_or_error: str, count: int)
+    返回: (success, filepath_or_error, saved, auto_skipped)
     """
     r = Path(root).resolve()
     ws = StudioWorkspace(r)
     dest = target_file if target_file else ws.tags_file
 
-    # 保留原有的 sha1 和 hash 映射
+    # 读取现有文件：保留 hash/sha1 映射；若为 delta 格式则记录其身份键(一旦手动永不归零)
     hash_map: dict[str, str] = {}
     sha_map: dict[str, str] = {}
+    existing_delta_keys: set[str] = set()
     if dest.exists():
         try:
             old_raw = json.loads(dest.read_text(encoding="utf-8"))
-            if isinstance(old_raw, list):
-                for item in old_raw:
-                    if isinstance(item, dict) and item.get("path"):
-                        pk = item["path"]
-                        if item.get("hash"):
-                            hash_map[pk] = item["hash"]
-                        if item.get("sha1"):
-                            sha_map[pk] = item["sha1"]
+            if isinstance(old_raw, dict):
+                old_items = old_raw.get("records") or old_raw.get("images") or []
+            elif isinstance(old_raw, list):
+                old_items = old_raw
+            else:
+                old_items = []
+            for item in old_items:
+                if not isinstance(item, dict):
+                    continue
+                pk = item.get("path") or ""
+                if item.get("hash"):
+                    hash_map[pk] = item["hash"]
+                if item.get("sha1"):
+                    sha_map[pk] = item["sha1"]
+                if "manual_tags" in item:
+                    hk = str(item.get("hash") or "").strip().lower()
+                    if hk:
+                        existing_delta_keys.add(hk)
+                    existing_delta_keys.add("path:" + pk)
         except Exception:
             pass
 
+    now_iso = datetime.now().isoformat(timespec="seconds")
     out_list: list[dict[str, Any]] = []
+    saved = 0
+    auto_skipped = 0
+
     for item in records:
         if not isinstance(item, dict):
+            auto_skipped += 1
             continue
         rel = (item.get("path") or item.get("file") or "").replace("\\", "/")
         if not rel:
+            auto_skipped += 1
             continue
 
-        tags_raw = item.get("tags") or []
         tags_norm: list[str] = []
-        for t in tags_raw:
+        for t in (item.get("tags") or []):
             canon = normalize_token(str(t)) or str(t).strip().lower()
             if canon and canon not in tags_norm:
                 tags_norm.append(canon)
-
         if not tags_norm:
             tags_norm = ["Others"]
 
-        cats = get_catalogs_for_tags(tags_norm)
-        conf = float(item.get("confidence", 0.8) or 0.8)
-        review = bool(item.get("review_required", False)) or (conf < 0.75) or any(t.lower() == "others" for t in tags_norm)
+        eff_key = str(item.get("hash") or "").strip().lower()
+        key = eff_key or ("path:" + rel)
 
-        out_item = {
+        # 目录名自动基准：与最终标签一致则无需落盘
+        base = guess_tags_from_path(r / rel, root=r)
+        base_set = {normalize_token(t) for t in base if t}
+
+        # 手动权威：is_manual(前端显式动作) 无条件落盘；differs/has_text 作为非前端生产者的安全网
+        already_manual = key in existing_delta_keys or ("path:" + rel) in existing_delta_keys or (eff_key in existing_delta_keys)
+        differs = set(tags_norm) != base_set
+        manual_flag = bool(item.get("is_manual"))
+        # 人工文本信号仅看 subject/scene：merge 会自动给每条记录写 reason(智能推断/继承等)，不能作为手动依据
+        has_text = bool(item.get("subject") or item.get("scene"))
+
+        if not manual_flag and not already_manual and not differs and not has_text:
+            auto_skipped += 1
+            continue
+
+        # 记录级先标记持久化：对象持久化时一律落 type="manual"，自动推断被显式禁用
+        delta: dict[str, Any] = {
+            "type": "manual",   # 显式手动/覆盖记录；tags 为空或 [Others] 也视为人为指定，绝不 re-derive
             "path": rel,
             "hash": item.get("hash") or hash_map.get(rel, ""),
             "sha1": item.get("sha1") or sha_map.get(rel, ""),
-            "tags": tags_norm,
-            "catalogs": cats,
-            "confidence": conf,
-            "subject": item.get("subject", ""),
-            "scene": item.get("scene", ""),
-            "reason": item.get("reason", ""),
-            "review_required": review,
-            "model": item.get("model", "manual"),
-            "taxonomy_version": "jigsaw-tag-v3.0-14",
+            "manual_tags": tags_norm,
         }
-        if item.get("width"):
-            out_item["width"] = int(item["width"])
-        if item.get("height"):
-            out_item["height"] = int(item["height"])
-        if item.get("format"):
-            out_item["format"] = str(item["format"]).upper()
-        if item.get("size"):
-            out_item["size"] = int(item["size"])
-        if item.get("mtime"):
-            out_item["mtime"] = int(item["mtime"])
-        if item.get("aspect_ratio"):
-            out_item["aspect_ratio"] = float(item["aspect_ratio"])
+        if item.get("subject"):
+            delta["subject"] = item["subject"]
+        if item.get("scene"):
+            delta["scene"] = item["scene"]
+        if item.get("reason") and not _is_auto_reason(item.get("reason")):
+            delta["reason"] = item["reason"]
+        # 复核为纯派生信号(未打标/低置信)，由 tags 推导，不再落盘冗余
+        delta["updated_at"] = now_iso
+        out_list.append(delta)
+        saved += 1
 
-        out_list.append(out_item)
+    out_list.sort(key=lambda d: d["path"].lower())
+    payload: dict[str, Any] = {
+        "$schema": DELTA_SCHEMA,
+        "key": "hash",
+        "records": out_list,
+    }
 
     try:
         dest.parent.mkdir(parents=True, exist_ok=True)
         tmp_file = dest.with_suffix(".tmp")
-        tmp_file.write_text(json.dumps(out_list, ensure_ascii=False, indent=2), encoding="utf-8")
+        tmp_file.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
         tmp_file.replace(dest)
         try:
             rel_dest = dest.relative_to(r).as_posix()
@@ -447,11 +599,13 @@ def save_tags_file(root: str | Path, records: list[dict[str, Any]], target_file:
             "tag_save",
             scope="tags",
             entity=rel_dest,
-            after={"count": len(out_list)},
+            after={"saved": saved, "auto_skipped": auto_skipped, "total": len(out_list)},
             result="ok",
         )
-        logger.info("[tags] 已保存 tags.json: %s (记录数=%d)", dest.resolve(), len(out_list))
-        return True, str(dest.resolve()), len(out_list)
+        logger.info(
+            "[tags] 已保存 tags.json: %s (手动=%d, 自动跳过=%d)", dest.resolve(), saved, auto_skipped
+        )
+        return True, str(dest.resolve()), saved, auto_skipped
     except Exception as e:
         logger.error("[tags] 保存 tags.json 失败: %s (%s)", dest, e)
-        return False, str(e), 0
+        return False, str(e), 0, 0
