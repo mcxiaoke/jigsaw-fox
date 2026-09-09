@@ -4,6 +4,7 @@
 > **更新日期**：2026-09-05  
 > **适用模块**：Main (主线)、Daily (日历)、Events (活动)、Collections (图集)  
 > **决策基准**：采纳 Review 3「源侧权威账本 + 确定性纯净构建」、用户决策「方案 B：纯净文件名 + 显式逻辑 ID + Hash 属性化」以及「`srcDir/.studio/` 独立隐藏工作区 + 最终拷贝交付 + 客户端显式 ID 硬约束」  
+> ⚠️ **状态：规划 / 未实施**——文中部分端点（如 `/api/export/inspect`、Phase 4 路线图）尚未在 `server.py` 落地。请以 `studio-server-architecture-and-api-20260908.md` + 当前源码为准，避免按图索骥。  
 
 ---
 

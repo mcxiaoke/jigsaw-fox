@@ -3,7 +3,8 @@
 > 适用范围：`studio/` 子项目（`server.py` + `static/` 前端）
 > 编写时间：2026-09-08 22:26 (GMT+8)
 > 触发：单图删除功能（+572 行）代码量审查 → 引发出对整体可维护性的评估
-> 状态：**方案讨论稿，尚未实施，等待逐项拍板**
+> 状态：**方案讨论稿，尚未实施，等待逐项拍板**  
+> ⚠️ 本文为**重构规划**，其中端点改名（如 `/api/quality/batch/cancel`）**尚未实施**；与 `studio-server-architecture-and-api-20260908.md`（现状架构）不一致时，以后者 + 当前源码为准，避免按图索骥。
 
 ---
 
@@ -84,7 +85,7 @@ Pinia stores（共享状态显式化，按现状状态模型切 5 个）：
 server.py（~500 行）  只留：StudioServer / 路由表 / do_* 分发 / _json/_error/_resolve_image_path / 日志初始化
 studio/handlers/      按域一个文件（模块级函数或 mixin）：
  ├── scan.py           /api/scan + /api/tags 读取
- ├── quality.py        /api/quality* + /api/quality/batch/cancel
+ ├── quality.py        /api/quality* + /api/quality/batch/cancel （规划：现状实际为 /api/quality/cancel）
  ├── export.py         /api/export + /api/export/preview + /api/job/status
  ├── image.py          /api/thumb + /api/file + /api/crop/manual + /api/delete
  └── misc.py           /api/health + /api/taxonomy + /api/exported

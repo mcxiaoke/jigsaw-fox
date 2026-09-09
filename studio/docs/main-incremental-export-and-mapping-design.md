@@ -4,6 +4,7 @@
 > **创建日期**：2026-09-05  
 > **状态**：方案草案 / 待审阅  
 > **适用范围**：Studio 资产管理平台、Main 导出器、Flutter 客户端同步管线、运维部署脚本  
+> ⚠️ **状态：规划 / 未实施**——文中 `/api/export/main/inspect`、`/api/export/run`（第二阶段）等端点尚未在 `server.py` 落地。请以 `studio-server-architecture-and-api-20260908.md` + 当前源码为准，避免按图索骥。  
 
 ---
 

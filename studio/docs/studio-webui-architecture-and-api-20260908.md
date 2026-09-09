@@ -71,6 +71,8 @@ const applyTags  = (r, tags, reviewRequired) => { r.tags = normalizeTags(tags); 
 
 所有写入口（`doScan` 加载、批量设/加/删/清标签、查看器点标签）一律走 `applyTags`，保证不变量恒成立。
 
+`applyTags` 内部除归一化外，还会置 `r.is_manual = true` 并触发 `scheduleAutoSave()`（600ms 防抖、静默落盘）；「保存 tags.json」手动按钮仅作强制/立即保存兜底（见 §4.1）。由此用户改完标签即自动持久化，杜绝「忘了点保存」。派生属性 `isManualTag(item)` 基于 `item.is_manual` 判断记录是否人工权威打标；卡片上 `item.is_manual` 时渲染 `✍️ 手` 徽标 + 左侧橙色 mark 线，一眼区分自动 tag 与手动(权威) tag。
+
 ### 3.3 核心响应式状态
 
 | 分类 | 状态 |
@@ -101,7 +103,7 @@ const applyTags  = (r, tags, reviewRequired) => { r.tags = normalizeTags(tags); 
 ### 4.1 主工作区（扫描 → 打标 → 质检）
 
 - **扫描**：`doScan()` → `/api/scan` → `normalizeTags` 归一化 → 清空选中 → 装配 `qualitySummary` → 后台 `fetchManualCropsAfterScan()` 拉裁切覆盖（不阻塞 UI）。
-- **保存**：`doSave()` → POST `/api/tags`（全量 records）。
+- **保存**：所有改标签入口经 `applyTags` 自动触发 `scheduleAutoSave()`（600ms 防抖）POST slim 载荷（`buildSaveRecords()` 仅回传 `path/hash/tags/is_manual/review_required/subject/scene/reason`）到 `/api/tags`；「保存 tags.json」手动按钮调用 `doSave()` 作强制/立即保存兜底。后端 `save_tags_file` 落 `type="manual"`。
 - **批量操作**：全选 / 全不选 / 反选 / 选待复核 / 选未导出；批量 设置 / 追加 / 移除 / 清空 标签；一键复核 / 标记待复核。全部只改前端 `records`，**落盘靠 `doSave`**。
 - **单张质检**：卡片上小按钮与查看器内「分析」按钮 → `/api/quality`（后者带 `force=1`）。
 - **批量质检**：见 4.4。
@@ -175,7 +177,7 @@ triggerBatchQuality(force)
 - 捕获 `window.error` 与 `unhandledrejection`；
 - 暴露 `window.StdLog`（`error/warn/info/log/debug/show/hide/toggle/copy/clear`）；
 - 右下角 📜 浮动按钮展开面板，可一键复制全部（优先 `navigator.clipboard`，非安全上下文回退 `textarea+execCommand`）；样式内联，不依赖 `studio.css`；z-index 低于致命白屏层。
-- `app.js` 在 7 处用户可见错误的 `catch` 中插入 `console.error("[上下文]", err)`，自动进面板（正常降级的 `catch (_) {}` 不计入）。
+- `app.js` 在多处用户可见错误的 `catch` 中插入**域名化** `console.error`（如 `[扫描目录]`、`[单张质检]`、`[批量质检]`、`[保存tags]`、`[导出]`、`[DELETE] 删除失败:` 等，当前共 12 处），自动进面板（正常降级的 `catch (_) {}` 不计入）。
 
 ### 4.7 键盘快捷键
 
@@ -204,7 +206,8 @@ triggerBatchQuality(force)
 | `fetchManualCrops(dir)` | GET | `/api/crop/manual?dir=` | — |
 | `saveManualCrop(hash,box,ratio,dir)` | POST | `/api/crop/manual` | box 为 `{x0,y0,x1,y1}` 百分比 |
 | `deleteManualCrop(hash,dir)` | DELETE | `/api/crop/manual?hash=&dir=` | — |
-| `getThumbUrl(path,size,baseDir)` | — | `/api/thumb?path=&size=&dir=` | **尺寸分桶** 240/360/480/640/800，提高缓存命中；`dir=` 让后端能解析相对路径 |
+| `deleteImage(dir, path, hash)` | POST | `/api/delete` | 软删除：移动到 `Deleted/`，已导出返回 409 |
+| `getThumbUrl(path,size,baseDir)` | — | `/api/thumb?path=&size=&dir=` | **尺寸分桶**（输出 240/360/480/640/800，按阈值 `size<=260→240` / `<=380→360` / `<=520→480` / `<=700→640` / else 800 离散），提高缓存命中；`dir=` 让后端能解析相对路径 |
 | `getFileUrl(path,baseDir)` | — | `/api/file?path=&dir=` | 查看器原图 |
 
 **序列化细节**：`jsonStringifySafe()` 刻意**不加缩进**——导出 payload 可能携带上万条 slim 记录，缩进会让体积近乎翻倍（实测 3000 张 2.1MB → 1.1MB）。配合 `buildSlimRecords()` 只回传 `path/file/hash/tags/exported` 五个字段，预检请求体实测量降 72.6%。
@@ -248,7 +251,7 @@ payload 关键点：`clientTaskId`、`trial`、`selectedPaths`、`manualOrder`�
 
 | 手段 | 位置 | 效果 |
 |---|---|---|
-| 缩略图尺寸分桶（240/360/480/640/800） | `getThumbUrl` | 提高浏览器与服务端缓存命中 |
+| 缩略图尺寸分桶（输出 240/360/480/640/800，按阈值 260/380/520/700 离散） | `getThumbUrl` | 提高浏览器与服务端缓存命中 |
 | ETag + `max-age=86400, immutable` | 后端 `/api/thumb` | 二次访问 304 |
 | `jsonStringifySafe` 不缩进 + `buildSlimRecords` | `api.js` / `app.js` | 预检请求体 -72.6% |
 | `.og-card` `content-visibility:auto` + `contain-intrinsic-size` | `studio.css` | 视口外卡片跳过布局绘制 |

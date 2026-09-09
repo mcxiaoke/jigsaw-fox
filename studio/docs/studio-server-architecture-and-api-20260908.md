@@ -1,7 +1,7 @@
 # Content Studio Server — 代码结构、功能与 API 全览
 
 > 适用范围：`studio/` 子项目后端（`server.py` + `core/` + `exporters/` + `taxonomy.py`）
-> 代码基线：2026-09-08（`server.py` 1662 行，`core/` 9 模块 3629 行，`exporters/` 8 模块 1957 行）
+> 代码基线：2026-09-09（`server.py` 1800 行，`core/` 9 模块 4458 行，`exporters/` 8 模块 1982 行；行数随 CHANGES 累积而增长，以当前源码为准）
 > 说明：本文所有接口、字段、常量均以当前源码为准；如与旧设计文档冲突，以本文（源码）为准。
 
 ---
@@ -222,14 +222,15 @@ find_tags_file → 读 tags.json（若有）
 
 | 路径 | 关键入参 | 说明 |
 |---|---|---|
-| `/api/tags` | `{dir, records}` | 原子写回 tags.json（`save_tags_file`）→ `{ok, file, count}` |
+| `/api/tags` | `{dir, records}` | 原子写回 tags.json（`save_tags_file`）→ `{ok, file, saved, autoSkipped}`；前端 toast 据此显示「手动 N 条（自动跳过 M 条）」 |
 | `/api/export` | 见 6.4 | 统一导出入口（同步执行，可带 `clientTaskId`） |
 | `/api/export/preview` | 见 6.5 | 只读预检，**不写任何盘** |
 | `/api/quality/batch` | `{dir, clientTaskId, paths?, limit?, force?, maxWorkers?}` | 注册任务后**立即返回** `{ok, taskId, total, started}` |
 | `/api/quality/cancel` | `{task}` | 协作式取消，仅 running 可取消 |
 | `/api/crop/manual` | `{hash, dir, x0,y0,x1,y1, ratio}` | 保存手动裁切框（百分比坐标，校验 `0.0~1.0` 且 `x1>x0 / y1>y0`） |
+| `/api/delete` | `{dir, path, hash}` | 软删除单张素材（移动到 `<src>/Deleted/`，并从缓存库移除），返回 `{ok, path, hash, deletedTo, removedHashes, cleaned}`；已导出的图服务端拒绝并返回 **409** |
 
-`/api/quality/batch` 的目标集选择：`paths` 优先；否则 `force=true` 用 `db.get_all_items()`（重算全部），否则用 `db.get_unscored_items()`（只补未评分）。`limit` 钳制在 `[1, 2000]`，`maxWorkers` 仅在 `[1,24]` 内生效。**并发拦截**：已有 running 任务时新请求返回 **409**。
+`/api/quality/batch` 的目标集选择：`paths` 优先；否则 `force=true` 用 `db.get_all_items()`（重算全部），否则用 `db.get_unscored_items()`（只补未评分）。`limit`：`limit<=0` 表示**全量**（不截断），`>0` 时钳制在 `[1, 2000]`；`maxWorkers` 仅在 `[1,24]` 内生效。**并发拦截**：已有 running 任务时新请求返回 **409**。
 
 ### 6.4 `/api/export`（server.py:1217）
 
@@ -241,7 +242,7 @@ find_tags_file → 读 tags.json（若有）
 2. 构造 `log_fn`（双写 JobStore + logger）与 `progress_fn`；
 3. **注入手动裁切框**：查 `CacheDB.get_all_user_overrides()`，把有 `has_crop` 的转成 `{hash: (x0,y0,x1,y1)}` 写入 `data["manual_boxes"]`，导出器按 hash 查找并对该文件跳过自动 smart crop；
 4. `get_exporter(type)` → `validate()` → `execute()`；
-5. 成功：试导出回 `trial/trialDir/wouldCommit`，正式导出回 `totalExported`；失败回 `{"ok":false,"error","logs"}` + HTTP 500。
+5. 成功：试导出回 `trial/trialDir/wouldCommit`（`_write_trial_meta` 输出 `_trial_meta/{source_map.json, ledger_delta.json, trial.log}`，且走 read_only 路径——**不写** `.studio/ledger` 事件流、`exports.json` 与账本快照，零污染）；正式导出回 `totalExported`；失败回 `{"ok":false,"error","logs"}` + HTTP 500。
 
 响应结构（`ExportResult.to_dict()`）：`{ok, summary, files, logs, error}`，成功时另加 `totalExported` 或 trial 三件套。
 
@@ -268,6 +269,7 @@ scan_images → 按 selectedPaths 过滤 → 剔除 excludedPaths
 | 路径 | 参数 | 说明 |
 |---|---|---|
 | `/api/crop/manual` | `hash`、`dir` | 删除该图的手动裁切覆盖 |
+| `/api/delete` | `dir`、`path`、`hash` | 软删除单张素材（POST，见 §6.3） |
 
 ---
 
@@ -295,6 +297,7 @@ scan_images → 按 selectedPaths 过滤 → 剔除 excludedPaths
 - `scan_image_infos` 并发取元信息，带 `hash_cache`、`progress_callback`、`stats_out`（cache_hits / new_hashes / errors）；
 - 新增 `long_side` 与 `too_small_long`：`long_side < DEFAULT_LONG_TARGET` 时置位，供前端置灰不可选；
 - `find_duplicate_groups` 按 hash 分组找内容重复；
+- 缓存命中判定改用纳秒级 `st_mtime_ns`（`get_image_info` 与 `_worker` 两处统一），修复「同秒内修改且大小相同」被误判未变导致的哈希污染；升级后首次扫描会**全量重算一次**哈希，之后稳定命中。
 - `sort_images` 支持 name / mtime / size / dimension 等，manual 模式接受 `manual_order` 列表。
 
 ### 7.3 `core/quality_evaluator.py` — 物理适玩度
@@ -318,6 +321,8 @@ scan_images → 按 selectedPaths 过滤 → 剔除 excludedPaths
 
 - `read_only=True` 时 `_try_migrate_legacy()` 只做内存迁移、跳过 `_save_unlocked()`；`append_records()` / `save()` 双保险拒绝写；`workspace.ensure_structure()` 只 `mkdir`，跳过含 `.studio.db` move 的 `_migrate_legacy_files`。
 - 能力：`get_exported_hashes`、`get_exported_map`、`check_history_duplicate`（含严重度分级，允许补丁修订同一 logicalId，严禁主线互斥重复）、`append_records`、`get_max_order`、`get_active_record`、`get_next_revision`。
+- 账本 **append-only 事件流** `.studio/ledger/exports_events.jsonl`：记账先追加事件再物化 `exports.json`；`exports.json` 损坏/缺失时 `_try_rebuild_from_events()` 全量重放重建，不再依赖快照。
+- `backup_ledger_snapshot()` 将权威账本复制为带日期时间后缀快照 `.studio/ledger/backups/exports-YYYYMMDD-HHMMSS.json`（默认仅保留最近 30 份），账本损坏后可手工 copy 覆盖回滚。
 
 ---
 
@@ -360,6 +365,8 @@ scan_images → 按 selectedPaths 过滤 → 剔除 excludedPaths
 |---|---|---|
 | SQLite 算力缓存 | `<src>/.studio.db` | 文件元数据 / 质检分 / 用户裁切覆盖 |
 | 导出账本 | `<src>/.studio/`（ledger、logs、release） | `ExportsLedger` + `StudioWorkspace` |
+| 账本事件流 | `<src>/.studio/ledger/exports_events.jsonl` | append-only，记账先于物化 `exports.json` |
+| 账本快照 | `<src>/.studio/ledger/backups/exports-YYYYMMDD-HHMMSS.json` | 保留最近 30 份，用于回滚 |
 | 旧版账本 | `<src>/exported.json` | `export_tracker.py` 兼容读取 |
 | tags | `<src>/tags.json` | 路径由 `find_tags_file` 发现 |
 | 试导出目录 | `<out>/_trial_{YYYYMMDD_HHMMSS}/` | 含 `_trial_meta/` 三件套 |
