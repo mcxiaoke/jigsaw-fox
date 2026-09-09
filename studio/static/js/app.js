@@ -660,6 +660,30 @@ const app = createApp({
       };
     });
 
+    // Smart crop content_box overlay 样式: 基于原图尺寸百分比定位 (绿色实线框)
+    const contentOverlayStyle = computed(() => {
+      const item = currentViewerItem.value;
+      if (!item || !item.quality || !item.quality.details || !item.quality.details.content_box) {
+        return {};
+      }
+      const imgW = item.width || 0;
+      const imgH = item.height || 0;
+      if (!imgW || !imgH) return {};
+      const cb = item.quality.details.content_box;
+      if (!Array.isArray(cb) || cb.length !== 4) return {};
+      const [x0, y0, x1, y1] = cb;
+      const leftPct = (x0 / imgW) * 100;
+      const topPct = (y0 / imgH) * 100;
+      const widthPct = ((x1 - x0) / imgW) * 100;
+      const heightPct = ((y1 - y0) / imgH) * 100;
+      return {
+        left: leftPct + "%",
+        top: topPct + "%",
+        width: widthPct + "%",
+        height: heightPct + "%",
+      };
+    });
+
     // 手动裁切框: 当前 viewer 图片是否有手动裁切框
     const hasManualCrop = computed(() => {
       const item = currentViewerItem.value;
@@ -2167,6 +2191,7 @@ const app = createApp({
       viewerModalOpen,
       currentViewerItem,
       cropOverlayStyle,
+      contentOverlayStyle,
       toast,
       getThumbUrl: thumbUrl,
       getFileUrl: fileUrl,

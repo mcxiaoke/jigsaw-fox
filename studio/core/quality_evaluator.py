@@ -41,6 +41,8 @@ try:
         build_ratio_pool,
         compute_content_box,
         expand_ratio_families,
+        fusion_content_box,
+        saliency_content_box,
         select_aspect,
         smart_aspect_crop_box,
     )
@@ -343,7 +345,7 @@ class PhysicalEvaluator:
     def _compute_smart_crop(self, pil_img: Any) -> dict[str, Any] | None:
         """模拟导出管线的 smart crop, 按 1:1+2:3 ratio 计算裁切框.
 
-        复用 crop_compute 的 compute_content_box -> select_aspect -> smart_aspect_crop_box,
+        复用 crop_compute 的 fusion_content_box (std25∪sal90) -> select_aspect -> smart_aspect_crop_box,
         与导出侧算法完全一致, 保证质检评分与最终导出结果口径统一.
 
         Returns:
@@ -352,7 +354,7 @@ class PhysicalEvaluator:
         """
         try:
             W, H = pil_img.size
-            content_box = compute_content_box(pil_img, detector="usm")
+            content_box = fusion_content_box(pil_img)
             if not content_box or len(content_box) != 4:
                 return None
             cx0, cy0, cx1, cy1 = content_box

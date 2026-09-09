@@ -14,8 +14,12 @@
     # 多预设对比模式: 对每张图输出 5 个参数档次的标注图
     python scripts/quality_visualize.py <输入目录> <输出目录> --compare [--limit N]
 
+    # content box 算法对比模式: 显式传入 --cbox-algs, 每张图只输出 _cbox.jpg 对比图 (不输出 _qc)
+    python scripts/quality_visualize.py <输入目录> <输出目录> --cbox-algs usm12,std25,sal90 [--limit N]
+
 示例:
     python scripts/quality_visualize.py F:/Images/JigsawData temp/quality_viz --compare --limit 10
+    python scripts/quality_visualize.py F:/Images/JigsawData temp/quality_viz_cbox --cbox-algs usm12,std25,sal90 --limit 10
 
 预设档次:
     default  — trim_tol=12, win=4,  detector=std, pad=16  (当前质检默认)
@@ -55,6 +59,8 @@ from studio.core.crop_compute import (
     build_ratio_pool,
     compute_content_box,
     expand_ratio_families,
+    fusion_content_box,
+    saliency_content_box,
     select_aspect,
     smart_aspect_crop_box,
 )
@@ -86,6 +92,38 @@ PRESETS = {
     "tight": {
         "desc": "trim_tol=25 win=8 usm pad=4 margin=0.02 (极紧)",
         "params": dict(trim_tol=25.0, margin_frac=0.02, win=8, detector="usm", pad=4),
+    },
+}
+
+
+# ---------------------------------------------------------------------------
+# content box 算法集合 (用于 --cbox-algs 对比模式)
+# ---------------------------------------------------------------------------
+
+CONTENT_ALG_MAP = {
+    "usm12": {
+        "desc": "细节阈值 usm tol=12 pad=16 (现网)",
+        "color": (59, 130, 246, 235),
+        "fn": lambda img: compute_content_box(
+            img, trim_tol=12.0, margin_frac=0.0, win=4, detector="usm", pad=16
+        ),
+    },
+    "std25": {
+        "desc": "细节阈值 std tol=25 win=8 pad=16",
+        "color": (249, 115, 22, 235),
+        "fn": lambda img: compute_content_box(
+            img, trim_tol=25.0, margin_frac=0.0, win=8, detector="std", pad=16
+        ),
+    },
+    "sal90": {
+        "desc": "显著性能量 q=90 pad=24 (新算法)",
+        "color": (16, 185, 129, 235),
+        "fn": lambda img: saliency_content_box(img, q=90.0, pad=24),
+    },
+    "fusion": {
+        "desc": "融合 std25∪sal90 逐边并集 (现网默认: 质检+导出)",
+        "color": (168, 85, 247, 235),
+        "fn": lambda img: fusion_content_box(img),
     },
 }
 
@@ -342,11 +380,52 @@ def _draw_annotations(
     return draw_img
 
 
+def _draw_content_box_compare(
+    pil_img: Image.Image,
+    result: dict,
+    alg_names: list[str],
+) -> Image.Image:
+    """同一张原图上叠加多个 content_box 算法框: 仅三色实线框 + 算法名标签。
+
+    供 --cbox-algs 使用: 每个算法用不同颜色实线绘制 content_box, 框边带
+    半透明底的算法名小标签; 无图例面板/描述/尺寸文字/参考线, 不遮挡内容。
+    """
+    draw_img = pil_img.copy()
+    draw = ImageDraw.Draw(draw_img, "RGBA")
+    orig_w, orig_h = pil_img.size
+
+    # 各算法 content_box: 实线 + 框边算法名标签 (半透明底)
+    box_font = _get_font(max(13, orig_w // 110))
+    label_bg = (0, 0, 0, 105)
+    for name in alg_names:
+        alg = CONTENT_ALG_MAP[name]
+        try:
+            box = tuple(int(v) for v in alg["fn"](pil_img))
+        except Exception:
+            continue
+        if len(box) != 4 or box[2] - box[0] < 8 or box[3] - box[1] < 8:
+            continue
+        x0, y0, x1, y1 = box
+        draw.rectangle([x0, y0, x1, y1], outline=alg["color"], width=4)
+        bbox = draw.textbbox((0, 0), name, font=box_font)
+        lw = bbox[2] - bbox[0] + 8
+        lh = bbox[3] - bbox[1] + 3
+        if y0 - lh - 2 >= 0:
+            ly = y0 - lh - 2
+        else:
+            ly = y0 + 2
+        draw.rectangle([x0, ly, x0 + lw, ly + lh], fill=label_bg)
+        draw.text((x0 + 4, ly), name, fill=alg["color"], font=box_font)
+
+    return draw_img
+
+
 def _process_one(
     img_path: Path,
     out_dir: Path,
     evaluator: PhysicalEvaluator,
     compare_mode: bool,
+    cbox_algs: list[str] | None = None,
 ) -> str | None:
     """处理单张图片"""
     try:
@@ -361,6 +440,13 @@ def _process_one(
             pil_img = pil_img.convert("RGB")
 
         presets_to_run = list(PRESETS.keys()) if compare_mode else ["default"]
+
+        # cbox 对比模式: 只输出 _cbox.jpg, 跳过 _qc 普通标注图
+        if cbox_algs:
+            compare_img = _draw_content_box_compare(pil_img, result, cbox_algs)
+            cbox_out = out_dir / (img_path.stem + "_cbox" + img_path.suffix)
+            compare_img.save(str(cbox_out), quality=92)
+            return None
 
         for pname in presets_to_run:
             preset = PRESETS[pname]
@@ -416,7 +502,23 @@ def main():
         action="store_true",
         help="多预设对比模式: 对每张图输出 5 个参数档次的标注图",
     )
+    parser.add_argument(
+        "--cbox-algs",
+        default=None,
+        help=(
+            "content box 算法对比: 逗号分隔算法名, 显式传入才启用 — 每张图只输出 "
+            "一张 _cbox.jpg 叠加对比图, 跳过 _qc 普通标注图 (空字符串=关闭; "
+            "可选: usm12,std25,sal90)。不传此参数则保持普通 _qc 输出"
+        ),
+    )
     args = parser.parse_args()
+
+    # 未显式传入 --cbox-algs 时关闭 cbox 模式 (仅保留普通 _qc 输出)
+    cbox_names = [s.strip() for s in (args.cbox_algs or "").split(",") if s.strip()]
+    unknown = [n for n in cbox_names if n not in CONTENT_ALG_MAP]
+    if unknown:
+        print(f"Error: unknown content box algorithm(s): {unknown}")
+        sys.exit(1)
 
     in_dir = Path(args.input_dir)
     out_dir = Path(args.output_dir)
@@ -441,6 +543,8 @@ def main():
 
     mode_desc = "多预设对比 (5档)" if args.compare else "单预设 (默认参数)"
     print(f"Found {len(images)} images in {in_dir}")
+    for p in images:
+        print(f"  source: {p}")
     print(f"Output directory: {out_dir}")
     print(f"Mode: {mode_desc}")
     print(f"Workers: {args.workers}")
@@ -452,7 +556,9 @@ def main():
     errors = 0
     with ThreadPoolExecutor(max_workers=args.workers) as pool:
         futures = {
-            pool.submit(_process_one, img, out_dir, evaluator, args.compare): img
+            pool.submit(
+                _process_one, img, out_dir, evaluator, args.compare, cbox_names
+            ): img
             for img in images
         }
         for fut in as_completed(futures):
@@ -462,7 +568,7 @@ def main():
                 print(err)
                 errors += 1
             if done % 5 == 0 or done == len(images):
-                print(f"  [{done}/{len(images)}] processed")
+                print(f"  [{done}/{len(images)}] processed: {futures[fut]}")
 
     print(f"\nDone: {done - errors}/{done} success, {errors} errors")
     print(f"Output: {out_dir}")

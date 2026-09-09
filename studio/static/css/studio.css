@@ -748,6 +748,35 @@ button, input, select, textarea { font: inherit; color: inherit; }
   /* width/height 由 JS 同步到 img 实际渲染尺寸，确保 overlay 百分比准确 */
 }
 .viewer-img-wrapper .viewer-img { display: block; }
+/* Smart crop content_box overlay (绿色实线框, 与 quality_visualize.py 标注风格一致) */
+.content-overlay {
+  position: absolute;
+  border: 2px solid rgba(34, 197, 94, 0.9);
+  background: rgba(34, 197, 94, 0.06);
+  box-shadow: inset 0 0 0 1px rgba(34, 197, 94, 0.35);
+  pointer-events: none;
+  box-sizing: border-box;
+  z-index: 9;
+}
+.content-overlay-label {
+  /* 标签固定在框内部左上角, 提升 z-index 避免被 crop 框(10)覆盖;
+     贴边/窄框场景仍需完整可见, 用 max-width + ellipsis 防溢出 */
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  z-index: 12;
+  max-width: calc(100% - 8px);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  background: rgba(34, 197, 94, 0.92);
+  color: #fff;
+  font-size: 12px;
+  line-height: 1.2;
+  padding: 2px 8px;
+  border-radius: 3px;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.35);
+}
 .crop-overlay {
   position: absolute;
   border: 2px dashed rgba(239, 68, 68, 0.85);

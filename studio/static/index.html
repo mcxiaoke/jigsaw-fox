@@ -922,6 +922,14 @@
               @error="handleImageError"
               @load="syncViewerImg"
             />
+            <!-- Smart Crop content_box overlay (绿色实线, 裁切模式时隐藏) -->
+            <div
+              v-if="currentViewerItem && !cropMode && currentViewerItem.quality && currentViewerItem.quality.details && currentViewerItem.quality.details.content_box"
+              class="content-overlay"
+              :style="contentOverlayStyle"
+            >
+              <div class="content-overlay-label">content_box</div>
+            </div>
             <!-- Smart Crop 裁切框 overlay (裁切模式时隐藏) -->
             <div
               v-if="currentViewerItem && !cropMode && currentViewerItem.quality && currentViewerItem.quality.details && currentViewerItem.quality.details.crop_box"

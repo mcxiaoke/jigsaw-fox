@@ -60,7 +60,9 @@ try:
         build_ratio_pool,
         compute_content_box,
         expand_ratio_families,
+        fusion_content_box,
         resize_long,
+        saliency_content_box,
         select_aspect,
         smart_aspect_crop_box,
     )
@@ -309,9 +311,9 @@ def normalize_export_image(
                     mode = "manual"
                     label = "manual"
                 else:
-                    # 1. (可选) 去背景内容感知框定
+                    # 1. (可选) 去背景内容感知框定 (默认融合算法 fusion_content_box = std25∪sal90)
                     if trim_background:
-                        content_box = compute_content_box(im, detector="usm")
+                        content_box = fusion_content_box(im)
                     else:
                         content_box = (0, 0, W, H)
                     cw = max(1, content_box[2] - content_box[0])
