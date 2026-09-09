@@ -192,7 +192,7 @@ def get_image_info(p: Path, root: Path, file_hash: str | None = None) -> dict[st
             "path": rel,
             "file": p.name,
             "size": stat.st_size,
-            "mtime": int(stat.st_mtime),
+            "mtime": stat.st_mtime_ns,
             "hash": file_hash,
             "width": width,
             "height": height,
@@ -245,7 +245,9 @@ def scan_image_infos(
         try:
             stat = p.stat()
             rel = p.relative_to(root).as_posix().replace("\\", "/")
-            mtime = int(stat.st_mtime)
+            # 使用纳秒级 mtime 判定文件是否变化，避免同一秒内修改且大小相同的文件被缓存误判为未变，
+            # 从而复用旧内容哈希，造成质检/去重/导出查重基于错误内容
+            mtime = stat.st_mtime_ns
             size = stat.st_size
 
             # 增量哈希与元数据缓存命中判断

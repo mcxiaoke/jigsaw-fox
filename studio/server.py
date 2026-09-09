@@ -744,6 +744,14 @@ class StudioRequestHandler(BaseHTTPRequestHandler):
                 f"[SCAN] 重复统计: 存在 {stats['duplicateGroups']} 组重复素材，共计 {stats['duplicateCount']} 个文件"
             )
 
+        # 每次扫描结束后自动备份权威账本快照，便于账本 JSON 损坏被重置时手工 copy 回滚
+        try:
+            from studio.core.exports_ledger import backup_ledger_snapshot
+
+            backup_ledger_snapshot(root)
+        except Exception:
+            pass
+
         self._json(
             {
                 "ok": True,
@@ -1210,7 +1218,9 @@ class StudioRequestHandler(BaseHTTPRequestHandler):
             return
 
         paths = data.get("paths") or []
-        limit = max(1, min(int(data.get("limit") or 500), 2000))
+        # limit<=0 表示全量，否则最多取 limit 条（上限 2000）
+        limit_raw = int(data.get("limit") or 0)
+        limit = 0 if limit_raw <= 0 else max(1, min(limit_raw, 2000))
         force = bool(data.get("force"))
         max_workers_raw = int(data.get("maxWorkers") or 0)
         max_workers = max_workers_raw if 1 <= max_workers_raw <= 24 else None

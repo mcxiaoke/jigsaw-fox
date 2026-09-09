@@ -109,19 +109,72 @@ class StudioWorkspace:
             except Exception:
                 pass
 
-    def log_export(self, action: str, **kwargs: Any) -> None:
-        """记录导出事件审计流水 (exports.jsonl)"""
+    def log_export(
+        self,
+        action: str,
+        scope: str | None = None,
+        entity: Any = None,
+        before: Any = None,
+        after: Any = None,
+        result: str = "ok",
+        error: Any = None,
+        detail: str = "",
+        **params: Any,
+    ) -> None:
+        """记录导出事件审计流水 (exports.jsonl)，结构化一行 JSON。"""
+        self._append_structured(
+            self.exports_log, action, scope, entity, before, after, result, error, detail, params
+        )
+
+    def record_audit(
+        self,
+        action: str,
+        scope: str | None = None,
+        entity: Any = None,
+        before: Any = None,
+        after: Any = None,
+        result: str = "ok",
+        error: Any = None,
+        detail: str = "",
+        **params: Any,
+    ) -> None:
+        """结构化操作审计 (operations.jsonl)，一行 JSON。"""
+        self._append_structured(
+            self.operations_log, action, scope, entity, before, after, result, error, detail, params
+        )
+
+    def _append_structured(
+        self,
+        log_path: Path,
+        action: str,
+        scope: str | None,
+        entity: Any,
+        before: Any,
+        after: Any,
+        result: str,
+        error: Any,
+        detail: str,
+        params: dict[str, Any],
+    ) -> None:
+        """统一的结构化审计落盘：写入指定 log 文件一行 JSON。"""
         now_str = dt.datetime.now(dt.timezone.utc).isoformat().replace("+00:00", "Z")
-        clean_kwargs = {k: str(v) if isinstance(v, Path) else v for k, v in kwargs.items()}
-        entry = {
-            "timestamp": now_str,
+        entry: dict[str, Any] = {
+            "ts": now_str,
             "action": action,
-            **clean_kwargs,
+            "scope": scope,
+            "entity": entity,
+            "before": before,
+            "after": after,
+            "result": result,
+            "error": error,
+            "detail": detail,
         }
+        for k, v in (params or {}).items():
+            entry[k] = str(v) if isinstance(v, Path) else v
         line = json.dumps(entry, ensure_ascii=False) + "\n"
         with self._lock:
             try:
-                with open(self.exports_log, "a", encoding="utf-8") as f:
+                with open(log_path, "a", encoding="utf-8") as f:
                     f.write(line)
             except Exception:
                 pass

@@ -443,7 +443,13 @@ def save_tags_file(root: str | Path, records: list[dict[str, Any]], target_file:
             rel_dest = dest.relative_to(r).as_posix()
         except Exception:
             rel_dest = str(dest)
-        ws.log_operation("tag_save", path=rel_dest, count=len(out_list))
+        ws.record_audit(
+            "tag_save",
+            scope="tags",
+            entity=rel_dest,
+            after={"count": len(out_list)},
+            result="ok",
+        )
         logger.info("[tags] 已保存 tags.json: %s (记录数=%d)", dest.resolve(), len(out_list))
         return True, str(dest.resolve()), len(out_list)
     except Exception as e:

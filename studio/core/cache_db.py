@@ -394,21 +394,32 @@ class CacheDB:
     def get_unscored_items(self, limit: int = 100) -> list[tuple[str, str]]:
         """
         获取尚未进行质量评分的图片列表：
-        返回: [(path, hash)]，最多返回 limit 条
+        返回: [(path, hash)]，limit<=0 时返回全量，否则最多返回 limit 条
         """
         with self._lock:
             conn = self._get_conn()
-            cursor = conn.execute(
-                """
-                SELECT f.path, f.hash
-                FROM file_cache f
-                LEFT JOIN quality_cache q ON f.hash = q.hash
-                WHERE q.hash IS NULL AND f.hash != ''
-                ORDER BY f.path ASC
-                LIMIT ?
-                """,
-                (limit,),
-            )
+            if limit > 0:
+                cursor = conn.execute(
+                    """
+                    SELECT f.path, f.hash
+                    FROM file_cache f
+                    LEFT JOIN quality_cache q ON f.hash = q.hash
+                    WHERE q.hash IS NULL AND f.hash != ''
+                    ORDER BY f.path ASC
+                    LIMIT ?
+                    """,
+                    (limit,),
+                )
+            else:
+                cursor = conn.execute(
+                    """
+                    SELECT f.path, f.hash
+                    FROM file_cache f
+                    LEFT JOIN quality_cache q ON f.hash = q.hash
+                    WHERE q.hash IS NULL AND f.hash != ''
+                    ORDER BY f.path ASC
+                    """
+                )
             return [(r["path"], r["hash"]) for r in cursor]
 
     def get_all_items(self, limit: int = 0) -> list[tuple[str, str]]:

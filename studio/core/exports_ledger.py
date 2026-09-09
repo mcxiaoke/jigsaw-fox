@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import datetime as dt
 import json
+import shutil
 from pathlib import Path
 import threading
 from typing import Any
@@ -32,6 +33,7 @@ class ExportsLedger:
         self.src_dir = Path(src_dir).resolve()
         self.workspace = StudioWorkspace(self.src_dir, read_only=read_only)
         self.ledger_file = self.workspace.ledger_file
+        self.events_file = self.ledger_file.parent / "exports_events.jsonl"
         self._read_only = bool(read_only)
         self._lock = threading.Lock()
 
@@ -47,14 +49,17 @@ class ExportsLedger:
         self.load()
 
     def load(self) -> None:
-        """加载账本数据，若不存在则尝试从 legacy exported.json 迁移"""
+        """加载账本数据，若不存在或损坏则依次尝试 legacy 迁移 / 事件流重建"""
         with self._lock:
             if not self.ledger_file.exists() or not self.ledger_file.is_file():
-                if not self._try_migrate_legacy():
-                    self.schema_version = 2
-                    self.updated_at = dt.datetime.now(dt.timezone.utc).isoformat().replace("+00:00", "Z")
-                    self.records = []
-                    self._rebuild_indices()
+                if self._try_migrate_legacy():
+                    return
+                if self._try_rebuild_from_events():
+                    return
+                self.schema_version = 2
+                self.updated_at = dt.datetime.now(dt.timezone.utc).isoformat().replace("+00:00", "Z")
+                self.records = []
+                self._rebuild_indices()
                 return
 
             try:
@@ -66,15 +71,73 @@ class ExportsLedger:
                 else:
                     self.records = []
             except Exception as e:
-                logger.error("[ledger] 账本解析失败，将重置为空: %s (%s)", self.ledger_file, e)
+                logger.error("[ledger] 账本解析失败，尝试事件流重建: %s (%s)", self.ledger_file, e)
                 try:
                     corrupt_backup = self.ledger_file.with_suffix(".corrupt")
                     shutil.copy2(self.ledger_file, corrupt_backup)
                 except Exception as e:
                     logger.warning("[ledger] 账本损坏副本备份失败: %s (%s)", self.ledger_file, e)
+                if self._try_rebuild_from_events():
+                    return
                 self.records = []
 
             self._rebuild_indices()
+
+    def _try_rebuild_from_events(self) -> bool:
+        """
+        从 append-only 事件流 exports_events.jsonl 全量重放，重建账本记录。
+        成功且非只读时会把重建结果物化回 exports.json。
+        """
+        if not self.events_file.exists() or not self.events_file.is_file():
+            return False
+        try:
+            records: list[dict[str, Any]] = []
+            with open(self.events_file, "r", encoding="utf-8") as f:
+                for line in f:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
+                        ev = json.loads(line)
+                    except Exception:
+                        continue
+                    if ev.get("action") != "append":
+                        continue
+                    r = ev.get("record")
+                    if isinstance(r, dict):
+                        records.append(r)
+            if not records:
+                return False
+            self.records = records
+            self._rebuild_indices()
+            if not self._read_only:
+                self._save_unlocked()
+            logger.info("[ledger] 已从事件流重建账本: %d 条记录", len(records))
+            return True
+        except Exception as e:
+            logger.warning("[ledger] 事件流重建失败: %s (%s)", self.events_file, e)
+            return False
+
+    def _append_events(self, records: list[dict[str, Any]]) -> None:
+        """向 append-only 账本事件流追加记录事件（一份数据两用：可重建账本 + 操作审计）。"""
+        if not records:
+            return
+        try:
+            self.events_file.parent.mkdir(parents=True, exist_ok=True)
+            lines = []
+            ts = dt.datetime.now(dt.timezone.utc).isoformat().replace("+00:00", "Z")
+            for rec in records:
+                ev = {
+                    "v": self.schema_version,
+                    "ts": ts,
+                    "action": "append",
+                    "record": rec,
+                }
+                lines.append(json.dumps(ev, ensure_ascii=False))
+            with open(self.events_file, "a", encoding="utf-8") as f:
+                f.write("\n".join(lines) + "\n")
+        except Exception as e:
+            logger.warning("[ledger] 事件流追加失败: %s (%s)", self.events_file, e)
 
     def _try_migrate_legacy(self) -> bool:
         """从旧版 exported.json (1.0.0 字典格式) 自动迁移"""
@@ -292,8 +355,15 @@ class ExportsLedger:
 
         with self._lock:
             now_iso = dt.datetime.now(dt.timezone.utc).isoformat().replace("+00:00", "Z")
+            # 幂等：以 (module, logicalId, revision) 为唯一键，已存在则跳过，
+            # 同一批次中断后重跑不会产生重复记账记录
+            existing_keys = {
+                (str(r.get("module") or ""), r.get("logicalId"), r.get("revision"))
+                for r in self.records
+            }
             added_count = 0
             cur_max_idx = len(self.records)
+            appended: list[dict[str, Any]] = []
 
             for item in new_records:
                 cur_max_idx += 1
@@ -314,12 +384,19 @@ class ExportsLedger:
                     "cropInfo": item.get("cropInfo"),
                     "exportedAt": item.get("exportedAt") or now_iso,
                 }
+                key = (rec["module"], rec["logicalId"], rec["revision"])
+                if key in existing_keys:
+                    continue
                 self.records.append(rec)
+                existing_keys.add(key)
+                appended.append(rec)
                 added_count += 1
 
-            self._rebuild_indices()
-            self._save_unlocked()
-            logger.info("[ledger] 已追加 %d 条导出记录到账本", added_count)
+            if appended:
+                self._rebuild_indices()
+                self._append_events(appended)
+                self._save_unlocked()
+            logger.info("[ledger] 已追加 %d 条导出记录到账本(幂等去重后)", added_count)
 
         return added_count
 
@@ -358,4 +435,47 @@ class ExportsLedger:
                 if rev > max_rev:
                     max_rev = rev
             return max_rev + 1
+
+
+# 账本快照默认保留份数（超出按文件名时间顺序裁剪最旧）
+LEDGER_BACKUP_KEEP = 30
+
+
+def backup_ledger_snapshot(
+    src_dir: Path | str, keep: int = LEDGER_BACKUP_KEEP
+) -> Path | None:
+    """
+    将当前权威账本 .studio/ledger/exports.json 复制为带日期时间后缀的快照，
+    存放于 .studio/ledger/backups/exports-YYYYMMDD-HHMMSS.json，并仅保留最近 keep 份。
+
+    用途：账本 JSON 一旦损坏被重置后，可手工用某份快照 copy 覆盖回滚历史。
+    返回备份文件路径；账本不存在或无快照差异时返回 None。
+    """
+    src = Path(src_dir).resolve()
+    ws = StudioWorkspace(src, read_only=True)
+    if not ws.ledger_file.exists() or not ws.ledger_file.is_file():
+        return None
+    backup_dir = ws.ledger_dir / "backups"
+    try:
+        backup_dir.mkdir(parents=True, exist_ok=True)
+        stamp = dt.datetime.now().strftime("%Y%m%d-%H%M%S")
+        dest = backup_dir / f"exports-{stamp}.json"
+        shutil.copy2(ws.ledger_file, dest)
+    except Exception as e:
+        logger.warning("[ledger] 账本快照备份失败: %s (%s)", ws.ledger_file, e)
+        return None
+
+    # 裁剪：只保留最近 keep 份，防止无界累积
+    try:
+        backups = sorted(backup_dir.glob("exports-*.json"))
+        for old in backups[:-keep] if keep > 0 else []:
+            try:
+                old.unlink()
+            except Exception:
+                pass
+    except Exception:
+        pass
+
+    logger.info("[ledger] 已备份账本快照: %s", dest.name)
+    return dest
 

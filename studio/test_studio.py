@@ -909,7 +909,7 @@ class TestDuplicateHandling(unittest.TestCase):
 
         p_cat = self.src_dir / "Animals" / "cat.jpg"
         p_cat.parent.mkdir(parents=True, exist_ok=True)
-        p_cat_copy = self.src_dir / "Temp" / "cat_copy.jpg"
+        p_cat_copy = self.src_dir / "Copies" / "cat_copy.jpg"
         p_cat_copy.parent.mkdir(parents=True, exist_ok=True)
         p_tree = self.src_dir / "Nature" / "tree.jpg"
         p_tree.parent.mkdir(parents=True, exist_ok=True)
@@ -941,7 +941,7 @@ class TestDuplicateHandling(unittest.TestCase):
         self.assertEqual(len(dup_items), 2)
         paths = {it["path"] for it in dup_items}
         self.assertIn("Animals/cat.jpg", paths)
-        self.assertIn("Temp/cat_copy.jpg", paths)
+        self.assertIn("Copies/cat_copy.jpg", paths)
 
     def test_duplicate_tag_inheritance(self):
         images = scan_images(self.src_dir)
@@ -964,8 +964,8 @@ class TestDuplicateHandling(unittest.TestCase):
         self.assertEqual(len(records), 3)
 
         rec_map = {r["path"]: r for r in records}
-        copy_rec = rec_map["Temp/cat_copy.jpg"]
-        # Temp/cat_copy.jpg 必须自动继承 cat.jpg 的真实标签 Pets，而不是被推断为 Others！
+        copy_rec = rec_map["Copies/cat_copy.jpg"]
+        # Copies/cat_copy.jpg 必须自动继承 cat.jpg 的真实标签 Pets，而不是被推断为 Others！
         self.assertEqual(copy_rec["tags"], ["Pets"])
         self.assertEqual(copy_rec["catalogs"], ["Pets"])
         self.assertIn("自动继承", copy_rec["reason"])

@@ -851,7 +851,7 @@ const app = createApp({
 
       try {
         const res = await batchEvaluateQuality(
-          srcDir.value.trim(), 500, [], force, taskId
+          srcDir.value.trim(), 0, [], force, taskId
         );
         if (res.total !== undefined) {
           qcProgress.value = { done: 0, total: res.total };

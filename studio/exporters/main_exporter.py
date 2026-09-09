@@ -486,7 +486,30 @@ class MainExporter(BaseExporter):
             "ok",
         )
 
-        # 7. 两阶段发布：正式导出才拷贝 release 镜像至 outDir；试导出时转录已直接写入构建根
+        # 7. 记录源侧权威账本与导出流水 (仅正式导出) —— 先记账后交付：
+        #    release 镜像已在第 6 步完成，立即落账，再把镜像分发到 outDir，
+        #    避免"已交付但账本未记"导致同一原图被重复使用
+        if self._commit():
+            try:
+                ledger.append_records(exported_items)
+                ws.log_export(
+                    "export_main",
+                    scope="main",
+                    entity=batch_id,
+                    after={
+                        "version": version,
+                        "count": len(images),
+                        "startOrder": start_order,
+                        "endOrder": start_order + len(images) - 1,
+                        "outDir": str(self.out_p),
+                    },
+                    result="ok",
+                )
+                self.log(f"已将 {len(exported_items)} 张图片记入源侧权威账本", "ok")
+            except Exception as e:
+                self.log(f"更新源侧权威账本失败: {e}", "warn")
+
+        # 8. 两阶段发布：正式导出才拷贝 release 镜像至 outDir；试导出时转录已直接写入构建根
         copied_files: list[str] = []
         if self._commit():
             copied_files = ws.copy_release_to_out("main", self.out_p)
@@ -512,7 +535,7 @@ class MainExporter(BaseExporter):
         if m_file:
             copied_files.append(str(m_file.resolve()))
 
-        # 9. 试导出元数据包 (自包含：source_map + ledger_delta + trial.log)
+        # 10. 试导出元数据包 (自包含：source_map + ledger_delta + trial.log)
         if self.is_trial:
             source_map: dict[str, Any] = {}
             for pl, it in zip(plans, exported_items):
@@ -532,24 +555,6 @@ class MainExporter(BaseExporter):
                     entry["normalize"] = it["normalize"]
                 source_map[pl["rel"]] = entry
             self._write_trial_meta(source_map, exported_items, logs=[])
-
-        # 10. 记录源侧权威账本与导出流水 (仅正式导出)
-        if self._commit():
-            try:
-                ledger.append_records(exported_items)
-                ws.log_export(
-                    "export_main",
-                    batchId=batch_id,
-                    module="main",
-                    count=len(images),
-                    version=version,
-                    startOrder=start_order,
-                    endOrder=start_order + len(images) - 1,
-                    outDir=str(self.out_p),
-                )
-                self.log(f"已将 {len(exported_items)} 张图片记入源侧权威账本", "ok")
-            except Exception as e:
-                self.log(f"更新源侧权威账本失败: {e}", "warn")
 
         if self.is_trial:
             self._would_commit = {

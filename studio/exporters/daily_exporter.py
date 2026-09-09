@@ -357,6 +357,27 @@ class DailyExporter(BaseExporter):
             "ok",
         )
 
+        # 4. 记录权威账本与导出流水 (仅正式导出) —— 先记账后交付：release 镜像完成后立即落账
+        if self._commit():
+            try:
+                ledger.append_records(exported_items)
+                ws.log_export(
+                    "export_daily",
+                    scope="daily",
+                    entity=month,
+                    after={
+                        "count": len(images),
+                        "version": new_version,
+                        "zipSize": zip_size,
+                        "zipHash": zip_hash,
+                        "outDir": str(self.out_p),
+                    },
+                    result="ok",
+                )
+                self.log(f"已将 {len(exported_items)} 张图片记入源侧权威账本", "ok")
+            except Exception as e:
+                self.log(f"更新权威账本失败: {e}", "warn")
+
         # 5. 两阶段发布：正式导出才拷贝 release 镜像至 outDir；试导出时转录已直接写入构建根
         copied_files: list[str] = []
         if self._commit():
@@ -405,24 +426,6 @@ class DailyExporter(BaseExporter):
                     entry
                 )
             self._write_trial_meta(source_map, exported_items, logs=[])
-
-        # 7. 记录权威账本与导出流水 (仅正式导出)
-        if self._commit():
-            try:
-                ledger.append_records(exported_items)
-                ws.log_export(
-                    "export_daily",
-                    month=month,
-                    module="daily",
-                    count=len(images),
-                    version=new_version,
-                    zipSize=zip_size,
-                    zipHash=zip_hash,
-                    outDir=str(self.out_p),
-                )
-                self.log(f"已将 {len(exported_items)} 张图片记入源侧权威账本", "ok")
-            except Exception as e:
-                self.log(f"更新权威账本失败: {e}", "warn")
 
         if self.is_trial:
             self._would_commit = {
