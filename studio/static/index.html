@@ -245,43 +245,13 @@
         <span class="zoom-val">{{ cardZoom }}px</span>
       </div>
 
-      <!-- 品质筛选 -->
-      <div style="display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-muted);">
+      <!-- 品质筛选 (复选框: 不选=全部, 选了=只显示对应品质) -->
+      <div style="display: flex; align-items: center; gap: 4px; font-size: 12px; color: var(--text-muted); flex-wrap: wrap;">
         <span>品质:</span>
-        <select v-model="filterGrade" style="border: 1px solid var(--line); border-radius: 4px; padding: 3px 6px;">
-          <option value="">全部品质</option>
-          <option value="S">🏆 S 级 (大师)</option>
-          <option value="A">⭐ A 级 (进阶)</option>
-          <option value="B">👍 B 级 (标准)</option>
-          <option value="C">💡 C 级 (需裁切)</option>
-          <option value="F">⛔ F 级 (建议淘汰)</option>
-          <option value="unscored">❓ 未质检 ({{ unscoredCount }})</option>
-        </select>
-      </div>
-
-      <!-- 分数区间过滤 -->
-      <div style="display: flex; align-items: center; gap: 4px; font-size: 12px; color: var(--text-muted);">
-        <span>分数:</span>
-        <input v-model="filterScoreMin" type="number" min="0" max="100" placeholder="min"
-               style="width: 42px; border: 1px solid var(--line); border-radius: 4px; padding: 3px 4px; font-size: 12px;" />
-        <span>~</span>
-        <input v-model="filterScoreMax" type="number" min="0" max="100" placeholder="max"
-               style="width: 42px; border: 1px solid var(--line); border-radius: 4px; padding: 3px 4px; font-size: 12px;" />
-        <label style="display: flex; align-items: center; gap: 2px; cursor: pointer; white-space: nowrap;">
-          <input type="checkbox" v-model="filterUpgradeable" style="margin: 0;" />
-          <span>可升级</span>
+        <label class="filter-toggle" v-for="g in gradeOptions" :key="g.value" style="gap: 3px;">
+          <input type="checkbox" :value="g.value" v-model="filterGrades" style="margin: 0;" />
+          <span>{{ g.label }} ({{ g.count }})</span>
         </label>
-        <!-- 快捷按钮组 -->
-        <button class="btn xs" @click="filterScoreMin='80'; filterScoreMax=''; filterGrade=''; filterUpgradeable=false;"
-                style="padding: 1px 6px; font-size: 11px;">≥80</button>
-        <button class="btn xs" @click="filterScoreMin='60'; filterScoreMax='79'; filterGrade=''; filterUpgradeable=false;"
-                style="padding: 1px 6px; font-size: 11px;">60-79</button>
-        <button class="btn xs" @click="filterScoreMin=''; filterScoreMax='44'; filterGrade=''; filterUpgradeable=false;"
-                style="padding: 1px 6px; font-size: 11px;">&lt;45</button>
-        <button class="btn xs" @click="filterScoreMin=''; filterScoreMax=''; filterGrade=''; filterUpgradeable=true;"
-                style="padding: 1px 6px; font-size: 11px;">⬆ 可升级</button>
-        <button class="btn xs" @click="filterScoreMin=''; filterScoreMax=''; filterGrade=''; filterUpgradeable=false;"
-                style="padding: 1px 6px; font-size: 11px;">清除</button>
       </div>
 
       <!-- 排序 -->
@@ -295,6 +265,10 @@
           <option value="size">文件大小</option>
           <option value="dimension">分辨率</option>
         </select>
+        <button class="btn xs" @click="toggleSortOrder" :title="sortOrder === 'desc' ? '当前: 降序 (高->低), 点击切换' : '当前: 升序 (低->高), 点击切换'"
+                style="padding: 1px 8px; font-size: 13px; line-height: 1; border: 1px solid var(--line); border-radius: 4px; background: var(--bg); cursor: pointer;">
+          {{ sortOrder === 'desc' ? '\u2193' : '\u2191' }}
+        </button>
       </div>
 
       <!-- 批量操作控制台 -->

@@ -119,13 +119,10 @@ const app = createApp({
     const onlyUnreviewed = ref(false);
     const hideExported = ref(false);
     const onlyDuplicates = ref(false);
-    const filterGrade = ref(""); // '' | 'S' | 'A' | 'B' | 'C' | 'F' | 'unscored'
-    const filterScoreMin = ref(""); // 分数下限, 空=不限
-    const filterScoreMax = ref(""); // 分数上限, 空=不限
-    const filterUpgradeable = ref(false); // 仅看 smart crop 可升级图片
+    const filterGrades = ref([]); // [] = 全部; ['S','A',...,'unscored'] = 只显示选中的品质
     const searchQuery = ref("");
     const sortBy = ref("name"); // 'name' | 'quality' | 'mtime' | 'confidence' | 'size' | 'dimension'
-    const sortOrder = ref("asc");
+    const sortOrder = ref("desc"); // 默认降序 (高->低)
 
     // 质检状态与汇总
     const isEvaluatingQuality = ref(false);
@@ -139,6 +136,21 @@ const app = createApp({
     });
     const unscoredCount = computed(() => records.value.filter((r) => !r.quality).length);
     const scoredCount = computed(() => records.value.filter((r) => !!r.quality).length);
+
+    // 品质复选框选项 (带数量)
+    const gradeOptions = computed(() => [
+      { value: "S", label: "S", count: qualitySummary.value.grades?.S || 0 },
+      { value: "A", label: "A", count: qualitySummary.value.grades?.A || 0 },
+      { value: "B", label: "B", count: qualitySummary.value.grades?.B || 0 },
+      { value: "C", label: "C", count: qualitySummary.value.grades?.C || 0 },
+      { value: "F", label: "F", count: qualitySummary.value.grades?.F || 0 },
+      { value: "unscored", label: "未质检", count: unscoredCount.value },
+    ]);
+
+    // 切换排序方向
+    const toggleSortOrder = () => {
+      sortOrder.value = sortOrder.value === "desc" ? "asc" : "desc";
+    };
 
     // 质检后台 job 状态
     const qcTaskId = ref("");
@@ -447,10 +459,11 @@ const app = createApp({
     // 计算属性 (Computed)
     // -----------------------------------------------------------------------
 
-    // 标签统计计数：未打标素材的 tags 已归一化为 ["Others"]，直接平铺计数即可
+    // 标签统计计数：基于 filteredRecords（跟随品质/搜索/隐藏等过滤实时联动），
+    // 未打标素材的 tags 已归一化为 ["Others"]，直接平铺计数即可
     const tagCounts = computed(() => {
       const map = {};
-      for (const r of records.value) {
+      for (const r of filteredRecords.value) {
         const tags = normalizeTags(r.tags);
         for (const t of tags) {
           map[t] = (map[t] || 0) + 1;
@@ -538,32 +551,14 @@ const app = createApp({
         list = list.filter((r) => !r.exported);
       }
 
-      // 4. 品质评级过滤
-      if (filterGrade.value) {
-        if (filterGrade.value === "unscored") {
-          list = list.filter((r) => !r.quality);
-        } else {
-          list = list.filter((r) => r.quality && (r.quality.grade || "").toUpperCase() === filterGrade.value.toUpperCase());
-        }
-      }
-
-      // 4.5 分数区间过滤
-      if (filterScoreMin.value !== "") {
-        const minVal = Number(filterScoreMin.value);
-        if (!isNaN(minVal)) {
-          list = list.filter((r) => r.quality && r.quality.score >= minVal);
-        }
-      }
-      if (filterScoreMax.value !== "") {
-        const maxVal = Number(filterScoreMax.value);
-        if (!isNaN(maxVal)) {
-          list = list.filter((r) => r.quality && r.quality.score <= maxVal);
-        }
-      }
-
-      // 4.6 可升级过滤 (smart crop score_boosted)
-      if (filterUpgradeable.value) {
-        list = list.filter((r) => r.quality && r.quality.details && r.quality.details.score_boosted === true);
+      // 4. 品质复选框过滤 (不选=全部, 选了=只显示对应品质)
+      if (filterGrades.value.length > 0) {
+        const selected = new Set(filterGrades.value);
+        list = list.filter((r) => {
+          if (selected.has("unscored") && !r.quality) return true;
+          if (r.quality && selected.has((r.quality.grade || "").toUpperCase())) return true;
+          return false;
+        });
       }
 
       // 5. 搜索关键词过滤
@@ -2232,10 +2227,9 @@ const app = createApp({
       lastExportIsTrial,
       lastTrialDir,
       copyExportLogs,
-      filterGrade,
-      filterScoreMin,
-      filterScoreMax,
-      filterUpgradeable,
+      filterGrades,
+      gradeOptions,
+      toggleSortOrder,
       isEvaluatingQuality,
       isBatchEvaluating,
       qualitySummary,
