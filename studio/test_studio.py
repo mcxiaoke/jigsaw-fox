@@ -154,6 +154,20 @@ class TestCoreAndExporters(unittest.TestCase):
                 img = Image.new("RGB", (100, 100), color=(100 * i, 50, 200))
                 img.save(cat_dir / f"cat_{i:02d}.jpg", "JPEG")
 
+    def _make_daily_images(self) -> None:
+        """为 Daily 用例补造覆盖 202609 整月 30 天的图片目录。"""
+        daily_dir = self.src_dir / "Daily"
+        daily_dir.mkdir(exist_ok=True)
+        if HAS_PIL:
+            from PIL import Image
+
+            for i in range(1, 31):
+                img = Image.new("RGB", (100, 100), color=(i * 8 % 256, 60, 200))
+                img.save(daily_dir / f"daily_{i:02d}.jpg", "JPEG")
+        else:
+            for i in range(1, 31):
+                (daily_dir / f"daily_{i:02d}.jpg").write_bytes(b"fake" * 8)
+
     def tearDown(self):
         shutil.rmtree(self.test_dir, ignore_errors=True)
 
@@ -394,6 +408,7 @@ class TestCoreAndExporters(unittest.TestCase):
         self.assertIn("updatedAt", m_data["modules"]["main"])
 
     def test_daily_exporter(self):
+        self._make_daily_images()
         logs = []
         exporter = get_exporter(
             exp_type="daily",
@@ -421,14 +436,15 @@ class TestCoreAndExporters(unittest.TestCase):
         self.assertIn("updatedAt", d_data)
         self.assertEqual(len(d_data["items"]), 1)
         self.assertEqual(d_data["items"][0]["month"], "202609")
-        self.assertEqual(d_data["items"][0]["totalCount"], 3)
+        # 30 张 Daily 整月 + 3 张 Cats = 33 张，天数校验放行 (≥30 天)
+        self.assertEqual(d_data["items"][0]["totalCount"], 33)
         self.assertIn("updatedAt", d_data["items"][0])
 
         manifest_json = self.out_dir / "manifest.json"
         self.assertTrue(manifest_json.exists())
         m_data = json.loads(manifest_json.read_text(encoding="utf-8"))
         self.assertIn("daily", m_data["modules"])
-        self.assertEqual(m_data["modules"]["daily"]["count"], 3)
+        self.assertEqual(m_data["modules"]["daily"]["count"], 33)
 
     def test_event_exporter(self):
         logs = []
@@ -1126,6 +1142,11 @@ class TestDuplicateHandling(unittest.TestCase):
         self.src_dir.mkdir(parents=True)
         self.out_dir.mkdir(parents=True)
 
+        # Daily 用例所需的整月 30 天图片按需在用例内构造
+        for i in range(1, 31):
+            (self.src_dir / "Daily").mkdir(parents=True, exist_ok=True)
+            break  # 仅确保 Daily 目录约定存在；图片由用例自行创建
+
         p_cat = self.src_dir / "Animals" / "cat.jpg"
         p_cat.parent.mkdir(parents=True, exist_ok=True)
         p_cat_copy = self.src_dir / "Copies" / "cat_copy.jpg"
@@ -1149,6 +1170,22 @@ class TestDuplicateHandling(unittest.TestCase):
 
     def tearDown(self):
         shutil.rmtree(self.test_dir, ignore_errors=True)
+
+    def _make_daily_images(self) -> None:
+        """为 Daily 用例补造覆盖 202609 整月 30 天的图片目录。"""
+        daily_dir = self.src_dir / "Daily"
+        daily_dir.mkdir(exist_ok=True)
+        if HAS_PIL:
+            from PIL import Image
+
+            for i in range(1, 31):
+                im = Image.new("RGB", (100, 100), color=(i * 8 % 256, 0, 128))
+                im.save(daily_dir / f"daily_{i:02d}.jpg", format="JPEG")
+        else:
+            for i in range(1, 31):
+                (daily_dir / f"daily_{i:02d}.jpg").write_bytes(
+                    f"daily_image_{i}".encode("utf-8")
+                )
 
     def test_find_duplicate_groups(self):
         images = scan_images(self.src_dir)
@@ -1215,6 +1252,9 @@ class TestDuplicateHandling(unittest.TestCase):
 
     def test_daily_exporter_rejects_duplicate_images(self):
         # Daily 导出包含重复图片时必须直接拦截，防止缺失日历天数
+        # selectedPaths 显式圈定含重复组的路径 (cat.jpg 与 cat_copy.jpg 哈希相同)，
+        # 数量上 ≥ 30 天，确保拦截点发生在重复校验而非天数校验
+        self._make_daily_images()
         logs = []
         exporter = get_exporter(
             exp_type="daily",
@@ -1223,6 +1263,11 @@ class TestDuplicateHandling(unittest.TestCase):
                 "format": "original",
                 "rename": "sequence",
                 "excludeExported": False,
+                "selectedPaths": [
+                    "Animals/cat.jpg",
+                    "Copies/cat_copy.jpg",
+                    *(f"Daily/daily_{i:02d}.jpg" for i in range(1, 31)),
+                ],
             },
             src_p=self.src_dir,
             out_p=self.out_dir,
@@ -1232,6 +1277,65 @@ class TestDuplicateHandling(unittest.TestCase):
         with self.assertRaises(ValueError) as ctx:
             exporter.execute()
         self.assertIn("存在 1 组内容完全相同的重复图片", str(ctx.exception))
+
+    def test_daily_exporter_rejects_insufficient_days(self):
+        # Daily 导出数量不足目标月份天数时，必须在写任何产物之前报错拦截
+        # 用 selectedPaths 只圈定 Daily 目录 (30 张 - 1 = 29 张 < 30 天)，
+        # 排除 setUp 里含重复组的 Animals/Copies/Nature 干扰
+        self._make_daily_images()
+        logs = []
+        exporter = get_exporter(
+            exp_type="daily",
+            data={
+                "month": "202609",
+                "format": "original",
+                "rename": "date",
+                "excludeExported": False,
+                "selectedPaths": [
+                    f"Daily/daily_{i:02d}.jpg" for i in range(1, 31)
+                ],
+            },
+            src_p=self.src_dir,
+            out_p=self.out_dir,
+            http_base="http://test.local/data",
+            log_fn=lambda msg, level: logs.append((msg, level)),
+        )
+        # 删掉 1 张，仅剩 29 张 < 30 天
+        (self.src_dir / "Daily" / "daily_30.jpg").unlink()
+        with self.assertRaises(ValueError) as ctx:
+            exporter.execute()
+        self.assertIn("图片数量不足", str(ctx.exception))
+        self.assertIn("30 天", str(ctx.exception))
+        self.assertIn("仅 29 张", str(ctx.exception))
+        err_logs = [m for m, _ in logs if "图片数量不足" in m]
+        self.assertEqual(len(err_logs), 1)
+        # 严禁留下半成品：zip / index.json 均未写出
+        self.assertFalse((self.out_dir / "daily").exists())
+
+    def test_daily_exporter_accepts_full_month(self):
+        # 数量恰好等于月份天数 (30 张 = 202609 的 30 天) 时应正常导出
+        # 用 selectedPaths 只圈定 Daily 目录，排除含重复组的其他目录干扰
+        self._make_daily_images()
+        logs = []
+        exporter = get_exporter(
+            exp_type="daily",
+            data={
+                "month": "202609",
+                "format": "original",
+                "rename": "date",
+                "excludeExported": False,
+                "selectedPaths": [
+                    f"Daily/daily_{i:02d}.jpg" for i in range(1, 31)
+                ],
+            },
+            src_p=self.src_dir,
+            out_p=self.out_dir,
+            http_base="http://test.local/data",
+            log_fn=lambda msg, level: logs.append((msg, level)),
+        )
+        result = exporter.execute()
+        self.assertTrue(result.success)
+        self.assertTrue((self.out_dir / "daily" / "zips" / "202609.zip").exists())
 
     def test_exporter_selected_paths_without_duplicates(self):
         # 当用户显式指定 selectedPaths 且无重复图片时，导出应正常成功
@@ -1433,7 +1537,7 @@ class TestTrialExportNonPollution(unittest.TestCase):
         self.src_dir.mkdir(parents=True)
         self.out_dir.mkdir(parents=True)
 
-        # 造几个测试图
+        # 造几个测试图 (Daily 用例需覆盖 202609 整月 30 天；调色避开与 Cats 重复)
         if HAS_PIL:
             from PIL import Image
 
@@ -1442,10 +1546,22 @@ class TestTrialExportNonPollution(unittest.TestCase):
             for i in range(1, 4):
                 img = Image.new("RGB", (100, 100), color=(80 * i, 60, 200))
                 img.save(cat_dir / f"cat_{i:02d}.jpg", "JPEG")
+            daily_dir = self.src_dir / "Daily"
+            daily_dir.mkdir()
+            for i in range(1, 31):
+                img = Image.new("RGB", (100, 100), color=(i * 7 % 256, 150, 90))
+                img.save(daily_dir / f"daily_{i:02d}.jpg", "JPEG")
         else:
+            (self.src_dir / "Cats").mkdir(exist_ok=True)
             for i in range(1, 4):
-                (self.src_dir / "Cats").mkdir(exist_ok=True)
-                (self.src_dir / "Cats" / f"cat_{i:02d}.jpg").write_bytes(b"fake" * 8)
+                (self.src_dir / "Cats" / f"cat_{i:02d}.jpg").write_bytes(
+                    f"cat_fake_{i}".encode("utf-8")
+                )
+            (self.src_dir / "Daily").mkdir(exist_ok=True)
+            for i in range(1, 31):
+                (self.src_dir / "Daily" / f"daily_{i:02d}.jpg").write_bytes(
+                    f"daily_fake_{i}".encode("utf-8")
+                )
 
     def tearDown(self):
         shutil.rmtree(self.test_dir, ignore_errors=True)
@@ -1506,7 +1622,7 @@ class TestTrialExportNonPollution(unittest.TestCase):
         images_dir = exporter._build_root / "main" / "images"
         self.assertTrue(images_dir.exists())
         webp_list = list(images_dir.glob("*.webp"))
-        self.assertEqual(len(webp_list), 3)
+        self.assertEqual(len(webp_list), 33)  # 30 Daily + 3 Cats
         self.assertTrue((exporter._build_root / "manifest.json").exists())
         self.assertTrue(
             (exporter._build_root / "_trial_meta" / "ledger_delta.json").exists()
@@ -1527,7 +1643,7 @@ class TestTrialExportNonPollution(unittest.TestCase):
         # 返回 wouldCommit
         self.assertEqual(exporter._would_commit["module"], "main")
         self.assertEqual(exporter._would_commit["startOrder"], 101)
-        self.assertEqual(exporter._would_commit["endOrder"], 103)
+        self.assertEqual(exporter._would_commit["endOrder"], 133)  # 30 Daily + 3 Cats
 
     def test_daily_trial_does_not_pollute_studio(self):
         before = self._studio_snapshot()

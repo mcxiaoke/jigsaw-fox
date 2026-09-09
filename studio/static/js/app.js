@@ -492,6 +492,29 @@ const app = createApp({
       }
     };
 
+    // 重命名规则默认值按导出类型区分：
+    //   daily → 日期格式 (20260901.webp)，与日历关卡一一对应；
+    //   main / event / collection → 数字序号递增 (如 101.webp)。
+    // 仅在当前值属于另一侧的默认值（即用户未手动改过）时才自动切换，
+    // 用户显式选择的规则不会被覆盖。
+    const RENAME_DEFAULT_BY_TYPE = {
+      daily: "date",
+      main: "sequence",
+      event: "sequence",
+      collection: "sequence",
+    };
+    watch(exportType, (t) => {
+      const target = RENAME_DEFAULT_BY_TYPE[t];
+      if (target && exportConfig.value.rename !== target) {
+        const others = Object.entries(RENAME_DEFAULT_BY_TYPE)
+          .filter(([k]) => k !== t)
+          .map(([, v]) => v);
+        if (others.includes(exportConfig.value.rename)) {
+          exportConfig.value.rename = target;
+        }
+      }
+    });
+
     // -----------------------------------------------------------------------
     // 统一日志助手：双写日志面板 (StdLog) 与浏览器控制台。
     // error/warn 全部进面板（右下角"📜 日志"），不再只存在于 DevTools；
@@ -2012,6 +2035,22 @@ const app = createApp({
         showToast("导出中止：未勾选任何图片");
         return;
       }
+      // Daily 日历天数预检：待导出数量必须 ≥ 目标月份天数，否则日历缺天
+      if (exportType.value === "daily") {
+        const m = String(exportConfig.value.month || "").trim();
+        if (/^\d{6}$/.test(m)) {
+          const daysInMonth = new Date(Number(m.slice(0, 4)), Number(m.slice(4, 6)), 0).getDate();
+          if (selectedSet.value.size < daysInMonth) {
+            const msg = `图片数量不足: 目标月份 ${m} 有 ${daysInMonth} 天，仅勾选 ${selectedSet.value.size} 张（缺 ${daysInMonth - selectedSet.value.size} 张）。每日挑战必须覆盖整月日历，请补齐素材后重新导出。`;
+            exportError.value = msg;
+            showToast("导出中止：图片数量不足，日历会缺天");
+            return;
+          }
+          if (selectedSet.value.size > daysInMonth) {
+            showToast(`注意: 勾选 ${selectedSet.value.size} 张超过 ${m} 月的 ${daysInMonth} 天，多余图片不会分配到日历日期`);
+          }
+        }
+      }
       if ((exportType.value === "event" || exportType.value === "collection") && !exportConfig.value.title.trim()) {
         exportError.value = "缺少英文标题：Event / Collection 导出前请填写英文标题 (Title)。";
         showToast("导出中止：请填写英文标题 (Title)");
@@ -2049,6 +2088,9 @@ const app = createApp({
               r.tags = normalizeTags(r.tags);
               return r;
             });
+            // 正式导出成功后清空主界面选中状态：这批图已导出完毕，
+            // 勾选残留会让下一次导出误带旧范围
+            selectedSet.value.clear();
           }
         } catch (_) {
           // ignore

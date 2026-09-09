@@ -11,7 +11,6 @@ from abc import abstractmethod
 import datetime as dt
 import json
 from pathlib import Path
-import tempfile
 from typing import Any, Callable
 import zipfile
 
@@ -251,7 +250,9 @@ class PackExporterBase(BaseExporter):
         )
 
         # 预打包 ZIP 到临时文件以确定内容哈希 (图片并行转码，再顺序写 zip 保持确定性)
-        tmp_zip = Path(tempfile.gettempdir()) / f"_{self.module}_{pack_id}_tmp.zip"
+        # 临时文件必须与最终目标同卷：Path.replace() 在 Windows 上跨盘移动会抛
+        # WinError 17 (OSError)，因此建在目标 packs_dir 内而非系统 Temp 目录。
+        tmp_zip = packs_dir / f"_{self.module}_{pack_id}_tmp.zip"
         zip_quality = resolve_quality(self.data)
         self.log(
             f"开始转码 {len(images)} 张图片 → {self.fmt} (quality={zip_quality}) ...",
@@ -268,10 +269,8 @@ class PackExporterBase(BaseExporter):
             rel_p = p.relative_to(self.src_p).as_posix().replace("\\", "/")
             img_hash = pack_hash_map.get(rel_p, "")
             if self.fmt != "original" and HAS_PIL:
-                tmp_f = (
-                    Path(tempfile.gettempdir())
-                    / f"_{self.module}_{pack_id}_{idx}_{arc_name}"
-                )
+                # 转码中间文件同样落在 packs_dir（与 tmp_zip 同卷，失败时统一清理）
+                tmp_f = packs_dir / f"_{self.module}_{pack_id}_{idx}_{arc_name}"
                 zip_entries.append((p, tmp_f, arc_name))
                 zip_tasks.append(
                     {

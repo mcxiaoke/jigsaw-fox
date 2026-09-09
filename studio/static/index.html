@@ -543,6 +543,8 @@
                 <option value="sequence">数字序号递增 (如 101.webp)</option>
                 <option value="date">日期格式 (如 20260901.webp)</option>
               </select>
+              <div style="font-size:12px;color:#6b7280;margin-top:4px;" v-if="exportType === 'daily'">Daily 默认日期格式，与日历日期一一对应</div>
+              <div style="font-size:12px;color:#6b7280;margin-top:4px;" v-else>Main / Event / Collection 默认数字序号递增，文件名即顺序</div>
             </div>
             <div class="field-group">
               <label>WebP / JPEG 质量: <b>{{ exportConfig.quality }}%</b> <span style="color:#6b7280;font-weight:400;">(默认 70)</span></label>
@@ -857,10 +859,10 @@
       <div class="viewer-dialog">
         <div class="viewer-header">
           <div class="viewer-title-box">
-            <b style="color:#fff;">🚀 确认正式导出？</b>
+            <b style="color:#1e293b;">🚀 确认正式导出？</b>
             <span class="viewer-meta-badge" style="background:#b91c1c; color:#fff;">不可撤销</span>
           </div>
-          <button class="modal-close" style="color:#fff;" @click="confirmFormalOpen = false">×</button>
+          <button class="modal-close" style="color:#334155;" @click="confirmFormalOpen = false">×</button>
         </div>
         <div class="viewer-content" style="max-height:60vh; overflow:auto;">
           <div class="formal-confirm-body">

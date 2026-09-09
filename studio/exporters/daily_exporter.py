@@ -6,11 +6,11 @@ studio.exporters.daily_exporter — 日历关卡导出器 (daily/index.json + zi
 
 from __future__ import annotations
 
+import calendar
 import datetime as dt
 import json
 from pathlib import Path
 import re
-import tempfile
 from typing import Any
 import zipfile
 
@@ -95,6 +95,27 @@ class DailyExporter(BaseExporter):
 
         if not images:
             raise ValueError("源目录中没有找到可打包的图片文件")
+
+        # 0a. 日历天数校验：待打包数量必须等于目标月份的天数，
+        #     否则日历会出现缺天/空天，必须在写任何产物之前拦截。
+        days_in_month = calendar.monthrange(int(month[:4]), int(month[4:]))[1]
+        if len(images) < days_in_month:
+            self.log(
+                f"导出中止: 图片数量不足 — 目标月份 {month} 有 {days_in_month} 天，"
+                f"待导出仅 {len(images)} 张，日历将缺失 {days_in_month - len(images)} 天。",
+                "err",
+            )
+            raise ValueError(
+                f"图片数量不足: 目标月份 {month} 有 {days_in_month} 天，"
+                f"待导出仅 {len(images)} 张（缺 {days_in_month - len(images)} 张）。"
+                f"每日挑战必须覆盖整月日历，请补齐素材后重新导出。"
+            )
+        if len(images) > days_in_month:
+            self.log(
+                f"注意: 待导出 {len(images)} 张超过 {month} 月天数 {days_in_month} 天，"
+                f"多余的图片将不会分配到日历日期，请确认选择范围。",
+                "warn",
+            )
 
         # 0. 排序：确定打包/分配日期的顺序
         sort_by = (self.data.get("sortBy") or "name_asc").strip().lower()
@@ -214,7 +235,9 @@ class DailyExporter(BaseExporter):
         )
 
         # 预打包 ZIP 至临时文件以计算内容哈希 (图片并行转码，顺序写 zip 保持确定性)
-        tmp_zip = Path(tempfile.gettempdir()) / f"_daily_{month}_tmp.zip"
+        # 临时文件必须与最终目标同卷：Path.replace() 在 Windows 上跨盘移动会抛
+        # WinError 17 (OSError)，因此建在目标 zips_dir 内而非系统 Temp 目录。
+        tmp_zip = zips_dir / f"_daily_{month}_tmp.zip"
         zip_quality = resolve_quality(self.data)
         self.log(
             f"开始转码 {len(target_items)} 张图片 → {self.fmt} (quality={zip_quality}) ...",
@@ -230,9 +253,8 @@ class DailyExporter(BaseExporter):
             target_items, start=1
         ):
             if self.fmt != "original" and HAS_PIL:
-                tmp_conv = (
-                    Path(tempfile.gettempdir()) / f"_daily_{month}_{idx:03d}_{arc_name}"
-                )
+                # 转码中间文件同样落在 zips_dir（与 tmp_zip 同卷，失败时统一清理）
+                tmp_conv = zips_dir / f"_daily_{month}_{idx:03d}_{arc_name}"
                 zip_entries.append((p, tmp_conv, arc_name))
                 zip_tasks.append(
                     {

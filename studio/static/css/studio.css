@@ -1230,6 +1230,21 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .formal-confirm-modal {
   z-index: 2100; /* 高于导出工作台 export-view-overlay(2000)，避免被遮挡不可点 */
 }
+/* 覆盖 .viewer-dialog 的深色底（原本为大图查看器设计）：
+   本弹窗正文为深色文字，必须使用浅色背景，否则黑底深字不可读 */
+.formal-confirm-modal .viewer-dialog {
+  background: #f8fafc;
+  color: #1e293b;
+  height: auto;
+  max-height: 90vh;
+  width: min(640px, 94vw);
+}
+.formal-confirm-modal .viewer-header {
+  border-bottom: 1px solid #e2e8f0;
+}
+.formal-confirm-modal .viewer-footer {
+  background: #f8fafc;
+}
 .formal-confirm-body {
   padding: 16px 20px;
   font-size: 14px;
