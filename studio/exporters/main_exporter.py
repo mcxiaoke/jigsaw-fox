@@ -222,19 +222,30 @@ class MainExporter(BaseExporter):
         if src_index_path.exists():
             try:
                 existing_index = json.loads(src_index_path.read_text(encoding="utf-8"))
-                if isinstance(existing_index, dict):
-                    existing_batches = (
-                        existing_index.get("items")
-                        or existing_index.get("batches")
-                        or []
-                    )
-                    existing_version = int(existing_index.get("version", 0))
-                    existing_total_count = int(existing_index.get("totalCount", 0))
-                    existing_max_order = max(
-                        existing_max_order, int(existing_index.get("maxOrder", 0))
-                    )
-            except Exception:
-                pass
+            except Exception as e:
+                # index.json 损坏时严禁静默清零重置：会导致版本号归零、批次重号
+                # 并覆盖历史分卷。fail-fast 提示用户从账本恢复，而不是静默丢状态。
+                raise RuntimeError(
+                    f"主线索引 index.json 已存在但无法解析（{src_index_path}）: {e}\n"
+                    f"为避免版本号归零与批次重号覆盖历史，导出已中止。"
+                    f"请先修复或从导出账本恢复该文件后重试。"
+                ) from e
+            if isinstance(existing_index, dict):
+                existing_batches = (
+                    existing_index.get("items")
+                    or existing_index.get("batches")
+                    or []
+                )
+                existing_version = int(existing_index.get("version", 0))
+                existing_total_count = int(existing_index.get("totalCount", 0))
+                existing_max_order = max(
+                    existing_max_order, int(existing_index.get("maxOrder", 0))
+                )
+            else:
+                raise RuntimeError(
+                    f"主线索引 index.json 内容不是合法的对象（{src_index_path}），导出已中止。"
+                    f"请先修复或从导出账本恢复该文件后重试。"
+                )
 
         # 计算版本与起始序号
         start_order_input = self.data.get("startOrder")
@@ -382,11 +393,13 @@ class MainExporter(BaseExporter):
             raise RuntimeError("并行转码结果数量不一致，导出中止")
 
         # 4c. 串行按序组装批次与账本记录 (顺序/标签/文件名语义与并行前完全一致)
+        # 转码失败一律中止整批（fail-fast）：宁可不出包也不允许缺图/空哈希的
+        # 半成品进入批次文件、index.json 与账本（否则该图将被"选未导出"永久排除）。
         for pl, res in zip(plans, results):
-            if res.get("ok"):
-                converted_count += 1
-            else:
+            if not res.get("ok"):
                 errors.append(f"{pl['p'].name}: {res.get('err')}")
+                continue
+            converted_count += 1
 
             order = pl["order"]
             logical_id = pl["logical_id"]
@@ -428,8 +441,14 @@ class MainExporter(BaseExporter):
         self.log(
             f"图片处理完成: {converted_count}/{len(images)}"
             + (f", {len(errors)} 失败" if errors else ""),
-            "ok",
+            "ok" if not errors else "err",
         )
+        if errors:
+            detail_lines = [f"  • {e}" for e in errors]
+            raise RuntimeError(
+                f"{len(errors)} 张图片转码失败，导出已中止（未写入批次/索引/账本，可排除问题素材后重试）:\n"
+                + "\n".join(detail_lines)
+            )
 
         # 5. 写入不可变批次文件 batches/batch_xxx.json (统一 items 键)
         batch_payload: dict[str, Any] = {
@@ -512,7 +531,11 @@ class MainExporter(BaseExporter):
                 )
                 self.log(f"已将 {len(exported_items)} 张图片记入源侧权威账本", "ok")
             except Exception as e:
-                self.log(f"更新源侧权威账本失败: {e}", "warn")
+                # 账本是防重复发布与 revision 推算的唯一权威，写失败时严禁继续交付，
+                # 否则会出现"已交付但账本未记"→ 重复发布/版本错乱。
+                # index.json 已写但 outDir 未交付，账本幂等，直接重试即可续跑。
+                self.log(f"更新源侧权威账本失败，导出中止（未交付至输出目录，可直接重试）: {e}", "err")
+                raise RuntimeError(f"权威账本写入失败，导出已中止: {e}") from e
 
         # 8. 两阶段发布：正式导出才拷贝 release 镜像至 outDir；试导出时转录已直接写入构建根
         copied_files: list[str] = []

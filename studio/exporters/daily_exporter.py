@@ -187,11 +187,22 @@ class DailyExporter(BaseExporter):
         if src_index_path.exists():
             try:
                 loaded = json.loads(src_index_path.read_text(encoding="utf-8"))
-                if isinstance(loaded, dict):
-                    existing_months = loaded.get("items", [])
-                    existing_version = int(loaded.get("version", 0))
-            except Exception:
-                existing_months = []
+            except Exception as e:
+                # index.json 损坏时严禁静默清零：会丢掉已有月份条目并导致
+                # 同月重导时 revision 判断错乱。fail-fast。
+                raise RuntimeError(
+                    f"daily/index.json 已存在但无法解析（{src_index_path}）: {e}\n"
+                    f"为避免丢失历史条目与版本错乱，导出已中止。"
+                    f"请先修复或从导出账本恢复该文件后重试。"
+                ) from e
+            if isinstance(loaded, dict):
+                existing_months = loaded.get("items", [])
+                existing_version = int(loaded.get("version", 0))
+            else:
+                raise RuntimeError(
+                    f"daily/index.json 内容不是合法的对象（{src_index_path}），导出已中止。"
+                    f"请先修复或从导出账本恢复该文件后重试。"
+                )
 
         prev_month = next(
             (
@@ -258,6 +269,7 @@ class DailyExporter(BaseExporter):
 
         with zipfile.ZipFile(tmp_zip, "w", zipfile.ZIP_DEFLATED) as zf:
             res_i = 0
+            convert_failures: list[str] = []
             for p, tmp_conv, arc_name in zip_entries:
                 if tmp_conv is not None:
                     ok = (
@@ -270,7 +282,18 @@ class DailyExporter(BaseExporter):
                         zf.write(tmp_conv, arcname=arc_name)
                         tmp_conv.unlink(missing_ok=True)
                         continue
+                    # 转码失败严禁静默回退写入未转码原图：客户端会拿到体积/尺寸/
+                    # 格式不合规的图片且无任何报错。fail-fast 中止整批导出。
+                    convert_failures.append(f"{p.name} → {arc_name}")
+                    continue
                 zf.write(p, arcname=arc_name)
+        if convert_failures:
+            tmp_zip.unlink(missing_ok=True)
+            detail_lines = [f"  • {line}" for line in convert_failures]
+            raise RuntimeError(
+                f"{len(convert_failures)} 张图片转码失败，ZIP 导出已中止（未写入索引/账本，可排除问题素材后重试）:\n"
+                + "\n".join(detail_lines)
+            )
 
         zip_size = tmp_zip.stat().st_size
         zip_hash = compute_file_sha256(tmp_zip)
@@ -376,7 +399,11 @@ class DailyExporter(BaseExporter):
                 )
                 self.log(f"已将 {len(exported_items)} 张图片记入源侧权威账本", "ok")
             except Exception as e:
-                self.log(f"更新权威账本失败: {e}", "warn")
+                # 账本是防重复发布的唯一权威，写失败时严禁继续交付，
+                # 否则该月日历包会绕过防重账本被重复发布。
+                # index.json 已写但 outDir 未交付，账本幂等，直接重试即可续跑。
+                self.log(f"更新权威账本失败，导出中止（未交付至输出目录，可直接重试）: {e}", "err")
+                raise RuntimeError(f"权威账本写入失败，导出已中止: {e}") from e
 
         # 5. 两阶段发布：正式导出才拷贝 release 镜像至 outDir；试导出时转录已直接写入构建根
         copied_files: list[str] = []

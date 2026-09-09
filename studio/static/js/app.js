@@ -86,6 +86,7 @@ const app = createApp({
       r.catalogs = [...r.tags];
       r.review_required = deriveReview(r); // 复核纯派生，不再允许手动切换
       r.is_manual = true; // 显式手动标记：打标/清空/追加/移除/重置/单改可经此路径都标记为手动(权威)
+      unsavedCount.value++;
       scheduleAutoSave(); // 每次手动操作自动保存，用户无需再手动点击
     };
 
@@ -111,6 +112,9 @@ const app = createApp({
     const selectedSet = ref(new Set());
     const isScanning = ref(false);
     const isSaving = ref(false);
+    // 脏状态跟踪：未落盘的打标修改条数。用于关闭页面拦截、保存按钮提示与自动重试
+    const unsavedCount = ref(0);
+    const isSaveRetryPending = ref(false);
 
     // -----------------------------------------------------------------------
     // 过滤、排序与显示设置
@@ -121,6 +125,38 @@ const app = createApp({
     const onlyDuplicates = ref(false);
     const filterGrades = ref([]); // [] = 全部; ['S','A',...,'unscored'] = 只显示选中的品质
     const searchQuery = ref("");
+    // 搜索防抖：直接绑 searchQuery 会让 filteredRecords 每敲一个键全量重算
+    const searchInput = ref("");
+    let searchDebounceTimer = null;
+    watch(searchInput, (v) => {
+      clearTimeout(searchDebounceTimer);
+      searchDebounceTimer = setTimeout(() => {
+        searchQuery.value = v;
+        currentPage.value = 1;
+      }, 250);
+    });
+
+    // 分页：万级卡片全量渲染是第一性能瓶颈，默认每页 500 张（可选全部=旧行为）
+    const currentPage = ref(1);
+    const pageInput = ref(1);
+    const pageSize = ref(500);
+    const totalPages = computed(() =>
+      pageSize.value === Infinity
+        ? 1
+        : Math.max(1, Math.ceil(filteredRecords.value.length / pageSize.value))
+    );
+    const pagedRecords = computed(() => {
+      if (currentPage.value > totalPages.value) currentPage.value = totalPages.value;
+      if (pageSize.value === Infinity) return filteredRecords.value;
+      const start = (currentPage.value - 1) * pageSize.value;
+      return filteredRecords.value.slice(start, start + pageSize.value);
+    });
+    const goPage = (n) => {
+      const t = totalPages.value;
+      const target = Math.min(Math.max(1, Math.floor(Number(n) || 1)), t);
+      currentPage.value = target;
+      pageInput.value = target;
+    };
     const sortBy = ref("name"); // 'name' | 'quality' | 'mtime' | 'confidence' | 'size' | 'dimension'
     const sortOrder = ref("desc"); // 默认降序 (高->低)
 
@@ -459,20 +495,6 @@ const app = createApp({
     // 计算属性 (Computed)
     // -----------------------------------------------------------------------
 
-    // 标签统计计数：基于 filteredRecords（跟随品质/搜索/隐藏等过滤实时联动），
-    // 未打标素材的 tags 已归一化为 ["Others"]，直接平铺计数即可
-    const tagCounts = computed(() => {
-      const map = {};
-      for (const r of filteredRecords.value) {
-        const tags = normalizeTags(r.tags);
-        for (const t of tags) {
-          map[t] = (map[t] || 0) + 1;
-        }
-      }
-      if (!(OTHERS in map)) map[OTHERS] = 0;
-      return map;
-    });
-
     // 待复核总数 (无真实标签 = 落在 Others 桶，或显式标记待复核)
     const unreviewedCount = computed(() => {
       let cnt = 0;
@@ -519,39 +541,28 @@ const app = createApp({
     });
 
     // 过滤后的卡片列表
-    const filteredRecords = computed(() => {
+    // Tag 前过滤链：包含 待复核/重复/隐藏已导出/品质/搜索 等全部过滤，
+    // 唯独不含 activeTag —— 供 tagCounts 使用，使侧栏计数与当前选中 tag 正交：
+    // 选中"宠物"时其它分类的数字仍反映当前过滤条件下的真实分布，而不是归零
+    const preTagFilteredRecords = computed(() => {
       let list = records.value;
 
-      // 1. Tag 过滤 (Others 桶 = tags 里含兜底标签的记录，与真实标签完全同一规则)
-      // 侧边栏伪分类："已导出"(__exported) / "不合格"(__small_long)。仅在当前选中时为特例，否则走正常 tag/搜索过滤
-      if (activeTag.value === "__exported") {
-        list = list.filter((r) => !!r.exported);
-      } else if (activeTag.value === "__small_long") {
-        list = list.filter((r) => !!r.too_small_long);
-      } else if (activeTag.value) {
-        if (activeTag.value.toLowerCase() === "others") {
-          list = list.filter((r) => isOthers(r));
-        } else {
-          list = list.filter((r) => r.tags && r.tags.includes(activeTag.value));
-        }
-      }
-
-      // 2. 待复核过滤
+      // 1. 待复核过滤
       if (onlyUnreviewed.value) {
         list = list.filter((r) => r.review_required || isOthers(r));
       }
 
-      // 2.5 仅看重复素材过滤
+      // 1.5 仅看重复素材过滤
       if (onlyDuplicates.value) {
         list = list.filter((r) => r.is_duplicate);
       }
 
-      // 3. 隐藏已导出 (筛选纯新图)
+      // 2. 隐藏已导出 (筛选纯新图)
       if (hideExported.value) {
         list = list.filter((r) => !r.exported);
       }
 
-      // 4. 品质复选框过滤 (不选=全部, 选了=只显示对应品质)
+      // 3. 品质复选框过滤 (不选=全部, 选了=只显示对应品质)
       if (filterGrades.value.length > 0) {
         const selected = new Set(filterGrades.value);
         list = list.filter((r) => {
@@ -561,7 +572,7 @@ const app = createApp({
         });
       }
 
-      // 5. 搜索关键词过滤
+      // 4. 搜索关键词过滤
       const q = searchQuery.value.trim().toLowerCase();
       if (q) {
         list = list.filter((r) => {
@@ -581,7 +592,42 @@ const app = createApp({
         });
       }
 
-      // 6. 排序
+      return list;
+    });
+
+    // 标签统计计数：基于 preTagFilteredRecords（跟随品质/搜索/隐藏等过滤实时联动，
+    // 但与当前选中的 tag 正交，选中任一 tag 时其它分类不再归零）。
+    // 未打标素材的 tags 已归一化为 ["Others"]，直接平铺计数
+    const tagCounts = computed(() => {
+      const map = {};
+      for (const r of preTagFilteredRecords.value) {
+        const tags = normalizeTags(r.tags);
+        for (const t of tags) {
+          map[t] = (map[t] || 0) + 1;
+        }
+      }
+      if (!(OTHERS in map)) map[OTHERS] = 0;
+      return map;
+    });
+
+    const filteredRecords = computed(() => {
+      let list = preTagFilteredRecords.value;
+
+      // 0. Tag 过滤 (Others 桶 = tags 里含兜底标签的记录，与真实标签完全同一规则)
+      // 侧边栏伪分类："已导出"(__exported) / "不合格"(__small_long)。仅在当前选中时为特例，否则走正常 tag/搜索过滤
+      if (activeTag.value === "__exported") {
+        list = list.filter((r) => !!r.exported);
+      } else if (activeTag.value === "__small_long") {
+        list = list.filter((r) => !!r.too_small_long);
+      } else if (activeTag.value) {
+        if (activeTag.value.toLowerCase() === "others") {
+          list = list.filter((r) => isOthers(r));
+        } else {
+          list = list.filter((r) => r.tags && r.tags.includes(activeTag.value));
+        }
+      }
+
+      // 排序
       list = [...list].sort((a, b) => {
         if (sortBy.value === "quality") {
           const qa = a.quality ? (a.quality.score || 0) : -1;
@@ -618,6 +664,24 @@ const app = createApp({
     });
 
     const selectedCount = computed(() => selectedSet.value.size);
+
+    // 筛选/排序变化时回到第一页，避免停留在超出范围的空页
+    watch(
+      [
+        activeTag,
+        onlyUnreviewed,
+        hideExported,
+        onlyDuplicates,
+        filterGrades,
+        sortBy,
+        sortOrder,
+        pageSize,
+      ],
+      () => {
+        currentPage.value = 1;
+        pageInput.value = 1;
+      }
+    );
 
     const isAllFilteredSelected = computed(() => {
       if (filteredRecords.value.length === 0) return false;
@@ -717,6 +781,14 @@ const app = createApp({
       if (!srcDir.value.trim()) {
         showToast("请先指定图片源目录");
         return;
+      }
+      // 扫描会整体覆盖当前记录列表：存在未保存修改时先确认，防止误刷新丢标注
+      if (unsavedCount.value > 0) {
+        const ok = window.confirm(
+          `当前有 ${unsavedCount.value} 条未保存的打标修改，重新扫描将覆盖这些修改。\n建议先点击「保存 tags.json」再扫描。确定继续吗？`
+        );
+        if (!ok) return;
+        unsavedCount.value = 0;
       }
       persistConfig();
       isScanning.value = true;
@@ -951,11 +1023,37 @@ const app = createApp({
     };
 
     let autoSaveTimer = null;
+    let autoSaveRetryTimer = null;
+    let autoSaveRetryAttempt = 0;
+    const AUTO_SAVE_RETRY_DELAYS_MS = [1000, 5000, 15000, 30000];
+
+    const scheduleAutoSaveRetry = () => {
+      if (!unsavedCount.value) return;
+      const delay =
+        AUTO_SAVE_RETRY_DELAYS_MS[
+          Math.min(autoSaveRetryAttempt, AUTO_SAVE_RETRY_DELAYS_MS.length - 1)
+        ];
+      autoSaveRetryAttempt++;
+      isSaveRetryPending.value = true;
+      clearTimeout(autoSaveRetryTimer);
+      autoSaveRetryTimer = setTimeout(() => persistTags(true), delay);
+    };
+
+    const cancelAutoSaveRetry = () => {
+      clearTimeout(autoSaveRetryTimer);
+      autoSaveRetryTimer = null;
+      autoSaveRetryAttempt = 0;
+      isSaveRetryPending.value = false;
+    };
+
     const persistTags = async (silent = false) => {
       if (!srcDir.value.trim() || records.value.length === 0) return;
       isSaving.value = true;
       try {
         const res = await saveTags(srcDir.value.trim(), buildSaveRecords());
+        // 保存成功后重置脏状态与失败重试链
+        unsavedCount.value = 0;
+        cancelAutoSaveRetry();
         const autoSkipped = Number(res.autoSkipped || 0);
         const saved = Number(res.saved ?? res.count ?? records.value.length);
         if (!silent) {
@@ -967,8 +1065,10 @@ const app = createApp({
         }
       } catch (err) {
         console.error("[保存tags]", err);
-        // 自动保存失败也必须告知用户，避免手动 tag 静默丢失
-        showToast(`保存失败: ${err.message}（请手动点击保存重试）`);
+        // 自动保存失败也必须告知用户，避免手动 tag 静默丢失；
+        // 同时登记失败并按指数退避自动重试，不再依赖用户记得手动点保存
+        showToast(`保存失败: ${err.message}（将自动重试，也可手动点击保存）`);
+        scheduleAutoSaveRetry();
       } finally {
         isSaving.value = false;
       }
@@ -976,6 +1076,9 @@ const app = createApp({
 
     // 自动保存：任何手动打标/清空操作后防抖落盘，杜绝"忘了点保存"。手动按钮兜底。
     const scheduleAutoSave = () => {
+      // 手动编辑会带上之前未落盘的修改一并保存，取消独立的失败重试链避免双写
+      cancelAutoSaveRetry();
+      autoSaveRetryAttempt = 0;
       clearTimeout(autoSaveTimer);
       autoSaveTimer = setTimeout(() => persistTags(true), 600);
     };
@@ -2053,7 +2156,6 @@ const app = createApp({
       window.addEventListener("keydown", (e) => {
         // 如果在输入框中，不触发全局快捷键
         if (["INPUT", "TEXTAREA", "SELECT"].includes(e.target.tagName)) return;
-
         if (e.key === "Escape") {
           if (deleteConfirmOpen.value) {
             cancelDeleteViewerItem();
@@ -2081,6 +2183,15 @@ const app = createApp({
       // 窗口缩放时同步 viewer 图片尺寸
       window.addEventListener("resize", () => {
         if (viewerModalOpen.value) syncViewerImg();
+      });
+
+      // 未保存修改保护：关闭/刷新页面前拦截确认，防止防抖窗口内打标丢失
+      window.addEventListener("beforeunload", (e) => {
+        if (unsavedCount.value > 0) {
+          e.preventDefault();
+          e.returnValue = `当前有 ${unsavedCount.value} 条未保存的打标修改，离开将丢失这些修改。`;
+          return e.returnValue;
+        }
       });
 
       // 尝试恢复未完成的质检任务
@@ -2129,6 +2240,8 @@ const app = createApp({
       selectedSet,
       isScanning,
       isSaving,
+      unsavedCount,
+      isSaveRetryPending,
       activeTag,
       onlyUnreviewed,
       hideExported,
@@ -2136,15 +2249,24 @@ const app = createApp({
       duplicateCount,
       duplicateGroupsCount,
       searchQuery,
+      searchInput,
+      currentPage,
+      pageInput,
+      pageSize,
+      totalPages,
+      pagedRecords,
+      goPage,
       sortBy,
       sortOrder,
       cardZoom,
-      tagCounts,
+      selectedCount,
       unreviewedCount,
       exportedCount,
       unexportedCount,
       smallLongCount,
       filteredRecords,
+      preTagFilteredRecords,
+      tagCounts,
       selectedCount,
       isAllFilteredSelected,
       batchTagTarget,

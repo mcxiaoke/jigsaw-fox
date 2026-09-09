@@ -52,8 +52,13 @@ class ManifestManager:
                         manifest_data["appConfig"] = {"notice": "", "minAppVersion": 1}
                     if "modules" not in manifest_data:
                         manifest_data["modules"] = {}
+                else:
+                    raise ValueError("manifest.json 根节点不是 JSON 对象")
             except Exception as e:
-                log_fn(f"读取现有 manifest.json 失败，将重新初始化: {e}", "warn")
+                # 损坏时严禁"重新初始化"：那会静默丢掉其余所有模块的客户端路由。
+                # fail-fast 让上层以错误结束导出，由用户修复或从账本/release 镜像恢复。
+                log_fn(f"读取现有 manifest.json 失败，导出中止（防止丢失其他模块路由）: {e}", "err")
+                raise RuntimeError(f"manifest.json 已存在但无法解析，导出已中止: {e}") from e
 
         # 更新指定模块路由
         mod_entry: dict[str, Any] = {

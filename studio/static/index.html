@@ -93,8 +93,12 @@
           待复核: <b>{{ unreviewedCount }}</b>
         </span>
 
-        <button class="btn success" @click="doSave" :disabled="isSaving || records.length === 0">
+        <button class="btn success" @click="doSave" :disabled="isSaving || records.length === 0"
+          :title="unsavedCount > 0 ? `有 ${unsavedCount} 条未保存修改` : ''"
+          :style="(unsavedCount > 0 || isSaveRetryPending) ? 'box-shadow: 0 0 0 2px #f59e0b;' : ''">
           <span v-if="isSaving">💾 保存中...</span>
+          <span v-else-if="isSaveRetryPending">⚠ 保存失败，重试中 ({{ unsavedCount }} 条)</span>
+          <span v-else-if="unsavedCount > 0">💾 保存 tags.json ({{ unsavedCount }} 条未保存)</span>
           <span v-else>💾 保存 tags.json</span>
         </button>
 
@@ -151,7 +155,7 @@
               <span class="zh">全部</span>
               <span class="en">All</span>
             </div>
-            <span class="count">{{ records.length }}</span>
+            <span class="count">{{ preTagFilteredRecords.length }}</span>
           </div>
 
           <!-- 14 主 Tags -->
@@ -210,7 +214,7 @@
       <!-- 搜索 -->
       <div class="search-box">
         <span class="icon">🔍</span>
-        <input type="text" v-model="searchQuery" placeholder="搜索文件名、标签、描述..." />
+        <input type="text" v-model="searchInput" placeholder="搜索文件名、标签、描述..." />
       </div>
 
       <!-- 仅看待复核 -->
@@ -324,9 +328,27 @@
         <p v-else>当前筛选条件下无图片。</p>
       </div>
 
+      <!-- 分页控制条：万级卡片全量渲染会卡顿，默认每页 500 张 -->
+      <div v-if="filteredRecords.length > pageSize" class="pagination-bar">
+        <button class="btn sm" :disabled="currentPage <= 1" @click="goPage(1)">« 首页</button>
+        <button class="btn sm" :disabled="currentPage <= 1" @click="goPage(currentPage - 1)">‹ 上一页</button>
+        <span class="page-info">
+          第 <input type="number" min="1" :max="totalPages" v-model.number="pageInput" @change="goPage(pageInput)" style="width: 64px;" />
+          / {{ totalPages }} 页 · 共 {{ filteredRecords.length }} 张
+        </span>
+        <button class="btn sm" :disabled="currentPage >= totalPages" @click="goPage(currentPage + 1)">下一页 ›</button>
+        <button class="btn sm" :disabled="currentPage >= totalPages" @click="goPage(totalPages)">末页 »</button>
+        <select class="btn sm" v-model.number="pageSize" title="每页数量">
+          <option :value="200">每页 200</option>
+          <option :value="500">每页 500</option>
+          <option :value="1000">每页 1000</option>
+          <option :value="Infinity">全部</option>
+        </select>
+      </div>
+
       <div class="image-grid" :style="{ '--card-size': cardZoom + 'px' }">
         <div
-          v-for="item in filteredRecords"
+          v-for="item in pagedRecords"
           :key="item.path"
           class="img-card"
           :class="{ selected: isSelected(item), 'is-exported': !!item.exported, 'is-small-long': item.too_small_long }"
