@@ -441,7 +441,12 @@ class SoundService {
   }
 
   /// 销毁所有播放器实例并清空池
+  /// 释放全部音频播放器（audioplayers 原生实例）。
+  ///
+  /// 由 main.dart 的 `onExitRequested`（点 X / Alt+F4）调用。
+  /// 释放后 [_initialized] 复位，允许后续 [init] 重新建池（避免一次性失效）。
   Future<void> dispose() async {
+    // 递增世代号：让所有在途的异步播放回调立即作废，等效于取消
     _generation++;
     for (final slot in _pool) {
       slot.resetSync();
@@ -449,7 +454,9 @@ class SoundService {
     final futures = _pool.map((s) => s.player.dispose()).toList();
     _pool.clear();
     _poolInitCompleter = null;
+    _initialized = false;
     await Future.wait(futures);
+    AppLogger.sound.info('SoundService disposed');
   }
 
   @visibleForTesting

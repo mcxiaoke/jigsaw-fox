@@ -6,8 +6,29 @@ import 'package:jigsawpuzzle/logic/content/network/content_http_client.dart';
 import 'package:jigsawpuzzle/logic/content/pipelines/daily_content_pipeline.dart';
 import 'package:path/path.dart' as p;
 
+/// 内容测试服务器基址覆盖项。
+///
+/// 默认基址指向作者本机的局域网服务器（192.168.1.118），该地址仅在特定网络
+/// 环境可达，换机或 CI 上必然失败。需要运行依赖真实服务器的用例时显式指定：
+///
+/// ```bash
+/// flutter test --dart-define=JIGSAW_TEST_SERVER=http://your-host/test2
+/// ```
+const String jigsawTestServerOverride = String.fromEnvironment(
+  'JIGSAW_TEST_SERVER',
+);
+
+/// 依赖真实内容服务器的用例的统一跳过条件（见 [jigsawTestServerOverride]）。
+///
+/// 未显式提供服务器时这些用例会被跳过，而不是在 CI 上产生假失败。
+String? get skipUnlessTestServer => jigsawTestServerOverride.isEmpty
+    ? '需要真实内容服务器：用 --dart-define=JIGSAW_TEST_SERVER=<base> 启用'
+    : null;
+
 void main() {
-  const testServerBase = 'http://192.168.1.118/data/www/game/test2';
+  final testServerBase = jigsawTestServerOverride.isNotEmpty
+      ? jigsawTestServerOverride
+      : 'http://127.0.0.1:8080/test2';
   late Directory sandboxDir;
   late String supportDir;
   late String documentsDir;
@@ -236,7 +257,8 @@ void main() {
       () async {
         final manager = ContentManager(
           bootstrapUrls: [
-            'http://192.168.1.118/data/www/game/test/non_existent_404.json', // 故意失败的主 URL
+            // 故意失败的主 URL：本地未监听端口，连接立即被拒，无需依赖局域网
+            'http://127.0.0.1:9999/non_existent_404.json',
             '$testServerBase/manifest.json', // 正常的备用 URL
           ],
           appSupportDir: supportDir,
@@ -318,36 +340,36 @@ void main() {
         expect(sepLevels.last.dailyDate, equals('20260925'));
       },
     );
-  });
+  }, skip: skipUnlessTestServer);
 
   group('RFC 3986 URL Resolution Tests', () {
     test('Correctly resolves relative and absolute URLs', () {
       const baseManifest =
-          'http://192.168.1.118/data/www/game/test2/manifest.json';
+          'http://127.0.0.1:8080/test2/manifest.json';
 
       // 1. 同级相对路径
       expect(
         ContentHttpClient.resolveUrl(baseManifest, 'main/index.json'),
-        equals('http://192.168.1.118/data/www/game/test2/main/index.json'),
+        equals('http://127.0.0.1:8080/test2/main/index.json'),
       );
 
       // 2. 模块内批次相对路径
       const baseMainIndex =
-          'http://192.168.1.118/data/www/game/test2/main/index.json';
+          'http://127.0.0.1:8080/test2/main/index.json';
       expect(
         ContentHttpClient.resolveUrl(baseMainIndex, 'batches/batch_001.json'),
         equals(
-          'http://192.168.1.118/data/www/game/test2/main/batches/batch_001.json',
+          'http://127.0.0.1:8080/test2/main/batches/batch_001.json',
         ),
       );
 
       // 3. 批次内部相对上级图片导航 (../images/0101.webp)
       const baseBatch =
-          'http://192.168.1.118/data/www/game/test2/main/batches/batch_001.json';
+          'http://127.0.0.1:8080/test2/main/batches/batch_001.json';
       expect(
         ContentHttpClient.resolveUrl(baseBatch, '../images/0101.webp'),
         equals(
-          'http://192.168.1.118/data/www/game/test2/main/images/0101.webp',
+          'http://127.0.0.1:8080/test2/main/images/0101.webp',
         ),
       );
 
@@ -363,7 +385,9 @@ void main() {
   });
 
   group('Universal v2.3.0 Deterministic Content Tests with test2 Server', () {
-    const test2ServerBase = 'http://192.168.1.118/data/www/game/test2';
+    final test2ServerBase = jigsawTestServerOverride.isNotEmpty
+      ? jigsawTestServerOverride
+      : 'http://127.0.0.1:8080/test2';
 
     test(
       '1. Full sync with test2, batch difference and explicit ID contract',
@@ -507,5 +531,5 @@ void main() {
         expect(restored105.id, equals('main:105'));
       },
     );
-  });
+  }, skip: skipUnlessTestServer);
 }

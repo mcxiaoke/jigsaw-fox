@@ -545,6 +545,3 @@ class AppLogger {
     return p.basename(path);
   }
 }
-
-// 避免未使用 unawaited 警告
-void unawaited(Future<void> f) {}

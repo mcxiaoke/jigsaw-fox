@@ -934,7 +934,10 @@ class GameRepository {
       AppLogger.repo.warning('resetAllData download reset failed', e, st);
     }
     // 5. 重新生成（含 §7.3 的进度水合——此刻 box 已空，样例重新植入，恢复出厂语义）
-    _initLevels();
+    // 2026-09-09：与正常启动路径对齐（init() 中 _initLevels() 已于 09-07 注释，首页切
+    // 网络 main 内容），重置后不再植入 100 关内置 demo，否则重置状态 ≠ 全新安装状态。
+    // 如需"重置后可玩样例"，应显式走网络内容管线而非内置关卡。
+    // _initLevels();
     await _initCustomPuzzles();
     // 6. 仅设置入口保留设置；此处不触碰 SharedPreferences 设置 key
     // 7. 快照索引对账（防幽灵索引）

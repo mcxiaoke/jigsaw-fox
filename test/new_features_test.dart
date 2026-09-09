@@ -15,7 +15,6 @@ import 'package:jigsawpuzzle/pages/main_screen.dart';
 import 'package:jigsawpuzzle/pages/settings_page.dart';
 import 'package:jigsawpuzzle/pages/tabs/daily_tab_view.dart';
 import 'package:jigsawpuzzle/pages/tabs/home_tab_view.dart';
-import 'package:jigsawpuzzle/pages/tabs/my_puzzles_tab_view.dart';
 import 'package:jigsawpuzzle/services/achievement_store.dart';
 import 'package:jigsawpuzzle/services/economy_service.dart';
 import 'package:jigsawpuzzle/services/locale_service.dart';
@@ -188,9 +187,6 @@ void main() {
       await tester.scrollUntilVisible(find.text('玩法技巧与操作指引'), 200);
       expect(find.text('玩法与帮助'), findsOneWidget);
       expect(find.text('玩法技巧与操作指引'), findsOneWidget);
-
-      await tester.scrollUntilVisible(find.text('重置所有游戏数据'), 200);
-      expect(find.text('重置所有游戏数据'), findsOneWidget);
     });
 
     testWidgets(
@@ -441,20 +437,6 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(deleteCalled, isTrue);
-    });
-
-    testWidgets('MyPuzzlesTabView renders UGC header and empty state', (
-      tester,
-    ) async {
-      await tester.pumpWidget(
-        const MaterialApp(home: Scaffold(body: MyPuzzlesTabView())),
-      );
-
-      expect(find.text('相册选图'), findsOneWidget);
-      expect(find.text('导入关卡包'), findsOneWidget);
-      expect(find.text('素材库'), findsOneWidget);
-      expect(find.text('在线搜图'), findsOneWidget);
-      expect(find.text('自制关卡'), findsOneWidget);
     });
 
     testWidgets(

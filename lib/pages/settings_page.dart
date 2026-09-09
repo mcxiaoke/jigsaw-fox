@@ -389,69 +389,6 @@ class _SettingsPageState extends State<SettingsPage> {
                   ),
                   onTap: () => LogViewerPage.open(context),
                 ),
-                Divider(height: 1, indent: 56, color: palette.divider),
-                ListTile(
-                  leading: Icon(
-                    PhosphorIconsBold.trashSimple,
-                    color: palette.error,
-                  ),
-                  title: Text(
-                    t.settings.dataResetTitle,
-                    style: styles.bodyBold.copyWith(color: palette.error),
-                  ),
-                  subtitle: Text(
-                    t.settings.dataResetDesc,
-                    style: styles.caption,
-                  ),
-                  trailing: Icon(
-                    PhosphorIconsBold.caretRight,
-                    size: 18,
-                    color: palette.error,
-                  ),
-                  onTap: () async {
-                    final ok = await showDialog<bool>(
-                      context: context,
-                      builder: (ctx) {
-                        final tt = LocaleSettings.instance.currentTranslations;
-                        return AlertDialog(
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(16),
-                          ),
-                          title: Text(tt.settings.dataResetConfirmTitle),
-                          content: Text(tt.settings.dataResetConfirmDesc),
-                          actions: [
-                            TextButton(
-                              onPressed: () => Navigator.pop(ctx, false),
-                              child: Text(tt.settings.dataCancel),
-                            ),
-                            FilledButton(
-                              onPressed: () => Navigator.pop(ctx, true),
-                              style: FilledButton.styleFrom(
-                                backgroundColor: palette.error,
-                              ),
-                              child: Text(tt.settings.dataConfirmReset),
-                            ),
-                          ],
-                        );
-                      },
-                    );
-                    if (ok == true) {
-                      AppLogger.ui.warning(
-                        'Settings resetAllData coinsBefore=$_coins solvedBefore=$_totalSolved starsBefore=$_totalStars',
-                      );
-                      await _repo.resetAllData();
-                      if (context.mounted) {
-                        setState(() {});
-                        GameToast.show(
-                          context,
-                          icon: PhosphorIconsFill.trashSimple,
-                          message: t.settings.toastDataReset,
-                          type: GameToastType.warning,
-                        );
-                      }
-                    }
-                  },
-                ),
               ], palette),
 
               const SizedBox(height: 24),

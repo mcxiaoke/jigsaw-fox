@@ -55,6 +55,9 @@ void _initLifecycleHooks() {
           await StorageManager.instance.waitPendingWrites();
         }
         await StorageManager.instance.closeAll();
+        // 释放音频播放器池（audioplayers 原生实例），
+        // 此前 dispose() 从未被接线，关窗时原生资源只能靠进程终止回收
+        await SoundService.I.dispose();
       } catch (e, st) {
         AppLogger.system.warning('exit cleanup failed', e, st);
         // 清理失败不阻止退出

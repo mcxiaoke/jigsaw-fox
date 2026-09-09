@@ -136,11 +136,11 @@ void main() {
   });
 
   group('resetAllData 重置语义（§7.6）', () {
-    test('box 清空、设置保留、样例重植、内存重置、金币 100、聚合刷新、广播', () async {
+    test('box 清空、设置保留、内置关卡不重植、内存重置、金币 100、聚合刷新、广播', () async {
       // 预置一条用户设置（须保留）
       SharedPreferences.setMockInitialValues({'jigsaw_setting_sound': false});
 
-      await GameRepository.instance.init(); // 植入 3 样例 + 100 关卡
+      await GameRepository.instance.init(); // 植入 3 样例（_initLevels 已注释：不再植入 100 关 demo）
       await EconomyService.instance.init();
       await AchievementStore.instance.init();
       await FavoriteStore.instance.init();
@@ -215,8 +215,9 @@ void main() {
       expect(await ProgressStore.instance.getTotalStars(), 0);
       expect(notifyCount, greaterThan(0));
 
-      // 5. 样例重新植入（恢复出厂语义，现状行为一致）
-      expect(GameRepository.instance.levels, hasLength(100));
+      // 5. 与全新安装状态一致：重置后不再重植 100 关内置 demo
+      //    （09-07 启动路径已注释 _initLevels，09-09 resetAllData 同步对齐）
+      expect(GameRepository.instance.levels, isEmpty);
       expect(GameRepository.instance.customPuzzles, hasLength(3));
       expect(sm.state.get('custom:presetsInitialized'), isTrue);
     });

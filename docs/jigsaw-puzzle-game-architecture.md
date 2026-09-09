@@ -11,7 +11,7 @@
 | **UI 表现框架** | Flutter 3.x (Dart 3) | 跨 Android / iOS / Windows / Web 一致渲染 |
 | **游戏/渲染引擎** | **Flame** (Canvas 抽象 + 2D 组件树) | 单画布批量渲染，规避多 Widget 堆叠的性能与手势穿透瓶颈；内置平移缩放视口与组件生命周期 |
 | **内容分发与存储** | **ContentManager / ManifestRouter** | 极简根路由发现、主备容灾、主线增量合并 (Append-Only)、每日挑战按月 Zip/时间锁推导、活动状态机与 Auto-GC |
-| **本地持久化** | **GameRepository / SharedPreferences** | 轻量高效的本地沙盒持久化，管理关卡进度、断点存档、自制图库与用户设置 |
+| **本地持久化** | **GameRepository / Hive (hive_ce) + SharedPreferences** | 轻量高效的本地沙盒持久化。Hive 承载关卡进度、断点存档与自制拼图等结构化数据；SharedPreferences 承载轻量开关与用户设置 |
 | **图片处理与超分辨率** | `image` + `image_picker` + `dart:ui` | 本地相册选取、自由裁剪、正交旋转与纯 Dart 非 AI 图像保边降噪 (Guided Filter) + CAS 超分辨率增强 |
 
 ---
@@ -23,8 +23,8 @@
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │  1. UI 表现层 (Flutter Widgets - 4-Tab 架构)                 │
-│  MainScreen: 主页 (Home) / 每日 (Daily) / 活动 (Events) / 自制 (My) │
-│  - 负责页面路由、多月日历网格、活动中心、标签筛选、音效触觉与无障碍   │
+│  MainScreen: 主页 (Home) / 每日 (Daily) / 合集 (Collections) / 我的 (My) │
+│  - 负责页面路由、多月日历网格、合集浏览、标签筛选、音效触觉与无障碍   │
 └──────────────────────────────┬──────────────────────────────┘
                                │ 用户操作 / 状态传递
 ┌──────────────────────────────▼──────────────────────────────┐
@@ -394,7 +394,9 @@ $$\frac{\text{cols}}{\text{rows}} = \frac{W_{\text{image}}}{H_{\text{image}}}$$
 - **无损分辨率重映射**：跨设备同步或窗口拉伸 Resize 时，只需将归一化坐标乘当前屏幕实际 `(boardW, boardH)`，彻底解决错位问题。
 
 ### 4.2 本地仓储管理 (GameRepository)
-- 管理 100 关官方关卡状态、多难度独立通关记录、每日挑战历史、自制拼图元数据与全局用户设置。
+- 管理关卡状态、多难度独立通关记录、每日挑战历史、自制拼图元数据与全局用户设置。
+- **关卡来源（2026-09-07 起变更）**：内置 100 关 demo 已下线，首页关卡数据源切换为网络 main 内容管线（`_initLevels()` 调用已注释，函数体保留以备后续"内置 samples 关卡"复用，测试可经 `reloadBuiltinLevelsForTest()` 显式恢复）。详见 `docs/home-network-migration-and-boot-init-design-20260907.md`。
+- **难度解锁（Phase0）**：`UnlockService.checkDifficultyUnlock` 当前恒返回 `isUnlocked: true`，全难度默认开放；解锁门槛逻辑待后续阶段启用。
 - **全局设置项**：拼图吸附音效 / 触感震动、12 款无缝桌板背景（`selectedBackground`，持久化 Key `jigsaw_setting_selected_background`）、碎片初始排布模式（`pieceScatterMode`：`tray | tabletop`）。
 - **来源追踪字段**：`CustomPuzzleItem` 扩展 `sourceType`（`gallery | online | preset`）、`sourcePlatform` 与 `sourceUrl`，序列化向下兼容历史老数据。
 - **响应式状态通知**：暴露 `customPuzzlesNotifier`（`ValueNotifier<List<CustomPuzzleItem>>`），在增删改自制关卡时自动派发通知，实现列表 100% 响应式自动刷新。
@@ -403,6 +405,8 @@ $$\frac{\text{cols}}{\text{rows}} = \frac{W_{\text{image}}}{H_{\text{image}}}$$
 - **档位枚举收敛**：`ThumbnailDimension {card(360), eventCover(720)}` 取代任意 `int`，编译期杜绝同源多份，`removeThumbnailForSource` 遍历全档位；FNV 掩码 `0x7FFFFFFFFFFFFFFF` 消负号，`_rebuildDiskKeyIndexAsync` 自清理 `thumb_-*.jpg` 与 `_600/_1440` 孤儿
 - **严格分层解耦**：
   - **核心引擎** `ImageCacheManager`：`L1 150张/30MB → L2 thumbnail_cache + Set索引 → L3 EngineTaskQueue(桌面4/移动2, Single-Flight)`，`getThumbnailBytes` 本地与 `getNetworkThumbnailBytes` 网络同流水线、同目录、同 Key
+  - **L2 磁盘容量治理（2026-09-09 新增）**：`kMaxDiskCacheBytes = 500MB`，超限后按文件修改时间升序（LRU）淘汰至 90% 水位，避免离线使用过程中磁盘占用单调增长；运行时以 `_diskCacheBytes` 计数，未超限时零扫描开销
+  - **缓存性质区分**：`thumbnail_cache` 为**可重建派生缓存**，可安全自动淘汰；`download_cache` 存放用户主动下载的原图，属**用户资产，不做自动淘汰**，容量由用户在设置中显式管理
   - **后台生成** `ThumbnailGenerator`：`package:image` Isolate 下采样，`ImageDescriptor.encoded` 零像素探针测尺寸
   - **渲染适配** `AppCachedImageProvider` 本地 / `AppCachedNetworkImageProvider` 网络，`getTargetSize` 钳 `720/360` 解码期降采样；`LevelImageResolver` 网络关卡可视即后台落原图到 `network_levels/` 再缩略，`LazyLevelImage` 保证见缩略必可玩
   - **UI 便捷** `AppCachedImage(targetDimension)` + `LazyLevelImage(level)` + `Image.memory(cacheWidth:600/1080/1440)`

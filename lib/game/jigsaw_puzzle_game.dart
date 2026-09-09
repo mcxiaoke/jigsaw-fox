@@ -1384,14 +1384,14 @@ class JigsawPuzzleGame extends FlameGame
 
   /// 计算“缩放无关、带硬上限”的吸附容差（归一化空间）。
   ///
-  /// 【问题】：原 `calculateSnapThreshold` 是归一化常量 `0.48 * min(1/cols, 1/rows)`，
+  /// 【问题】：原 `calculateSnapThreshold` 是归一化常量 `0.40 * min(1/cols, 1/rows)`，
   /// 但在**屏幕像素**上随缩放成正比放大——放大后吸附半径暴涨，导致碎片在离槽位较远时
   /// 就被吸过去并锁定，出现“离槽位还有距离却被吸附/锁定”的 bug。
   ///
-  /// 【修复】：屏幕像素吸附半径恒定并设硬上限 44px，缩放越大归一化阈值越小，
-  /// 使吸附手感不再随放大而走样；1× 缩放、且单元格像素×0.48 < 44px 时与原始行为一致，无手感回退。
+  /// 【修复】：屏幕像素吸附半径恒定并设硬上限 48px，缩放越大归一化阈值越小，
+  /// 使吸附手感不再随放大而走样；1× 缩放、且单元格像素×0.40 < 48px 时与原始行为一致，无手感回退。
   double effectiveSnapDistance() {
-    const ratio = PuzzleEngine.defaultSnapRatio; // 0.48
+    const ratio = PuzzleEngine.defaultSnapRatio; // 0.40，见 PuzzleEngine
     const maxScreenPx = 48; // 吸附半径屏幕像素硬上限
     final minBoardPx = min(boardSize.x, boardSize.y);
     final minCellPx = minBoardPx * min(1.0 / cols, 1.0 / rows);

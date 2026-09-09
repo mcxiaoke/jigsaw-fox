@@ -157,16 +157,9 @@ class _Translations$settings$zh extends Translations$settings$en {
 	@override String get dataClear => '清理';
 	@override String get dataViewLogsTitle => '查看运行日志';
 	@override String get dataViewLogsDesc => '查看、过滤并复制 App 运行日志（诊断用）';
-	@override String get dataResetTitle => '重置所有游戏数据';
-	@override String get dataResetDesc => '清除所有关卡记录、每日挑战与自制拼图';
-	@override String get dataResetConfirmTitle => '确认重置全部数据？';
-	@override String get dataResetConfirmDesc => '该操作不可逆，将清除所有主线关卡进度、每日挑战与自制拼图记录。';
-	@override String get dataCancel => '取消';
-	@override String get dataConfirmReset => '确定重置';
 	@override String footerVersion({required Object version}) => '版本 ${version}';
 	@override String get toastCacheCleared => '缩略图缓存已清空，下次浏览时会自动重新生成';
 	@override String toastCacheClearFailed({required Object error}) => '清理缓存失败: ${error}';
-	@override String get toastDataReset => '所有游戏数据已重置为初始状态';
 	@override String get languageTitle => '语言';
 	@override String get languageDesc => '应用显示语言 / App Language';
 	@override String get languageSystem => '跟随系统';
@@ -1268,16 +1261,9 @@ extension on TranslationsZh {
 			'settings.dataClear' => '清理',
 			'settings.dataViewLogsTitle' => '查看运行日志',
 			'settings.dataViewLogsDesc' => '查看、过滤并复制 App 运行日志（诊断用）',
-			'settings.dataResetTitle' => '重置所有游戏数据',
-			'settings.dataResetDesc' => '清除所有关卡记录、每日挑战与自制拼图',
-			'settings.dataResetConfirmTitle' => '确认重置全部数据？',
-			'settings.dataResetConfirmDesc' => '该操作不可逆，将清除所有主线关卡进度、每日挑战与自制拼图记录。',
-			'settings.dataCancel' => '取消',
-			'settings.dataConfirmReset' => '确定重置',
 			'settings.footerVersion' => ({required Object version}) => '版本 ${version}',
 			'settings.toastCacheCleared' => '缩略图缓存已清空，下次浏览时会自动重新生成',
 			'settings.toastCacheClearFailed' => ({required Object error}) => '清理缓存失败: ${error}',
-			'settings.toastDataReset' => '所有游戏数据已重置为初始状态',
 			'settings.languageTitle' => '语言',
 			'settings.languageDesc' => '应用显示语言 / App Language',
 			'settings.languageSystem' => '跟随系统',

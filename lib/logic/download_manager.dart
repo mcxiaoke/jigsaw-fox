@@ -259,62 +259,72 @@ class DownloadManager {
         );
       }
 
+      // partFile 生命周期守卫：仅 rename 成功后才视为已消费，
+      // 其余任何路径（下载失败 / 空数据 / 过大 / 校验异常）都在 finally 中清理，杜绝 .part 残留
+      var partConsumed = false;
       try {
-        AppLogger.download.info(
-          'Dio requesting ${AppLogger.sanitizeUrl(sourceUrl)}',
-        );
-        await doDownload(headers);
-      } on DioException catch (dioErr) {
-        AppLogger.download.warning(
-          'DioError status=${dioErr.response?.statusCode} url=${AppLogger.sanitizeUrl(sourceUrl)}',
-          dioErr,
-        );
-        if (dioErr.response?.statusCode == 403 ||
-            dioErr.response?.statusCode == 401) {
+        try {
           AppLogger.download.info(
-            'DioRetry with desktop headers url=${AppLogger.sanitizeUrl(sourceUrl)}',
+            'Dio requesting ${AppLogger.sanitizeUrl(sourceUrl)}',
           );
-          final retryHeaders = <String, dynamic>{
-            'Accept':
-                'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8',
-            'User-Agent':
-                'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
-            if (refererUrl != null && refererUrl.isNotEmpty)
-              'Referer': refererUrl,
-          };
-          // 清理残损 part
-          if (await partFile.exists()) {
-            try {
-              await partFile.delete();
-            } catch (_) {}
+          await doDownload(headers);
+        } on DioException catch (dioErr) {
+          AppLogger.download.warning(
+            'DioError status=${dioErr.response?.statusCode} url=${AppLogger.sanitizeUrl(sourceUrl)}',
+            dioErr,
+          );
+          if (dioErr.response?.statusCode == 403 ||
+              dioErr.response?.statusCode == 401) {
+            AppLogger.download.info(
+              'DioRetry with desktop headers url=${AppLogger.sanitizeUrl(sourceUrl)}',
+            );
+            final retryHeaders = <String, dynamic>{
+              'Accept':
+                  'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8',
+              'User-Agent':
+                  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+              if (refererUrl != null && refererUrl.isNotEmpty)
+                'Referer': refererUrl,
+            };
+            // 清理残损 part
+            if (await partFile.exists()) {
+              try {
+                await partFile.delete();
+              } catch (_) {}
+            }
+            await doDownload(retryHeaders);
+          } else {
+            rethrow;
           }
-          await doDownload(retryHeaders);
-        } else {
-          rethrow;
+        }
+
+        if (!await partFile.exists() || await partFile.length() == 0) {
+          throw Exception('下载数据为空');
+        }
+        const maxImageBytes = 50 * 1024 * 1024;
+        final partLen = await partFile.length();
+        if (partLen > maxImageBytes) {
+          throw Exception('图片过大 $partLen > $maxImageBytes');
+        }
+        if (await targetFile.exists()) {
+          try {
+            await targetFile.delete();
+          } catch (_) {}
+        }
+        await partFile.rename(targetFile.path);
+        partConsumed = true;
+        rawBytes = await targetFile.readAsBytes();
+        AppLogger.download.info(
+          'DioSuccess downloaded ${rawBytes.length} bytes to ${AppLogger.sanitizePath(filePath)}',
+        );
+      } finally {
+        // rename 成功后 partFile 已不存在，此处兜底清理所有失败路径的 .part 残留
+        if (!partConsumed && await partFile.exists()) {
+          try {
+            await partFile.delete();
+          } catch (_) {}
         }
       }
-
-      if (!await partFile.exists() || await partFile.length() == 0) {
-        throw Exception('下载数据为空');
-      }
-      const maxImageBytes = 50 * 1024 * 1024;
-      final partLen = await partFile.length();
-      if (partLen > maxImageBytes) {
-        try {
-          await partFile.delete();
-        } catch (_) {}
-        throw Exception('图片过大 $partLen > $maxImageBytes');
-      }
-      if (await targetFile.exists()) {
-        try {
-          await targetFile.delete();
-        } catch (_) {}
-      }
-      await partFile.rename(targetFile.path);
-      rawBytes = await targetFile.readAsBytes();
-      AppLogger.download.info(
-        'DioSuccess downloaded ${rawBytes.length} bytes to ${AppLogger.sanitizePath(filePath)}',
-      );
     }
 
     // Parse and strictly validate image dimensions

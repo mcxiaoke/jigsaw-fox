@@ -262,24 +262,6 @@ class Translations$settings$en {
 	/// en: 'Browse, filter and copy runtime logs'
 	String get dataViewLogsDesc => 'Browse, filter and copy runtime logs';
 
-	/// en: 'Reset All Data'
-	String get dataResetTitle => 'Reset All Data';
-
-	/// en: 'Clear all progress, daily and custom puzzles'
-	String get dataResetDesc => 'Clear all progress, daily and custom puzzles';
-
-	/// en: 'Reset all data?'
-	String get dataResetConfirmTitle => 'Reset all data?';
-
-	/// en: 'This cannot be undone. All main progress, daily challenges and custom puzzles will be cleared.'
-	String get dataResetConfirmDesc => 'This cannot be undone. All main progress, daily challenges and custom puzzles will be cleared.';
-
-	/// en: 'Cancel'
-	String get dataCancel => 'Cancel';
-
-	/// en: 'Reset'
-	String get dataConfirmReset => 'Reset';
-
 	/// en: 'Version {version}'
 	String footerVersion({required Object version}) => 'Version ${version}';
 
@@ -288,9 +270,6 @@ class Translations$settings$en {
 
 	/// en: 'Failed to clear cache: {error}'
 	String toastCacheClearFailed({required Object error}) => 'Failed to clear cache: ${error}';
-
-	/// en: 'All game data has been reset'
-	String get toastDataReset => 'All game data has been reset';
 
 	/// en: 'Language'
 	String get languageTitle => 'Language';
@@ -2184,16 +2163,9 @@ extension on Translations {
 			'settings.dataClear' => 'Clear',
 			'settings.dataViewLogsTitle' => 'View Logs',
 			'settings.dataViewLogsDesc' => 'Browse, filter and copy runtime logs',
-			'settings.dataResetTitle' => 'Reset All Data',
-			'settings.dataResetDesc' => 'Clear all progress, daily and custom puzzles',
-			'settings.dataResetConfirmTitle' => 'Reset all data?',
-			'settings.dataResetConfirmDesc' => 'This cannot be undone. All main progress, daily challenges and custom puzzles will be cleared.',
-			'settings.dataCancel' => 'Cancel',
-			'settings.dataConfirmReset' => 'Reset',
 			'settings.footerVersion' => ({required Object version}) => 'Version ${version}',
 			'settings.toastCacheCleared' => 'Thumbnail cache cleared, will regenerate on next browse',
 			'settings.toastCacheClearFailed' => ({required Object error}) => 'Failed to clear cache: ${error}',
-			'settings.toastDataReset' => 'All game data has been reset',
 			'settings.languageTitle' => 'Language',
 			'settings.languageDesc' => 'App display language',
 			'settings.languageSystem' => 'Follow System',

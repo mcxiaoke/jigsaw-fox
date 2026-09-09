@@ -48,11 +48,18 @@ class _ImportPackPageState extends State<ImportPackPage> {
         allowedExtensions: ['zip'],
       );
 
-      if (result != null && result.files.single.path != null) {
-        setState(() {
-          _localPathController.text = result.files.single.path!;
-          _networkUrlController.clear();
-        });
+      // 选择器打开期间用户可能已退出页面，回到此处必须先判定 mounted，
+      // 否则触发 "setState() called after dispose()"
+      if (!mounted) return;
+      final files = result?.files ?? const [];
+      if (files.isNotEmpty) {
+        final pickedPath = files.first.path;
+        if (pickedPath != null) {
+          setState(() {
+            _localPathController.text = pickedPath;
+            _networkUrlController.clear();
+          });
+        }
       }
     } catch (e) {
       if (mounted) {

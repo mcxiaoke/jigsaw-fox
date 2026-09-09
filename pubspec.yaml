@@ -39,12 +39,10 @@ dependencies:
   file_picker: ^8.1.7
   flame: ^1.38.0
   flame_audio: ^2.12.2
-  flame_riverpod: ^5.5.5
   flutter_inappwebview: ^6.1.5
   flutter_launcher_icons: ^0.14.4
   flutter_localizations:
     sdk: flutter
-  flutter_riverpod: ^3.4.2
   hive_ce: ^2.19.3
   image: ^4.9.2
   image_picker: ^1.2.3

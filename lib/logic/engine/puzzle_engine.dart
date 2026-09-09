@@ -12,10 +12,12 @@ import 'package:logging/logging.dart';
 /// 碎片网格槽位吸附（Board Slot Snapping）、碎片集群自由合并（Cluster Merging / Disjoint Set）、
 /// 碎片旋转中心计算、智能提示（Hint）及最终通关判定（Solved State Check）。
 class PuzzleEngine {
-  /// 默认吸附容差阈值比例（单块碎片尺寸的 48%）。
+  /// 默认吸附容差阈值比例（单块碎片尺寸的 40%）。
   /// 【选值依据】：
-  /// 48% 是经过大量手感测试的黄金手感比例：既能保证玩家拖到目标附近时有清晰痛快的“自动就位吸附感”，
+  /// 40% 是经过大量手感测试的黄金手感比例：既能保证玩家拖到目标附近时有清晰痛快的“自动就位吸附感”，
   /// 又不会在密集拖动时误触发旁边不相干的槽位。
+  ///
+  /// 注意：早期版本曾取 0.48，注释与代码一度不一致，调参时请以本常量实际值为准。
   static const double defaultSnapRatio = 0.40;
 
   /// 生成打散后的初始拼图棋盘状态（Scatter Pieces）。

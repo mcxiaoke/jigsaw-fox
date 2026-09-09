@@ -41,6 +41,26 @@ class ImageCacheManager {
   static const ThumbnailDimension kDefaultThumbnailDimension =
       ThumbnailDimension.card;
 
+  /// L2 磁盘缓存容量上限 (500MB)
+  ///
+  /// 超过该上限后按 LRU（文件修改时间升序）淘汰最久未访问的缩略图，
+  /// 防止离线使用过程中磁盘占用单调增长。
+  static const int kMaxDiskCacheBytes = 500 * 1024 * 1024;
+
+  /// 运行期生效的上限（默认 [kMaxDiskCacheBytes]，测试可下调以便验证淘汰）
+  int _maxDiskCacheBytes = kMaxDiskCacheBytes;
+
+  /// 仅用于测试：覆盖磁盘缓存上限，避免为验证淘汰而真实写入 500MB
+  @visibleForTesting
+  set diskCacheLimitForTest(int bytes) => _maxDiskCacheBytes = bytes;
+
+  /// 仅用于测试：当前磁盘缓存字节计数
+  @visibleForTesting
+  int get diskCacheBytesForTest => _diskCacheBytes;
+
+  /// 淘汰水位：触发淘汰后回落到该占比，避免每次写入都触发全量扫描
+  static const double kEvictTargetRatio = 0.9;
+
   /// L1 纯内存 LRU 缓存 (150 张 / 30MB)
   final MemoryCache _memoryCache = MemoryCache();
 
@@ -49,6 +69,15 @@ class ImageCacheManager {
 
   /// L2 磁盘缓存内存索引表 (Key 集合，用于 0 纳秒内存判断文件是否存在，杜绝主线程 existsSync)
   final Set<String> _diskKeyIndex = <String>{};
+
+  /// L2 磁盘缓存运行时字节计数（避免每次淘汰都全量扫描目录）
+  int _diskCacheBytes = 0;
+
+  /// 淘汰任务重入保护
+  bool _isEvicting = false;
+
+  /// 进行中的初始化 Future（并发去重，见 [init]）
+  Completer<void>? _initCompleter;
 
   Directory? _cacheDir;
   bool _isInitialized = false;
@@ -70,8 +99,16 @@ class ImageCacheManager {
   EngineTaskQueue get taskQueue => _taskQueue;
 
   /// 异步初始化缓存目录与内存索引表
+  ///
+  /// 并发安全：用 Completer 缓存"进行中"的初始化，多个调用方共享同一个 Future。
+  /// （旧实现在 await 之后才置 `_isInitialized`，并发调用会重复建索引。）
   Future<void> init() async {
+    final pending = _initCompleter;
+    if (pending != null) return pending.future;
     if (_isInitialized) return;
+
+    final completer = Completer<void>();
+    _initCompleter = completer;
 
     try {
       final appSupportDir = await getApplicationSupportDirectory();
@@ -86,18 +123,31 @@ class ImageCacheManager {
       // 异步构建 L2 磁盘缓存内存索引 (零主线程同步 I/O)
       await _rebuildDiskKeyIndexAsync();
 
+      // 历史遗留数据可能已超上限，启动时先回落到水位内
+      if (_diskCacheBytes > _maxDiskCacheBytes) {
+        await _enforceDiskCacheLimit();
+      }
+
       _isInitialized = true;
+      completer.complete();
       AppLogger.imageCache.info(
-        'Initialized indexed=${_diskKeyIndex.length} concurrency=${_taskQueue.maxConcurrency} dir=${_cacheDir?.path}',
+        'Initialized indexed=${_diskKeyIndex.length} '
+        'size=${(_diskCacheBytes / (1024 * 1024)).toStringAsFixed(1)}MB '
+        'limit=${(kMaxDiskCacheBytes / (1024 * 1024)).toStringAsFixed(0)}MB '
+        'concurrency=${_taskQueue.maxConcurrency} dir=${_cacheDir?.path}',
       );
     } catch (e, st) {
       AppLogger.imageCache.severe('Failed to initialize', e, st);
+      completer.complete();
+    } finally {
+      _initCompleter = null;
     }
   }
 
   /// 异步扫描磁盘目录重建内存索引表
   Future<void> _rebuildDiskKeyIndexAsync() async {
     _diskKeyIndex.clear();
+    _diskCacheBytes = 0;
     if (_cacheDir == null || !await _cacheDir!.exists()) return;
 
     // 合法档位集合，用于识别并清理历史孤儿文件（负号键 / 旧 600/1440 档位）
@@ -129,6 +179,10 @@ class ImageCacheManager {
               continue;
             }
             _diskKeyIndex.add(fileName);
+            // 建索引时同步累计磁盘占用，作为 LRU 淘汰的基线
+            try {
+              _diskCacheBytes += await entity.length();
+            } catch (_) {}
           }
         }
       }
@@ -259,7 +313,11 @@ class ImageCacheManager {
               await parent.create(recursive: true);
             }
             await targetFile.writeAsBytes(generatedBytes, flush: true);
-            _diskKeyIndex.add(cacheKey);
+            // add 返回 true 表示新增（覆盖写入不重复计数）
+            if (_diskKeyIndex.add(cacheKey)) {
+              _diskCacheBytes += generatedBytes.length;
+            }
+            await _enforceDiskCacheLimit();
           } catch (e, st) {
             AppLogger.imageCache.warning(
               'Failed to write thumbnail file key=$cacheKey',
@@ -487,7 +545,10 @@ class ImageCacheManager {
               await parent.create(recursive: true);
             }
             await targetFile.writeAsBytes(generatedBytes, flush: true);
-            _diskKeyIndex.add(cacheKey);
+            if (_diskKeyIndex.add(cacheKey)) {
+              _diskCacheBytes += generatedBytes.length;
+            }
+            await _enforceDiskCacheLimit();
           } catch (e, st) {
             AppLogger.imageCache.warning(
               'Failed to write network thumbnail key=$cacheKey',
@@ -503,16 +564,89 @@ class ImageCacheManager {
             e,
             st,
           );
-          // 清理残留 tmp
-          if (tmpPath != null) {
-            try {
-              await File(tmpPath).delete();
-            } catch (_) {}
-          }
           return null;
+        } finally {
+          // 统一兜底：覆盖成功 / 失败 / 提前 return 的所有路径，杜绝 .part 残留
+          await _deleteTempFile(tmpPath);
         }
       },
     );
+  }
+
+  /// 静默删除临时文件（不存在则跳过），用于下载 / 生成失败时的兜底清理
+  Future<void> _deleteTempFile(String? path) async {
+    if (path == null) return;
+    try {
+      final file = File(path);
+      if (await file.exists()) {
+        await file.delete();
+      }
+    } catch (_) {}
+  }
+
+  /// LRU 淘汰：磁盘缓存超过 [kMaxDiskCacheBytes] 时按"最久未访问"优先删除，
+  /// 直到回落到 [kEvictTargetRatio] 水位（留 10% 余量，避免写入后立刻再次触发扫描）。
+  ///
+  /// 全流程异步 I/O；未超限时仅做一次整数比较即返回，不产生目录扫描开销。
+  Future<void> _enforceDiskCacheLimit() async {
+    if (_diskCacheBytes <= _maxDiskCacheBytes) return;
+    // 重入保护：淘汰期间的新写入无需再触发一次扫描
+    if (_isEvicting) return;
+    _isEvicting = true;
+
+    try {
+      final dir = _cacheDir;
+      if (dir == null || !await dir.exists()) return;
+
+      final targetBytes = (_maxDiskCacheBytes * kEvictTargetRatio).round();
+
+      // 收集候选（口径与内存索引一致：仅 thumb_*.jpg）
+      final entries = <({File file, String name, DateTime modified, int size})>[];
+      await for (final entity in dir.list(followLinks: false)) {
+        if (entity is! File) continue;
+        final name = entity.uri.pathSegments.last;
+        if (!name.startsWith('thumb_') || !name.endsWith('.jpg')) continue;
+        try {
+          final stat = await entity.stat();
+          entries.add((
+            file: entity,
+            name: name,
+            modified: stat.modified,
+            size: stat.size,
+          ));
+        } catch (_) {}
+      }
+
+      if (entries.isEmpty) return;
+
+      // LRU：最久未修改的排在最前，优先淘汰
+      entries.sort((a, b) => a.modified.compareTo(b.modified));
+
+      var removed = 0;
+      for (final entry in entries) {
+        if (_diskCacheBytes <= targetBytes) break;
+        try {
+          await entry.file.delete();
+        } catch (_) {
+          continue;
+        }
+        _diskCacheBytes -= entry.size;
+        if (_diskCacheBytes < 0) _diskCacheBytes = 0;
+        _diskKeyIndex.remove(entry.name);
+        removed++;
+      }
+
+      if (removed > 0) {
+        AppLogger.imageCache.info(
+          'LRU evicted=$removed '
+          'remaining=${(_diskCacheBytes / (1024 * 1024)).toStringAsFixed(1)}MB',
+        );
+      }
+    } catch (e, st) {
+      AppLogger.imageCache.warning('Failed to evict disk cache', e, st);
+    } finally {
+      _isEvicting = false;
+    }
   }
 
   /// 异步统计缩略图磁盘占用总字节数（仅统计 thumb_*.jpg，避免误算目录内其它文件）
@@ -545,6 +679,9 @@ class ImageCacheManager {
     _memoryCache.clear();
     _diskKeyIndex.clear();
     _taskQueue.clearQueue();
+    // 必须与物理删除同步归零：否则计数虚高，之后每次写入都会
+    // 触发 _enforceDiskCacheLimit 做一次删不到东西的全目录扫描，且无法自愈
+    _diskCacheBytes = 0;
 
     if (_cacheDir != null && await _cacheDir!.exists()) {
       try {
