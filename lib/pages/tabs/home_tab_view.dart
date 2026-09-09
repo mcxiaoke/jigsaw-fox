@@ -12,11 +12,11 @@ import 'package:jigsawpuzzle/logic/content/app_content.dart';
 import 'package:jigsawpuzzle/logic/content/models/puzzle_event_item.dart';
 import 'package:jigsawpuzzle/logic/content/models/puzzle_level_item.dart';
 import 'package:jigsawpuzzle/logic/image_source.dart';
-import 'package:jigsawpuzzle/logic/puzzle_model.dart';
 import 'package:jigsawpuzzle/pages/event_levels_page.dart';
 import 'package:jigsawpuzzle/pages/game_page.dart';
 import 'package:jigsawpuzzle/services/app_logger.dart';
 import 'package:jigsawpuzzle/services/locale_service.dart';
+import 'package:jigsawpuzzle/services/recommend_service.dart';
 import 'package:jigsawpuzzle/services/sound_service.dart';
 import 'package:jigsawpuzzle/theme/app_palette.dart';
 import 'package:jigsawpuzzle/theme/app_text_styles.dart';
@@ -197,10 +197,9 @@ class _HomeTabViewState extends State<HomeTabView> {
     AppLogger.game.info(
       'Home openLevel canonical=$canonicalId order=${level.order}',
     );
-    // D7：数据未下发 difficulty 前统一默认 square 第二档 6x6/36（recommended 档）
-    final fallbackDifficulty = PuzzleAspectRatio.square1x1.tiers
-        .firstWhere((t) => t.difficulty.recommended)
-        .difficulty;
+    // D7：数据未下发 difficulty 前默认全局推荐档（按 1:1 假定；
+    // 面板内解码图片后会对非 square 图按实际比例校正到推荐档）
+    final fallbackDifficulty = RecommendService.instance.squareDifficulty;
     final title = level.displayTitle;
 
     final handled = await ResumeHelper.tryHandleResumeFlow(

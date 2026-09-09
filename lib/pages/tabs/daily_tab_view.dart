@@ -11,10 +11,10 @@ import 'package:jigsawpuzzle/logic/content/app_content.dart';
 import 'package:jigsawpuzzle/logic/content/models/canonical_id.dart';
 import 'package:jigsawpuzzle/logic/content/models/puzzle_level_item.dart';
 import 'package:jigsawpuzzle/logic/image_source.dart';
-import 'package:jigsawpuzzle/logic/puzzle_model.dart';
 import 'package:jigsawpuzzle/pages/game_page.dart';
 import 'package:jigsawpuzzle/services/app_logger.dart';
 import 'package:jigsawpuzzle/services/locale_service.dart';
+import 'package:jigsawpuzzle/services/recommend_service.dart';
 import 'package:jigsawpuzzle/theme/app_palette.dart';
 import 'package:jigsawpuzzle/theme/app_text_styles.dart';
 import 'package:jigsawpuzzle/widgets/app_cached_image.dart';
@@ -271,9 +271,8 @@ class _DailyTabViewState extends State<DailyTabView> {
 
     final canonicalId = level.id;
     final progress = ProgressStore.instance.getLevelProgress(canonicalId);
-    final fallbackDifficulty = PuzzleAspectRatio.square1x1.tiers
-        .firstWhere((t) => t.difficulty.recommended)
-        .difficulty;
+    // 默认难度 = 全局推荐档（按 1:1 假定，面板解码后按实际比例校正）
+    final fallbackDifficulty = RecommendService.instance.squareDifficulty;
     final title = _formatDailyDateDisplay(level.dailyDate);
 
     final handled = await ResumeHelper.tryHandleResumeFlow(

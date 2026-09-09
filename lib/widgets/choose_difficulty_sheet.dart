@@ -12,6 +12,7 @@ import 'package:jigsawpuzzle/logic/geometry/edge_layout.dart';
 import 'package:jigsawpuzzle/logic/geometry/piece_shape.dart';
 import 'package:jigsawpuzzle/logic/puzzle_model.dart';
 import 'package:jigsawpuzzle/logic/source_tag.dart';
+import 'package:jigsawpuzzle/services/recommend_service.dart';
 import 'package:jigsawpuzzle/services/sound_service.dart';
 import 'package:jigsawpuzzle/theme/app_palette.dart';
 import 'package:jigsawpuzzle/theme/app_text_styles.dart';
@@ -232,6 +233,23 @@ class _ChooseDifficultySheetState extends State<ChooseDifficultySheet> {
 
   List<DifficultyTier> get _currentTiers => _playableTiers;
 
+  /// 是否为进程内全局推荐档（“推荐”徽章跟随动态推荐，而非静态新手档）
+  bool _isPreferredTier(DifficultyTier t) =>
+      t.tierLevel == RecommendService.instance.recommendedTierLevel;
+
+  /// 全局推荐档在该比例 tiers 中的档位（推荐档恒在 L2~L5，各比例必含；
+  /// 仅作防御性回退：静态 recommended 档 → 首档）
+  DifficultyTier _preferredTier(List<DifficultyTier> tiers) {
+    final prefLevel = RecommendService.instance.recommendedTierLevel;
+    return tiers.firstWhere(
+      (t) => t.tierLevel == prefLevel,
+      orElse: () => tiers.firstWhere(
+        (t) => t.difficulty.recommended,
+        orElse: () => tiers.first,
+      ),
+    );
+  }
+
   @override
   void initState() {
     super.initState();
@@ -240,10 +258,7 @@ class _ChooseDifficultySheetState extends State<ChooseDifficultySheet> {
     _selectedDifficulty = defaultTiers
         .firstWhere(
           (t) => t.difficulty.pieceCount == widget.initialDifficulty.pieceCount,
-          orElse: () => defaultTiers.firstWhere(
-            (t) => t.difficulty.recommended,
-            orElse: () => defaultTiers[0],
-          ),
+          orElse: () => _preferredTier(defaultTiers),
         )
         .difficulty;
     _decodeImageSize();
@@ -267,10 +282,7 @@ class _ChooseDifficultySheetState extends State<ChooseDifficultySheet> {
               (t) =>
                   t.difficulty.pieceCount ==
                   widget.initialDifficulty.pieceCount,
-              orElse: () => tiers.firstWhere(
-                (t) => t.difficulty.recommended,
-                orElse: () => tiers[0],
-              ),
+              orElse: () => _preferredTier(tiers),
             )
             .difficulty;
       });
@@ -290,10 +302,7 @@ class _ChooseDifficultySheetState extends State<ChooseDifficultySheet> {
     return tiers
         .firstWhere(
           (t) => t.difficulty.pieceCount == _selectedDifficulty.pieceCount,
-          orElse: () => tiers.firstWhere(
-            (t) => t.difficulty.recommended,
-            orElse: () => tiers[0],
-          ),
+          orElse: () => _preferredTier(tiers),
         )
         .difficulty;
   }
@@ -354,10 +363,7 @@ class _ChooseDifficultySheetState extends State<ChooseDifficultySheet> {
 
     final selectedTier = currentTiers.firstWhere(
       (t) => t.difficulty.pieceCount == effectiveDiff.pieceCount,
-      orElse: () => currentTiers.firstWhere(
-        (t) => t.difficulty.recommended,
-        orElse: () => currentTiers[0],
-      ),
+      orElse: () => _preferredTier(currentTiers),
     );
 
     final isEffectivePassed = widget.completedPieceCounts.contains(
@@ -1060,7 +1066,7 @@ class _ChooseDifficultySheetState extends State<ChooseDifficultySheet> {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
-                if (opt.recommended)
+                if (_isPreferredTier(tier))
                   Padding(
                     padding: const EdgeInsets.only(top: 1),
                     child: Text(

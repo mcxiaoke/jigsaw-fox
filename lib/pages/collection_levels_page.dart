@@ -13,6 +13,7 @@ import 'package:jigsawpuzzle/logic/content/models/puzzle_level_item.dart';
 import 'package:jigsawpuzzle/logic/puzzle_model.dart';
 import 'package:jigsawpuzzle/pages/game_page.dart';
 import 'package:jigsawpuzzle/services/app_logger.dart';
+import 'package:jigsawpuzzle/services/recommend_service.dart';
 import 'package:jigsawpuzzle/theme/app_palette.dart';
 import 'package:jigsawpuzzle/theme/app_text_styles.dart';
 import 'package:jigsawpuzzle/widgets/choose_difficulty_sheet.dart';
@@ -173,14 +174,10 @@ class _CollectionLevelsPageState extends State<CollectionLevelsPage> {
     final canonicalId = level.id;
     final progress = await ResumeHelper.loadProgress(canonicalId);
     if (!mounted) return;
+    // 历史难度优先（该图玩过/有存档）；新图回退全局推荐档（面板按实际比例校正）
     final fallbackDiff = PuzzleDifficulty.presets.firstWhere(
       (d) => SnapshotStore.difficultyKeyFor(d) == progress.activeDifficultyKey,
-      orElse: () => PuzzleDifficulty(
-        label: t.difficulty.pieceCount(cols: 4, rows: 4, count: 16),
-        rows: 4,
-        cols: 4,
-        recommended: true,
-      ),
+      orElse: () => RecommendService.instance.squareDifficulty,
     );
 
     // 1. 若有残局快照，优先进入断点续玩流程

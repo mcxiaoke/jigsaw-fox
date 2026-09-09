@@ -9,9 +9,9 @@ import 'package:jigsawpuzzle/logic/content/app_content.dart';
 import 'package:jigsawpuzzle/logic/content/content_manager.dart';
 import 'package:jigsawpuzzle/logic/content/models/puzzle_event_item.dart';
 import 'package:jigsawpuzzle/logic/content/models/puzzle_level_item.dart';
-import 'package:jigsawpuzzle/logic/puzzle_model.dart';
 import 'package:jigsawpuzzle/pages/game_page.dart';
 import 'package:jigsawpuzzle/services/app_logger.dart';
+import 'package:jigsawpuzzle/services/recommend_service.dart';
 import 'package:jigsawpuzzle/theme/app_palette.dart';
 import 'package:jigsawpuzzle/theme/app_text_styles.dart';
 import 'package:jigsawpuzzle/widgets/choose_difficulty_sheet.dart';
@@ -117,16 +117,8 @@ class _EventLevelsPageState extends State<EventLevelsPage> {
 
     if (imgBytes == null || !mounted) return;
 
-    final defaultDiff = PuzzleDifficulty(
-      label: LocaleSettings.instance.currentTranslations.difficulty.pieceCount(
-        cols: 4,
-        rows: 4,
-        count: 16,
-      ),
-      rows: 4,
-      cols: 4,
-      recommended: true,
-    );
+    // 默认难度 = 全局推荐档（按 1:1 假定，面板解码后按实际比例校正）
+    final defaultDiff = RecommendService.instance.squareDifficulty;
 
     await ChooseDifficultySheet.show(
       context: context,

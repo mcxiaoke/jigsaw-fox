@@ -15,6 +15,7 @@ import 'package:jigsawpuzzle/services/achievement_store.dart';
 import 'package:jigsawpuzzle/services/app_logger.dart';
 import 'package:jigsawpuzzle/services/economy_service.dart';
 import 'package:jigsawpuzzle/services/locale_service.dart';
+import 'package:jigsawpuzzle/services/recommend_service.dart';
 import 'package:jigsawpuzzle/services/sound_service.dart';
 import 'package:jigsawpuzzle/services/webview_service.dart';
 
@@ -139,6 +140,8 @@ void main() async {
     AppContent.instance.initFromDiskCache(),
   ]);
   AppLogger.system.info('Group1(Core) init done ${sw.elapsedMilliseconds}ms');
+  // 推荐难度：只在启动后计算一次（进程内恒定），进入 Home 时各入口直接读全局缓存
+  await RecommendService.instance.ensureComputed();
   sw.reset();
   // 组2/3 可后台：下载与音效不阻塞首帧（内容后台增量由 MainScreen/BootGate 收口触发）
   final bgFutures = [

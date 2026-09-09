@@ -11,6 +11,7 @@ import 'package:jigsawpuzzle/l10n/gen/strings.g.dart';
 import 'package:jigsawpuzzle/logic/cache/image_cache_manager.dart';
 import 'package:jigsawpuzzle/logic/image_upscaler.dart';
 import 'package:jigsawpuzzle/logic/puzzle_model.dart';
+import 'package:jigsawpuzzle/services/recommend_service.dart';
 import 'package:jigsawpuzzle/theme/app_palette.dart';
 import 'package:jigsawpuzzle/widgets/game_toast.dart';
 import 'package:path_provider/path_provider.dart';
@@ -137,13 +138,10 @@ class _CropPuzzlePageState extends State<CropPuzzlePage> {
   @override
   void initState() {
     super.initState();
-    final defaultTiers = _selectedRatio.aspectRatio.tiers;
-    _selectedDifficulty = defaultTiers
-        .firstWhere(
-          (t) => t.difficulty.recommended,
-          orElse: () => defaultTiers[0],
-        )
-        .difficulty;
+    // 默认难度 = 全局推荐档（自制页裁剪比例已知，可直接按比例取推荐档）
+    _selectedDifficulty = RecommendService.instance.difficultyForAspect(
+      _selectedRatio.aspectRatio,
+    );
     _decodeImage();
   }
 
@@ -166,13 +164,9 @@ class _CropPuzzlePageState extends State<CropPuzzlePage> {
             (c) => c.aspectRatio == detected,
             orElse: () => supportedCropOptions.first,
           );
-          final tiers = _selectedRatio.aspectRatio.tiers;
-          _selectedDifficulty = tiers
-              .firstWhere(
-                (t) => t.difficulty.recommended,
-                orElse: () => tiers[0],
-              )
-              .difficulty;
+          _selectedDifficulty = RecommendService.instance.difficultyForAspect(
+            _selectedRatio.aspectRatio,
+          );
           _needsResetMatrix = true;
         });
       } else {
@@ -222,10 +216,9 @@ class _CropPuzzlePageState extends State<CropPuzzlePage> {
     setState(() {
       _selectedRatio = ratio;
       _needsResetMatrix = true;
-      final tiers = ratio.aspectRatio.tiers;
-      _selectedDifficulty = tiers
-          .firstWhere((t) => t.difficulty.recommended, orElse: () => tiers[0])
-          .difficulty;
+      _selectedDifficulty = RecommendService.instance.difficultyForAspect(
+        ratio.aspectRatio,
+      );
     });
   }
 

@@ -24,6 +24,7 @@ import 'package:jigsawpuzzle/pages/import_pack_page.dart';
 import 'package:jigsawpuzzle/pages/online_image_picker_page.dart';
 import 'package:jigsawpuzzle/services/app_logger.dart';
 import 'package:jigsawpuzzle/services/locale_service.dart';
+import 'package:jigsawpuzzle/services/recommend_service.dart';
 import 'package:jigsawpuzzle/services/sound_service.dart';
 import 'package:jigsawpuzzle/services/webview_service.dart';
 import 'package:jigsawpuzzle/theme/app_palette.dart';
@@ -276,9 +277,7 @@ class _MyCenterTabViewState extends State<MyCenterTabView> {
     if (card.hasActiveSnapshot) {
       final fallbackDiff = PuzzleDifficulty.presets.firstWhere(
         (d) => SnapshotStore.difficultyKeyFor(d) == card.activeDifficultyKey,
-        orElse: () => PuzzleAspectRatio.square1x1.tiers
-            .firstWhere((t) => t.difficulty.recommended)
-            .difficulty,
+        orElse: () => RecommendService.instance.squareDifficulty,
       );
       final handled = await ResumeHelper.tryHandleResumeFlow(
         context: context,
@@ -315,9 +314,7 @@ class _MyCenterTabViewState extends State<MyCenterTabView> {
     // 2. 无快照或点“重选难度”，打开难度选择面板
     final initialDiff = PuzzleDifficulty.presets.firstWhere(
       (d) => SnapshotStore.difficultyKeyFor(d) == card.activeDifficultyKey,
-      orElse: () => PuzzleAspectRatio.square1x1.tiers
-          .firstWhere((t) => t.difficulty.recommended)
-          .difficulty,
+      orElse: () => RecommendService.instance.squareDifficulty,
     );
 
     if (!mounted) return;

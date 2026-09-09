@@ -10,6 +10,7 @@ import 'package:jigsawpuzzle/logic/content/models/puzzle_level_item.dart';
 import 'package:jigsawpuzzle/logic/content/models/puzzle_pack_item.dart';
 import 'package:jigsawpuzzle/logic/puzzle_model.dart';
 import 'package:jigsawpuzzle/pages/game_page.dart';
+import 'package:jigsawpuzzle/services/recommend_service.dart';
 import 'package:jigsawpuzzle/theme/app_palette.dart';
 import 'package:jigsawpuzzle/theme/app_text_styles.dart';
 import 'package:jigsawpuzzle/widgets/app_cached_image.dart';
@@ -100,16 +101,9 @@ class _PackLevelsPageState extends State<PackLevelsPage> {
     }
   }
 
-  static PuzzleDifficulty get _defaultDiff => PuzzleDifficulty(
-    label: LocaleSettings.instance.currentTranslations.difficulty.pieceCount(
-      cols: 4,
-      rows: 4,
-      count: 16,
-    ),
-    rows: 4,
-    cols: 4,
-    recommended: true,
-  );
+  /// 默认难度 = 全局推荐档（按 1:1 假定，面板解码后按实际比例校正）
+  static PuzzleDifficulty get _defaultDiff =>
+      RecommendService.instance.squareDifficulty;
 
   Future<void> _openLevel(PuzzleLevelItem level) async {
     final imageFile = File(level.imagePathOrUrl);
