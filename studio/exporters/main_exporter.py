@@ -30,6 +30,7 @@ from studio.core.workspace import StudioWorkspace
 from studio.exporters.base import (
     BaseExporter,
     ExportResult,
+    assert_max_images,
     assert_min_long,
     resolve_excluded,
     resolve_normalize,
@@ -151,13 +152,16 @@ class MainExporter(BaseExporter):
                         "所选范围内的图片均已在历史批次中导出，无新图片可供导出"
                     )
 
+        # 0b. 单次导出数量上限硬拦截（在剔除已导出之后，按最终真实数量判定）
+        assert_max_images(images, self.log, exp_type="main")
+
         # 0. 待导出图片格式与完整性硬拦截校验 (损坏/0字节立即中止)
         for p in images:
             valid, err_msg = validate_image(p)
             if not valid:
                 self.log(f"导出中止: 待导出图片损坏或无效: {p.name} ({err_msg})", "err")
                 raise ValueError(f"待导出图片损坏或无效: {p.name} ({err_msg})")
-        # 0a. 规格化：长边 <2160 阻断（仅在规格化激活时生效，向后兼容旧调用）
+        # 0a. 规格化：长边 <1920 阻断（仅在规格化激活时生效，向后兼容旧调用）
         normalize_spec = resolve_normalize(self.data)
         if normalize_spec:
             assert_min_long(images, self.log)

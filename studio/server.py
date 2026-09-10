@@ -54,6 +54,11 @@ from studio.core.tags_manager import (
     save_tags_file,
 )
 from studio.exporters import get_exporter
+from studio.exporters.base import (
+    EXPORT_IMAGE_LIMITS,
+    MAX_EXPORT_IMAGES_PER_JOB,
+    resolve_export_limit,
+)
 from studio.taxonomy import (
     ALL_CANONICAL_TAGS,
     CATALOG_DEFS,
@@ -69,6 +74,14 @@ from studio.taxonomy import (
 )
 
 STATIC_DIR = Path(__file__).parent / "static"
+
+# 导出类型 (前端 type) → 导出器 module 名（用于按类型解析数量上限等按模块维度的配置）
+_EXPORT_MODULE_OF_TYPE = {
+    "main": "main",
+    "daily": "daily",
+    "event": "events",
+    "collection": "collections",
+}
 
 # 素材删除回收目录名：删除 = 把文件移入 <SourceDir>/Deleted/（软删除，可手工找回）。
 # scanner.IGNORE_DIRS 已包含 "deleted"（大小写不敏感），故该目录不会被后续扫描重新纳入。
@@ -171,6 +184,40 @@ _JOBS: dict[str, dict[str, Any]] = {}
 _JOB_MAX_KEEP = 50  # 最多保留最近 N 个任务
 _JOB_TTL_SECONDS = 300.0  # 终态任务保留时长 (惰性清理，无定时器)
 
+# 任务类型前缀约定：客户端生成 clientTaskId 时必须带类型前缀（见 _job_kind_of）。
+# 前缀决定了并发互斥的粒度——同类任务互斥，异类任务互不阻塞。
+_JOB_KIND_LABELS = {
+    "quality": "质检",
+    "export": "导出",
+    "unknown": "未知类型",
+}
+
+
+def _job_kind_of(task_id: str) -> str:
+    """从 taskId 前缀推断任务类型：'quality-*' / 'export-*'，无法识别时返回 unknown。"""
+    t = (task_id or "").strip().lower()
+    for kind in _JOB_KIND_LABELS:
+        if kind == "unknown":
+            continue
+        if t.startswith(f"{kind}-") or t.startswith(f"{kind}_"):
+            return kind
+    return "unknown"
+
+
+def _job_kind_label(kind: str) -> str:
+    return _JOB_KIND_LABELS.get(kind, _JOB_KIND_LABELS["unknown"])
+
+
+def _job_find_running(kind: str | None = None) -> list[str]:
+    """列出处于 running 状态的任务 id；指定 kind 时只统计该类型。"""
+    with _JOB_LOCK:
+        return [
+            k
+            for k, v in _JOBS.items()
+            if v.get("state") == "running"
+            and (kind is None or v.get("kind") == kind)
+        ]
+
 
 def _job_cleanup_locked(now: float) -> None:
     """惰性清理：终态且超时的记录剔除；仍超上限时保留最近 N 条。须持锁调用。"""
@@ -190,14 +237,25 @@ def _job_cleanup_locked(now: float) -> None:
             _JOBS.pop(k, None)
 
 
-def _job_register(task_id: str) -> None:
+def _job_register(task_id: str, kind: str | None = None, exclusive: bool = True) -> bool:
+    """注册任务；返回 False 表示已有同类型任务在跑（注册被拒）。
+
+    「检查同类无 running」与「写入本任务」在同一把锁内完成，避免两个并发请求
+    同时通过检查、双双注册而绕过互斥。
+    """
     if not task_id:
-        return
+        return True
     now = time.time()
     with _JOB_LOCK:
+        k = kind or _job_kind_of(task_id)
+        if exclusive:
+            for v in _JOBS.values():
+                if v.get("state") == "running" and v.get("kind") == k:
+                    return False
         _job_cleanup_locked(now)
         _JOBS[task_id] = {
             "state": "running",
+            "kind": k,
             "logs": [],
             "done": 0,
             "total": 0,
@@ -206,6 +264,7 @@ def _job_register(task_id: str) -> None:
             "error": None,
             "created_at": now,
         }
+        return True
 
 
 def _job_append_log(task_id: str, entry: dict[str, str]) -> None:
@@ -262,6 +321,7 @@ def _job_snapshot(task_id: str) -> dict[str, Any] | None:
             return None
         return {
             "state": job.get("state", "running"),
+            "kind": job.get("kind", "unknown"),
             "logs": list(job.get("logs", [])),
             "done": job.get("done", 0),
             "total": job.get("total", 0),
@@ -269,6 +329,17 @@ def _job_snapshot(task_id: str) -> dict[str, Any] | None:
             "summary": job.get("summary"),
             "error": job.get("error"),
         }
+
+
+def _job_ensure_finished(task_id: str, error: str = "任务状态未知，已强制结束") -> None:
+    """兜底收口：任务仍为 running 时强制置为 error，防止互斥锁被永久占用。"""
+    if not task_id:
+        return
+    with _JOB_LOCK:
+        job = _JOBS.get(task_id)
+        if job is not None and job.get("state") == "running":
+            job["state"] = "error"
+            job["error"] = error
 
 
 def _job_cancel(task_id: str) -> bool:
@@ -507,8 +578,8 @@ class StudioRequestHandler(BaseHTTPRequestHandler):
             self._handle_get_tags(qs)
             return
 
-        if path == "/api/exported":
-            self._handle_get_exported(qs)
+        if path == "/api/export/limits":
+            self._handle_export_limits()
             return
 
         if path in ("/api/export/status", "/api/job/status"):
@@ -701,7 +772,7 @@ class StudioRequestHandler(BaseHTTPRequestHandler):
             )
             img_infos = list(image_infos.values())
 
-            # 读取 exported.json 账本并关联到每条记录
+            # 读取权威导出账本 (.studio/ledger/exports.json) 并关联到每条记录
             exp_ledger = load_exported_ledger(root)
             exp_hashes = exp_ledger.get("hashes", {})
             exp_map = get_exported_map(root)
@@ -815,44 +886,68 @@ class StudioRequestHandler(BaseHTTPRequestHandler):
         )
 
     def _resolve_image_path(self, path_s: str, qs: dict[str, list[str]]) -> Path | None:
-        """多策略路径解析：直接绝对路径、基于 ?dir 参数或上次扫描根目录"""
+        """多策略路径解析：直接绝对路径、相对路径与允许根目录拼接。
+
+        安全边界：解析结果必须落在「允许根目录」之内。允许根按优先级取
+        ① 请求显式携带的 ?dir= 目录；② 最近一次成功扫描的 current_root_dir。
+        允许根为空时一律拒绝——在未指定工作目录的情况下不接受任何路径，
+        避免 /api/file、/api/thumb 被用作读取本机任意文件的通道。
+        """
         if not path_s or not str(path_s).strip():
             return None
         decoded = urllib.parse.unquote(path_s).strip()
         candidates = [Path(decoded), Path(path_s)]
 
-        # 1. 检查候选路径本身是否可直达
-        for cand in candidates:
-            try:
-                if cand.exists() and cand.is_file():
-                    return cand.resolve()
-            except Exception:
-                pass
-
-        # 2. 如果是相对路径，优先尝试与 query 参数中的 ?dir= 拼接
+        allowed_roots: list[Path] = []
         dir_param = (qs.get("dir") or [""])[0].strip()
         if dir_param:
             try:
-                dir_root = Path(dir_param).resolve()
-                for cand in candidates:
-                    joined = dir_root / cand
-                    if joined.exists() and joined.is_file():
-                        return joined.resolve()
+                dp = Path(dir_param).resolve()
+                if dp.is_dir():
+                    allowed_roots.append(dp)
             except Exception:
                 pass
-
-        # 3. 回退与上次成功扫描的目录拼接
-        if (
-            StudioRequestHandler.current_root_dir
-            and StudioRequestHandler.current_root_dir.is_dir()
-        ):
+        cur = StudioRequestHandler.current_root_dir
+        if cur:
             try:
-                for cand in candidates:
-                    joined = StudioRequestHandler.current_root_dir / cand
-                    if joined.exists() and joined.is_file():
-                        return joined.resolve()
+                cp = Path(cur).resolve()
+                if cp.is_dir() and cp not in allowed_roots:
+                    allowed_roots.append(cp)
             except Exception:
                 pass
+        if not allowed_roots:
+            return None
+
+        def _within(cand: Path) -> Path | None:
+            """候选路径存在且位于任一允许根内时返回其绝对路径，否则 None。"""
+            try:
+                rp = cand.resolve()
+            except Exception:
+                return None
+            try:
+                if not rp.is_file():
+                    return None
+            except Exception:
+                return None
+            for r in allowed_roots:
+                if rp == r or r in rp.parents:
+                    return rp
+            return None
+
+        # 1. 候选路径本身可直达（绝对路径，或相对当前工作目录）
+        for cand in candidates:
+            got = _within(cand)
+            if got:
+                return got
+
+        # 2. 相对路径与允许根目录拼接（绝对路径已在上一步处理，跳过）
+        for root in allowed_roots:
+            for cand in candidates:
+                if cand.is_absolute():
+                    continue
+                got = _within(root / cand)
+                if got:
+                    return got
 
         return None
 
@@ -897,16 +992,6 @@ class StudioRequestHandler(BaseHTTPRequestHandler):
                 r["duplicate_with"] = []
 
         self._json({"ok": True, "file": str(tag_file.resolve()), "records": records})
-
-    def _handle_get_exported(self, qs: dict[str, list[str]]) -> None:
-        """读取源目录下的 exported.json 导出账本"""
-        dir_param = (qs.get("dir") or [""])[0].strip()
-        if not dir_param:
-            self._error("缺少 ?dir 参数")
-            return
-        root = Path(dir_param)
-        ledger = load_exported_ledger(root)
-        self._json({"ok": True, "ledger": ledger})
 
     def _handle_job_status(self, qs: dict[str, list[str]]) -> None:
         """任务进度状态快照 (只读观测通道，供前端轮询)；导出与质检共用"""
@@ -1303,22 +1388,29 @@ class StudioRequestHandler(BaseHTTPRequestHandler):
 
         total = len(targets)
 
-        # 并发拦截：已有质检任务在跑时拒绝新请求
-        with _JOB_LOCK:
-            running = [k for k, v in _JOBS.items() if v.get("state") == "running"]
-        if running:
+        # 并发拦截：只拦截同类型（质检）任务，导出任务互不阻塞。
+        # 注册本身是原子的（锁内完成「检查 + 写入」），此处仅用于取出冲突任务 id 以生成文案。
+        if not _job_register(client_task_id, kind="quality"):
+            running = _job_find_running(kind="quality")
             self._error(
-                f"质检任务正在进行中: {running[0]}, 请等待完成或先取消",
+                f"{_job_kind_label('quality')}任务正在进行中: {running[0] if running else '(未知)'}，"
+                f"请等待完成或先取消",
                 status=409,
             )
             return
 
-        _job_register(client_task_id)
         _job_progress(client_task_id, 0, total)
 
-        _Pool(max_workers=1).submit(
-            _run_quality_job, root, targets, client_task_id, max_workers
-        )
+        def _quality_worker() -> None:
+            """后台线程入口：任何逃逸异常都必须收口为任务失败，
+            否则任务会永远停在 running，导致同类任务被互斥锁永久挡住。"""
+            try:
+                _run_quality_job(root, targets, client_task_id, max_workers)
+            except Exception as e:  # pragma: no cover - 兜底路径
+                logger.error("[QUALITY] %s 任务异常终止: %s", client_task_id, e)
+                _job_finish(client_task_id, error=f"质检任务异常终止: {e}")
+
+        _Pool(max_workers=1).submit(_quality_worker)
 
         logger.info(
             "[QUALITY] 质检任务已启动: task=%s, total=%d, force=%s, workers=%s",
@@ -1417,7 +1509,10 @@ class StudioRequestHandler(BaseHTTPRequestHandler):
         logs: list[dict[str, str]] = []
         # 进度感知观测通道：仅当请求携带 clientTaskId 时注册；否则整条路径与旧版一致
         task_id = str(data.get("clientTaskId") or "").strip()
-        _job_register(task_id)
+        if not task_id:
+            # 未携带 clientTaskId 时补一个匿名导出任务 id，确保同样纳入并发互斥与
+            # 状态观测——否则不传该参数即可绕过导出互斥锁。
+            task_id = f"export_anon_{int(time.time() * 1000)}"
 
         # 导出器 self.log(...) 的级别映射到 Python logging 级别
         _EXPORT_LOG_LEVELS = {
@@ -1462,6 +1557,25 @@ class StudioRequestHandler(BaseHTTPRequestHandler):
 
         src_p = Path(src)
         out_p = Path(out)
+
+        # 并发互斥：同一时刻只允许一个导出任务。
+        # 两个导出同时写同一 release/index.json 与账本会互相覆盖（order 撞号、
+        # manifest 与产物不符），且不会报错，因此必须入口拦截。
+        # 注册为原子操作（锁内完成「检查 + 写入」），并发请求只有一个能成功。
+        if not _job_register(task_id, kind="export"):
+            running = _job_find_running(kind="export")
+            self._json(
+                {
+                    "ok": False,
+                    "error": (
+                        f"{_job_kind_label('export')}任务正在进行中: {running[0] if running else '(未知)'}，"
+                        f"请等待其结束后再发起新的导出"
+                    ),
+                    "logs": logs,
+                },
+                409,
+            )
+            return
 
         cat_id = data.get("catalog", "")
         log_fn(f"开始导出任务: [{exp_type.upper()}] (分类: {cat_id})")
@@ -1516,6 +1630,20 @@ class StudioRequestHandler(BaseHTTPRequestHandler):
                 logger.error(f"[EXPORT] 导出失败: {result.error}")
                 _job_finish(task_id, error=result.error)
             self._json(res_dict)
+        except ValueError as e:
+            # 业务校验类失败（数量超限 / 素材不足 / 图片损坏等）按 400 返回，
+            # 与 500 的运行时异常区分，便于前端把原因直接呈现给用户。
+            log_fn(f"导出中止: {e}", "err")
+            logger.warning(f"[EXPORT] 导出校验未通过: {e}")
+            _job_finish(task_id, error=str(e))
+            self._json(
+                {
+                    "ok": False,
+                    "error": str(e),
+                    "logs": logs,
+                },
+                status=400,
+            )
         except Exception as e:
             import traceback
 
@@ -1531,6 +1659,25 @@ class StudioRequestHandler(BaseHTTPRequestHandler):
                 },
                 status=500,
             )
+        finally:
+            # 兜底收口：异常路径之外的任何漏网（如 exporter 内部提前 return）
+            # 都必须让任务离开 running，否则导出互斥锁会永久生效。
+            _job_ensure_finished(task_id)
+
+    def _handle_export_limits(self) -> None:
+        """下发导出侧硬限制（单次导出图片数上限）。
+
+        前端据此提示与禁用按钮，避免阈值在前后端各写一份而产生漂移。
+        """
+        self._json(
+            {
+                "ok": True,
+                "limits": {
+                    "maxImagesPerJob": MAX_EXPORT_IMAGES_PER_JOB,
+                    "byType": dict(EXPORT_IMAGE_LIMITS),
+                },
+            }
+        )
 
     def _handle_export_preview(self, data: dict[str, Any]) -> None:
         """导出前只读预检：按排序方式返回图片清单 + 统计 + 建议起始序号/版本 (不写盘)"""
@@ -1706,6 +1853,11 @@ class StudioRequestHandler(BaseHTTPRequestHandler):
         if exp_type == "main" and suggested.get("maxOrder", 0) > 0:
             stats["suggestedStartOrder"] = suggested["suggestedStartOrder"]
 
+        # 单次导出数量上限：与导出器校验同源（导出器会在剔除已导出后按最终真实数量复核）
+        limit = resolve_export_limit(_EXPORT_MODULE_OF_TYPE.get(exp_type, exp_type))
+        stats["maxImagesPerJob"] = limit
+        stats["overLimit"] = len(ordered) > limit
+
         self._json(
             {
                 "ok": True,
@@ -1713,6 +1865,10 @@ class StudioRequestHandler(BaseHTTPRequestHandler):
                 "ordered": ordered,
                 "stats": stats,
                 "suggested": suggested,
+                "limits": {
+                    "maxImagesPerJob": MAX_EXPORT_IMAGES_PER_JOB,
+                    "byType": dict(EXPORT_IMAGE_LIMITS),
+                },
             }
         )
 

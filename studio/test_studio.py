@@ -23,7 +23,6 @@ from studio.core.export_tracker import (
     get_exported_map,
     load_exported_ledger,
     record_exports,
-    save_exported_ledger,
 )
 from studio.core.image_proc import (
     HAS_PIL,
@@ -584,7 +583,7 @@ class TestCoreAndExporters(unittest.TestCase):
 
 
 class TestExportTracker(unittest.TestCase):
-    """测试已导出账本管理 (exported.json)"""
+    """测试已导出账本视图（唯一事实源：.studio/ledger/exports.json）"""
 
     def setUp(self):
         self.test_dir = Path(tempfile.mkdtemp(prefix="studio_tracker_"))
@@ -592,14 +591,31 @@ class TestExportTracker(unittest.TestCase):
     def tearDown(self):
         shutil.rmtree(self.test_dir, ignore_errors=True)
 
-    def test_load_and_save_empty_ledger(self):
+    def test_load_empty_ledger(self):
         ledger = load_exported_ledger(self.test_dir)
         self.assertEqual(ledger["total_exported"], 0)
         self.assertEqual(len(ledger["hashes"]), 0)
+        # 空视图只读，不应在源目录产生任何旧版账本文件
+        self.assertFalse((self.test_dir / "exported.json").exists())
 
-        ok, msg = save_exported_ledger(self.test_dir, ledger)
-        self.assertTrue(ok)
-        self.assertTrue((self.test_dir / "exported.json").exists())
+    def test_no_legacy_exported_json_is_written(self):
+        """旧版 exported.json 兼容层已移除：任何写入都不应再产生该文件。"""
+        record_exports(
+            self.test_dir,
+            [
+                {
+                    "hash": "deadbeef",
+                    "path": "Animals/cat.jpg",
+                    "export_type": "main",
+                    "target": "main/1.webp",
+                    "order": 1,
+                }
+            ],
+        )
+        self.assertFalse((self.test_dir / "exported.json").exists())
+        self.assertTrue(
+            (self.test_dir / ".studio" / "ledger" / "exports.json").exists()
+        )
 
     def test_record_exports(self):
         items = [
@@ -1773,7 +1789,7 @@ class TestImageDelete(unittest.TestCase):
             db.save_quality(self.h_a, {"score": 88, "grade": "A", "status": "ok", "details": {}})
             db.set_user_override(self.h_a, crop_box=(0.1, 0.1, 0.9, 0.9), crop_ratio="1:1")
 
-        # 标记 b.jpg 为已导出 (legacy exported.json 账本)
+        # 标记 b.jpg 为已导出（权威账本 .studio/ledger/exports.json）
         record_exports(
             self.test_dir,
             [{"hash": self.h_b, "path": "sub/b.jpg", "export_type": "main", "order": 1}],

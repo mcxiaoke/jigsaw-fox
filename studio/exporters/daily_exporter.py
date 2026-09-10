@@ -31,6 +31,7 @@ from studio.core.workspace import StudioWorkspace
 from studio.exporters.base import (
     BaseExporter,
     ExportResult,
+    assert_max_images,
     assert_min_long,
     resolve_excluded,
     resolve_normalize,
@@ -125,6 +126,9 @@ class DailyExporter(BaseExporter):
         images = sort_images(images, sort_by, manual_order=manual_order)
         self.log(f"已按排序策略 [{sort_by}] 排定 {len(images)} 张图片顺序", "info")
 
+        # 0b. 单次导出数量上限硬拦截
+        assert_max_images(images, self.log, exp_type="daily")
+
         # 1. 图片格式与完整性校验 + 重复图片校验拦截
         seen_hashes: dict[str, list[str]] = {}
         target_items: list[tuple[Path, str, str, str]] = []
@@ -171,7 +175,7 @@ class DailyExporter(BaseExporter):
                 + "\n".join(detail_lines)
             )
 
-        # 0a. 规格化：长边 <2160 阻断（仅在规格化激活时生效，向后兼容旧调用）
+        # 0a. 规格化：长边 <1920 阻断（仅在规格化激活时生效，向后兼容旧调用）
         normalize_spec = resolve_normalize(self.data)
         if normalize_spec:
             assert_min_long(images, self.log)

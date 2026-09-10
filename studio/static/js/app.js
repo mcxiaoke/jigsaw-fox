@@ -15,6 +15,7 @@ import {
   fetchQualityStats,
   fetchTags,
   fetchTaxonomy,
+  fetchExportLimits,
   deleteManualCrop as deleteManualCropApi,
   getFileUrl,
   getThumbUrl,
@@ -347,6 +348,25 @@ const app = createApp({
     const previewError = computed(() => previewState.value.error || "");
     const previewOrdered = computed(() => previewState.value.ordered || []);
     const previewStats = computed(() => previewState.value.stats || null);
+
+    // 单次导出数量上限：由后端 /api/export/limits 下发，前端不硬编码阈值
+    const exportLimits = ref({ maxImagesPerJob: 100, byType: {} });
+    const EXPORT_MODULE_OF_TYPE = {
+      main: "main",
+      daily: "daily",
+      event: "events",
+      collection: "collections",
+    };
+    const currentExportLimit = computed(() => {
+      const mod = EXPORT_MODULE_OF_TYPE[exportType.value] || exportType.value;
+      const byType = exportLimits.value.byType || {};
+      return Number(byType[mod]) || Number(exportLimits.value.maxImagesPerJob) || 100;
+    });
+    // 预览清单条数即导出器实际处理量（已导出图片默认排除，两者同口径）
+    const exportImageCount = computed(() => Number(previewStats.value?.total) || 0);
+    const exportOverLimit = computed(
+      () => exportImageCount.value > currentExportLimit.value
+    );
     const suggested = computed(() => previewState.value.suggested || null);
     const suggestedStartHint = computed(() => (suggested.value && exportType.value === "main") ? suggested.value.suggestedStartOrder : null);
     const suggestedMaxOrder = computed(() => (suggested.value && suggested.value.maxOrder) || 0);
@@ -1046,7 +1066,8 @@ const app = createApp({
         return;
       }
 
-      const taskId = "qc_" + Date.now().toString(36) + "_" + Math.random().toString(36).slice(2, 10);
+      // 前缀必须为 quality_ / export_：后端按前缀判定任务类型并做同类互斥
+      const taskId = "quality_" + Date.now().toString(36) + "_" + Math.random().toString(36).slice(2, 10);
       isBatchEvaluating.value = true;
       qcTaskId.value = taskId;
       qcProgress.value = { done: 0, total: unscored.length, failed: 0 };
@@ -2002,6 +2023,16 @@ const app = createApp({
     );
 
     const startExport = async () => {
+      // 数量上限硬拦截：与后端同源（后端仍会在导出器内按最终真实数量复核）
+      if (exportOverLimit.value) {
+        stdError(
+          "[导出]",
+          new Error(
+            `本次 ${exportImageCount.value} 张，超过单次导出上限 ${currentExportLimit.value} 张，请减少选中范围或分批导出`
+          )
+        );
+        return;
+      }
       // 纯前端防呆：试导出直接执行；正式导出必须先过二次确认弹窗
       if (exportConfig.value.trial) {
         await runExport();
@@ -2068,8 +2099,9 @@ const app = createApp({
 
       // 进度感知：前端生成任务 id；POST 与状态轮询并行，
       // 任一通道先到达终态即收尾 (finalize 幂等，后到者忽略)
+      // 前缀必须为 quality_ / export_：后端按前缀判定任务类型并做同类互斥
       const taskId =
-        "exp_" + Date.now().toString(36) + "_" + Math.random().toString(36).slice(2, 10);
+        "export_" + Date.now().toString(36) + "_" + Math.random().toString(36).slice(2, 10);
       let finalized = false;
       let pollTimer = null;
 
@@ -2311,6 +2343,17 @@ const app = createApp({
       }, 3000);
 
       try {
+        const limits = await fetchExportLimits();
+        exportLimits.value = {
+          maxImagesPerJob: Number(limits.maxImagesPerJob) || 100,
+          byType: limits.byType || {},
+        };
+      } catch (err) {
+        stdError("[初始化导出限制]", err);
+        // 拉取失败保留默认值 100，不阻断使用
+      }
+
+      try {
         const tax = await fetchTaxonomy();
         mainTags.value = tax.main_tags || tax.tags || tax.catalogs || [];
         catalogs.value = mainTags.value;
@@ -2463,6 +2506,10 @@ const app = createApp({
       previewError,
       previewOrdered,
       previewStats,
+      exportLimits,
+      currentExportLimit,
+      exportImageCount,
+      exportOverLimit,
       suggestedStartHint,
       suggestedMaxOrder,
       suggestedVersion,

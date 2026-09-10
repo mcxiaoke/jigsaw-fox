@@ -546,7 +546,7 @@ def resize_short(img, short_target):
 def resize_long(img, long_target):
     """仅缩小：使长边（max(w,h) = long_target，不放大。
 
-    designed for 长边固定 2160 的导出规格化；原图长边已 ≤ long_target 时原样返回
+    designed for 长边默认 1920 (DEFAULT_LONG_TARGET) 的导出规格化；原图长边已 ≤ long_target 时原样返回
     （只缩小不放大，不凭空造像素）。
     """
     w, h = img.size

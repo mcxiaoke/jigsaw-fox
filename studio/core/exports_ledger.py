@@ -3,7 +3,8 @@
 """
 studio.core.exports_ledger — 源素材库唯一权威导出总账本 (.studio/ledger/exports.json)
 基于 Append-Only 列表设计，记录原图 SHA-256、逻辑 ID、版本修订与交付归属。
-支持历史防重拦截、同模块排重、跨模块预警与旧版 exported.json 自动迁移。
+支持历史防重拦截、同模块排重、跨模块预警，并可通过 append-only 事件流在账本损坏时全量重建。
+（旧版 exported.json 兼容层已整体移除，本账本为唯一事实源。）
 """
 
 from __future__ import annotations
@@ -58,11 +59,9 @@ class ExportsLedger:
         self.load()
 
     def load(self) -> None:
-        """加载账本数据，若不存在或损坏则依次尝试 legacy 迁移 / 事件流重建"""
+        """加载账本数据，若不存在或损坏则尝试从事件流重建"""
         with self._lock:
             if not self.ledger_file.exists() or not self.ledger_file.is_file():
-                if self._try_migrate_legacy():
-                    return
                 if self._try_rebuild_from_events():
                     return
                 self.schema_version = 2
@@ -171,80 +170,6 @@ class ExportsLedger:
         except Exception as e:
             logger.warning("[ledger] 事件流追加失败: %s (%s)", self.events_file, e)
 
-    def _try_migrate_legacy(self) -> bool:
-        """从旧版 exported.json (1.0.0 字典格式) 自动迁移"""
-        candidates = [
-            self.src_dir / "exported.json",
-            self.workspace.studio_dir / "exported.json",
-        ]
-        legacy_file = None
-        for cand in candidates:
-            if cand.exists() and cand.is_file():
-                legacy_file = cand
-                break
-
-        if not legacy_file:
-            return False
-
-        try:
-            raw = json.loads(legacy_file.read_text(encoding="utf-8"))
-            if not isinstance(raw, dict) or "hashes" not in raw:
-                return False
-
-            hashes_dict = raw.get("hashes", {})
-            migrated_records: list[dict[str, Any]] = []
-            idx = 1
-
-            for h, item in hashes_dict.items():
-                if not isinstance(item, dict):
-                    continue
-                exp_type = item.get("export_type", "main")
-                order = item.get("order")
-                month = item.get("month")
-                event_id = item.get("event_id")
-                col_id = item.get("collection_id")
-
-                if exp_type == "main" and order:
-                    logical_id = f"main:{order}"
-                elif exp_type == "daily" and month:
-                    logical_id = f"daily:{month}"
-                elif exp_type == "event" and event_id:
-                    logical_id = f"event:{event_id}"
-                elif exp_type == "collection" and col_id:
-                    logical_id = f"collection:{col_id}"
-                else:
-                    logical_id = f"{exp_type}:{Path(item.get('path', '')).stem}"
-
-                rec = {
-                    "recordId": f"rec_{idx:04d}",
-                    "sourceHash": (item.get("hash") or h).strip().lower(),
-                    "sourcePath": item.get("path", "").replace("\\", "/"),
-                    "sourceSize": int(item.get("file_size", 0)),
-                    "module": exp_type,
-                    "logicalId": logical_id,
-                    "order": order,
-                    "batchId": None,
-                    "targetFile": item.get("target", ""),
-                    "targetHash": "",
-                    "revision": 1,
-                    "supersedes": None,
-                    "cropInfo": None,
-                    "exportedAt": item.get("exported_at") or dt.datetime.now(dt.timezone.utc).isoformat().replace("+00:00", "Z"),
-                }
-                migrated_records.append(rec)
-                idx += 1
-
-            self.schema_version = 2
-            self.updated_at = dt.datetime.now(dt.timezone.utc).isoformat().replace("+00:00", "Z")
-            self.records = migrated_records
-            self._rebuild_indices()
-            if not self._read_only:
-                self._save_unlocked()
-            return True
-        except Exception as e:
-            logger.warning("[ledger] 旧版 exported.json 迁移失败，跳过: %s", e)
-            return False
-
     def _rebuild_indices(self) -> None:
         """重构内存倒排索引"""
         self._by_source_hash.clear()
@@ -315,7 +240,7 @@ class ExportsLedger:
             for rec in self.records:
                 h = (rec.get("sourceHash") or "").strip().lower()
                 p = (rec.get("sourcePath") or "").replace("\\", "/")
-                legacy_view = {
+                view = {
                     "hash": h,
                     "path": p,
                     "export_type": rec.get("module"),
@@ -326,9 +251,9 @@ class ExportsLedger:
                     "recordId": rec.get("recordId"),
                 }
                 if h:
-                    out[h] = legacy_view
+                    out[h] = view
                 if p:
-                    out[p] = legacy_view
+                    out[p] = view
             return out
 
     def check_history_duplicate(

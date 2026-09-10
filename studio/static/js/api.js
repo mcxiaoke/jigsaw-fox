@@ -107,6 +107,13 @@ export async function previewExport(payload) {
   return data;
 }
 
+export async function fetchExportLimits() {
+  const res = await fetch("/api/export/limits");
+  const data = await parseJson(res, "导出限制");
+  if (!res.ok || !data.ok) throw new Error(data.error || "读取导出限制失败");
+  return data.limits || {};
+}
+
 export function getThumbUrl(absOrRelPath, size = 360, baseDir = "") {
   let full = absOrRelPath;
   if (baseDir && !/^[A-Za-z]:[\\/]/.test(absOrRelPath) && !absOrRelPath.startsWith("/")) {

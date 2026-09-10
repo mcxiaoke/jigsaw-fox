@@ -35,7 +35,8 @@ def resolve_normalize(data: dict[str, Any]) -> dict[str, Any] | None:
 
     返回 None 表示不规格化（走普通转码，向后兼容旧调用）。
     显式 `normalize=False` 则始终关闭；否则一旦参数里出现 targetRatios/cropMode 即生效
-    （前端导出工作台第①步会下发）。长边 2160 为常量，不开放给 UI。
+    （前端导出工作台第①步会下发）。长边默认为常量 DEFAULT_LONG_TARGET = 1920，
+    可由参数 longTarget 覆盖，但 UI 未开放该入口。
     """
     if data.get("normalize") is False:
         return None
@@ -88,6 +89,52 @@ def resolve_excluded(data: dict[str, Any]) -> set[str]:
         if s:
             out.add(s)
     return out
+
+
+# ---------------------------------------------------------------------------
+# 单次导出数量上限（业务硬约束）
+# ---------------------------------------------------------------------------
+# 游戏侧一次内容更新（main / daily / event / collection）的绝对量不宜过大，
+# 因此在这里设统一硬上限。调整方式见 studio/docs/studio-full-review-20260910.md
+# 的「导出数量限制方案」：只需改本常量或 EXPORT_IMAGE_LIMITS 字典，
+# 前端通过 GET /api/export/limits 自动同步，无需改动前端。
+MAX_EXPORT_IMAGES_PER_JOB = 100
+
+# 按导出类型差异化上限（键为导出器 module 名）；缺省回落到 MAX_EXPORT_IMAGES_PER_JOB
+EXPORT_IMAGE_LIMITS: dict[str, int] = {
+    "main": 100,
+    "daily": 100,
+    "events": 100,
+    "collections": 100,
+}
+
+
+def resolve_export_limit(exp_type: str) -> int:
+    """解析指定导出类型的单次数量上限。"""
+    return int(
+        EXPORT_IMAGE_LIMITS.get(
+            (exp_type or "").strip().lower(), MAX_EXPORT_IMAGES_PER_JOB
+        )
+    )
+
+
+def assert_max_images(
+    images: list,
+    log_fn: Callable[[str, str], None],
+    exp_type: str = "main",
+    context: str = "导出",
+) -> None:
+    """导出前阻断校验：待导出图片数超过单次上限时直接中止（在剔除已导出之后调用）。"""
+    limit = resolve_export_limit(exp_type)
+    n = len(images)
+    if n <= limit:
+        return
+    msg = (
+        f"{context}被阻断: 本次待导出 {n} 张，超过单次导出上限 {limit} 张。"
+        f"游戏侧单次内容更新量不宜过大，请减少选中范围或分批导出。"
+    )
+    log_fn(msg, "err")
+    raise ValueError(msg)
 
 
 @dataclass

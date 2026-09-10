@@ -23,7 +23,7 @@ Content Studio 是为 JigsawFox 拼图游戏生态打造的本地化生产力工
    - 告别单图编辑的繁琐，选中即批量；
    - 支持**覆盖设置 (Set)、追加 (Add)、移除 (Del)、重置 (Clear)、一键复核/标记待复核**；
    - 基于父级物理目录名称自动推断初始标签。
-4. **🛡️ 全生命周期防重发布账本（`exported.json`）**
+4. **🛡️ 全生命周期防重发布账本（`.studio/ledger/exports.json`）**
    - 每次导出自动沉淀图片内容哈希与归属信息，卡片直观显示 `✔ 已导出` 角标；
    - 支持「隐藏已导出」与「选未导出」，轻松掌控可用新图库存水位。
 5. **🔄 文件改名与移动路径自愈**
@@ -169,7 +169,7 @@ studio/
 │   ├── crop_compute.py     纯几何/能量裁剪算法（与 scripts/imgcrop.py 共用）
 │   ├── image_proc.py       缩略图、转码、规格化、并行进程池
 │   ├── exports_ledger.py   导出账本（.studio/ledger，含 read_only 试导出模式）
-│   ├── export_tracker.py   旧版 exported.json 账本读取（兼容层）
+│   ├── export_tracker.py   导出账本只读视图适配层（投影为 hashes/path_to_hash）
 │   └── workspace.py        源目录 .studio 工作区（目录结构、审计流水、发布镜像）
 ├── exporters/              策略模式导出引擎
 │   ├── base.py             BaseExporter 抽象基类 + 试导出隔离 + 进度上报

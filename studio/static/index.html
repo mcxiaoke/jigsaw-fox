@@ -807,14 +807,24 @@
               质量 <b>{{ exportConfig.quality }}%</b> · 排序 <b>{{ exportConfig.sortBy }}</b>
               <span v-if="previewStats.alreadyExported > 0" style="color:#b45309; font-weight:600; margin-left:8px;">含 {{ previewStats.alreadyExported }} 张已导出的历史图片</span>
             </div>
+            <!-- 单次导出数量上限：超出时禁止导出并给出分批指引 -->
+            <div v-if="exportOverLimit" style="margin-top:10px; padding:10px 14px; background:#fef2f2; border:1px solid #fecaca; border-radius:6px; font-size:13px; color:#b91c1c;">
+              ⚠️ 本次待导出 <b>{{ exportImageCount }}</b> 张，超过单次导出上限 <b>{{ currentExportLimit }}</b> 张。
+              游戏侧单次内容更新量不宜过大，请减少选中范围或拆成多批导出。
+            </div>
+            <div v-else-if="exportImageCount > 0" style="margin-top:10px; padding:8px 14px; background:#f8fafc; border:1px solid #e2e8f0; border-radius:6px; font-size:12px; color:#64748b;">
+              本次待导出 <b>{{ exportImageCount }}</b> 张（单次上限 {{ currentExportLimit }} 张）
+            </div>
           </template>
         </div>
 
+        <!-- 轮询断连重挂：独立于日志容器，避免「还没收到第一条日志就断连」时按钮不可见 -->
+        <button v-if="isExporting && exportPollLost" class="btn sm" style="margin-bottom:8px; border-color:#f59e0b; color:#b45309;" @click="reconnectExportPoll" title="轮询因网络中断已停止，后端导出任务可能仍在运行，点击重新挂载进度">
+          🔄 重新连接导出任务
+        </button>
+
         <!-- 控制台日志/结果：导出执行中实时滚动；完成后停留在预览视图并保留结果 -->
         <div class="export-result" v-if="exportLogs.length > 0 && (exportDone || isExporting)">
-          <button v-if="isExporting && exportPollLost" class="btn sm" style="margin-bottom:8px; border-color: #f59e0b; color: #b45309;" @click="reconnectExportPoll" title="轮询因网络中断已停止，后端导出任务可能仍在运行，点击重新挂载进度">
-            🔄 重新连接导出任务
-          </button>
           <div class="console-box">
             <div v-for="(l, i) in exportLogs" :key="i" class="log-line" :class="l.level">
               <span class="t">[{{ l.t }}]</span>
@@ -844,7 +854,7 @@
               {{ previewLoading ? '⏳ 预检中…' : '下一步：顺序调整 →' }}
             </button>
             <button v-else-if="exportStep === 2" class="btn primary" :disabled="isExporting" @click="goExportStep(3)">下一步：导出前预览 →</button>
-            <button v-else-if="exportStep === 3" class="btn primary" :disabled="isExporting" @click="startExport">
+            <button v-else-if="exportStep === 3" class="btn primary" :disabled="isExporting || exportOverLimit" :title="exportOverLimit ? ('本次 ' + exportImageCount + ' 张，超过单次上限 ' + currentExportLimit + ' 张，请分批导出') : ''" @click="startExport">
               <span v-if="isExporting">⏳ {{ exportProgressText }}</span>
               <span v-else-if="exportConfig.trial">🧪 开始试导出</span>
               <span v-else>🚀 确认正式导出</span>

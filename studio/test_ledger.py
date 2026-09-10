@@ -94,7 +94,9 @@ class TestExportsLedger(unittest.TestCase):
         self.assertFalse(conflict)
         self.assertIsNone(sev)
 
-    def test_legacy_exported_json_migration(self):
+    def test_legacy_exported_json_is_ignored(self):
+        """旧版 exported.json 兼容层已移除：文件存在也不再被读取或迁移。"""
+
         # 写入旧版 exported.json (v1.0.0 字典格式)
         legacy_file = self.test_dir / "exported.json"
         legacy_data = {
@@ -114,15 +116,12 @@ class TestExportsLedger(unittest.TestCase):
         legacy_file.write_text(json.dumps(legacy_data), encoding="utf-8")
 
         ledger = ExportsLedger(self.test_dir)
-        self.assertEqual(len(ledger.records), 1)
-        rec = ledger.records[0]
-        self.assertEqual(rec["sourceHash"], "old_hash_1")
-        self.assertEqual(rec["logicalId"], "main:201")
-        self.assertEqual(rec["order"], 201)
-        self.assertTrue(ledger.ledger_file.exists())
+        # 不再读取旧版账本：记录为空，且不会因迁移而生成权威账本文件
+        self.assertEqual(len(ledger.records), 0)
+        self.assertFalse(ledger.ledger_file.exists())
 
     def test_read_only_no_migration_write(self):
-        """暗坑 A：read_only 下即使存在 legacy exported.json，也只能内存迁移，不得落盘。"""
+        """read_only 下不产生任何写入（旧版迁移路径已移除，更无从落盘）。"""
         legacy_file = self.test_dir / "exported.json"
         legacy_data = {
             "version": "1.0.0",
@@ -141,8 +140,8 @@ class TestExportsLedger(unittest.TestCase):
         legacy_file.write_text(json.dumps(legacy_data), encoding="utf-8")
 
         ledger = ExportsLedger(self.test_dir, read_only=True)
-        # 内存已迁移
-        self.assertEqual(len(ledger.records), 1)
+        # 不再迁移
+        self.assertEqual(len(ledger.records), 0)
         # 但不得写入 exports.json
         self.assertFalse(ledger.ledger_file.exists())
 
