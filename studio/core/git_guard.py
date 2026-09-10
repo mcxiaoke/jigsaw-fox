@@ -36,15 +36,33 @@ DEFAULT_MODE = "auto"
 _VALID_MODES = ("off", "auto", "strict")
 _MODE_FILE = "git_guard.json"
 
-GITIGNORE_CONTENT = """\
-# studio git guard: 高频二进制缓存与构建镜像（体积大、可重建、WAL 持续变动）
+# 托管区标记：guard 只维护两个标记之间的内容，标记之外的用户自定义行一律保留。
+# 这样用户可以自由追加忽略规则，且模板升级仍能下发到老仓库。
+_MANAGED_BEGIN = "# >>> studio git guard managed, do not edit >>>"
+_MANAGED_END = "# <<< studio git guard managed <<<"
+
+# .gitignore 托管区内容：高频二进制缓存、构建镜像与 rollback 快照，
+# 体积大、可重建、持续变动（WAL / 每次导出新增的账本快照 / 回滚产物）。
+# ledger/backups/ 必须忽略：回滚会把 release 镜像里的 zip/webp 移入
+# ledger/backups/trashed-<op>/ 保留，一旦入库会让仓库迅速膨胀。
+GITIGNORE_MANAGED_BODY = """\
+# 高频二进制缓存、构建镜像与 rollback 快照（可重建，勿入库）
 cache/
 staging/
 release/
+ledger/backups/
+
+# 兜底：.studio 只版本化文本元数据（tags/ledger/logs），压缩包与图片产物
+# 一律不属于版本化范围。目录名白名单不可能穷尽，按扩展名兜底可确保未来
+# 新增产物目录即使漏配，也不会把 MB 级二进制提交进仓库。
+*.zip
+*.png
+*.jpg
+*.webp
 """
 
-# 与主仓库决策一致：彻底关闭行尾转换，防 CRLF 污染（见 AGENTS.md / studio 仓库教训）
-GITATTRIBUTES_CONTENT = "* -text\n"
+# .gitattributes 托管区内容：与主仓库决策一致，彻底关闭行尾转换防 CRLF 污染
+GITATTRIBUTES_MANAGED_BODY = "* -text\n"
 
 _CONFIG_KEYS = ("core.autocrlf", "user.name", "user.email", "gc.auto")
 _CONFIG_VALUES = ("false", "studio", "studio@local", "0")
@@ -174,8 +192,11 @@ def describe_status(studio_dir: Path, mode: str | None = None) -> str:
 def ensure_repo(studio_dir: Path) -> bool:
     """幂等初始化 .studio git 仓库；成功返回 True，失败返回 False（不抛异常）。
 
-    - 已存在合法 repo：仅补齐/校验 ignore 与配置，直接返回 True；
+    - 已存在合法 repo：仅校准 ignore 托管区与配置，直接返回 True；
     - 首次初始化：git init → 写 .gitignore/.gitattributes → 局部配置 → 首次提交。
+
+    ignore 文件采用「托管区校准」而非整文件覆盖：guard 只维护标记之间的内容，
+    用户在标记之外追加的任何规则都会被保留，绝不会被静默抹掉。
     """
     studio_dir = Path(studio_dir)
     try:
@@ -183,8 +204,16 @@ def ensure_repo(studio_dir: Path) -> bool:
 
         first_time = not _repo_dir_ok(studio_dir)
 
-        _write_once(studio_dir / ".gitignore", GITIGNORE_CONTENT)
-        _write_once(studio_dir / ".gitattributes", GITATTRIBUTES_CONTENT)
+        if _calibrate_managed_file(
+            studio_dir / ".gitignore", GITIGNORE_MANAGED_BODY
+        ):
+            logger.info(
+                "[GIT_GUARD] 已校准 .gitignore 托管区（用户自定义行保留）: %s",
+                studio_dir,
+            )
+        _calibrate_managed_file(
+            studio_dir / ".gitattributes", GITATTRIBUTES_MANAGED_BODY
+        )
 
         if first_time:
             logger.info(
@@ -200,7 +229,8 @@ def ensure_repo(studio_dir: Path) -> bool:
         _apply_local_config(studio_dir)
         if first_time:
             logger.info(
-                "[GIT_GUARD] 初始化完成 (跟踪范围: tags/ledger/logs；忽略: cache/staging/release)"
+                "[GIT_GUARD] 初始化完成 (跟踪范围: tags/ledger/logs；"
+                "忽略托管区: cache/staging/release/ledger/backups)"
             )
         return True
     except Exception as e:  # noqa: BLE001
@@ -208,14 +238,44 @@ def ensure_repo(studio_dir: Path) -> bool:
         return False
 
 
-def _write_once(p: Path, content: str) -> None:
-    """内容一致则跳过写入，避免无意义的 mtime 变化。"""
+def _managed_block(body: str) -> str:
+    """把托管区内容渲染为带首尾标记的完整文本块（标记行是合法注释）。"""
+    return f"{_MANAGED_BEGIN}\n{body}{_MANAGED_END}\n"
+
+
+def _calibrate_managed_file(p: Path, body: str) -> bool:
+    """校准 ignore 类文件的托管区；返回是否发生了写入。
+
+    语义（关键：绝不吞掉用户内容）：
+    - 文件不存在：写入完整托管区；
+    - 含托管标记：只替换标记之间的内容（模板升级可下发），标记之外原样保留；
+    - 无托管标记（老文件或用户自建）：原有内容全部保留，托管区追加到末尾。
+    """
+    block = _managed_block(body)
     try:
-        if p.exists() and p.read_text(encoding="utf-8") == content:
-            return
-    except Exception:  # noqa: BLE001
-        pass
-    p.write_text(content, encoding="utf-8", newline="\n")
+        existing = p.read_text(encoding="utf-8") if p.exists() else None
+    except Exception:  # noqa: BLE001 - 读取失败按不存在处理
+        existing = None
+
+    if existing is None:
+        new = block
+    elif _MANAGED_BEGIN in existing and _MANAGED_END in existing:
+        head, _, rest = existing.partition(_MANAGED_BEGIN)
+        _, _, tail = rest.partition(_MANAGED_END)
+        tail = tail.lstrip("\r\n")
+        if head and not head.endswith("\n"):
+            head += "\n"
+        if tail and not tail.endswith("\n"):
+            tail += "\n"
+        new = head + block + tail
+    else:
+        sep = "\n" if existing and not existing.endswith("\n") else ""
+        new = existing + sep + block
+
+    if new == existing:
+        return False
+    p.write_text(new, encoding="utf-8", newline="\n")
+    return True
 
 
 def _init_repo(studio_dir: Path) -> bool:

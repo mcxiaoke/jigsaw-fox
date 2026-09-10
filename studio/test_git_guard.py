@@ -92,6 +92,95 @@ class TestGitGuard(unittest.TestCase):
         (cache_dir / "studio.db-wal").write_bytes(b"y" * 8)
         self.assertFalse(is_dirty(self.studio_dir), "cache/ 必须被 ignore")
 
+    def test_gitignore_ignores_ledger_backups(self):
+        """ledger/backups/ 必须被忽略：含账本快照与回滚产物（zip/webp）。"""
+        ensure_repo(self.studio_dir)
+        backups = self.studio_dir / "ledger" / "backups"
+        (backups / "trashed-op_1" / "collections").mkdir(parents=True)
+        (backups / "exports-20260910-120000.json").write_text("[]", encoding="utf-8")
+        (backups / "trashed-op_1" / "collections" / "a.zip").write_bytes(b"z" * 64)
+        (backups / "trashed-op_1" / "collections" / "a.webp").write_bytes(b"w" * 64)
+        self.assertFalse(
+            is_dirty(self.studio_dir), "ledger/backups/ 必须被 ignore"
+        )
+
+    def test_gitignore_ignores_binary_artifacts_anywhere(self):
+        """兜底策略：任意位置的 zip / 图片产物都不入库（不依赖目录名白名单）。"""
+        ensure_repo(self.studio_dir)
+        gi_content = (self.studio_dir / ".gitignore").read_text(encoding="utf-8")
+        for pat in ("*.zip", "*.png", "*.jpg", "*.webp"):
+            self.assertIn(pat, gi_content, f"托管区缺少兜底规则 {pat}")
+        (self.studio_dir / "loose.zip").write_bytes(b"z" * 64)
+        (self.studio_dir / "loose.webp").write_bytes(b"w" * 64)
+        new_dir = self.studio_dir / "some_new_artifact_dir"
+        new_dir.mkdir()
+        (new_dir / "a.png").write_bytes(b"p" * 64)
+        (new_dir / "b.jpg").write_bytes(b"j" * 64)
+        self.assertFalse(
+            is_dirty(self.studio_dir), "二进制产物必须被兜底规则忽略"
+        )
+
+    def test_gitignore_user_rules_preserved(self):
+        """用户在托管区外追加的规则，跨 ensure_repo 必须原样保留。"""
+        ensure_repo(self.studio_dir)
+        gi = self.studio_dir / ".gitignore"
+        gi.write_text(
+            gi.read_text(encoding="utf-8") + "*.psd\n*.ai\nmy_custom/\n",
+            encoding="utf-8",
+            newline="\n",
+        )
+        # 再次校准（等价于下一次导出前的 ensure_repo）
+        self.assertTrue(ensure_repo(self.studio_dir))
+        content = gi.read_text(encoding="utf-8")
+        for rule in ("*.psd", "*.ai", "my_custom/"):
+            self.assertIn(rule, content, f"用户规则 {rule} 被吞掉")
+        self.assertIn("cache/", content)
+        self.assertIn("ledger/backups/", content)
+        self.assertEqual(content.count(git_guard._MANAGED_BEGIN), 1)
+        self.assertEqual(content.count(git_guard._MANAGED_END), 1)
+
+    def test_gitignore_legacy_without_markers_preserved(self):
+        """无托管标记的老文件：原有内容全保留，托管区追加且不重复。"""
+        gi = self.studio_dir / ".gitignore"
+        gi.write_text("thumbs/\ntmp/\ntemp/\ncache/", encoding="utf-8", newline="\n")
+        self.assertTrue(ensure_repo(self.studio_dir))
+        c1 = gi.read_text(encoding="utf-8")
+        for rule in ("thumbs/", "tmp/", "temp/"):
+            self.assertIn(rule, c1, f"老文件规则 {rule} 被吞掉")
+        self.assertIn("ledger/backups/", c1)
+        # 幂等：二次校准不追加第二份托管区
+        self.assertTrue(ensure_repo(self.studio_dir))
+        c2 = gi.read_text(encoding="utf-8")
+        self.assertEqual(c1, c2)
+        self.assertEqual(c2.count(git_guard._MANAGED_BEGIN), 1)
+
+    def test_managed_block_template_upgrade_keeps_user_rules(self):
+        """模板升级：只替换托管区内容，用户规则保留。"""
+        ensure_repo(self.studio_dir)
+        gi = self.studio_dir / ".gitignore"
+        gi.write_text(
+            "# 用户区\n*.psd\n"
+            + git_guard._MANAGED_BEGIN
+            + "\ncache/\nstaging/\n"
+            + git_guard._MANAGED_END
+            + "\n# 尾部用户区\nmy_private/\n",
+            encoding="utf-8",
+            newline="\n",
+        )
+        self.assertTrue(ensure_repo(self.studio_dir))
+        content = gi.read_text(encoding="utf-8")
+        # 标记外的用户规则必须保留
+        self.assertIn("*.psd", content)
+        self.assertIn("my_private/", content)
+        # 标记内的托管区必须已升级为最新模板
+        self.assertIn("release/", content)
+        self.assertIn("ledger/backups/", content)
+        self.assertIn("*.zip", content)
+        self.assertLess(content.index("*.psd"), content.index(git_guard._MANAGED_BEGIN))
+        self.assertLess(
+            content.index(git_guard._MANAGED_END), content.index("my_private/")
+        )
+
     # ------------------------------------------------------------------
     # checkpoint
     # ------------------------------------------------------------------

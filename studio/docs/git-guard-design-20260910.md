@@ -28,14 +28,34 @@ ledger/exports.json（导出账本）、logs/*.jsonl（审计流水）是核心�
 repo 位置：`<src_dir>/.studio/`（即 `StudioWorkspace.studio_dir`），所有 git 操作
 统一以该目录为 work tree，避免把 src_dir 下的海量素材纳入 git 扫描。
 
-`.gitignore`（由 git_guard 在 repo 初始化时自动写入）：
+`.gitignore`（由 git_guard 在每次 `ensure_repo` 时**校准**，非整文件覆盖）：
 
 ```gitignore
-# 高频二进制缓存与构建镜像：体积大、可重建、WAL 持续变动
+# >>> studio git guard managed, do not edit >>>
+# 高频二进制缓存、构建镜像与 rollback 快照（可重建，勿入库）
 cache/
 staging/
 release/
+ledger/backups/
+
+# 兜底：.studio 只版本化文本元数据（tags/ledger/logs），压缩包与图片产物
+# 一律不属于版本化范围
+*.zip
+*.png
+*.jpg
+*.webp
+# <<< studio git guard managed <<<
 ```
+
+**托管区机制（2026-09-10 修正）**：guard 只维护两个标记之间的内容，标记之外
+是用户自由区——用户追加的任何规则都会被保留，**绝不会被静默抹掉**；模板升级
+（如新增 `ledger/backups/`）仍能通过替换托管区下发到老仓库。无标记的老文件
+（历史遗留）则原样保留并在末尾追加托管区，不丢任何既有行。
+
+`ledger/backups/` 必须忽略：① 每次回滚前的账本快照 `exports-*.json`
+（单份 200~300KB，随导出持续新增）；② 回滚把 release 镜像里被移除的产物移入
+`trashed-<op>/` 保留而非物理删除，其中含 `*.zip` / `*.webp`。此前模板未覆盖
+该目录，导致 2.1MB zip 与 52KB webp 被 `git add -A` 提交进仓库（见变更日志）。
 
 跟踪范围（即提交内容）：
 
@@ -50,6 +70,16 @@ release/
 未在白名单内的其余文件（如未来新增的临时文件）按 .gitignore 结果处理：git_guard
 提交时使用 `git add -A`，因此 ignore 之外的任何新增文件也会被提交——这保证
 "clean" 的语义严格成立（strict 模式下不 clean 就拦截），不依赖白名单的完备性。
+
+**反过来说这也是必须守的纪律**：`git add -A` 不区分文件来源，任何新增的
+guard/回滚产物目录（如 `ledger/backups/`）一旦没进托管区，就会连着体积大的
+zip/webp 一起被提交（2026-09-10 已发生一次）。新增此类目录时**必须同步更新
+`GITIGNORE_MANAGED_BODY`**。
+
+由于「目录名白名单不可能穷尽」，托管区额外按**扩展名兜底**忽略
+`*.zip` / `*.png` / `*.jpg` / `*.webp`：`.studio` 的版本化范围只有文本元数据，
+仓库内出现的压缩包与图片按定义都属于构建产物或回滚残渣，不存在误伤场景。
+这条兜底与 `release/`、`ledger/backups/` 构成两层防线（正常路径 + 未知路径）。
 
 ### 关键防坑配置
 
@@ -138,7 +168,9 @@ def commit_after_rollback(studio_dir: Path, modules: list[str], op_id: str, reas
 4. **dirty 判定**：`repo.is_dirty(untracked_files=True)` + 对 ignore 生效性做一次
    自检（`cache/` 必须被忽略）；GitPython 不可用时用 `git status --porcelain` 判定；
 5. **幂等初始化**：`ensure_repo` 在已存在合法 repo 时直接返回 True，不重复 init；
-   `.gitignore`/`.gitattributes` 每次写入前对比内容，避免无意义的 mtime 变化。
+   `.gitignore`/`.gitattributes` 走 `_calibrate_managed_file`——只替换托管区标记
+   之间的内容并在无变化时不落盘（避免无意义 mtime 变化），标记之外的用户内容
+   一律保留；不提供任何"整文件覆盖"路径。
 
 ## 六、server 挂接点
 
@@ -226,3 +258,10 @@ unittest 风格，与现有套件一致；所有用例基于临时目录构造 `
       由三个导出器回填、server 透传；`test_studio.py` 补 `result.count` 断言，
       `temp/verify_gg_count.py` 端到端复验 `export(main): 5 images` 正确。
       历史错误 commit 不重写（只读历史参照，重写破坏哈希链）。
+- [x] 四次自审（2026-09-10 缺陷复盘）：原 `_write_once` 是"内容≠模板就整体覆盖"，
+      且每次 `ensure_repo` 都执行，导致用户手改的 `.gitignore` 每次导出被静默抹掉，
+      并在同一 commit 里把因此"解禁"的 `ledger/backups/` 内容（含 2.1MB zip、
+      52KB webp、23 份账本快照）扫入版本库。修复：改为托管区校准
+      （`_calibrate_managed_file`，只维护标记之间的内容）+ 托管区补 `ledger/backups/`。
+      `test_git_guard.py` 新增 4 例覆盖：备份目录被忽略、用户规则跨 ensure_repo
+      保留、无标记老文件不丢内容、模板升级时用户规则保留。历史不重写。
