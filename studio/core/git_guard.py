@@ -59,6 +59,8 @@ ledger/backups/
 *.png
 *.jpg
 *.webp
+# 运行日志：文本但体量大且可重建，不入库（结构化审计仍以 logs/*.jsonl 版本化）
+*.log
 """
 
 # .gitattributes 托管区内容：与主仓库决策一致，彻底关闭行尾转换防 CRLF 污染
