@@ -400,9 +400,16 @@ const app = createApp({
     };
 
     // 打标记录瘦身：仅回传预检/导出真正需要的字段，
-    // 避免 25k 张时把 width/height/quality/size 等全量字段塞进请求体（实测可从 MB 级降到 KB 级）
-    const buildSlimRecords = () =>
-      records.value.map((r) => ({
+    // 且只传选中子集（导出仅支持按勾选，范围外记录后端本就查不到表），
+    // 避免 25k 张时把全量 width/height/quality 等塞进请求体（MB 级 → KB 级）。
+    // 后端消费点（server.py 预检 + main_exporter）均为 rel/name 查表 + 缺失回退
+    // （hash→重算、tags→路径推断），按范围传子集与全量等价。
+    const buildSlimRecords = () => {
+      const scopeSelected = exportConfig.value.exportScope === "selected" && selectedSet.value.size > 0;
+      const target = scopeSelected
+        ? records.value.filter((r) => selectedSet.value.has(r.path))
+        : records.value;
+      return target.map((r) => ({
         path: r.path,
         file: r.file,
         hash: r.hash || "",
@@ -410,6 +417,7 @@ const app = createApp({
         is_manual: !!r.is_manual,
         exported: !!r.exported,
       }));
+    };
 
     // 保存用瘦身载荷：仅回传 save_tags_file 真正消费的字段(path/hash/tags/is_manual/
     // subject/scene/reason)，避免自动保存频繁把 width/height/quality 等重对象塞进请求体
@@ -470,25 +478,43 @@ const app = createApp({
       };
     };
 
-    const loadExportPreview = async () => {
+    // 预检响应缓存（U8）：同一导出会话内，影响预检结果的请求参数完全一致时，
+    // ①→②→③ 来回切步直接复用上次响应，不再重复序列化 + 传输。
+    // 手动排序（manualOrder 每次拖拽都变）不缓存，保持实时。
+    const previewCache = { key: "", data: null };
+    const previewCacheKey = (payload) =>
+      JSON.stringify([
+        payload.type, payload.srcDir, payload.outDir, payload.sortBy, payload.format,
+        payload.quality, payload.targetRatios, payload.cropMode, payload.excludeExported,
+        payload.selectedPaths, payload.excludedPaths,
+      ]);
+    const invalidatePreviewCache = () => {
+      previewCache.key = "";
+      previewCache.data = null;
+    };
+
+    const loadExportPreview = async (force = false) => {
+      // 手动排序下 ordered 会被用户拖拽/剔除实时修改，任何缓存命中都可能用过期清单
+      const cacheable = exportConfig.value.sortBy !== "manual";
+      const payload = buildPreviewPayload();
+      const key = cacheable ? previewCacheKey(payload) : "";
+      if (!force && cacheable && key && previewCache.key === key && previewCache.data) {
+        applyPreviewResponse(previewCache.data);
+        // 缓存命中同样要重绑拖拽：②步网格由 v-if 重建，Sortable 绑定不会自动恢复
+        nextTick(rebuildSortable);
+        return;
+      }
       previewState.value.loading = true;
       previewState.value.error = "";
       try {
-        const res = await previewExport(buildPreviewPayload());
-        previewState.value.ordered = res.ordered || [];
-        previewState.value.stats = res.stats || null;
-        previewState.value.suggested = res.suggested || null;
-        // 记录服务端给出的「预计/原图」换算比，供本地剔除单张后重算体积保持同口径
-        const st = res.stats || {};
-        previewState.value.estRatio =
-          Number(st.sourceBytes) > 0 ? Number(st.estWebpBytes) / Number(st.sourceBytes) : 0.2;
-        // 自动填充起始序号（仅 main，且当前为空/小于建议值时）
-        if (exportType.value === "main" && res.suggested && res.suggested.suggestedStartOrder) {
-          const cur = Number(exportConfig.value.startOrder) || 0;
-          if (cur === 0 || cur < res.suggested.suggestedStartOrder) {
-            exportConfig.value.startOrder = res.suggested.suggestedStartOrder;
-          }
+        const res = await previewExport(payload);
+        if (cacheable) {
+          previewCache.key = key;
+          previewCache.data = res;
+        } else {
+          invalidatePreviewCache();
         }
+        applyPreviewResponse(res);
       } catch (e) {
         stdError("[预览预检]", e);
         previewState.value.error = e.message || "预检失败";
@@ -496,6 +522,24 @@ const app = createApp({
         previewState.value.loading = false;
         // 等 loading 覆盖层移除、网格真正渲染后再绑定拖拽
         nextTick(rebuildSortable);
+      }
+    };
+
+    // 应用预检响应到 previewState（网络响应与缓存命中共用，保证口径一致）
+    const applyPreviewResponse = (res) => {
+      previewState.value.ordered = res.ordered || [];
+      previewState.value.stats = res.stats || null;
+      previewState.value.suggested = res.suggested || null;
+      // 记录服务端给出的「预计/原图」换算比，供本地剔除单张后重算体积保持同口径
+      const st = res.stats || {};
+      previewState.value.estRatio =
+        Number(st.sourceBytes) > 0 ? Number(st.estWebpBytes) / Number(st.sourceBytes) : 0.2;
+      // 自动填充起始序号（仅 main，且当前为空/小于建议值时）
+      if (exportType.value === "main" && res.suggested && res.suggested.suggestedStartOrder) {
+        const cur = Number(exportConfig.value.startOrder) || 0;
+        if (cur === 0 || cur < res.suggested.suggestedStartOrder) {
+          exportConfig.value.startOrder = res.suggested.suggestedStartOrder;
+        }
       }
     };
 
@@ -1766,6 +1810,8 @@ const app = createApp({
       lastExportIsTrial.value = false;
       lastTrialDir.value = "";
       exportModalOpen.value = true;
+      // 新导出会话：清空预检缓存，避免上一会话的选中/配置残留命中旧响应
+      invalidatePreviewCache();
       // 后台预检，自动填充建议序号/版本并预热第二步清单（不阻塞进入第一步）
       loadExportPreview();
     };
@@ -2107,6 +2153,8 @@ const app = createApp({
             // 正式导出成功后清空主界面选中状态：这批图已导出完毕，
             // 勾选残留会让下一次导出误带旧范围
             selectedSet.value.clear();
+            // 选中集已变：预检缓存随之失效（下次 openExport 也会再清一次，双保险）
+            invalidatePreviewCache();
           }
         } catch (_) {
           // ignore
