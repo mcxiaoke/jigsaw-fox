@@ -1,0 +1,232 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Content Studio — 导出回滚与台账</title>
+  <link rel="stylesheet" href="/static/css/studio.css" />
+  <link rel="stylesheet" href="/static/css/rollback.css" />
+  <style>[v-cloak]{display:none}</style>
+</head>
+<body>
+<div id="app" v-cloak>
+  <!-- 顶栏 -->
+  <header class="rb-topbar">
+    <div class="rb-brand">
+      <div class="logo-icon">↩</div>
+      <div>
+        <div class="rb-title">导出回滚与台账</div>
+        <div class="brand-sub">独立操作台 · 撤销历史导出 · 高危操作全程留痕</div>
+      </div>
+    </div>
+    <div class="rb-dirbar">
+      <input class="rb-dir-input" v-model.trim="dirInput" @keyup.enter="loadAll()"
+             placeholder="源素材库目录（含 .studio/ledger）" spellcheck="false" />
+      <button class="btn btn-primary" :disabled="loading" @click="loadAll()">加载</button>
+      <a class="rb-backlink" href="/static/index.html">← 返回工作台</a>
+    </div>
+  </header>
+
+  <main class="rb-main">
+    <!-- 汇总条 -->
+    <div class="rb-summary" v-if="ops.length">
+      <span>共 <b>{{ ops.length }}</b> 次导出操作</span>
+      <span>合计 <b>{{ totalRecords }}</b> 条记账记录</span>
+      <span v-if="legacyCount" class="rb-summary-legacy">⚠ {{ legacyCount }} 组 legacy 记录（无 opId，不支持按操作撤销）</span>
+    </div>
+
+    <!-- 空态 -->
+    <div class="rb-empty" v-if="!loading && inited && !ops.length">
+      <p>台账为空，尚无任何导出记录。</p>
+      <p class="rb-empty-sub">先在<a href="/static/index.html">工作台</a>完成一次导出，或检查上方目录是否正确。</p>
+    </div>
+
+    <!-- Tabs -->
+    <div class="rb-tabs" v-if="ops.length || auditEvents.length">
+      <button :class="['rb-tab', tab==='ops' && 'active']" @click="tab='ops'">操作列表</button>
+      <button :class="['rb-tab', tab==='audit' && 'active']" @click="tab='audit'">
+        回滚审计<span class="rb-tab-badge" v-if="auditEvents.length">{{ auditEvents.length }}</span>
+      </button>
+    </div>
+
+    <!-- Tab1 操作列表 -->
+    <section v-show="tab==='ops'" v-if="ops.length">
+      <div class="rb-filters">
+        <select v-model="moduleFilter" class="rb-select">
+          <option value="">全部模块</option>
+          <option v-for="m in allModules" :key="m" :value="m">{{ m }}</option>
+        </select>
+        <input class="rb-search" v-model.trim="kw" placeholder="搜索 opId / 批次 / logicalId…" />
+      </div>
+      <table class="rb-table">
+        <thead>
+          <tr>
+            <th>导出时间</th>
+            <th>opId</th>
+            <th>模块</th>
+            <th>记录数</th>
+            <th>order 区间</th>
+            <th>批次</th>
+            <th class="rb-col-actions">操作</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="op in filteredOps" :key="op.opId">
+            <td class="rb-nowrap">{{ fmtTime(op.maxExportedAt) }}</td>
+            <td class="rb-mono rb-nowrap">{{ op.opId }}</td>
+            <td>
+              <span v-for="m in op.modules" :key="m" :class="['rb-badge','rb-mod-'+m]">{{ m }}</span>
+            </td>
+            <td>{{ op.count }}</td>
+            <td class="rb-nowrap">{{ op.minOrder!=null ? op.minOrder+' ~ '+op.maxOrder : '—' }}</td>
+            <td class="rb-mono rb-cell-batches" :title="(op.batchIds||[]).join(', ')">{{ (op.batchIds||[]).join(', ') || '—' }}</td>
+            <td class="rb-col-actions">
+              <button class="btn btn-sm" @click="showDetail(op)">详情</button>
+              <button class="btn btn-sm btn-danger-outline" @click="openRollback(op)">回滚</button>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <!-- Tab2 审计 -->
+    <section v-show="tab==='audit'" v-if="ops.length || auditEvents.length">
+      <h3 class="rb-section-title">回滚事件（exports_events.jsonl）</h3>
+      <div class="rb-empty" v-if="!auditEvents.length">
+        <p>暂无回滚事件 —— 还没有执行过任何回滚。</p>
+      </div>
+      <table class="rb-table" v-if="auditEvents.length">
+        <thead>
+          <tr><th>时间</th><th>opId</th><th>剔除记录数</th></tr>
+        </thead>
+        <tbody>
+          <tr v-for="(ev,i) in auditEvents" :key="i">
+            <td class="rb-nowrap">{{ fmtTime(ev.ts) }}</td>
+            <td class="rb-mono rb-nowrap">{{ ev.opId || '—' }}</td>
+            <td>{{ (ev.recordIds||[]).length }}</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3 class="rb-section-title">快照备份（.studio/ledger/backups/，保留最近 30 份）</h3>
+      <div class="rb-empty" v-if="!backups.length"><p>暂无快照。</p></div>
+      <table class="rb-table" v-if="backups.length">
+        <thead><tr><th>文件名</th><th>大小</th><th>时间</th></tr></thead>
+        <tbody>
+          <tr v-for="b in backups" :key="b.name">
+            <td class="rb-mono">{{ b.name }}</td>
+            <td>{{ fmtSize(b.size) }}</td>
+            <td class="rb-nowrap">{{ fmtTime(b.mtime, true) }}</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+  </main>
+
+  <!-- 详情抽屉 -->
+  <div class="rb-mask" v-if="detailOp" @click.self="detailOp=null">
+    <div class="rb-drawer">
+      <div class="rb-drawer-head">
+        <div>
+          <div class="rb-drawer-title">操作详情 <code class="rb-mono">{{ detailOp.opId }}</code></div>
+          <div class="rb-drawer-sub">
+            {{ fmtTime(detailOp.maxExportedAt) }} ·
+            <span v-for="m in detailOp.modules" :key="m" :class="['rb-badge','rb-mod-'+m]">{{ m }}</span>
+            · {{ detailOp.count }} 条记录
+            <template v-if="detailOp.minOrder!=null"> · order {{ detailOp.minOrder }} ~ {{ detailOp.maxOrder }}</template>
+          </div>
+        </div>
+        <button class="rb-close" @click="detailOp=null">×</button>
+      </div>
+      <div class="rb-loading" v-if="detailLoading">加载中…</div>
+      <template v-else>
+        <input class="rb-search rb-detail-search" v-model.trim="detailKw" placeholder="过滤文件…" />
+        <table class="rb-table">
+          <thead>
+            <tr><th>#</th><th>源文件</th><th>logicalId</th><th>order</th><th>版本</th><th>状态</th></tr>
+          </thead>
+          <tbody>
+            <tr v-for="r in filteredRecords" :key="r.recordId">
+              <td class="rb-mono">{{ r.order!=null ? r.order : '—' }}</td>
+              <td class="rb-mono rb-cell-path" :title="r.sourcePath">{{ r.sourcePath }}</td>
+              <td class="rb-mono rb-cell-path" :title="r.logicalId">{{ r.logicalId || '—' }}</td>
+              <td>{{ r.order!=null ? r.order : '—' }}</td>
+              <td>r{{ r.revision || 1 }}</td>
+              <td>
+                <span v-if="isSuperseded(r)" class="rb-badge rb-mod-legacy">已被修订替代</span>
+                <span v-else class="rb-badge rb-mod-main">有效</span>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+        <p class="rb-detail-hint" v-if="!filteredRecords.length">无匹配记录。</p>
+      </template>
+    </div>
+  </div>
+
+  <!-- 回滚弹窗：预览 → 确认 → 结果 -->
+  <div class="rb-mask" v-if="rbOp" @click.self="closeRollback">
+    <div class="rb-modal">
+      <!-- 步骤1 预览 -->
+      <template v-if="rbStep==='preview'">
+        <h3 class="rb-modal-title">回滚预览 <code class="rb-mono">{{ rbOp.opId }}</code></h3>
+        <div class="rb-loading" v-if="rbPreviewLoading">正在生成预览…</div>
+        <template v-else>
+          <pre class="rb-preview" v-if="rbPreview">{{ rbPreview }}</pre>
+          <div class="rb-alert rb-alert-bad" v-else>{{ rbPreviewError }}</div>
+        </template>
+        <div class="rb-modal-actions">
+          <button class="btn" @click="closeRollback">取消</button>
+          <button class="btn btn-danger" :disabled="rbPreviewLoading || !rbPreviewOk" @click="rbStep='confirm'">下一步：确认</button>
+        </div>
+      </template>
+
+      <!-- 步骤2 确认 -->
+      <template v-else-if="rbStep==='confirm'">
+        <h3 class="rb-modal-title">⚠ 确认执行回滚</h3>
+        <div class="rb-alert rb-alert-warn">
+          此操作将：<b>回退 release 镜像</b>（相关批次/产物移入回收站目录）并<b>剔除账本记录</b>。
+          回滚前会自动生成快照；若镜像回退失败将整体还原、账本不受影响。
+        </div>
+        <label class="rb-confirm-label">
+          <input type="checkbox" v-model="rbAck" />
+          我知晓该操作会移除 release 中对应产物文件
+        </label>
+        <textarea class="rb-reason" v-model.trim="rbReason" rows="2"
+                  placeholder="回滚原因（写入审计流水，可留空）"></textarea>
+        <div class="rb-modal-actions">
+          <button class="btn" @click="rbStep='preview'">← 上一步</button>
+          <button class="btn btn-danger" :disabled="!rbAck || rbExecLoading" @click="execRollback()">
+            {{ rbExecLoading ? '执行中…' : '执行回滚' }}
+          </button>
+        </div>
+      </template>
+
+      <!-- 步骤3 结果 -->
+      <template v-else>
+        <h3 class="rb-modal-title">回滚结果</h3>
+        <div v-if="rbResult" :class="['rb-alert', rbResult.ok ? 'rb-alert-ok' : 'rb-alert-bad']">
+          {{ rbResult.msg }}
+        </div>
+        <div class="rb-result-detail" v-if="rbResult && rbResult.detail"><pre>{{ rbResult.detail }}</pre></div>
+        <div class="rb-result-snaps" v-if="rbResult && (rbResult.snapshotLedger || (rbResult.snapshotIndex && rbResult.snapshotIndex.length))">
+          快照：{{ rbResult.snapshotLedger ? rbResult.snapshotLedger.name || rbResult.snapshotLedger : '' }}
+          <template v-if="rbResult.snapshotIndex && rbResult.snapshotIndex.length"> · {{ rbResult.snapshotIndex.join(', ') }}</template>
+        </div>
+        <div class="rb-modal-actions">
+          <button class="btn btn-primary" @click="closeRollback(true)">完成</button>
+        </div>
+      </template>
+    </div>
+  </div>
+
+  <!-- Toast -->
+  <transition name="rb-toast">
+    <div v-if="toast" :class="['rb-toast', 'rb-toast-'+toast.type]">{{ toast.msg }}</div>
+  </transition>
+</div>
+
+<script src="/static/vendor/vue.global.prod.js"></script>
+<script src="/static/js/rollback-app.js"></script>
+</body>
+</html>

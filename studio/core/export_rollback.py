@@ -8,14 +8,15 @@ studio.core.export_rollback — 导出操作回滚工具 (L1 Operation 回滚)
 - undo      按 opId 撤销某次导出
 - undo-last 撤销最近一次导出
 
-撤销语义：
-1. ledger.rollback_operation(op_id)：剔除该 op 全部 records + 追加自包含
-   rollback 事件（损坏重建不复活）+ 原子保存；被 supersedes 的旧记录自动复活；
-2. main 模块附加：release/index.json 按 batchId 移除 entry、重算 maxOrder/
-   totalCount（version 不回退）、删除 batches/{batchId}.json；
-3. daily / event / collection：本轮仅 ledger 层撤销，镜像投影回退待 L1.1，
-   撤销后打印提示；
-4. 撤销前自动快照 ledger 与 release index.json 到 .studio/ledger/backups/；
+撤销语义（L1.2 原子化，见 docs/rollback-plan-20260910.md）：
+1. 撤销前自动快照 ledger 与涉及模块的 release index.json 到 .studio/ledger/backups/；
+2. 先回退全部模块 release 镜像（index 回退 + 产物文件移入 .studio/ledger/backups/
+   trashed-{op}/ 保留而非物理删除）；
+3. 任一模块镜像回退失败 → 整体失败：从快照还原已回退模块的 index.json，
+   账本不动，返回 ok: False；
+4. 全部镜像回退成功 → 才执行 ledger.rollback_operation(op_id)：剔除该 op 全部
+   records + 追加自包含 rollback 事件（损坏重建不复活）+ 原子保存；
+   被 supersedes 的旧记录自动复活；
 5. 撤销后经 workspace.log_export 追加一条 rollback_export 审计到 exports.jsonl。
 
 命令行示例（仓库根目录执行）：
@@ -30,6 +31,7 @@ from __future__ import annotations
 import argparse
 import datetime as dt
 import json
+import re
 import shutil
 from pathlib import Path
 from typing import Any
@@ -71,23 +73,30 @@ def _snapshot_file(path: Path, backup_dir: Path) -> Path | None:
         return None
 
 
-def _cleanup_main_release(src_dir: Path, batch_ids: set[str]) -> dict[str, Any]:
+def _cleanup_main_release(src_dir: Path, batch_ids: set[str], trash_dir: Path) -> dict[str, Any]:
     """
     main 模块 release 镜像投影回退（批次目录自包含组织）：
     - index.json 移除匹配 batchId 的 entry，重算 maxOrder/totalCount（version 不回退）；
-    - 删除 batches/{batchId}/ 整个批次目录（含 index.json 与 images/，物理清理零孤儿）。
-    返回 {removedEntries, deletedFiles, indexPath}。
+    - batches/{batchId}/ 整目录移入回收站（trash_dir/main/batches/{batchId}），
+      成功后物理不在 release 内；失败可整体还原。
+    返回 {removedEntries, trashedFiles, indexPath, errors}。
     """
-    result: dict[str, Any] = {"removedEntries": 0, "deletedFiles": [], "indexPath": None}
-    if not batch_ids:
+    result: dict[str, Any] = {"removedEntries": 0, "trashedFiles": [], "indexPath": None, "errors": []}
+    safe_ids = {b for b in (str(x).strip() for x in batch_ids) if _safe_batch_id(b)}
+    if not safe_ids:
+        if batch_ids:
+            result["errors"].append("batchId 含非法字符，拒绝回退")
         return result
+    if not trash_dir:
+        trash_dir = None
+    batch_ids = safe_ids
     ws = StudioWorkspace(src_dir, read_only=True)
     index_p = ws.release_dir / "main" / "index.json"
     if index_p.exists():
         try:
             data = json.loads(index_p.read_text(encoding="utf-8"))
         except Exception as e:
-            result["error"] = f"release/main/index.json 解析失败，跳过镜像回退: {e}"
+            result["errors"].append(f"release/main/index.json 解析失败，跳过镜像回退: {e}")
             return result
         if isinstance(data, dict):
             items = data.get("items")
@@ -125,29 +134,32 @@ def _cleanup_main_release(src_dir: Path, batch_ids: set[str]) -> dict[str, Any]:
                         tmp_p.replace(index_p)
                         result["indexPath"] = str(index_p)
                     except Exception as e:
-                        result["error"] = f"index.json 回退写入失败: {e}"
+                        result["errors"].append(f"index.json 回退写入失败: {e}")
                         return result
                     result["removedEntries"] = removed
 
     for bid in sorted(batch_ids):
         batch_dir = ws.release_dir / "main" / "batches" / bid
         if batch_dir.exists():
-            try:
-                shutil.rmtree(batch_dir)
-                result["deletedFiles"].append(str(batch_dir))
-            except Exception as e:
-                result["error"] = f"批次目录删除失败 {batch_dir.name}: {e}"
+            if not trash_dir:
+                result["errors"].append(f"批次目录 {bid}: 回收站不可用，跳过文件清理")
+                continue
+            ok, err = _move_to_trash(batch_dir, trash_dir / "main" / "batches", bid)
+            if ok:
+                result["trashedFiles"].append(f"main/batches/{bid}")
+            else:
+                result["errors"].append(f"批次目录移除失败 {bid}: {err}")
     return result
 
 
-def _cleanup_daily_release(src_dir: Path, months: set[str]) -> dict[str, Any]:
+def _cleanup_daily_release(src_dir: Path, months: set[str], trash_dir: Path) -> dict[str, Any]:
     """
     daily 模块 release 镜像投影回退：
     - index.json 移除匹配 month 的 entry，currentMonth 重算（version 不回退）；
-    - 删除被移除 entry 指向的 zips/{zip}（镜像内不再被引用）。
-    返回 {removedEntries, deletedFiles, indexPath}。
+    - 被移除 entry 指向的 zips/{zip} 移入回收站（trash_dir/daily/zips/{zip}）。
+    返回 {removedEntries, trashedFiles, indexPath, errors}。
     """
-    result: dict[str, Any] = {"removedEntries": 0, "deletedFiles": [], "indexPath": None}
+    result: dict[str, Any] = {"removedEntries": 0, "trashedFiles": [], "indexPath": None, "errors": []}
     if not months:
         return result
     ws = StudioWorkspace(src_dir, read_only=True)
@@ -157,7 +169,7 @@ def _cleanup_daily_release(src_dir: Path, months: set[str]) -> dict[str, Any]:
         try:
             data = json.loads(index_p.read_text(encoding="utf-8"))
         except Exception as e:
-            result["error"] = f"release/daily/index.json 解析失败，跳过镜像回退: {e}"
+            result["errors"].append(f"release/daily/index.json 解析失败，跳过镜像回退: {e}")
             return result
         if isinstance(data, dict) and isinstance(data.get("items"), list):
             items = data["items"]
@@ -183,33 +195,41 @@ def _cleanup_daily_release(src_dir: Path, months: set[str]) -> dict[str, Any]:
                     tmp_p.replace(index_p)
                     result["indexPath"] = str(index_p)
                 except Exception as e:
-                    result["error"] = f"daily index.json 回退写入失败: {e}"
+                    result["errors"].append(f"daily index.json 回退写入失败: {e}")
                     return result
                 result["removedEntries"] = removed
 
     for entry in removed_entries:
         zip_rel = entry.get("zipUrl")
-        if zip_rel:
-            f = ws.release_dir / "daily" / str(zip_rel).lstrip("/")
-            if f.exists():
-                try:
-                    f.unlink()
-                    result["deletedFiles"].append(str(f))
-                except Exception as e:
-                    result["error"] = f"daily zip 删除失败 {f.name}: {e}"
+        if not zip_rel:
+            continue
+        f = _safe_release_path(ws, "daily", zip_rel)
+        if f is None:
+            result["errors"].append(f"daily zip 路径非法，已跳过: {zip_rel}")
+            continue
+        if f.exists():
+            if not trash_dir:
+                result["errors"].append(f"daily zip {f.name}: 回收站不可用，跳过文件清理")
+                continue
+            ok, err = _move_to_trash(f, trash_dir / "daily" / "zips", f.name)
+            if ok:
+                result["trashedFiles"].append(f"daily/zips/{f.name}")
+            else:
+                result["errors"].append(f"daily zip 移除失败 {f.name}: {err}")
     return result
 
 
 def _cleanup_pack_release(
-    src_dir: Path, module: str, pack_ids: set[str]
+    src_dir: Path, module: str, pack_ids: set[str], trash_dir: Path
 ) -> dict[str, Any]:
     """
     events/collections 模块 release 镜像投影回退：
     - index.json 移除匹配 id 的 entry（version 不回退）；
-    - 删除被移除 entry 指向的 packs/{zip} 与 covers/{cover}。
+    - 被移除 entry 指向的 packs/{zip} 与 covers/{cover} 移入回收站。
     module 形如 "events" / "collections"。
+    返回 {removedEntries, trashedFiles, indexPath, errors}。
     """
-    result: dict[str, Any] = {"removedEntries": 0, "deletedFiles": [], "indexPath": None}
+    result: dict[str, Any] = {"removedEntries": 0, "trashedFiles": [], "indexPath": None, "errors": []}
     if not pack_ids:
         return result
     ws = StudioWorkspace(src_dir, read_only=True)
@@ -219,7 +239,7 @@ def _cleanup_pack_release(
         try:
             data = json.loads(index_p.read_text(encoding="utf-8"))
         except Exception as e:
-            result["error"] = f"release/{module}/index.json 解析失败，跳过镜像回退: {e}"
+            result["errors"].append(f"release/{module}/index.json 解析失败，跳过镜像回退: {e}")
             return result
         if isinstance(data, dict) and isinstance(data.get("items"), list):
             items = data["items"]
@@ -242,7 +262,7 @@ def _cleanup_pack_release(
                     tmp_p.replace(index_p)
                     result["indexPath"] = str(index_p)
                 except Exception as e:
-                    result["error"] = f"{module} index.json 回退写入失败: {e}"
+                    result["errors"].append(f"{module} index.json 回退写入失败: {e}")
                     return result
                 result["removedEntries"] = removed
 
@@ -251,13 +271,19 @@ def _cleanup_pack_release(
             rel = entry.get(key)
             if not rel:
                 continue
-            f = ws.release_dir / module / str(rel).lstrip("/")
+            f = _safe_release_path(ws, module, rel)
+            if f is None:
+                result["errors"].append(f"{module} 产物路径非法，已跳过: {rel}")
+                continue
             if f.exists():
-                try:
-                    f.unlink()
-                    result["deletedFiles"].append(str(f))
-                except Exception as e:
-                    result["error"] = f"{module} 产物删除失败 {f.name}: {e}"
+                if not trash_dir:
+                    result["errors"].append(f"{module} 产物 {f.name}: 回收站不可用，跳过文件清理")
+                    continue
+                ok, err = _move_to_trash(f, trash_dir / module / f.name, f.name)
+                if ok:
+                    result["trashedFiles"].append(f"{module}/{f.name}")
+                else:
+                    result["errors"].append(f"{module} 产物移除失败 {f.name}: {err}")
     return result
 
 
@@ -265,6 +291,7 @@ def _cleanup_release_for_module(
     src_dir: Path,
     module: str,
     targets: list[dict[str, Any]],
+    trash_dir: Path | None = None,
 ) -> dict[str, Any]:
     """按模块路由 release 镜像投影回退。"""
     if module == "main":
@@ -273,18 +300,18 @@ def _cleanup_release_for_module(
             for r in targets
             if r.get("batchId") is not None
         }
-        return _cleanup_main_release(src_dir, batch_ids)
+        return _cleanup_main_release(src_dir, batch_ids, trash_dir)
     if module == "daily":
         months = {str(r["month"]) for r in targets if r.get("month") is not None}
-        return _cleanup_daily_release(src_dir, months)
+        return _cleanup_daily_release(src_dir, months, trash_dir)
     if module in ("events", "collections"):
         pack_ids = {
             str(r.get("packId"))
             for r in targets
             if r.get("packId") is not None
         }
-        return _cleanup_pack_release(src_dir, module, pack_ids)
-    return {"removedEntries": 0, "deletedFiles": [], "skipped": True}
+        return _cleanup_pack_release(src_dir, module, pack_ids, trash_dir)
+    return {"removedEntries": 0, "trashedFiles": [], "errors": [], "skipped": True}
 
 
 def undo_op(
@@ -298,10 +325,10 @@ def undo_op(
     撤销一次导出。dry_run=True 只预览不落盘。
     返回摘要 dict：{ok, msg, ...}
 
-    各模块镜像投影回退（L1.1）：
-      main        release/main/index.json 移除批次 + 删除 batches/{batchId}.json
-      daily       release/daily/index.json 移除月份 + 删除 zips/{zip}
-      events/collections  release/{module}/index.json 移除条目 + 删除 packs/cover 产物
+    各模块镜像投影回退（L1.2 原子撤销，产物移入回收站而非物理删除）：
+      main        release/main/index.json 移除批次 + 批次目录移入回收站
+      daily       release/daily/index.json 移除月份 + zips/{zip} 移入回收站
+      events/collections  release/{module}/index.json 移除条目 + packs/covers 移入回收站
     """
     src = Path(src_dir).resolve()
     # 读取目标 records 明细（撤销前取，含 module/batchId/month/packId 等投影定位字段）
@@ -357,36 +384,81 @@ def undo_op(
     # 1. 撤销前自动快照：账本 + 涉及模块的 index.json
     snap_ledger = backup_ledger_snapshot(src)
     ws = StudioWorkspace(src, read_only=False)
-    snapshots: list[str] = []
+    backups_dir = ws.ledger_dir / "backups"
+    snapshots: dict[str, Path] = {}
     for m in modules:
         if m in ("main", "daily", "events", "collections"):
             snap = _snapshot_file(
-                ws.release_dir / m / "index.json", ws.ledger_dir / "backups"
+                ws.release_dir / m / "index.json", backups_dir
             )
             if snap:
-                snapshots.append(snap.name)
+                snapshots[m] = snap
 
-    # 2. 账本记录回滚
+    # 2. 先回退各模块 release 镜像（产物移入回收站；任一失败则整体还原、账本不动）
+    release_res: dict[str, Any] = {}
+    mirror_errors: list[str] = []
+    trash_dir = backups_dir / f"trashed-{op_id}"
+    if clean_release:
+        for m in modules:
+            res = _cleanup_release_for_module(src, m, targets, trash_dir)
+            release_res[m] = res
+            mirror_errors.extend(f"{m}: {e}" for e in (res.get("errors") or []))
+        if mirror_errors:
+            restored_idx: list[str] = []
+            for m, snap in snapshots.items():
+                try:
+                    idx_p = ws.release_dir / m / "index.json"
+                    tmp_p = idx_p.with_suffix(".tmp")
+                    shutil.copy2(snap, tmp_p)
+                    tmp_p.replace(idx_p)
+                    restored_idx.append(f"{m}/index.json")
+                except Exception:
+                    pass
+            restored_files = _restore_trash(trash_dir, ws, modules)
+            try:
+                shutil.rmtree(trash_dir, ignore_errors=True)
+            except Exception:
+                pass
+            try:
+                ws.log_export(
+                    "rollback_export",
+                    scope=",".join(modules) or "unknown",
+                    entity=op_id,
+                    after={
+                        "removedRecords": 0,
+                        "reason": reason or "",
+                        "srcDir": str(src),
+                        "error": "; ".join(mirror_errors)[:500],
+                    },
+                    result="fail",
+                )
+            except Exception:
+                pass
+            return {
+                "ok": False,
+                "msg": (
+                    f"回滚失败，已整体还原，账本未改动。失败原因: {'; '.join(mirror_errors)}"
+                    + (f"；已还原 index: {', '.join(restored_idx)}" if restored_idx else "")
+                    + (f"；已还原文件: {', '.join(restored_files)}" if restored_files else "")
+                ),
+                "errors": mirror_errors,
+                "restoredIndex": restored_idx,
+                "restoredFiles": restored_files,
+                "snapshotLedger": (snap_ledger.name if snap_ledger else None),
+                "snapshotIndex": [p.name for p in snapshots.values()],
+            }
+
+    # 3. 镜像全部回退成功 → 才回滚账本记录
     ledger = ExportsLedger(src, read_only=False)
     ok, msg = ledger.rollback_operation(op_id, reason=reason)
     if not ok:
-        return {"ok": False, "msg": msg}
-
-    # 3. 各模块镜像投影回退
-    release_res: dict[str, Any] = {}
-    if clean_release:
-        for m in modules:
-            res = _cleanup_release_for_module(src, m, targets)
-            if res.get("removedEntries") or res.get("deletedFiles") or res.get("skipped"):
-                release_res[m] = res
-            if res.get("error"):
-                return {
-                    "ok": True,
-                    "msg": f"{msg}；但 {m} 镜像回退不完整: {res['error']}",
-                    "warn": res["error"],
-                    "snapshotLedger": snap_ledger,
-                    "snapshotIndex": snapshots,
-                }
+        return {
+            "ok": False,
+            "msg": f"镜像已回退但账本回滚失败，请人工核查（可从快照恢复镜像）: {msg}",
+            "errors": [msg],
+            "snapshotLedger": (snap_ledger.name if snap_ledger else None),
+            "snapshotIndex": [p.name for p in snapshots.values()],
+        }
 
     # 4. 追加 rollback_export 审计流水
     try:
@@ -410,7 +482,7 @@ def undo_op(
         if res.get("skipped"):
             continue
         extra_parts.append(
-            f"{m} 镜像回退 index({res.get('removedEntries', 0)} 条) 删 {len(res.get('deletedFiles', []))} 个文件"
+            f"{m} 镜像回退 index({res.get('removedEntries', 0)} 条) 移除 {len(res.get('trashedFiles') or [])} 个文件"
         )
     if extra_parts:
         extra = "；" + "；".join(extra_parts)
@@ -419,15 +491,18 @@ def undo_op(
     if snap_ledger:
         extra += f"；快照: {snap_ledger.name}"
     if snapshots:
-        extra += f" index 快照: {','.join(snapshots)}"
+        extra += f" index 快照: {','.join(p.name for p in snapshots.values())}"
     return {
         "ok": True,
         "msg": f"{msg}{extra}",
         "detail": detail,
         "removedRecords": count,
         "modules": modules,
-        "snapshotLedger": snap_ledger,
-        "snapshotIndex": snapshots,
+        "trashedFiles": [
+            f for res in release_res.values() for f in (res.get("trashedFiles") or [])
+        ],
+        "snapshotLedger": (snap_ledger.name if snap_ledger else None),
+        "snapshotIndex": [p.name for p in snapshots.values()],
     }
 
 
@@ -454,6 +529,70 @@ def undo_last(
         clean_release=clean_release,
         reason=reason,
     )
+
+
+_BATCH_ID_RE = re.compile(r"^[A-Za-z0-9_\-]+$")
+
+
+def _safe_batch_id(batch_id: str) -> str | None:
+    """batchId 白名单校验：仅允许字母数字下划线连字符，防止路径拼接越界。"""
+    bid = str(batch_id or "").strip()
+    if not bid or not _BATCH_ID_RE.match(bid) or bid in (".", ".."):
+        return None
+    return bid
+
+
+def _safe_release_path(ws: "StudioWorkspace", module: str, rel: str) -> Path | None:
+    """
+    规范化 release/{module}/ 下的相对路径，限制在 release/{module} 目录内。
+    防御 '..' 等越界拼接；越界或异常返回 None。
+    """
+    try:
+        base = (ws.release_dir / module).resolve()
+        p = (base / str(rel or "").lstrip("/\\")).resolve()
+        if p != base and not str(p).startswith(str(base) + "\\") and not str(p).startswith(str(base) + "/"):
+            return None
+        return p
+    except Exception:
+        return None
+
+
+def _move_to_trash(src: Path, trash_dir: Path, rel: str) -> tuple[bool, str]:
+    """
+    将 release 内产物移入回收站目录（trash_dir/rel），保留结构以便失败还原。
+    返回 (成功, 错误消息)。
+    """
+    try:
+        dest = trash_dir / rel
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        shutil.move(str(src), str(dest))
+        return True, ""
+    except Exception as e:
+        return False, f"{src.name}: {e}"
+
+
+def _restore_trash(trash_dir: Path, ws: "StudioWorkspace", modules: list[str]) -> list[str]:
+    """
+    失败还原：把回收站内 {module}/ 相对结构下的文件移回 release/{module}/。
+    返回还原的文件相对路径列表。
+    """
+    restored: list[str] = []
+    for m in modules:
+        mdir = trash_dir / m
+        if not mdir.exists():
+            continue
+        for f in sorted(mdir.rglob("*")):
+            if not f.is_file():
+                continue
+            rel = f.relative_to(mdir)
+            dest = ws.release_dir / m / rel
+            try:
+                dest.parent.mkdir(parents=True, exist_ok=True)
+                shutil.move(str(f), str(dest))
+                restored.append(f"{m}/{rel.as_posix()}")
+            except Exception:
+                continue
+    return restored
 
 
 def _fmt_ts(iso: str | None) -> str:

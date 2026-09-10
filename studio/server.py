@@ -20,6 +20,7 @@ import sys
 import threading
 import time
 import urllib.parse
+import uuid
 import webbrowser
 from concurrent.futures import ThreadPoolExecutor as _Pool
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -33,6 +34,7 @@ if str(_root_dir) not in sys.path:
     sys.path.insert(0, str(_root_dir))
 
 from studio.core.cache_db import CacheDB
+from studio.core.export_rollback import list_ops, undo_op
 from studio.core.export_tracker import get_exported_map, load_exported_ledger
 from studio.core.exports_ledger import ExportsLedger
 from studio.core.image_proc import HAS_PIL, generate_thumbnail_bytes
@@ -53,6 +55,7 @@ from studio.core.tags_manager import (
     normalize_records,
     save_tags_file,
 )
+from studio.core.workspace import StudioWorkspace
 from studio.exporters import get_exporter
 from studio.exporters.base import (
     EXPORT_IMAGE_LIMITS,
@@ -189,6 +192,7 @@ _JOB_TTL_SECONDS = 300.0  # 终态任务保留时长 (惰性清理，无定时�
 _JOB_KIND_LABELS = {
     "quality": "质检",
     "export": "导出",
+    "rollback": "回滚",
     "unknown": "未知类型",
 }
 
@@ -548,6 +552,12 @@ class StudioRequestHandler(BaseHTTPRequestHandler):
             )
             return
 
+        if path in ("/rollback", "/rollback.html"):
+            self._serve_static_file(
+                STATIC_DIR / "rollback.html", "text/html; charset=utf-8"
+            )
+            return
+
         if path == "/favicon.ico":
             self.send_response(204)
             self.end_headers()
@@ -610,6 +620,18 @@ class StudioRequestHandler(BaseHTTPRequestHandler):
             self._handle_get_manual_crops(qs)
             return
 
+        if path == "/api/ledger/ops":
+            self._handle_ledger_ops(qs)
+            return
+
+        if path == "/api/ledger/records":
+            self._handle_ledger_records(qs)
+            return
+
+        if path == "/api/ledger/audit":
+            self._handle_ledger_audit(qs)
+            return
+
         # 兜底查找静态文件
         cand = STATIC_DIR / path.lstrip("/")
         if cand.exists() and cand.is_file():
@@ -660,6 +682,10 @@ class StudioRequestHandler(BaseHTTPRequestHandler):
 
         if path == "/api/delete":
             self._handle_delete_image(data)
+            return
+
+        if path == "/api/rollback":
+            self._handle_rollback(data)
             return
 
         self.send_error(404, f"Not Found POST: {path}")
@@ -1117,6 +1143,179 @@ class StudioRequestHandler(BaseHTTPRequestHandler):
     # ------------------------------------------------------------------
     # 手动裁切框 API
     # ------------------------------------------------------------------
+
+    # ------------------------------------------------------------------
+    # 台账 / 回滚 API（见 docs/rollback-plan-20260910.md）
+    # ------------------------------------------------------------------
+
+    def _ledger_dir_param(self, dir_param: str) -> Path | None:
+        """解析台账接口的 ?dir 参数；为空回退 current_root_dir。"""
+        root = (
+            Path(dir_param).resolve()
+            if dir_param
+            else StudioRequestHandler.current_root_dir
+        )
+        if not root or not root.is_dir():
+            return None
+        return root
+
+    def _handle_ledger_ops(self, qs: dict[str, list[str]]) -> None:
+        """GET /api/ledger/ops?dir=... — 按操作聚合的可撤销导出列表（只读）"""
+        root = self._ledger_dir_param((qs.get("dir") or [""])[0].strip())
+        if not root:
+            self._error("缺少有效目录 ?dir 参数")
+            return
+        try:
+            ops = list_ops(root)
+        except Exception as e:
+            self._error(f"读取台账失败: {e}", status=500)
+            return
+        legacy = [o for o in ops if not o.get("opId")]
+        self._json(
+            {
+                "ok": True,
+                "ops": ops,
+                "legacyCount": len(legacy),
+                "totalRecords": sum(int(o.get("count") or 0) for o in ops),
+            }
+        )
+
+    def _handle_ledger_records(self, qs: dict[str, list[str]]) -> None:
+        """GET /api/ledger/records?dir=...&op=op_xxx — 单次导出的文件级记录"""
+        root = self._ledger_dir_param((qs.get("dir") or [""])[0].strip())
+        if not root:
+            self._error("缺少有效目录 ?dir 参数")
+            return
+        op_id = (qs.get("op") or [""])[0].strip()
+        if not op_id:
+            self._error("缺少 op 参数", status=400)
+            return
+        try:
+            ledger = ExportsLedger(root, read_only=True)
+        except Exception as e:
+            self._error(f"读取台账失败: {e}", status=500)
+            return
+        records = [r for r in ledger.records if r.get("opId") == op_id]
+        superseded = ledger._superseded_ids
+        for r in records:
+            r = r  # noqa: 保持可读；字段透传
+        self._json(
+            {
+                "ok": True,
+                "opId": op_id,
+                "records": records,
+                "supersededIds": sorted(str(s) for s in superseded & {r.get("recordId") for r in records if r.get("recordId")}),
+            }
+        )
+
+    def _handle_ledger_audit(self, qs: dict[str, list[str]]) -> None:
+        """GET /api/ledger/audit?dir=...&limit=50 — 回滚审计事件 + 快照备份列表"""
+        root = self._ledger_dir_param((qs.get("dir") or [""])[0].strip())
+        if not root:
+            self._error("缺少有效目录 ?dir 参数")
+            return
+        try:
+            limit = max(1, min(500, int((qs.get("limit") or ["50"])[0])))
+        except ValueError:
+            limit = 50
+        ws = StudioWorkspace(root, read_only=True)
+        events_file = ws.ledger_dir / "exports_events.jsonl"
+        events: list[dict[str, Any]] = []
+        if events_file.exists():
+            try:
+                lines = events_file.read_text(encoding="utf-8").strip().splitlines()
+                for line in reversed(lines[-limit * 5:] if limit * 5 < len(lines) else lines):
+                    if len(events) >= limit:
+                        break
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
+                        ev = json.loads(line)
+                    except Exception:
+                        continue
+                    # 只保留与回滚审计相关的动作
+                    if ev.get("action") in ("rollback", "append"):
+                        if ev.get("action") == "append":
+                            # append 过多，仅保留 op 级首次出现由前端聚合；此处直接跳过 append
+                            continue
+                        events.append(ev)
+            except Exception as e:
+                logger.warning(f"[LEDGER_AUDIT] 读取事件流失败: {e}")
+        backups: list[dict[str, Any]] = []
+        backup_dir = ws.ledger_dir / "backups"
+        if backup_dir.is_dir():
+            for f in sorted(backup_dir.glob("*"), key=lambda p: p.name, reverse=True):
+                if f.is_file():
+                    try:
+                        stat = f.stat()
+                        backups.append(
+                            {
+                                "name": f.name,
+                                "size": stat.st_size,
+                                "mtime": stat.st_mtime,
+                            }
+                        )
+                    except Exception:
+                        continue
+        self._json({"ok": True, "events": events, "backups": backups[:100]})
+
+    def _handle_rollback(self, data: dict[str, Any]) -> None:
+        """POST /api/rollback — 回滚预览 (dryRun) 或执行回滚 (confirm)"""
+        dir_param = (data.get("dir") or "").strip()
+        root = self._ledger_dir_param(dir_param)
+        if not root:
+            self._error("缺少有效目录 dir 参数")
+            return
+        op_id = (data.get("opId") or "").strip()
+        if not op_id:
+            self._error("缺少 opId 参数", status=400)
+            return
+        dry_run = bool(data.get("dryRun"))
+        confirm = bool(data.get("confirm"))
+        if not dry_run and not confirm:
+            self._error("回滚为高危操作：预览请传 dryRun=true，执行请传 confirm=true", status=400)
+            return
+        reason = str(data.get("reason") or "").strip()[:500]
+        clean_release = data.get("cleanRelease") is not False
+
+        # 与导出/质检同款任务互斥：回滚同时改账本与 release，禁止并发回滚/导出/质检
+        task_id = f"rollback-{uuid.uuid4().hex[:12]}"
+        if not _job_register(task_id, kind="rollback"):
+            running = _job_find_running(kind="rollback")
+            self._error(
+                f"{_job_kind_label('rollback')}任务正在进行中: {running[0] if running else '(未知)'}，请稍后再试",
+                status=409,
+            )
+            return
+
+        try:
+            # 回滚与导出/质检也互斥（三者都会写账本或 release）
+            for other_kind in ("export", "quality"):
+                if _job_find_running(kind=other_kind):
+                    _job_finish(task_id, error="interrupted by running job")
+                    self._error(
+                        f"{_job_kind_label(other_kind)}任务正在进行中，回滚必须等待其结束（防止账本/镜像写入冲突）",
+                        status=409,
+                    )
+                    return
+            result = undo_op(root, op_id, dry_run=dry_run, clean_release=clean_release, reason=reason)
+            # Path 对象（如 snapshotLedger）转为可序列化字符串
+            def _jsonable(v: Any) -> Any:
+                if isinstance(v, Path):
+                    return str(v)
+                if isinstance(v, dict):
+                    return {k: _jsonable(x) for k, x in v.items()}
+                if isinstance(v, (list, tuple)):
+                    return [_jsonable(x) for x in v]
+                return v
+            result = _jsonable(result)
+            _job_finish(task_id, summary=result.get("msg") or ("" if result.get("ok") else "rollback failed"))
+            self._json(result)
+        except Exception as e:
+            _job_finish(task_id, error=str(e))
+            logger.exception(f"[ROLLBACK] 执行异常: {e}")
+            self._error(f"回滚执行失败: {e}", status=500)
 
     def _handle_get_manual_crops(self, qs: dict[str, list[str]]) -> None:
         """GET /api/crop/manual?dir=... — 批量返回所有用户手动裁切框"""

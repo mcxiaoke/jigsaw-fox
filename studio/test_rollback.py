@@ -393,5 +393,116 @@ class TestUndoPackRelease(unittest.TestCase):
         self.assertEqual(len(ExportsLedger(self.test_dir).records), 0)
 
 
+class TestUndoAtomicity(unittest.TestCase):
+    """L1.2 原子撤销：先镜像后账本，任一模块失败整体还原、账本不动"""
+
+    def setUp(self):
+        self.test_dir = Path(tempfile.mkdtemp(prefix="studio_rollback_test_"))
+        main_rel = self.test_dir / ".studio" / "release" / "main"
+        (main_rel / "batches").mkdir(parents=True, exist_ok=True)
+        index_p = main_rel / "index.json"
+        self.index_before = {
+            "module": "main", "version": 2, "totalCount": 120, "maxOrder": 120,
+            "updatedAt": "2026-09-09T00:00:00Z",
+            "items": [
+                {"batchId": "batch_001", "version": 1, "count": 100,
+                 "startOrder": 1, "endOrder": 100,
+                 "url": "batches/batch_001/index.json"},
+                {"batchId": "batch_002", "version": 2, "count": 20,
+                 "startOrder": 101, "endOrder": 120,
+                 "url": "batches/batch_002/index.json"},
+            ],
+        }
+        index_p.write_text(json.dumps(self.index_before, ensure_ascii=False), encoding="utf-8")
+        for bid in ("batch_001", "batch_002"):
+            bdir = main_rel / "batches" / bid
+            (bdir / "images").mkdir(parents=True, exist_ok=True)
+            (bdir / "images" / f"{bid}.webp").write_bytes(b"img")
+
+        ledger = ExportsLedger(self.test_dir)
+        ledger.append_records([
+            {"sourceHash": "h1", "sourcePath": "assets/h1.jpg", "sourceSize": 1024,
+             "module": "main", "logicalId": "main:101", "order": 101,
+             "batchId": "batch_002", "revision": 1,
+             "targetFile": "main/images/0101.webp"},
+            {"sourceHash": "h2", "sourcePath": "assets/h2.jpg", "sourceSize": 1024,
+             "module": "main", "logicalId": "main:102", "order": 102,
+             "batchId": "batch_002", "revision": 1,
+             "targetFile": "main/images/0102.webp"},
+        ])
+        self.op_id = ledger.records[0]["opId"]
+
+    def tearDown(self):
+        shutil.rmtree(self.test_dir, ignore_errors=True)
+
+    def test_mirror_failure_aborts_entire_rollback(self):
+        """注入镜像失败：整体失败、账本不动、index 从快照还原、批次目录还原"""
+        import studio.core.export_rollback as rb
+
+        original = rb._cleanup_main_release
+
+        def failing(src_dir, batch_ids, trash_dir):
+            res = original(src_dir, batch_ids, trash_dir)
+            res["errors"].append("注入失败: 模拟磁盘错误")
+            return res
+
+        rb._cleanup_main_release = failing
+        try:
+            res = undo_op(self.test_dir, self.op_id, clean_release=True)
+        finally:
+            rb._cleanup_main_release = original
+
+        self.assertFalse(res.get("ok"), res.get("msg"))
+        self.assertTrue(res.get("errors"))
+        # 账本未动
+        self.assertEqual(len(ExportsLedger(self.test_dir).records), 2)
+        # index 已从快照还原
+        index = json.loads(
+            (self.test_dir / ".studio" / "release" / "main" / "index.json").read_text(encoding="utf-8")
+        )
+        self.assertEqual([e["batchId"] for e in index["items"]], ["batch_001", "batch_002"])
+        self.assertEqual(index["totalCount"], 120)
+        # 批次目录已从回收站还原
+        self.assertTrue((self.test_dir / ".studio" / "release" / "main" / "batches" / "batch_002").exists())
+        self.assertTrue((self.test_dir / ".studio" / "release" / "main" / "batches" / "batch_002" / "images" / "batch_002.webp").exists())
+        # 审计流水记录了失败
+        audit = (self.test_dir / ".studio" / "logs" / "exports.jsonl").read_text(encoding="utf-8")
+        self.assertIn("rollback_export", audit)
+        self.assertIn("fail", audit)
+
+    def test_batch_id_whitelist_rejects_traversal(self):
+        """batchId 含路径穿越字符时拒绝回退（不产生任何删除）"""
+        import studio.core.export_rollback as rb
+
+        self.assertIsNone(rb._safe_batch_id("../evil"))
+        self.assertIsNone(rb._safe_batch_id("a/b"))
+        self.assertIsNone(rb._safe_batch_id(".."))
+        self.assertEqual(rb._safe_batch_id("batch_001-X9"), "batch_001-X9")
+
+        # 注入恶意 batchId 的记录 → 回退被拒绝，整体失败
+        ledger = ExportsLedger(self.test_dir)
+        ledger.append_records([
+            {"sourceHash": "evil", "sourcePath": "assets/evil.jpg", "sourceSize": 1,
+             "module": "main", "logicalId": "main:999", "order": 999,
+             "batchId": "../../escape", "revision": 1,
+             "targetFile": "main/images/0999.webp"},
+        ])
+        evil_op = [r for r in ledger.records if r.get("batchId") == "../../escape"][0]["opId"]
+        res = undo_op(self.test_dir, evil_op, clean_release=True)
+        self.assertFalse(res.get("ok"))
+        # escape 目录未被创建，release 内无越界产物
+        self.assertFalse((self.test_dir / ".studio" / "release" / "main" / "escape").exists())
+
+    def test_success_returns_trashed_files(self):
+        """成功回滚返回回收站文件清单，批次目录不在 release 内"""
+        res = undo_op(self.test_dir, self.op_id, clean_release=True)
+        self.assertTrue(res.get("ok"), res.get("msg"))
+        self.assertIn("main/batches/batch_002", res.get("trashedFiles") or [])
+        self.assertFalse(
+            (self.test_dir / ".studio" / "release" / "main" / "batches" / "batch_002").exists()
+        )
+        self.assertEqual(len(ExportsLedger(self.test_dir).records), 0)
+
+
 if __name__ == "__main__":
     unittest.main()
