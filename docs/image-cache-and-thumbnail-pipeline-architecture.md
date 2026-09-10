@@ -113,7 +113,7 @@ class ImageCacheManager {
   Future<void> init(); // <AppSupportDir>/thumbnail_cache/ + _rebuildDiskKeyIndexAsync 自清理
 
   String getCacheKey(String sourcePath, {ThumbnailDimension dimension = kDefaultThumbnailDimension}); // FNV-1a 63位 thumb_<16hex>_<dim>.jpg
-  String getThumbnailFilePath(String sourcePath, {ThumbnailDimension dimension = kDefaultThumbnailDimension});
+  String? getThumbnailFilePath(String sourcePath, {ThumbnailDimension dimension = kDefaultThumbnailDimension}); // 语义 2026-09-10 更新：_cacheDir 未就绪时返回 null，调用方跳过 L2 回退（不再拼 ''/thumb_xxx.jpg）
   bool isThumbnailCached(String sourcePath, {ThumbnailDimension dimension = kDefaultThumbnailDimension});
   Uint8List? getCachedThumbnailBytesFromMemory(String sourcePath, {ThumbnailDimension dimension = kDefaultThumbnailDimension});
 

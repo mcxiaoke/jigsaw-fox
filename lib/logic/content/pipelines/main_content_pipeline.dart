@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:jigsawpuzzle/logic/content/models/canonical_id.dart';
 import 'package:jigsawpuzzle/logic/content/models/puzzle_level_item.dart';
 import 'package:jigsawpuzzle/logic/content/network/content_http_client.dart';
+import 'package:jigsawpuzzle/logic/single_flight.dart';
 import 'package:jigsawpuzzle/services/app_logger.dart';
 
 /// 主线不可变分卷信息模型
@@ -331,19 +332,11 @@ class MainContentPipeline {
     PuzzleLevelItem level, {
     Duration? timeout,
   }) {
-    final inFlight = _inFlightDownloads[level.id];
-    if (inFlight != null) {
-      AppLogger.mainPipe.fine('ensureDownloaded in-flight reuse ${level.id}');
-      return inFlight;
-    }
-    final future = _ensureLevelImageDownloadedImpl(level, timeout: timeout);
-    _inFlightDownloads[level.id] = future;
-    future.whenComplete(() {
-      if (identical(_inFlightDownloads[level.id], future)) {
-        _inFlightDownloads.remove(level.id);
-      }
-    });
-    return future;
+    return runSingleFlight(
+      _inFlightDownloads,
+      level.id,
+      () => _ensureLevelImageDownloadedImpl(level, timeout: timeout),
+    );
   }
 
   Future<PuzzleLevelItem> _ensureLevelImageDownloadedImpl(

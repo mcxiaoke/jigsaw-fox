@@ -7,6 +7,7 @@ import 'package:jigsawpuzzle/logic/content/models/canonical_id.dart';
 import 'package:jigsawpuzzle/logic/content/models/puzzle_collection_item.dart';
 import 'package:jigsawpuzzle/logic/content/models/puzzle_level_item.dart';
 import 'package:jigsawpuzzle/logic/content/network/content_http_client.dart';
+import 'package:jigsawpuzzle/logic/single_flight.dart';
 import 'package:jigsawpuzzle/services/app_logger.dart';
 import 'package:path/path.dart' as p;
 
@@ -35,6 +36,9 @@ class CollectionsContentPipeline {
   /// 供图集卡片监听下载进度的通知器 (collectionId -> progress 0.0~1.0)
   final ValueNotifier<Map<String, double>> progressNotifier =
       ValueNotifier<Map<String, double>>({});
+
+  /// 进行中的下载单飞表 (同 id 并发 ensure 复用同一 Future，防互删临时目录)
+  final Map<String, Future<bool>> _inFlightDownloads = {};
 
   static final RegExp _imageFileRegex = RegExp(
     r'\.(webp|jpg|jpeg|png)$',
@@ -197,8 +201,22 @@ class CollectionsContentPipeline {
     }
   }
 
-  /// 确保图集的关卡资源就绪 (若为 Zip 模式则自动下载并解压)
+  /// 确保图集的关卡资源就绪 (若为 Zip 模式则自动下载并解压)。
+  ///
+  /// 单飞（P1-7）：同 id 进行中的调用复用同一 Future，避免并发下载互删
+  /// temp_extract 临时目录。
   Future<bool> ensureCollectionDownloaded(
+    PuzzleCollectionItem collection, {
+    void Function(double progress)? onProgress,
+  }) {
+    return runSingleFlight(
+      _inFlightDownloads,
+      collection.id,
+      () => _ensureCollectionDownloadedImpl(collection, onProgress: onProgress),
+    );
+  }
+
+  Future<bool> _ensureCollectionDownloadedImpl(
     PuzzleCollectionItem collection, {
     void Function(double progress)? onProgress,
   }) async {

@@ -324,13 +324,17 @@ class GameRepository {
   }
 
   /// Adds a new user custom puzzle.
+  ///
+  /// 先落盘成功再更新内存（P1-5）：`_saveCustomPuzzle` 失败会上抛，
+  /// 此时内存列表与 notifier 保持不变，避免出现"UI 已显示但磁盘无此条"的
+  /// 幽灵条目（调用方 crop_puzzle_page 的 catch 会 toast 且不 pop）。
   Future<void> addCustomPuzzle(CustomPuzzleItem item) async {
     AppLogger.repo.info(
       'addCustomPuzzle id=${item.id} isLocal=${item.isLocalFile}',
     );
+    await _saveCustomPuzzle(item);
     _customPuzzles.insert(0, item);
     customPuzzlesNotifier.value = List.unmodifiable(_customPuzzles);
-    await _saveCustomPuzzle(item);
   }
 
   /// Deletes a custom puzzle and cleans up local image file if present.

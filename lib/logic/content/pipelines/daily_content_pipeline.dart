@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:jigsawpuzzle/logic/content/models/canonical_id.dart';
 import 'package:jigsawpuzzle/logic/content/models/puzzle_level_item.dart';
 import 'package:jigsawpuzzle/logic/content/network/content_http_client.dart';
+import 'package:jigsawpuzzle/logic/single_flight.dart';
 import 'package:jigsawpuzzle/services/app_logger.dart';
 import 'package:path/path.dart' as p;
 
@@ -18,13 +19,39 @@ class DailyContentPipeline {
   final String dailyStorageBaseDir;
   final ContentHttpClient _httpClient;
 
+  /// 进行中的下载单飞表 (同月并发 ensure 复用同一 Future，防互删临时目录)
+  final Map<String, Future<bool>> _inFlightDownloads = {};
+
   static final RegExp _dailyFileRegex = RegExp(
     r'^(\d{4})(\d{2})(\d{2})\.(webp|jpg|jpeg|png)$',
     caseSensitive: false,
   );
 
-  /// 确保某月份的每日关卡已就绪 (若本地不存在则尝试从远端 Zip 下载解压)
+  /// 确保某月份的每日关卡已就绪 (若本地不存在则尝试从远端 Zip 下载解压)。
+  ///
+  /// 单飞（P1-7）：同月份进行中的调用复用同一 Future，避免并发下载互删
+  /// temp_extract 临时目录。
   Future<bool> ensureMonthReady({
+    required String yyyyMm,
+    String zipUrlPattern = '',
+    String? explicitZipUrl,
+    List<String> mirrorUrls = const [],
+    DateTime? overrideToday,
+  }) {
+    return runSingleFlight(
+      _inFlightDownloads,
+      yyyyMm,
+      () => _ensureMonthReadyImpl(
+        yyyyMm: yyyyMm,
+        zipUrlPattern: zipUrlPattern,
+        explicitZipUrl: explicitZipUrl,
+        mirrorUrls: mirrorUrls,
+        overrideToday: overrideToday,
+      ),
+    );
+  }
+
+  Future<bool> _ensureMonthReadyImpl({
     required String yyyyMm,
     String zipUrlPattern = '',
     String? explicitZipUrl,

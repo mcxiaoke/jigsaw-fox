@@ -7,6 +7,7 @@ import 'package:jigsawpuzzle/logic/content/models/canonical_id.dart';
 import 'package:jigsawpuzzle/logic/content/models/puzzle_event_item.dart';
 import 'package:jigsawpuzzle/logic/content/models/puzzle_level_item.dart';
 import 'package:jigsawpuzzle/logic/content/network/content_http_client.dart';
+import 'package:jigsawpuzzle/logic/single_flight.dart';
 import 'package:jigsawpuzzle/services/app_logger.dart';
 import 'package:path/path.dart' as p;
 
@@ -23,6 +24,9 @@ class EventsContentPipeline {
   final ContentHttpClient _httpClient;
 
   final Map<String, PuzzleEventItem> _eventsMap = {};
+
+  /// 进行中的下载单飞表 (同 id 并发 ensure 复用同一 Future，防互删临时目录)
+  final Map<String, Future<bool>> _inFlightDownloads = {};
 
   static final RegExp _imageFileRegex = RegExp(
     r'\.(webp|jpg|jpeg|png)$',
@@ -183,8 +187,19 @@ class EventsContentPipeline {
     return deletedCount;
   }
 
-  /// 确保活动的关卡资源已就绪 (若为 Zip 模式则自动下载并解压)
-  Future<bool> ensureEventDownloaded(PuzzleEventItem event) async {
+  /// 确保活动的关卡资源已就绪 (若为 Zip 模式则自动下载并解压)。
+  ///
+  /// 单飞（P1-7）：同 id 进行中的调用复用同一 Future，避免并发下载互删
+  /// temp_extract 临时目录。
+  Future<bool> ensureEventDownloaded(PuzzleEventItem event) {
+    return runSingleFlight(
+      _inFlightDownloads,
+      event.id,
+      () => _ensureEventDownloadedImpl(event),
+    );
+  }
+
+  Future<bool> _ensureEventDownloadedImpl(PuzzleEventItem event) async {
     if (event.isLocalDownloaded && _isEventLocalDownloaded(event)) {
       AppLogger.events.fine('ensureEventDownloaded already ready ${event.id}');
       return true;

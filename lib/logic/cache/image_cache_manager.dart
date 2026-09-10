@@ -29,7 +29,7 @@ enum ThumbnailDimension {
 ///
 /// 架构设计遵循 Android (Glide / Coil) 与 iOS (SDWebImage) 工业级标准：
 /// 1. L1 内存缓存 (MemoryCache): 纯内存 LRU，0 纳秒极速响应；
-/// 2. L2 磁盘缓存内存索引 (_diskKeyIndex): 启动时异步扫描建索引，主线程零同步 I/O (No existsSync)；
+/// 2. L2 磁盘缓存内存索引 (_diskKeyIndex: Key → size): 启动时异步扫描建索引，主线程零同步 I/O (No existsSync)；覆盖写/删除同步增减字节计数；
 /// 3. L3 并发受控任务调度引擎 (EngineTaskQueue): 桌面端并发可达 4，移动端 2，支持 Single-Flight 请求去重；
 /// 4. 100% 异步非阻塞流水线: 所有磁盘读写与文件状态探测全异步或在后台 Worker 处理。
 class ImageCacheManager {
@@ -67,8 +67,9 @@ class ImageCacheManager {
   /// L3 任务调度与并发限流引擎
   final EngineTaskQueue _taskQueue = EngineTaskQueue();
 
-  /// L2 磁盘缓存内存索引表 (Key 集合，用于 0 纳秒内存判断文件是否存在，杜绝主线程 existsSync)
-  final Set<String> _diskKeyIndex = <String>{};
+  /// L2 磁盘缓存内存索引表 (Key → 字节大小，用于 0 纳秒内存判断文件是否存在并
+  /// 支持覆盖写/删除时精确增减计数，杜绝主线程 existsSync)
+  final Map<String, int> _diskKeyIndex = <String, int>{};
 
   /// L2 磁盘缓存运行时字节计数（避免每次淘汰都全量扫描目录）
   int _diskCacheBytes = 0;
@@ -178,10 +179,11 @@ class ImageCacheManager {
               } catch (_) {}
               continue;
             }
-            _diskKeyIndex.add(fileName);
             // 建索引时同步累计磁盘占用，作为 LRU 淘汰的基线
             try {
-              _diskCacheBytes += await entity.length();
+              final size = await entity.length();
+              _diskKeyIndex[fileName] = size;
+              _diskCacheBytes += size;
             } catch (_) {}
           }
         }
@@ -218,14 +220,18 @@ class ImageCacheManager {
     return 'thumb_${hashHex}_$dim.jpg';
   }
 
-  /// 获取缩略图在磁盘上的目标路径
-  String getThumbnailFilePath(
+  /// 获取缩略图在磁盘上的目标路径。
+  ///
+  /// [_cacheDir] 未就绪（初始化失败或尚未完成）时返回 null，
+  /// 调用方应跳过 L2 磁盘层并回退，而非拼出 `''/thumb_xxx.jpg` 的非法路径（P0-2）。
+  String? getThumbnailFilePath(
     String sourcePath, {
     ThumbnailDimension dimension = kDefaultThumbnailDimension,
   }) {
+    final cacheDir = _cacheDir;
+    if (cacheDir == null) return null;
     final cacheKey = getCacheKey(sourcePath, dimension: dimension);
-    final baseDir = _cacheDir?.path ?? '';
-    return '$baseDir/$cacheKey';
+    return '${cacheDir.path}/$cacheKey';
   }
 
   /// 纯内存快速检查缩略图是否已存在于磁盘 (耗时 0 纳秒，杜绝主线程 existsSync)
@@ -234,7 +240,7 @@ class ImageCacheManager {
     ThumbnailDimension dimension = kDefaultThumbnailDimension,
   }) {
     final cacheKey = getCacheKey(sourcePath, dimension: dimension);
-    return _diskKeyIndex.contains(cacheKey);
+    return _diskKeyIndex.containsKey(cacheKey);
   }
 
   /// 从 L1 内存中秒级获取缩略图字节 (若命中耗时 < 0.001ms，未命中返回 null)
@@ -261,18 +267,24 @@ class ImageCacheManager {
     }
 
     // 2. L2 磁盘缓存命中 (内存索引快速判断)
-    if (_diskKeyIndex.contains(cacheKey)) {
+    if (_diskKeyIndex.containsKey(cacheKey)) {
       final diskPath = getThumbnailFilePath(sourcePath, dimension: dimension);
-      try {
-        final file = File(diskPath);
-        final diskBytes = await file.readAsBytes();
-        if (diskBytes.isNotEmpty) {
-          _memoryCache.put(cacheKey, diskBytes);
-          return diskBytes;
+      if (diskPath != null) {
+        try {
+          final file = File(diskPath);
+          final diskBytes = await file.readAsBytes();
+          if (diskBytes.isNotEmpty) {
+            _memoryCache.put(cacheKey, diskBytes);
+            return diskBytes;
+          }
+        } catch (_) {
+          // 读取异常：从索引与字节计数中移除，以便重新生成
+          final knownSize = _diskKeyIndex.remove(cacheKey);
+          if (knownSize != null) {
+            _diskCacheBytes -= knownSize;
+            if (_diskCacheBytes < 0) _diskCacheBytes = 0;
+          }
         }
-      } catch (_) {
-        // 读取异常时从索引中移除，以便重新生成
-        _diskKeyIndex.remove(cacheKey);
       }
     }
 
@@ -305,25 +317,40 @@ class ImageCacheManager {
         }
 
         {
-          // 异步写入 L2 磁盘
-          try {
-            final targetFile = File(targetPath);
-            final parent = targetFile.parent;
-            if (!await parent.exists()) {
-              await parent.create(recursive: true);
-            }
-            await targetFile.writeAsBytes(generatedBytes, flush: true);
-            // add 返回 true 表示新增（覆盖写入不重复计数）
-            if (_diskKeyIndex.add(cacheKey)) {
+          // 异步写入 L2 磁盘（_cacheDir 未就绪时跳过 L2，仅保留 L1 内存缓存）
+          if (targetPath != null) {
+            try {
+              final targetFile = File(targetPath);
+              final parent = targetFile.parent;
+              if (!await parent.exists()) {
+                await parent.create(recursive: true);
+              }
+              // P0-3：临时文件 + rename 原子替换，避免截断写盘产生的损坏 JPEG 固化
+              final tmpFile = File('$targetPath.tmp');
+              await tmpFile.writeAsBytes(generatedBytes, flush: true);
+              // Windows 下 rename 不能覆盖已有文件：先删旧文件再原子替换
+              if (await targetFile.exists()) {
+                await targetFile.delete();
+              }
+              await tmpFile.rename(targetPath);
+              // 新增：直接计入；覆盖写：先减旧大小再加新大小，保证计数与磁盘一致
+              final previousSize = _diskKeyIndex[cacheKey];
+              _diskKeyIndex[cacheKey] = generatedBytes.length;
               _diskCacheBytes += generatedBytes.length;
+              if (previousSize != null) {
+                _diskCacheBytes -= previousSize;
+              }
+              if (_diskCacheBytes < 0) _diskCacheBytes = 0;
+              await _enforceDiskCacheLimit();
+            } catch (e, st) {
+              AppLogger.imageCache.warning(
+                'Failed to write thumbnail file key=$cacheKey',
+                e,
+                st,
+              );
+              // 清理可能残留的临时文件
+              await _deleteTempFile('$targetPath.tmp');
             }
-            await _enforceDiskCacheLimit();
-          } catch (e, st) {
-            AppLogger.imageCache.warning(
-              'Failed to write thumbnail file key=$cacheKey',
-              e,
-              st,
-            );
           }
 
           // 写入 L1 内存缓存
@@ -343,7 +370,12 @@ class ImageCacheManager {
     final targetPath = getThumbnailFilePath(sourcePath, dimension: dimension);
     final cacheKey = getCacheKey(sourcePath, dimension: dimension);
 
-    if (_diskKeyIndex.contains(cacheKey)) {
+    // _cacheDir 未就绪时无 L2 可用，直接回退原图（P0-2）
+    if (targetPath == null) {
+      return File(sourcePath);
+    }
+
+    if (_diskKeyIndex.containsKey(cacheKey)) {
       return File(targetPath);
     }
 
@@ -391,9 +423,16 @@ class ImageCacheManager {
     for (final dim in ThumbnailDimension.values) {
       final thumbKey = getCacheKey(sourcePath, dimension: dim);
       _memoryCache.remove(thumbKey);
-      _diskKeyIndex.remove(thumbKey);
+      // 移除索引时同步减字节计数（后续覆盖写会重新计入）
+      final knownSize = _diskKeyIndex.remove(thumbKey);
+      if (knownSize != null) {
+        _diskCacheBytes -= knownSize;
+        if (_diskCacheBytes < 0) _diskCacheBytes = 0;
+      }
 
       final diskPath = getThumbnailFilePath(sourcePath, dimension: dim);
+      // _cacheDir 未就绪时无磁盘文件可清（P0-2）
+      if (diskPath == null) continue;
       try {
         final file = File(diskPath);
         if (await file.exists()) {
@@ -421,17 +460,24 @@ class ImageCacheManager {
     if (memBytes != null && memBytes.isNotEmpty) return memBytes;
 
     // 2. L2 磁盘命中（内存索引零 I/O 判断）
-    if (_diskKeyIndex.contains(cacheKey)) {
+    if (_diskKeyIndex.containsKey(cacheKey)) {
       final diskPath = getThumbnailFilePath(url, dimension: dimension);
-      try {
-        final file = File(diskPath);
-        final diskBytes = await file.readAsBytes();
-        if (diskBytes.isNotEmpty) {
-          _memoryCache.put(cacheKey, diskBytes);
-          return diskBytes;
+      if (diskPath != null) {
+        try {
+          final file = File(diskPath);
+          final diskBytes = await file.readAsBytes();
+          if (diskBytes.isNotEmpty) {
+            _memoryCache.put(cacheKey, diskBytes);
+            return diskBytes;
+          }
+        } catch (_) {
+          // 读取异常：从索引与字节计数中移除，以便重新下载
+          final knownSize = _diskKeyIndex.remove(cacheKey);
+          if (knownSize != null) {
+            _diskCacheBytes -= knownSize;
+            if (_diskCacheBytes < 0) _diskCacheBytes = 0;
+          }
         }
-      } catch (_) {
-        _diskKeyIndex.remove(cacheKey);
       }
     }
 
@@ -443,16 +489,23 @@ class ImageCacheManager {
         if (doubleCheckMem != null) return doubleCheckMem;
 
         // 再次检查磁盘（排队期间可能已被别的任务写入）
-        if (_diskKeyIndex.contains(cacheKey)) {
+        if (_diskKeyIndex.containsKey(cacheKey)) {
           final diskPath = getThumbnailFilePath(url, dimension: dimension);
-          try {
-            final diskBytes = await File(diskPath).readAsBytes();
-            if (diskBytes.isNotEmpty) {
-              _memoryCache.put(cacheKey, diskBytes);
-              return diskBytes;
+          if (diskPath != null) {
+            try {
+              final diskBytes = await File(diskPath).readAsBytes();
+              if (diskBytes.isNotEmpty) {
+                _memoryCache.put(cacheKey, diskBytes);
+                return diskBytes;
+              }
+            } catch (_) {
+              // 读取异常：从索引与字节计数中移除，以便重新下载
+              final knownSize = _diskKeyIndex.remove(cacheKey);
+              if (knownSize != null) {
+                _diskCacheBytes -= knownSize;
+                if (_diskCacheBytes < 0) _diskCacheBytes = 0;
+              }
             }
-          } catch (_) {
-            _diskKeyIndex.remove(cacheKey);
           }
         }
 
@@ -537,24 +590,41 @@ class ImageCacheManager {
             return null;
           }
 
-          try {
-            final targetPath = getThumbnailFilePath(url, dimension: dimension);
-            final targetFile = File(targetPath);
-            final parent = targetFile.parent;
-            if (!await parent.exists()) {
-              await parent.create(recursive: true);
-            }
-            await targetFile.writeAsBytes(generatedBytes, flush: true);
-            if (_diskKeyIndex.add(cacheKey)) {
+          // 写入 L2 磁盘（_cacheDir 未就绪时跳过，仅保留 L1 内存缓存）
+          final targetPath = getThumbnailFilePath(url, dimension: dimension);
+          if (targetPath != null) {
+            try {
+              final targetFile = File(targetPath);
+              final parent = targetFile.parent;
+              if (!await parent.exists()) {
+                await parent.create(recursive: true);
+              }
+              // P0-3：临时文件 + rename 原子替换，避免截断写盘产生的损坏 JPEG 固化
+              final tmpFile = File('$targetPath.tmp');
+              await tmpFile.writeAsBytes(generatedBytes, flush: true);
+              // Windows 下 rename 不能覆盖已有文件：先删旧文件再原子替换
+              if (await targetFile.exists()) {
+                await targetFile.delete();
+              }
+              await tmpFile.rename(targetPath);
+              // 新增：直接计入；覆盖写：先减旧大小再加新大小，保证计数与磁盘一致
+              final previousSize = _diskKeyIndex[cacheKey];
+              _diskKeyIndex[cacheKey] = generatedBytes.length;
               _diskCacheBytes += generatedBytes.length;
+              if (previousSize != null) {
+                _diskCacheBytes -= previousSize;
+              }
+              if (_diskCacheBytes < 0) _diskCacheBytes = 0;
+              await _enforceDiskCacheLimit();
+            } catch (e, st) {
+              AppLogger.imageCache.warning(
+                'Failed to write network thumbnail key=$cacheKey',
+                e,
+                st,
+              );
+              // 清理可能残留的临时文件
+              await _deleteTempFile('$targetPath.tmp');
             }
-            await _enforceDiskCacheLimit();
-          } catch (e, st) {
-            AppLogger.imageCache.warning(
-              'Failed to write network thumbnail key=$cacheKey',
-              e,
-              st,
-            );
           }
           _memoryCache.put(cacheKey, generatedBytes);
           return generatedBytes;
@@ -601,7 +671,8 @@ class ImageCacheManager {
       final targetBytes = (_maxDiskCacheBytes * kEvictTargetRatio).round();
 
       // 收集候选（口径与内存索引一致：仅 thumb_*.jpg）
-      final entries = <({File file, String name, DateTime modified, int size})>[];
+      final entries =
+          <({File file, String name, DateTime modified, int size})>[];
       await for (final entity in dir.list(followLinks: false)) {
         if (entity is! File) continue;
         final name = entity.uri.pathSegments.last;
