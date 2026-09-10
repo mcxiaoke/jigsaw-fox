@@ -93,11 +93,16 @@ release/
 |---|---|---|
 | 初始导入 | repo 首次初始化 | `chore: init studio git guard` |
 | 导出前 checkpoint | `_handle_export` 正式导出发起时（validate 之前） | `checkpoint(pre-export): <exp_type> (auto)` |
-| 导出后 | 正式导出成功收尾处 | `export(<exp_type>): <n> images`（n=len(result.files)） |
+| 导出后 | 正式导出成功收尾处 | `export(<exp_type>): <n> images`（n=result.count=len(images)） |
 | 导出失败 | 正式导出失败收尾处（有变更才提交，记录失败现场） | `export(<exp_type>): failed after checkpoint (auto)` |
 | 回滚后 | `undo_op` 成功且非 dryRun 后 | `rollback(<modules>): op=<opId> <reason或msg>` |
 
 - 消息首行为单行摘要，无正文，保证 `git log --oneline` 可读；
+- `<n>` 的取值：`ExportResult.count`（由各导出器回填 `len(images)`，即本次实际
+  产出图片数）。**严禁使用 `len(result.files)`**：`files` 是
+  `StudioWorkspace.copy_release_to_out()` 的全量交付文件清单（含
+  `index.json`/`manifest.json`/`zip`/封面 webp），且 main 镜像跨批次累积，
+  其长度与图片张数无对应关系（2026-09-10 修正，见变更日志）；
 - 自审修正：导出前 checkpoint 发生在 validate 之前，此时张数未知，故消息不含
   `<n>`；`ExportResult` 无 batchId 字段（仅出现在 summary 文本中），消息规范不
   依赖它；回滚的 `<modules>` 取自 `undo_op` 返回的 `modules` 列表（逗号连接）；
@@ -117,6 +122,7 @@ def checkpoint(studio_dir: Path, msg: str) -> bool   # dirty 时 add -A + commit
 def guard_export(studio_dir: Path, exp_type: str, *, strict: bool) -> str | None
     # 导出前置：返回 None=放行，返回 str=拦截原因（strict 且 checkpoint 失败）
 def commit_after_export(studio_dir: Path, exp_type: str, n: int, failed: bool = False) -> None
+    # n = 本次导出图片张数，由调用方传 result.count（不可用 len(result.files)）
 def commit_after_rollback(studio_dir: Path, modules: list[str], op_id: str, reason: str) -> None
 ```
 
@@ -141,8 +147,10 @@ def commit_after_rollback(studio_dir: Path, modules: list[str], op_id: str, reas
 - 正式导出（`data.get("trial")` 为假）时，在 `exporter.validate()` 之前：
   `mode = load_mode(...)`；`mode != "off"` 时 `ensure_repo` → `guard_export(...)`；
   `guard_export` 返回拦截原因时按业务校验失败处理（400 + 导出中止日志）；
-- 导出成功且非 trial：`commit_after_export(...)`，用 try/except 包裹，失败仅
-  logger.warning，不影响 200 响应；
+- 导出成功且非 trial：`commit_after_export(src_p / ".studio", exp_type,
+  result.count or len(result.files or []))`，用 try/except 包裹，失败仅
+  logger.warning，不影响 200 响应；`result.count` 由导出器回填为
+  `len(images)`，`files` 仅作 `count` 缺失时的兜底（正常路径不会走到）；
 - 导出失败（ValueError / Exception 分支）：`commit_after_export` 的失败变体
   （`export(...): failed ...`），同样尽力而为。
 
@@ -188,7 +196,9 @@ unittest 风格，与现有套件一致；所有用例基于临时目录构造 `
 2. `server.py`：`_handle_export` 前置 guard 与成功/失败收尾 commit；`_handle_rollback`
    成功收尾 commit；
 3. 新增 `studio/test_git_guard.py`；
-4. 更新 `studio/README.md`（可选，一行说明）与 `docs/CHANGES-20260910.md`。
+4. 更新 `studio/README.md`（可选，一行说明）与 `docs/CHANGES-20260910.md`；
+5. （2026-09-10 修正）`exporters/base.py` 的 `ExportResult` 新增 `count` 字段，
+   三个导出器回填 `len(images)`；`server.py` 改传 `result.count`。
 
 ## 十、自审记录（2026-09-10）
 
@@ -209,3 +219,10 @@ unittest 风格，与现有套件一致；所有用例基于临时目录构造 `
       无误；checkpoint 消息不含未知张数；`ExportResult`/undo_op 返回结构与
       消息规范对齐；导出失败分支在 except ValueError/Exception 中可访问
       `exporter.is_trial`（trial 失败同样不做 git 操作）。
+- [x] 三次自审（2026-09-10 修正）：原「n=len(result.files)」前提错误——`files`
+      是 release 镜像的全量交付文件清单（含 index.json/manifest.json/zip/封面，
+      且 main 镜像跨批次累积），不是图片张数，导致真实仓库 commit 消息张数长期
+      偏大（如 main 80 张记成 184 images）。改为 `ExportResult.count=len(images)`，
+      由三个导出器回填、server 透传；`test_studio.py` 补 `result.count` 断言，
+      `temp/verify_gg_count.py` 端到端复验 `export(main): 5 images` 正确。
+      历史错误 commit 不重写（只读历史参照，重写破坏哈希链）。

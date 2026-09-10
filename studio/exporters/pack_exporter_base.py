@@ -559,4 +559,5 @@ class PackExporterBase(BaseExporter):
             success=True,
             summary=summary,
             files=copied_files,
+            count=len(images),
         )

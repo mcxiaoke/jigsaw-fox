@@ -1869,9 +1869,14 @@ class StudioRequestHandler(BaseHTTPRequestHandler):
                     res_dict["totalExported"] = ledger.get("total_exported", 0)
                 logger.info(f"[EXPORT] 导出成功: 输出文件={result.files}")
                 if not getattr(exporter, "is_trial", False):
-                    # 导出后提交账本/流水/标签变化（尽力而为，失败不影响响应）
+                    # 导出后提交账本/流水/标签变化（尽力而为，失败不影响响应）。
+                    # 张数必须取 result.count（= 本次导出图片数）；result.files 是
+                    # release 镜像的全量交付文件清单（含 index.json/manifest.json/
+                    # zip/封面，且 main 镜像跨批次累积），其长度与图片数无关。
                     commit_after_export(
-                        src_p / ".studio", exp_type, len(result.files or [])
+                        src_p / ".studio",
+                        exp_type,
+                        result.count or len(result.files or []),
                     )
                 _job_finish(task_id, summary=result.summary)
             else:

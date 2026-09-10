@@ -139,12 +139,19 @@ def assert_max_images(
 
 @dataclass
 class ExportResult:
-    """导出操作执行结果"""
+    """导出操作执行结果
+
+    count: 本次导出实际产出的图片张数（= len(images)），供 git 守卫等
+    需要"张数"语义的调用方使用。切勿用 len(files) 代替——files 是
+    release 镜像的全量交付文件清单（含 index.json/manifest.json/zip/
+    封面，且 main 镜像跨批次累积），与图片张数无对应关系。
+    """
     success: bool
     summary: str = ""
     files: list[str] = field(default_factory=list)
     logs: list[dict[str, str]] = field(default_factory=list)
     error: str | None = None
+    count: int = 0
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -153,6 +160,7 @@ class ExportResult:
             "files": self.files,
             "logs": self.logs,
             "error": self.error,
+            "count": self.count,
         }
 
 

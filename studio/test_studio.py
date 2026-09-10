@@ -380,6 +380,9 @@ class TestCoreAndExporters(unittest.TestCase):
         result = exporter.execute()
 
         self.assertTrue(result.success)
+        # count 必须是图片张数，而非 len(files)（release 镜像交付文件数）
+        self.assertEqual(result.count, 3)
+        self.assertNotEqual(result.count, len(result.files))
         main_index = self.out_dir / "main" / "index.json"
         self.assertTrue(main_index.exists())
         idx_data = json.loads(main_index.read_text(encoding="utf-8"))
@@ -438,6 +441,8 @@ class TestCoreAndExporters(unittest.TestCase):
         result = exporter.execute()
 
         self.assertTrue(result.success)
+        # count 必须是图片张数（30 张 Daily + 3 张 Cats）
+        self.assertEqual(result.count, 33)
         daily_zip = self.out_dir / "daily" / "zips" / "202609.zip"
         self.assertTrue(daily_zip.exists())
 
@@ -505,6 +510,7 @@ class TestCoreAndExporters(unittest.TestCase):
         result = exporter.execute()
 
         self.assertTrue(result.success)
+        self.assertEqual(result.count, 3)
         event_zip = self.out_dir / "events" / "packs" / "test_event_2026.zip"
         self.assertTrue(event_zip.exists())
 
@@ -545,6 +551,7 @@ class TestCoreAndExporters(unittest.TestCase):
         result = exporter.execute()
 
         self.assertTrue(result.success)
+        self.assertEqual(result.count, 3)
         col_zip = self.out_dir / "collections" / "packs" / "test_col_2026.zip"
         self.assertTrue(col_zip.exists())
 
