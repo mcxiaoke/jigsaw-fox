@@ -500,6 +500,40 @@ button, input, select, textarea { font: inherit; color: inherit; }
   accent-color: var(--primary);
 }
 
+/* 大图预览按钮：缩略图右下角悬浮，默认隐藏，悬停卡片时出现 */
+.card-viewer-btn {
+  position: absolute;
+  bottom: 6px;
+  right: 6px;
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 15px;
+  line-height: 1;
+  border-radius: 6px;
+  background: rgba(15, 23, 42, 0.55);
+  backdrop-filter: blur(4px);
+  color: #fff;
+  z-index: 3;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.12s ease, background 0.12s ease;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+}
+.img-card:hover .card-viewer-btn {
+  opacity: 1;
+}
+.card-viewer-btn:hover {
+  background: rgba(37, 99, 235, 0.85);
+}
+/* 🔍 按钮占据缩略图右下角，质检角标避让至左下角 */
+.img-thumb-wrap .card-quality-badge {
+  right: auto;
+  left: 6px;
+}
+
 .card-status-dot {
   position: absolute;
   top: 8px;
@@ -656,6 +690,19 @@ button, input, select, textarea { font: inherit; color: inherit; }
   background: #fafafa;
 }
 
+/* 通用确认 AlertDialog：z-index 高于导出工作台(2000)，保证任何弹窗之上都能弹出 */
+.confirm-dialog-mask {
+  z-index: 2200;
+}
+.confirm-dialog-danger {
+  background: #dc2626;
+  border-color: #b91c1c;
+  color: #fff;
+}
+.confirm-dialog-danger:hover {
+  background: #b91c1c;
+}
+
 /* 选项卡 */
 .tab-group { display: flex; border-bottom: 2px solid var(--line); gap: 18px; margin-bottom: 8px; }
 .tab-item {
@@ -705,19 +752,69 @@ button, input, select, textarea { font: inherit; color: inherit; }
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 12px;
   border-bottom: 1px solid #1e293b;
+  flex-shrink: 0;
 }
 .viewer-title-box {
   display: flex;
   align-items: center;
   gap: 8px;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+}
+/* 文件名单行截断，完整路径见 title 提示 */
+.viewer-file-name {
+  font-size: 14px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex-shrink: 1;
+  min-width: 60px;
 }
 .viewer-meta-badge {
   font-size: 11px;
   padding: 2px 7px;
   border-radius: 4px;
   background: #1e293b;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.viewer-index-label {
+  font-size: 11px;
+  color: #94a3b8;
+  white-space: nowrap;
+  flex-shrink: 0;
+  margin-left: 2px;
+}
+.viewer-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+.viewer-action-btn {
+  color: #fff;
+  border: 1px solid #334155;
+  background: #1e293b;
+  white-space: nowrap;
+}
+.viewer-action-btn:hover {
+  background: #334155;
+}
+.viewer-action-danger {
+  border: 1px solid #b91c1c;
+  background: #dc2626;
+}
+.viewer-action-danger:hover {
+  background: #b91c1c;
+}
+.viewer-close-btn {
+  flex-shrink: 0;
+}
+.viewer-meta-badge {
   color: #38bdf8;
   border: 1px solid #334155;
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
@@ -863,10 +960,10 @@ button, input, select, textarea { font: inherit; color: inherit; }
   display: flex;
   gap: 6px;
 }
-/* 缩略图手动裁切框角标 */
+/* 缩略图手动裁切框角标：位于缩略图内左下角质检角标的上方 */
 .card-manual-crop-badge {
   position: absolute;
-  bottom: 6px;
+  bottom: 30px;
   left: 6px;
   background: rgba(59, 130, 246, 0.92);
   color: #fff;
@@ -899,36 +996,20 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .viewer-nav-btn.prev { left: 18px; }
 .viewer-nav-btn.next { right: 18px; }
 
-/* 大图快速打标与复核栏 */
+/* 大图快速打标栏：单排标签，左对齐，放不下自动换行 */
 .viewer-footer {
-  padding: 6px 18px;
+  padding: 5px 18px;
   background: #0f172a;
   border-top: 1px solid #1e293b;
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  flex-wrap: wrap;
+  align-items: flex-start;
   flex-shrink: 0;
 }
 .viewer-tags-section {
   display: flex;
-  align-items: center;
-  gap: 6px;
-  flex-wrap: wrap;
-  flex: 1;
+  align-items: flex-start;
+  width: 100%;
   min-width: 0;
-}
-.viewer-footer .label {
-  font-size: 10px;
-  color: #64748b;
-  font-weight: 600;
-  white-space: nowrap;
-}
-.current-tags-row {
-  display: flex;
-  gap: 6px;
-  flex-wrap: wrap;
 }
 .viewer-tag-badge {
   display: inline-flex;
@@ -961,6 +1042,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
   display: flex;
   gap: 3px;
   flex-wrap: wrap;
+  align-content: flex-start;
 }
 .btn.xs {
   padding: 3px 7px;
@@ -1062,7 +1144,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .q-tag-c { background: #fffbeb; color: #d97706; }
 .q-tag-f { background: #fef2f2; color: #dc2626; }
 
-/* 查看器质检展示栏 */
+/* 查看器质检展示栏：评分+指标+重新质检 单行 */
 .viewer-quality-bar {
   padding: 6px 18px;
   background: #1e293b;
@@ -1138,17 +1220,15 @@ button, input, select, textarea { font: inherit; color: inherit; }
   border-radius: 4px;
   color: #cbd5e1;
 }
-.q-crop-box {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  background: rgba(245, 158, 11, 0.15);
-  border: 1px solid rgba(245, 158, 11, 0.4);
-  color: #fbbf24;
-  padding: 2px 8px;
-  border-radius: 4px;
-  font-size: 11px;
-  font-weight: 500;
+.viewer-recheck-btn {
+  background: #334155;
+  color: #fff;
+  border: 1px solid #475569;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.viewer-recheck-btn:hover {
+  background: #475569;
 }
 /* ============ 全屏导出工作台 ============ */
 /* 第③步 输出设置 + 必填错误红条 */
@@ -1304,6 +1384,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
   align-items: stretch;
   justify-content: center;
   padding: 24px;
+  /* 刻意不绑定 @click.self 关闭：导出配置较长，防止点外误关丢失填写内容，仅右上角 × 可关闭 */
 }
 .export-view {
   background: #fff;

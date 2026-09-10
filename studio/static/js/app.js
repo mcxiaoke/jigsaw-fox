@@ -617,6 +617,61 @@ const app = createApp({
     };
 
     // -----------------------------------------------------------------------
+    // 通用确认对话框 (AlertDialog)：showConfirm(options) 返回 Promise<boolean>
+    //   options: { title, message, html?, confirmText?, cancelText?, danger?, requireCheck?, checkText? }
+    //   - danger=true 确认按钮为红色危险样式
+    //   - requireCheck=true 需勾选确认复选框后确认按钮才可用（高危操作防呆）
+    //   - 点遮罩/ESC 均视为取消，不丢失任何状态
+    // -----------------------------------------------------------------------
+    const confirmDialog = ref({
+      open: false,
+      title: "",
+      message: "",
+      html: "",
+      confirmText: "确定",
+      cancelText: "取消",
+      danger: false,
+      requireCheck: false,
+      checkText: "我已确认本次操作",
+      checked: false,
+      _resolve: null,
+    });
+    const showConfirm = (options) => {
+      return new Promise((resolve) => {
+        const d = confirmDialog.value;
+        // 若已有未决对话框，先按取消结算，避免 Promise 悬挂
+        if (d.open && d._resolve) d._resolve(false);
+        d.title = options.title || "确认操作";
+        d.message = options.message || "";
+        d.html = options.html || "";
+        d.confirmText = options.confirmText || "确定";
+        d.cancelText = options.cancelText || "取消";
+        d.danger = !!options.danger;
+        d.requireCheck = !!options.requireCheck;
+        d.checkText = options.checkText || "我已确认本次操作";
+        d.checked = !options.requireCheck;
+        d.open = true;
+        d._resolve = resolve;
+      });
+    };
+    const settleConfirmDialog = (result) => {
+      const d = confirmDialog.value;
+      if (!d.open) return;
+      d.open = false;
+      if (d._resolve) {
+        const r = d._resolve;
+        d._resolve = null;
+        r(result);
+      }
+    };
+    const confirmDialogOk = () => {
+      const d = confirmDialog.value;
+      if (d.requireCheck && !d.checked) return;
+      settleConfirmDialog(true);
+    };
+    const confirmDialogCancel = () => settleConfirmDialog(false);
+
+    // -----------------------------------------------------------------------
     // 计算属性 (Computed)
     // -----------------------------------------------------------------------
 
@@ -909,9 +964,14 @@ const app = createApp({
       }
       // 扫描会整体覆盖当前记录列表：存在未保存修改时先确认，防止误刷新丢标注
       if (unsavedCount.value > 0) {
-        const ok = window.confirm(
-          `当前有 ${unsavedCount.value} 条未保存的打标修改，重新扫描将覆盖这些修改。\n建议先点击「保存 tags.json」再扫描。确定继续吗？`
-        );
+        const ok = await showConfirm({
+          title: "存在未保存的打标修改",
+          message: `当前有 ${unsavedCount.value} 条未保存的打标修改，重新扫描将覆盖这些修改。`,
+          html: "建议先点击「💾 保存 tags.json」再扫描。",
+          confirmText: "放弃修改并扫描",
+          cancelText: "先不扫描",
+          danger: true,
+        });
         if (!ok) return;
         unsavedCount.value = 0;
       }
@@ -1364,19 +1424,21 @@ const app = createApp({
     // 用户手动批量增删改 Tags 核心功能
     // -----------------------------------------------------------------------
 
-    const batchSetTag = (targetTag) => {
+    const batchSetTag = async (targetTag) => {
       if (!targetTag) return;
       if (selectedCount.value === 0) {
         showToast("请先在网格中勾选图片");
         return;
       }
-      // 大批量防呆：影响面超过 20 张时二次确认（误操作覆盖标签成本极高）
-      if (selectedCount.value > 20) {
-        const ok = window.confirm(
-          `即将把 ${selectedCount.value} 张图片的标签【覆盖设置为】[${tagZh.value[targetTag] || targetTag}]。\n覆盖会清除这些图片原有的全部标签，确定继续吗？`
-        );
-        if (!ok) return;
-      }
+      // 覆盖会清除原有全部标签，始终二次确认（误操作成本极高）
+      const ok = await showConfirm({
+        title: "批量覆盖标签",
+        message: `即将把 ${selectedCount.value} 张图片的标签【覆盖设置为】[${tagZh.value[targetTag] || targetTag}]。`,
+        html: "覆盖会<b style='color:#dc2626'>清除这些图片原有的全部标签</b>，仅保留目标标签。",
+        confirmText: "覆盖",
+        danger: true,
+      });
+      if (!ok) return;
       let count = 0;
       for (const r of records.value) {
         if (selectedSet.value.has(r.path)) {
@@ -1389,12 +1451,19 @@ const app = createApp({
       stdInfo(`[打标] Set: ${count} 张 -> [${targetTag}]`);
     };
 
-    const batchAddTag = (targetTag) => {
+    const batchAddTag = async (targetTag) => {
       if (!targetTag) return;
       if (selectedCount.value === 0) {
         showToast("请先在网格中勾选图片");
         return;
       }
+      const ok = await showConfirm({
+        title: "批量追加标签",
+        message: `即将为 ${selectedCount.value} 张图片【追加】标签 [${tagZh.value[targetTag] || targetTag}]。`,
+        html: "已有其他标签的图片不受影响；追加具体标签时将自动移除 Others 兜底标签。",
+        confirmText: "追加",
+      });
+      if (!ok) return;
       let count = 0;
       for (const r of records.value) {
         if (selectedSet.value.has(r.path)) {
@@ -1413,19 +1482,20 @@ const app = createApp({
       showToast(`已为 ${count} 张图片追加标签 [${tagZh.value[targetTag] || targetTag}]`);
     };
 
-    const batchRemoveTag = (targetTag) => {
+    const batchRemoveTag = async (targetTag) => {
       if (!targetTag) return;
       if (selectedCount.value === 0) {
         showToast("请先在网格中勾选图片");
         return;
       }
-      // 大批量防呆：影响面超过 20 张时二次确认
-      if (selectedCount.value > 20) {
-        const ok = window.confirm(
-          `即将从 ${selectedCount.value} 张图片中【移除】标签 [${tagZh.value[targetTag] || targetTag}]，确定继续吗？`
-        );
-        if (!ok) return;
-      }
+      const ok = await showConfirm({
+        title: "批量移除标签",
+        message: `即将从 ${selectedCount.value} 张图片中【移除】标签 [${tagZh.value[targetTag] || targetTag}]。`,
+        html: "标签被移空后图片会自动归入 Others 兜底桶。",
+        confirmText: "移除",
+        danger: true,
+      });
+      if (!ok) return;
       let count = 0;
       for (const r of records.value) {
         if (selectedSet.value.has(r.path)) {
@@ -1444,15 +1514,19 @@ const app = createApp({
       showToast(`已从 ${count} 张图片中移除标签 [${tagZh.value[targetTag] || targetTag}]`);
     };
 
-    const batchClearTags = () => {
+    const batchClearTags = async () => {
       if (selectedCount.value === 0) return;
-      // 大批量防呆：重置为 Others 会抹掉原标签，超过 20 张时二次确认
-      if (selectedCount.value > 20) {
-        const ok = window.confirm(
-          `即将把 ${selectedCount.value} 张图片的标签【重置为 [Others]】（清除原标签），确定继续吗？`
-        );
-        if (!ok) return;
-      }
+      // 重置为 Others 会抹掉原标签，属高危操作：始终确认 + 需勾选确认
+      const ok = await showConfirm({
+        title: "重置标签为 Others",
+        message: `即将把 ${selectedCount.value} 张图片的标签【重置为 [Others]】。`,
+        html: "<b style='color:#dc2626'>所有原有标签将被清除</b>，且可通过「保存 tags.json」持久化，请谨慎操作。",
+        confirmText: "重置",
+        danger: true,
+        requireCheck: true,
+        checkText: `我确认要重置 ${selectedCount.value} 张图片的标签`,
+      });
+      if (!ok) return;
       for (const r of records.value) {
         if (selectedSet.value.has(r.path)) {
           applyTags(r, [OTHERS]);
@@ -2405,15 +2479,16 @@ const app = createApp({
         // 如果在输入框中，不触发全局快捷键
         if (["INPUT", "TEXTAREA", "SELECT"].includes(e.target.tagName)) return;
         if (e.key === "Escape") {
-          if (deleteConfirmOpen.value) {
+          if (confirmDialog.value.open) {
+            confirmDialogCancel();
+          } else if (deleteConfirmOpen.value) {
             cancelDeleteViewerItem();
           } else if (viewerModalOpen.value) {
             closeViewer();
-          } else if (exportModalOpen.value) {
-            closeExport();
           } else if (selectedCount.value > 0) {
             clearSelection();
           }
+          // 注意：导出工作台 (exportModalOpen) 刻意不响应 ESC，避免配置过程中误触丢失；仅可点右上角 × 关闭
         } else if (viewerModalOpen.value) {
           if (e.key === "ArrowLeft") prevViewer();
           if (e.key === "ArrowRight") nextViewer();
@@ -2477,6 +2552,10 @@ const app = createApp({
       tagIcon,
       tagDesc,
       tagZh,
+      confirmDialog,
+      showConfirm,
+      confirmDialogOk,
+      confirmDialogCancel,
       srcDir,
       outDir,
       httpBase,

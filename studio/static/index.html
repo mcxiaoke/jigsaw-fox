@@ -370,7 +370,6 @@
           class="img-card"
           :class="{ selected: isSelected(item), 'is-exported': !!item.exported, 'is-small-long': item.too_small_long }"
           @click="toggleSelect(item)"
-          @dblclick.stop="openViewer(item)"
         >
           <!-- 复选框（分辨率不足/已导出的图置灰不可选） -->
           <input
@@ -408,13 +407,6 @@
             ✔ {{ formatExportShort(item.exported) }}
           </div>
 
-          <!-- 手动裁切框角标 -->
-          <div
-            v-if="item.manualCrop"
-            class="card-manual-crop-badge"
-            title="已设定手动裁切框，导出时将优先使用"
-          >✂</div>
-
           <!-- 状态小圆点 -->
           <div
             class="card-status-dot"
@@ -435,6 +427,21 @@
               :alt="item.file"
               @error="handleImageError"
             />
+            <!-- 手动裁切框角标（缩略图内，质检角标上方，避免与底部标签行重叠） -->
+            <div
+              v-if="item.manualCrop"
+              class="card-manual-crop-badge"
+              title="已设定手动裁切框，导出时将优先使用"
+            >✂</div>
+
+            <!-- 大图预览按钮（缩略图右下角悬浮，避免双击误触） -->
+            <div
+              class="card-viewer-btn"
+              title="查看大图"
+              @click.stop="openViewer(item)"
+              @dblclick.stop
+            >🔍</div>
+
             <!-- 质检角标 -->
             <div
               v-if="item.quality"
@@ -910,7 +917,7 @@
       <div class="viewer-dialog">
         <div class="viewer-header">
           <div class="viewer-title-box">
-            <b>{{ currentViewerItem?.file }}</b>
+            <b class="viewer-file-name" :title="currentViewerItem?.path">{{ currentViewerItem?.file }}</b>
             <span class="viewer-meta-badge" v-if="currentViewerItem?.width && currentViewerItem?.height">
               📐 {{ currentViewerItem.width }} × {{ currentViewerItem.height }}
             </span>
@@ -923,24 +930,25 @@
             <span class="viewer-meta-badge" v-if="currentViewerItem?.exported" style="background: #059669; color: #fff;">
               ✔ 已导出至 {{ formatExportShort(currentViewerItem.exported) }}
             </span>
-            <span style="color: #94a3b8; font-size: 11px; margin-left: 6px;">
-              [{{ viewerIndex + 1 }} / {{ filteredRecords.length }}] {{ currentViewerItem?.path }}
+            <span class="viewer-index-label" :title="currentViewerItem?.path">
+              [{{ viewerIndex + 1 }} / {{ filteredRecords.length }}]
             </span>
           </div>
-          <button class="btn xs" style="color:#fff; border:1px solid #334155; background:#1e293b;" @click="enterCropMode" v-if="!cropMode && currentViewerItem" title="手动画裁切框，导出时优先使用">✂ 画裁切框</button>
-          <button
-            class="btn xs"
-            v-if="!cropMode && currentViewerItem"
-            :disabled="!canDeleteViewerItem || isDeletingImage"
-            :title="canDeleteViewerItem ? '删除该图片 (移动到 Deleted 目录)' : '已导出的图片不能删除'"
-            style="color:#fff; border:1px solid #b91c1c; background:#dc2626;"
-            :style="{ opacity: canDeleteViewerItem ? 1 : 0.45, cursor: canDeleteViewerItem ? 'pointer' : 'not-allowed' }"
-            @click="requestDeleteViewerItem"
-          >
-            <span v-if="isDeletingImage">⏳ 删除中...</span>
-            <span v-else>🗑 删除</span>
-          </button>
-          <button class="modal-close" style="color: #fff;" @click="closeViewer">×</button>
+          <div class="viewer-header-actions">
+            <button class="btn xs viewer-action-btn" @click="enterCropMode" v-if="!cropMode && currentViewerItem" title="手动画裁切框，导出时优先使用">✂ 画裁切框</button>
+            <button
+              class="btn xs viewer-action-btn viewer-action-danger"
+              v-if="!cropMode && currentViewerItem"
+              :disabled="!canDeleteViewerItem || isDeletingImage"
+              :title="canDeleteViewerItem ? '删除该图片 (移动到 Deleted 目录)' : '已导出的图片不能删除'"
+              :style="{ opacity: canDeleteViewerItem ? 1 : 0.45, cursor: canDeleteViewerItem ? 'pointer' : 'not-allowed' }"
+              @click="requestDeleteViewerItem"
+            >
+              <span v-if="isDeletingImage">⏳ 删除中...</span>
+              <span v-else>🗑 删除</span>
+            </button>
+            <button class="modal-close viewer-close-btn" style="color: #fff;" @click="closeViewer">×</button>
+          </div>
         </div>
 
         <div class="viewer-content">
@@ -1032,11 +1040,7 @@
                 🧩 推荐: <b>{{ currentViewerItem.quality.max_grid }}</b>
               </span>
             </div>
-            <div class="q-crop-box" v-if="currentViewerItem.quality.crop_suggestion">
-              <span class="q-crop-icon">✂️</span>
-              <span class="q-crop-text">{{ currentViewerItem.quality.crop_suggestion }}</span>
-            </div>
-            <button class="btn xs" style="background: #334155; color: #fff; border: 1px solid #475569;" @click="evalSingleQuality(currentViewerItem, true)" :disabled="isEvaluatingQuality">
+            <button class="btn xs viewer-recheck-btn" @click="evalSingleQuality(currentViewerItem, true)" :disabled="isEvaluatingQuality">
               🔄 重新质检
             </button>
           </div>
@@ -1052,22 +1056,6 @@
         <!-- 底部快速打标与复核栏 -->
         <div class="viewer-footer" v-if="currentViewerItem">
           <div class="viewer-tags-section">
-            <span class="label">当前标签:</span>
-            <div class="current-tags-row">
-              <span
-                v-for="t in currentViewerItem.tags"
-                :key="t"
-                class="viewer-tag-badge"
-                @click="toggleViewerTag(t)"
-                :title="'点击移除 ' + (tagZh[t] || t)"
-              >
-                {{ tagIcon[t] || '🏷️' }} {{ tagZh[t] || t }} ✕
-              </span>
-            </div>
-          </div>
-
-          <div class="viewer-quick-tags">
-            <span class="label">快速添加/移除:</span>
             <div class="quick-chips">
               <button
                 v-for="t in mainTags"
@@ -1080,7 +1068,6 @@
               </button>
             </div>
           </div>
-
         </div>
       </div>
     </div>
@@ -1111,6 +1098,36 @@
                   :disabled="isDeletingImage" @click="confirmDeleteViewerItem">
             <span v-if="isDeletingImage">⏳ 删除中...</span>
             <span v-else>确认删除</span>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 通用确认 AlertDialog：showConfirm({title, message, html, danger, requireCheck}) -> Promise<boolean> -->
+    <div v-if="confirmDialog.open" class="modal-mask confirm-dialog-mask" @click.self="confirmDialogCancel">
+      <div class="modal-dialog" style="max-width: 460px;">
+        <div class="modal-header" :style="confirmDialog.danger ? 'background:#fef2f2; border-bottom:1px solid #fecaca;' : 'background:#f8fafc;'">
+          <h3 :style="confirmDialog.danger ? 'color:#b91c1c;' : 'color:#1e293b;'">{{ confirmDialog.title }}</h3>
+          <button class="modal-close" @click="confirmDialogCancel">×</button>
+        </div>
+        <div class="modal-body" style="padding: 16px 20px;">
+          <p v-if="confirmDialog.message" style="margin:0 0 8px; font-size:14px; color:#1e293b;">{{ confirmDialog.message }}</p>
+          <p v-if="confirmDialog.html" style="margin:0; font-size:12px; color:#64748b; line-height:1.6;" v-html="confirmDialog.html"></p>
+          <label v-if="confirmDialog.requireCheck" class="filter-toggle" style="margin-top:14px; cursor:pointer; display:flex; align-items:center; gap:8px; font-size:13px; color:#334155;">
+            <input type="checkbox" v-model="confirmDialog.checked" />
+            <span>{{ confirmDialog.checkText }}</span>
+          </label>
+        </div>
+        <div class="modal-footer">
+          <button class="btn" @click="confirmDialogCancel">{{ confirmDialog.cancelText }}</button>
+          <button
+            class="btn"
+            :class="{ 'confirm-dialog-danger': confirmDialog.danger }"
+            :disabled="confirmDialog.requireCheck && !confirmDialog.checked"
+            :style="(confirmDialog.requireCheck && !confirmDialog.checked) ? 'opacity:0.45; cursor:not-allowed;' : ''"
+            @click="confirmDialogOk"
+          >
+            {{ confirmDialog.confirmText }}
           </button>
         </div>
       </div>
