@@ -382,6 +382,7 @@ class PackExporterBase(BaseExporter):
                 "sourceSize": p.stat().st_size if p.exists() else 0,
                 "module": self.module,
                 "logicalId": f"{self.module}:{pack_id}:{p.name}",
+                "packId": pack_id,
                 "targetFile": f"{self.module}/packs/{zip_file_name}#{arc_name}",
                 "revision": rev,
             }

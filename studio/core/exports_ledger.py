@@ -21,6 +21,15 @@ logger = logging.getLogger(__name__)
 from studio.core.workspace import StudioWorkspace
 
 
+def new_op_id() -> str:
+    """生成一次导出操作的操作 ID (op_YYYYMMDD_HHMMSSmmm, UTC)。
+
+    约定：一次正式导出（一次 append_records 调用）= 一个 opId。
+    幂等续跑时重复记录被跳过、不产生新 opId。
+    """
+    return "op_" + dt.datetime.now(dt.timezone.utc).strftime("%Y%m%d_%H%M%S%f")[:-3]
+
+
 class ExportsLedger:
     """
     源侧权威导出总账本管理器：
@@ -86,12 +95,17 @@ class ExportsLedger:
     def _try_rebuild_from_events(self) -> bool:
         """
         从 append-only 事件流 exports_events.jsonl 全量重放，重建账本记录。
+        按行序重放：
+          - action=append   → 加入记录（同 recordId 未撤销前重复 append 忽略，幂等）
+          - action=rollback → 按其 recordIds 删除对应记录（撤销后重建不会复活）
         成功且非只读时会把重建结果物化回 exports.json。
         """
         if not self.events_file.exists() or not self.events_file.is_file():
             return False
         try:
-            records: list[dict[str, Any]] = []
+            parsed = 0
+            cur: dict[str, dict[str, Any]] = {}
+            order: list[str] = []
             with open(self.events_file, "r", encoding="utf-8") as f:
                 for line in f:
                     line = line.strip()
@@ -101,18 +115,36 @@ class ExportsLedger:
                         ev = json.loads(line)
                     except Exception:
                         continue
-                    if ev.get("action") != "append":
-                        continue
-                    r = ev.get("record")
-                    if isinstance(r, dict):
-                        records.append(r)
-            if not records:
+                    action = ev.get("action")
+                    if action == "append":
+                        r = ev.get("record")
+                        if not isinstance(r, dict):
+                            continue
+                        rid = str(r.get("recordId") or "").strip()
+                        if not rid:
+                            # 兜底：append_records 必生成 recordId，缺失属异常数据，跳过
+                            continue
+                        if rid in cur:
+                            continue  # 未撤销的重复 append：幂等忽略
+                        cur[rid] = r
+                        order.append(rid)
+                        parsed += 1
+                    elif action == "rollback":
+                        rids = ev.get("recordIds") or []
+                        for rid in rids:
+                            rid = str(rid).strip()
+                            if rid in cur:
+                                del cur[rid]
+                        # 保持顺序列表与 cur 一致
+                        order = [rid for rid in order if rid in cur]
+                        parsed += 1
+            if parsed <= 0:
                 return False
-            self.records = records
+            self.records = [cur[rid] for rid in order]
             self._rebuild_indices()
             if not self._read_only:
                 self._save_unlocked()
-            logger.info("[ledger] 已从事件流重建账本: %d 条记录", len(records))
+            logger.info("[ledger] 已从事件流重建账本: %d 条记录", len(self.records))
             return True
         except Exception as e:
             logger.warning("[ledger] 事件流重建失败: %s (%s)", self.events_file, e)
@@ -344,9 +376,13 @@ class ExportsLedger:
 
             return False, "", None
 
-    def append_records(self, new_records: list[dict[str, Any]]) -> int:
+    def append_records(
+        self, new_records: list[dict[str, Any]], op_id: str | None = None
+    ) -> int:
         """
-        向账本中追加新导出记录 (Append-Only) 并同步原子落盘与写入日志
+        向账本中追加新导出记录 (Append-Only) 并同步原子落盘与写入日志。
+        未显式传 op_id 时，为本批新增记录统一回填一个批次级 opId
+        （一次导出 = 一个 opId；幂等跳过的重复记录不产生新 opId）。
         """
         if not new_records:
             return 0
@@ -355,6 +391,7 @@ class ExportsLedger:
 
         with self._lock:
             now_iso = dt.datetime.now(dt.timezone.utc).isoformat().replace("+00:00", "Z")
+            batch_op_id = str(op_id or "").strip() or new_op_id()
             # 幂等：以 (module, logicalId, revision) 为唯一键，已存在则跳过，
             # 同一批次中断后重跑不会产生重复记账记录
             existing_keys = {
@@ -382,8 +419,14 @@ class ExportsLedger:
                     "revision": int(item.get("revision") or 1),
                     "supersedes": item.get("supersedes"),
                     "cropInfo": item.get("cropInfo"),
+                    "opId": batch_op_id,
                     "exportedAt": item.get("exportedAt") or now_iso,
                 }
+                # L1.1 模块标识透传：daily 的 month、pack 的 packId 等，
+                # 供按操作撤销时定位各模块 release 镜像投影（index/zips/packs/covers）
+                for extra_key in ("month", "packId", "eventId", "collectionId"):
+                    if item.get(extra_key) is not None:
+                        rec[extra_key] = item.get(extra_key)
                 key = (rec["module"], rec["logicalId"], rec["revision"])
                 if key in existing_keys:
                     continue
@@ -399,6 +442,124 @@ class ExportsLedger:
             logger.info("[ledger] 已追加 %d 条导出记录到账本(幂等去重后)", added_count)
 
         return added_count
+
+    def rollback_operation(
+        self, op_id: str, reason: str = ""
+    ) -> tuple[bool, str]:
+        """
+        按操作 ID 撤销一次导出的全部记账记录 (L1 Operation 回滚)：
+        - 从 records 剔除该 op 全部记录并原子保存；
+        - 向事件流追加一条自包含 rollback 事件 (opId + recordIds)，
+          使损坏重建时按序重放同样不会复活被撤记录；
+        - 被本 op 记录 supersedes 的旧记录因 _superseded_ids 为派生索引而自动复活。
+        返回 (ok, 摘要消息)。只读模式或 opId 不存在时返回失败。
+        """
+        if self._read_only:
+            return False, "账本处于只读模式，禁止回滚"
+        op_id = str(op_id or "").strip()
+        if not op_id:
+            return False, "缺少 opId"
+
+        with self._lock:
+            targets = [r for r in self.records if r.get("opId") == op_id]
+            if not targets:
+                return False, f"未找到 opId={op_id} 的导出记录（可能已撤销或不存在）"
+
+            record_ids = [str(r.get("recordId") or "") for r in targets]
+            self.records = [r for r in self.records if r.get("opId") != op_id]
+            self._rebuild_indices()
+
+            # 追加自包含 rollback 事件（与 _append_events 相同写入策略，失败仅告警）
+            try:
+                self.events_file.parent.mkdir(parents=True, exist_ok=True)
+                ts = dt.datetime.now(dt.timezone.utc).isoformat().replace("+00:00", "Z")
+                ev: dict[str, Any] = {
+                    "v": self.schema_version,
+                    "ts": ts,
+                    "action": "rollback",
+                    "opId": op_id,
+                    "recordIds": record_ids,
+                }
+                if str(reason or "").strip():
+                    ev["reason"] = str(reason).strip()
+                with open(self.events_file, "a", encoding="utf-8") as f:
+                    f.write(json.dumps(ev, ensure_ascii=False) + "\n")
+            except Exception as e:
+                logger.warning("[ledger] rollback 事件追加失败: %s (%s)", self.events_file, e)
+
+            ok, msg = self._save_unlocked()
+            if not ok:
+                return False, f"撤销记录已从内存剔除但保存失败: {msg}"
+
+            logger.info(
+                "[ledger] 已回滚操作 %s: 剔除 %d 条记录 (%s)",
+                op_id,
+                len(targets),
+                reason or "",
+            )
+            return True, f"已回滚操作 {op_id}: 剔除 {len(record_ids)} 条记账记录"
+
+    def get_ops_summary(self) -> list[dict[str, Any]]:
+        """
+        按 opId 聚合导出操作摘要（撤销工具 list 用）：
+        返回按最后导出时间升序的操作列表，含 record 数、模块、批次与序号区间。
+        无 opId 的旧记录聚合为 opId=None 的 legacy 组（不支持按 op 撤销）。
+        """
+        with self._lock:
+            groups: dict[str, dict[str, Any]] = {}
+            for r in self.records:
+                key = str(r.get("opId") or "")
+                g = groups.setdefault(
+                    key,
+                    {
+                        "opId": r.get("opId"),
+                        "count": 0,
+                        "modules": set(),
+                        "batchIds": set(),
+                        "minExportedAt": None,
+                        "maxExportedAt": None,
+                        "minOrder": None,
+                        "maxOrder": None,
+                    },
+                )
+                g["count"] += 1
+                mod = str(r.get("module") or "")
+                if mod:
+                    g["modules"].add(mod)
+                bid = r.get("batchId")
+                if bid:
+                    g["batchIds"].add(str(bid))
+                o = r.get("order")
+                if o is not None:
+                    try:
+                        io = int(o)
+                    except Exception:
+                        io = None
+                    if io is not None:
+                        g["minOrder"] = io if g["minOrder"] is None else min(g["minOrder"], io)
+                        g["maxOrder"] = io if g["maxOrder"] is None else max(g["maxOrder"], io)
+                ts = str(r.get("exportedAt") or "")
+                if ts:
+                    if g["minExportedAt"] is None or ts < g["minExportedAt"]:
+                        g["minExportedAt"] = ts
+                    if g["maxExportedAt"] is None or ts > g["maxExportedAt"]:
+                        g["maxExportedAt"] = ts
+            ops = []
+            for key, g in groups.items():
+                ops.append(
+                    {
+                        "opId": g["opId"],
+                        "count": g["count"],
+                        "modules": sorted(g["modules"]),
+                        "batchIds": sorted(g["batchIds"]),
+                        "minExportedAt": g["minExportedAt"],
+                        "maxExportedAt": g["maxExportedAt"],
+                        "minOrder": g["minOrder"],
+                        "maxOrder": g["maxOrder"],
+                    }
+                )
+            ops.sort(key=lambda o: (o["maxExportedAt"] or "", o["opId"] or ""))
+            return ops
 
     def get_max_order(self, module: str = "main") -> int:
         """获取指定模块当前已分配的最大 order 序号"""
