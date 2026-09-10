@@ -37,6 +37,14 @@ from studio.core.cache_db import CacheDB
 from studio.core.export_rollback import list_ops, undo_op
 from studio.core.export_tracker import get_exported_map, load_exported_ledger
 from studio.core.exports_ledger import ExportsLedger
+from studio.core.git_guard import (
+    commit_after_export,
+    commit_after_rollback,
+    describe_status,
+    ensure_repo,
+    guard_export,
+    load_mode,
+)
 from studio.core.image_proc import HAS_PIL, generate_thumbnail_bytes
 from studio.core.quality_evaluator import evaluate_image, evaluate_images_batch
 from studio.core.scanner import (
@@ -897,6 +905,12 @@ class StudioRequestHandler(BaseHTTPRequestHandler):
         except Exception:
             pass
 
+        # .studio git 守卫状态可见性：扫描后输出一行状态摘要（只读，不产生任何 git 操作）
+        try:
+            logger.info("[GIT_GUARD] %s", describe_status(root / ".studio"))
+        except Exception:
+            pass
+
         self._json(
             {
                 "ok": True,
@@ -1310,6 +1324,14 @@ class StudioRequestHandler(BaseHTTPRequestHandler):
                     return [_jsonable(x) for x in v]
                 return v
             result = _jsonable(result)
+            if result.get("ok") and not result.get("dryRun"):
+                # 回滚成功后提交账本/流水变化（尽力而为，失败不影响响应）
+                commit_after_rollback(
+                    root / ".studio",
+                    modules=result.get("modules") or [],
+                    op_id=op_id,
+                    reason=reason,
+                )
             _job_finish(task_id, summary=result.get("msg") or ("" if result.get("ok") else "rollback failed"))
             self._json(result)
         except Exception as e:
@@ -1784,6 +1806,28 @@ class StudioRequestHandler(BaseHTTPRequestHandler):
             f"[EXPORT] 收到导出请求: 类型={exp_type}, 分类={cat_id}, 源路径={src}, 输出路径={out}"
         )
 
+        # .studio git 守卫：正式导出前自动 checkpoint（strict 模式失败则拦截）。
+        # 试导出不写账本/release，无状态变化，完全跳过 git 操作。
+        is_trial_export = bool(data.get("trial", False))
+        if not is_trial_export:
+            gg_mode = load_mode(src_p / ".studio")
+            if gg_mode != "off":
+                if ensure_repo(src_p / ".studio"):
+                    block_reason = guard_export(
+                        src_p / ".studio", exp_type, strict=(gg_mode == "strict")
+                    )
+                    if block_reason:
+                        log_fn(block_reason, "err")
+                        logger.warning(f"[EXPORT] git 守卫拦截导出: {block_reason}")
+                        _job_finish(task_id, error=block_reason)
+                        self._json(
+                            {"ok": False, "error": block_reason, "logs": logs},
+                            status=400,
+                        )
+                        return
+                else:
+                    log_fn(".studio git 仓库初始化失败，本次导出无版本快照（不影响导出）", "warn")
+
         # 查询用户手动裁切框，注入 data 供 exporter 在构建转码任务时按 hash 查找
         try:
             with CacheDB(src_p) as _db:
@@ -1824,6 +1868,11 @@ class StudioRequestHandler(BaseHTTPRequestHandler):
                     ledger = load_exported_ledger(src_p)
                     res_dict["totalExported"] = ledger.get("total_exported", 0)
                 logger.info(f"[EXPORT] 导出成功: 输出文件={result.files}")
+                if not getattr(exporter, "is_trial", False):
+                    # 导出后提交账本/流水/标签变化（尽力而为，失败不影响响应）
+                    commit_after_export(
+                        src_p / ".studio", exp_type, len(result.files or [])
+                    )
                 _job_finish(task_id, summary=result.summary)
             else:
                 logger.error(f"[EXPORT] 导出失败: {result.error}")
@@ -1834,6 +1883,9 @@ class StudioRequestHandler(BaseHTTPRequestHandler):
             # 与 500 的运行时异常区分，便于前端把原因直接呈现给用户。
             log_fn(f"导出中止: {e}", "err")
             logger.warning(f"[EXPORT] 导出校验未通过: {e}")
+            if not is_trial_export:
+                # 记录失败现场（checkpoint 之后、账本变更前的差异，尽力而为）
+                commit_after_export(src_p / ".studio", exp_type, 0, failed=True)
             _job_finish(task_id, error=str(e))
             self._json(
                 {
@@ -1849,6 +1901,8 @@ class StudioRequestHandler(BaseHTTPRequestHandler):
             err_detail = traceback.format_exc().splitlines()[-1]
             log_fn(f"导出失败: {e} ({err_detail})", "err")
             logger.error(f"[EXPORT] 导出异常: {e}\n{traceback.format_exc()}")
+            if not is_trial_export:
+                commit_after_export(src_p / ".studio", exp_type, 0, failed=True)
             _job_finish(task_id, error=str(e))
             self._json(
                 {
