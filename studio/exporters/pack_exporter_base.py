@@ -19,6 +19,7 @@ from studio.core.image_proc import (
     HAS_PIL,
     convert_images_parallel,
     convert_image,
+    make_cover_image,
     make_rename,
     validate_image,
 )
@@ -395,13 +396,21 @@ class PackExporterBase(BaseExporter):
                 entry["normalize"] = norm
             exported_items.append(entry)
 
-        # 生成封面图并双重校验完整性
-        ok_cov, err_cov = convert_image(
-            images[0], cover_path, "webp", quality=zip_quality
+        # 生成封面图并双重校验完整性（限幅裁切 + 长边 1080 + 面板同款 quality）
+        ok_cov, err_cov, cover_meta = make_cover_image(
+            images[0], cover_path, quality=zip_quality
         )
         if not ok_cov:
             self.log(f"封面生成失败: {err_cov}", "err")
             raise ValueError(f"封面图生成失败 ({images[0].name}): {err_cov}")
+        if cover_meta and cover_meta.get("crop_mode") == "degraded_convert_only":
+            self.log("封面降级: 裁切算法依赖缺失，仅转码未缩放", "warn")
+        elif cover_meta:
+            self.log(
+                f"封面规格: {cover_meta.get('out_size')}px "
+                f"({cover_meta.get('crop_mode')})",
+                "info",
+            )
         ok_val, err_val = validate_image(cover_path)
         if not ok_val:
             self.log(f"封面校验未通过: {err_val}", "err")

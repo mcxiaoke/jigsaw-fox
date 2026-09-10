@@ -14,6 +14,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from PIL import Image, ImageDraw
+
 _pkg_dir = Path(__file__).resolve().parent
 _root_dir = _pkg_dir.parent
 if str(_root_dir) not in sys.path:
@@ -123,6 +125,86 @@ class TestNormalizeExport(unittest.TestCase):
             self.assertTrue(ok, err)
             self.assertEqual(meta["out_size"], [DEFAULT_LONG_TARGET, DEFAULT_LONG_TARGET])
             self.assertEqual(meta["mode"], "none")
+
+
+class TestMakeCoverImage(unittest.TestCase):
+    """封面生成：限幅裁切 + 长边 1080（正常图不裁、异形图裁到限幅边界）。"""
+
+    COVER_LONG = 1080
+    CLAMP = 2.0
+
+    @staticmethod
+    def _save_src(td: str, name: str, size: tuple[int, int]) -> Path:
+        # 纯色边框(5%) + 内部棋盘主体：compute_content_box 会裁掉均匀边框、
+        # 保留棋盘区域，内容框比例≈源图比例（可预测且鲁棒）。
+        p = Path(td) / name
+        p.parent.mkdir(parents=True, exist_ok=True)
+        w, h = size
+        im = Image.new("RGB", size, (245, 245, 240))
+        dr = ImageDraw.Draw(im)
+        bx, by = int(w * 0.05), int(h * 0.05)
+        cell = max(16, min(w, h) // 40)
+        for yy in range(by, h - by, cell):
+            for xx in range(bx, w - bx, cell):
+                if (xx // cell + yy // cell) % 2 == 0:
+                    dr.rectangle([xx, yy, xx + cell, yy + cell], fill=(60, 60, 70))
+        im.save(p)
+        return p
+
+    @unittest.skipUnless(HAS_CROP_COMPUTE, "需要 numpy")
+    def test_normal_image_no_crop(self):
+        # 正常比例（4:3）-> 不裁切，输出长边 1080，比例≈内容框比例（棋盘主体）
+        with tempfile.TemporaryDirectory() as td:
+            src = self._save_src(td, "a.png", (4000, 3000))
+            dst = Path(td) / "a.webp"
+            from studio.core.image_proc import make_cover_image
+            ok, err, meta = make_cover_image(src, dst, quality=70)
+            self.assertTrue(ok, err)
+            self.assertEqual(meta["crop_mode"], "keep")
+            ow, oh = meta["out_size"]
+            self.assertEqual(max(ow, oh), self.COVER_LONG)
+            # 内容框比例 1.32 -> 输出比例一致（不裁）
+            self.assertAlmostEqual(ow / oh, 1.32, delta=0.1)
+
+    @unittest.skipUnless(HAS_CROP_COMPUTE, "需要 numpy")
+    def test_ultra_wide_clamped(self):
+        # 超宽 -> 裁到 2:1，输出长边 1080，输出比例=2.0
+        with tempfile.TemporaryDirectory() as td:
+            src = self._save_src(td, "b.png", (6000, 1200))
+            dst = Path(td) / "b.webp"
+            from studio.core.image_proc import make_cover_image
+            ok, err, meta = make_cover_image(src, dst, quality=70)
+            self.assertTrue(ok, err)
+            self.assertEqual(meta["crop_mode"], "clamp_2:1")
+            ow, oh = meta["out_size"]
+            self.assertEqual(max(ow, oh), self.COVER_LONG)
+            self.assertAlmostEqual(ow / oh, 2.0, delta=0.05)
+
+    @unittest.skipUnless(HAS_CROP_COMPUTE, "需要 numpy")
+    def test_ultra_tall_clamped(self):
+        # 超高 -> 裁到 1:2，输出长边 1080，输出比例=0.5
+        with tempfile.TemporaryDirectory() as td:
+            src = self._save_src(td, "c.png", (1000, 6000))
+            dst = Path(td) / "c.webp"
+            from studio.core.image_proc import make_cover_image
+            ok, err, meta = make_cover_image(src, dst, quality=70)
+            self.assertTrue(ok, err)
+            self.assertEqual(meta["crop_mode"], "clamp_1:2")
+            ow, oh = meta["out_size"]
+            self.assertEqual(max(ow, oh), self.COVER_LONG)
+            self.assertAlmostEqual(ow / oh, 0.5, delta=0.05)
+
+    def test_degraded_without_crop_compute(self):
+        # HAS_CROP_COMPUTE=False 时降级为纯转码，不抛异常
+        if HAS_CROP_COMPUTE:
+            self.skipTest("仅在裁切算法缺失环境验证降级路径")
+        with tempfile.TemporaryDirectory() as td:
+            src = self._save_src(td, "d.png", (2000, 2000))
+            dst = Path(td) / "d.webp"
+            from studio.core.image_proc import make_cover_image
+            ok, err, meta = make_cover_image(src, dst, quality=70)
+            self.assertTrue(ok, err)
+            self.assertEqual(meta["crop_mode"], "degraded_convert_only")
 
 
 class TestScanWarn(unittest.TestCase):

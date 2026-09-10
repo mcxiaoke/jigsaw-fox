@@ -573,6 +573,87 @@ def convert_images_parallel(
         return results
 
 
+def make_cover_image(
+    src_path: Path,
+    dst_path: Path,
+    *,
+    quality: int = 70,
+    long_target: int = 1080,
+    ratio_clamp: float = 2.0,
+) -> tuple[bool, str | None, dict | None]:
+    """生成封面图：限幅裁切 + 长边缩放 + 转码（WebP）。
+
+    规则（方案 B 折中，正常图不裁、异形图裁到限幅边界）：
+      1. compute_content_box 内容感知定位主体框；
+      2. 框长宽比在 [1/ratio_clamp, ratio_clamp] 内 -> 不裁切，仅长边缩放（保留完整构图）；
+      3. 超宽 -> 裁到 ratio_clamp:1；超高 -> 裁到 1:ratio_clamp；
+         裁切窗口用 smart_aspect_crop_box 显著性滑窗对准主体；
+      4. resize_long 只缩不放到 long_target，WebP 编码落盘。
+
+    quality 与导出面板同源（resolve_quality 结果）。
+    返回 (ok, err, meta)；meta 含 crop_mode/orig_size/out_size 等，便于追踪。
+    """
+    if not HAS_PIL:
+        return False, "PIL 缺失，无法生成封面", None
+    if not HAS_CROP_COMPUTE:
+        # numpy/裁切算法缺失时降级为普通转码（行为等同旧版封面），不让导出失败
+        ok, err = convert_image(src_path, dst_path, "webp", quality=quality)
+        return (
+            ok,
+            err,
+            {"crop_mode": "degraded_convert_only"} if ok else None,
+        )
+
+    with report_pil_warnings(src_path):
+        try:
+            dst_path.parent.mkdir(parents=True, exist_ok=True)
+            with Image.open(src_path) as im:
+                try:
+                    im = ImageOps.exif_transpose(im)
+                except Exception:
+                    pass
+                W, H = im.size
+                box = compute_content_box(im)
+                x0, y0, x1, y1 = box
+                bw, bh = max(1, x1 - x0), max(1, y1 - y0)
+                aspect = bw / bh
+
+                # 限幅：正常比例不裁；超出 [1/clamp, clamp] 裁到限幅边界
+                crop_mode = "keep"
+                if aspect > ratio_clamp:
+                    target = ratio_clamp
+                    crop_mode = f"clamp_{ratio_clamp:g}:1"
+                elif aspect < 1 / ratio_clamp:
+                    target = 1 / ratio_clamp
+                    crop_mode = f"clamp_1:{ratio_clamp:g}"
+                else:
+                    target = aspect
+
+                crop_box = (
+                    smart_aspect_crop_box(im, box, target)
+                    if target != aspect
+                    else box
+                )
+                out = resize_long(im.crop(crop_box), long_target)
+
+                target_fmt = "webp"
+                if out.mode not in ("RGB", "RGBA"):
+                    out = out.convert("RGB")
+                out.save(dst_path, "WEBP", quality=quality, method=6)
+
+                ow, oh = out.size
+                meta = {
+                    "crop_mode": crop_mode,
+                    "orig_size": [W, H],
+                    "content_box": list(box),
+                    "crop_box": list(crop_box),
+                    "out_size": [ow, oh],
+                }
+                return True, None, meta
+        except Exception as e:
+            return False, str(e), None
+
+
 def validate_image(img_path: Path | str) -> tuple[bool, str | None]:
     """
     深度校验图片文件的物理存在性、非空以及是否损坏或不可解码。
