@@ -641,7 +641,7 @@
           <div v-if="exportType === 'event' || exportType === 'collection'" style="display: flex; flex-direction: column; gap: 10px; margin-top:8px;">
             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
               <div class="field-group">
-                <label>{{ exportType === 'event' ? '活动 ID (eventId)' : '合集 ID (collectionId)' }}</label>
+                <label>{{ exportType === 'event' ? '活动 ID (eventId)' : '合集 ID (collectionId)' }} <span style="color: #dc2626;">*必填</span></label>
                 <input class="field-input" type="text" v-model="exportConfig.eventId" v-if="exportType === 'event'" placeholder="halloween2026" />
                 <input class="field-input" type="text" v-model="exportConfig.collectionId" v-else placeholder="masterpieces_v1" />
               </div>

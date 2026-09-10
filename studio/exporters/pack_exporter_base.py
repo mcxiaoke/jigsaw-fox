@@ -255,6 +255,23 @@ class PackExporterBase(BaseExporter):
                     f"请先修复或从导出账本恢复该文件后重试。"
                 )
 
+        # 5.5 id 唯一性硬校验：Event/Collection 的 id 是客户端路由主键，
+        # 同 id 重复导出会在客户端产生两条互相覆盖的 pack（数据错乱），必须拦截。
+        # 覆盖历史导出的正确姿势 = 先在「回滚」页撤销上一次导出 (rollback) 再重新导出。
+        if any(
+            isinstance(it, dict) and it.get("id") == pack_id for it in existing_items
+        ):
+            self.log(
+                f"导出中止: {self.module} 已存在 id={pack_id!r} 的条目，禁止重复导出",
+                "err",
+            )
+            raise ValueError(
+                f"{self.module} 中已存在 id='{pack_id}' 的条目，禁止重复导出"
+                f"（客户端以 id 为主键，重复会导致数据错乱）。\n"
+                f"如需更新该条目：请先在「回滚」页撤销上一次导出 (rollback) 后重新导出；"
+                f"或为本次导出改用一个新的 id。"
+            )
+
         prev_item = next(
             (
                 it

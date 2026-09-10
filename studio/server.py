@@ -676,6 +676,14 @@ class StudioRequestHandler(BaseHTTPRequestHandler):
             self._handle_export_limits()
             return
 
+        if path == "/api/export/check-outdir":
+            self._handle_check_outdir(qs)
+            return
+
+        if path == "/api/export/check-pack-id":
+            self._handle_check_pack_id(qs)
+            return
+
         if path in ("/api/export/status", "/api/job/status"):
             self._handle_job_status(qs)
             return
@@ -2066,6 +2074,104 @@ class StudioRequestHandler(BaseHTTPRequestHandler):
             # 兜底收口：异常路径之外的任何漏网（如 exporter 内部提前 return）
             # 都必须让任务离开 running，否则导出互斥锁会永久生效。
             _job_ensure_finished(task_id)
+
+    def _handle_check_pack_id(self, qs: dict[str, list[str]]) -> None:
+        """Event/Collection 的 id 唯一性只读预检：点导出即拦，免走完向导才失败。
+
+        读取源库 release 源 `{module}/index.json`，判断该 id 是否已被占用。
+        只读：不创建目录、不写任何文件。导出器内仍有同源硬校验作为最终防线。
+        """
+        src = (qs.get("dir") or qs.get("srcDir") or [""])[0].strip()
+        exp_type = (qs.get("type") or [""])[0].strip().lower()
+        pack_id = (qs.get("id") or [""])[0].strip()
+        if not src or not exp_type or not pack_id:
+            self._error("缺少参数：dir / type / id")
+            return
+        module = _EXPORT_MODULE_OF_TYPE.get(exp_type, exp_type)
+        if module not in ("events", "collections"):
+            self._error(f"check-pack-id 仅支持 event / collection，收到: {exp_type}")
+            return
+        root = Path(src)
+        if not root.is_dir():
+            self._error(f"源目录不存在: {src}", status=404)
+            return
+        index_p = root / ".studio" / "release" / module / "index.json"
+        exists = False
+        existing_title = ""
+        if index_p.is_file():
+            try:
+                loaded = json.loads(index_p.read_text(encoding="utf-8"))
+            except Exception as e:
+                # 读不动时不臆断为「不存在」，交由导出器的 fail-fast 报错
+                self._error(f"读取 {module}/index.json 失败: {e}")
+                return
+            items = loaded.get("items", []) if isinstance(loaded, dict) else []
+            for it in items:
+                if isinstance(it, dict) and it.get("id") == pack_id:
+                    exists = True
+                    existing_title = str(it.get("title") or "")
+                    break
+        self._json(
+            {
+                "ok": True,
+                "module": module,
+                "type": exp_type,
+                "id": pack_id,
+                "exists": exists,
+                "existingTitle": existing_title,
+            }
+        )
+
+    def _handle_check_outdir(self, qs: dict[str, list[str]]) -> None:
+        """输出目录只读预检：判断目标目录是否存在/为空/是否已有 manifest.json。
+
+        正式导出前由前端调用，用于「选错部署目录」防呆：
+        部署目录本应含历史导出的 manifest.json；若缺失则告警让用户确认。
+        只读：绝不创建目录、不写任何文件。
+        """
+        raw = (qs.get("dir") or [""])[0].strip()
+        if not raw:
+            self._error("缺少 dir 参数")
+            return
+        p = Path(raw)
+        exists = p.exists()
+        is_dir = p.is_dir() if exists else False
+        file_count = 0
+        has_manifest = False
+        has_main_index = False
+        modules: list[str] = []
+        if is_dir:
+            try:
+                file_count = len(list(p.iterdir()))
+            except Exception as e:
+                self._error(f"读取输出目录失败: {e}")
+                return
+            manifest_p = p / "manifest.json"
+            if manifest_p.is_file():
+                has_manifest = True
+                try:
+                    mdata = json.loads(manifest_p.read_text(encoding="utf-8"))
+                    if isinstance(mdata, dict) and isinstance(
+                        mdata.get("modules"), dict
+                    ):
+                        modules = list(mdata["modules"].keys())
+                except Exception:
+                    # manifest 存在但损坏：交由导出器的 fail-fast 报错，此处仅如实回报
+                    modules = []
+            has_main_index = (p / "main" / "index.json").is_file()
+        self._json(
+            {
+                "ok": True,
+                "dir": raw,
+                "exists": exists,
+                "isDir": is_dir,
+                "isEmpty": bool(is_dir and file_count == 0),
+                "fileCount": file_count,
+                "hasManifest": has_manifest,
+                "hasMainIndex": has_main_index,
+                "modules": modules,
+            }
+        )
 
     def _handle_export_limits(self) -> None:
         """下发导出侧硬限制（单次导出图片数上限）。

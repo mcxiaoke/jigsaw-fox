@@ -588,6 +588,48 @@ class TestCoreAndExporters(unittest.TestCase):
             exporter.validate()
         self.assertIn("必须填写标题", str(ctx.exception))
 
+    def test_pack_exporter_rejects_duplicate_id(self):
+        """Event/Collection 的 id 唯一性：同 id 二次导出必须被硬拦截（客户端以 id 为主键）。"""
+        data = {
+            "eventId": "dup_event_2026",
+            "title": "Dup Event",
+            "outputMode": "zip",
+            "format": "webp" if HAS_PIL else "original",
+            "rename": "none",
+        }
+        exporter1 = get_exporter(
+            exp_type="event",
+            data=dict(data),
+            src_p=self.src_dir,
+            out_p=self.out_dir,
+            http_base="http://test.local/data",
+            log_fn=lambda msg, lvl="info": None,
+        )
+        exporter1.validate()
+        self.assertTrue(exporter1.execute().success)
+
+        # 同 id 再次导出：必须在写盘/转码前被拦截（而非静默覆盖历史条目）
+        exporter2 = get_exporter(
+            exp_type="event",
+            data=dict(data),
+            src_p=self.src_dir,
+            out_p=self.out_dir,
+            http_base="http://test.local/data",
+            log_fn=lambda msg, lvl="info": None,
+        )
+        exporter2.validate()
+        with self.assertRaises(ValueError) as ctx:
+            exporter2.execute()
+        self.assertIn("禁止重复导出", str(ctx.exception))
+        self.assertIn("dup_event_2026", str(ctx.exception))
+
+        # 既有条目与 version 不受影响（未被静默覆盖）
+        ev_data = json.loads(
+            (self.out_dir / "events" / "index.json").read_text(encoding="utf-8")
+        )
+        self.assertEqual(len(ev_data["items"]), 1)
+        self.assertEqual(ev_data["items"][0]["id"], "dup_event_2026")
+
 
 class TestExportTracker(unittest.TestCase):
     """测试已导出账本视图（唯一事实源：.studio/ledger/exports.json）"""
@@ -1447,6 +1489,67 @@ class TestDuplicateHandling(unittest.TestCase):
                 records = data["records"]
                 dup_recs = [r for r in records if r.get("is_duplicate")]
                 self.assertEqual(len(dup_recs), 2)
+        finally:
+            server.shutdown()
+            server.server_close()
+
+    def test_server_check_pack_id_api(self):
+        """点导出即拦：id 唯一性只读预检 API 的占用检测 / 模块映射 / 非法类型报错。"""
+        from studio.server import StudioRequestHandler, StudioServer
+        import threading
+        import time
+        import urllib.error
+        import urllib.parse
+        import urllib.request
+
+        ev_dir = self.src_dir / ".studio" / "release" / "events"
+        ev_dir.mkdir(parents=True, exist_ok=True)
+        (ev_dir / "index.json").write_text(
+            json.dumps(
+                {
+                    "module": "events",
+                    "version": 2,
+                    "items": [{"id": "dup_event_api", "title": "Dup API Event"}],
+                },
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
+
+        server = StudioServer(("127.0.0.1", 0), StudioRequestHandler)
+        port = server.server_address[1]
+        t = threading.Thread(target=server.serve_forever, daemon=True)
+        t.start()
+        time.sleep(0.1)
+
+        try:
+
+            def get_pack_id(params: dict) -> dict:
+                url = (
+                    f"http://127.0.0.1:{port}/api/export/check-pack-id?"
+                    + urllib.parse.urlencode(params)
+                )
+                with urllib.request.urlopen(url) as resp:
+                    return json.loads(resp.read().decode("utf-8"))
+
+            dup = get_pack_id(
+                {"dir": str(self.src_dir), "type": "event", "id": "dup_event_api"}
+            )
+            self.assertTrue(dup["ok"])
+            self.assertTrue(dup["exists"])
+            self.assertEqual(dup["existingTitle"], "Dup API Event")
+            self.assertEqual(dup["module"], "events")
+
+            free = get_pack_id(
+                {"dir": str(self.src_dir), "type": "event", "id": "brand_new_id"}
+            )
+            self.assertTrue(free["ok"])
+            self.assertFalse(free["exists"])
+
+            # 仅支持 event / collection：其它类型按 400 拒绝
+            with self.assertRaises(urllib.error.HTTPError) as ctx:
+                get_pack_id({"dir": str(self.src_dir), "type": "main", "id": "x"})
+            self.assertEqual(ctx.exception.code, 400)
         finally:
             server.shutdown()
             server.server_close()

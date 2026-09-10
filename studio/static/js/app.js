@@ -6,6 +6,8 @@ import {
   batchEvaluateQuality,
   cancelQualityJob,
   checkHealth,
+  checkOutDir,
+  checkPackId,
   deleteImage,
   executeExport,
   fetchJobStatus,
@@ -229,6 +231,19 @@ const app = createApp({
     // -----------------------------------------------------------------------
     const exportModalOpen = ref(false);
     const exportType = ref("main");
+    // Event/Collection 的「一次性内容字段」：每个 pack 的 id/title/描述都不同，
+    // 严禁跨导出会话复用上一次的残留值（见 openExport 的重置逻辑）。
+    const PACK_CONTENT_FIELDS = [
+      "eventId",
+      "collectionId",
+      "title",
+      "titleZh",
+      "description",
+      "descZh",
+    ];
+    // Event/Collection 字段标签与必填校验（id / 英文标题，与后端 pack_exporter_base 同源强制）
+    const packIdLabel = () =>
+      exportType.value === "event" ? "活动 ID (eventId)" : "合集 ID (collectionId)";
     const exportConfig = ref({
       format: "webp",
       // main 默认数字序号命名，让「文件名 = order」，手动拖拽的顺序在产物上直接可见
@@ -255,6 +270,15 @@ const app = createApp({
       // 默认安全：试导出 (试导出=trial:true，不写账本/ID/清单/部署；正式导出需二次确认)
       trial: true,
     });
+    const packMissingField = () => {
+      const t = exportType.value;
+      if (t !== "event" && t !== "collection") return "";
+      const idVal =
+        t === "event" ? exportConfig.value.eventId : exportConfig.value.collectionId;
+      if (!String(idVal || "").trim()) return "id";
+      if (!exportConfig.value.title.trim()) return "title";
+      return "";
+    };
     const isExporting = ref(false);
     const exportLogs = ref([]);
     const exportSummary = ref("");
@@ -1881,6 +1905,9 @@ const app = createApp({
       exportError.value = "";
       // 仅支持按勾选导出（"全部"已废弃，防止混入未勾选/分辨率不足/已导出的图）
       exportConfig.value.exportScope = "selected";
+      // Event/Collection 的 id/title/描述 均为一次性内容（每个 pack 都不同），
+      // 严禁把上一次会话的残留值当成默认值 → 每次新会话一律清空（偏好类字段保留）
+      for (const k of PACK_CONTENT_FIELDS) exportConfig.value[k] = "";
       lastExportIsTrial.value = false;
       lastTrialDir.value = "";
       exportModalOpen.value = true;
@@ -1904,8 +1931,17 @@ const app = createApp({
         exportProgress.value = "";
       }
       exportError.value = "";
-      if (exportType.value === "event" || exportType.value === "collection") {
-        if ((n === 2 || n === 3) && !exportConfig.value.title.trim()) {
+      if (
+        (n === 2 || n === 3) &&
+        (exportType.value === "event" || exportType.value === "collection")
+      ) {
+        // id 与英文标题均为必填（id 缺失客户端无法路由）
+        const miss = packMissingField();
+        if (miss === "id") {
+          showToast(`请填写${packIdLabel()}`);
+          return;
+        }
+        if (miss === "title") {
           showToast("请填写英文标题 (Title)");
           return;
         }
@@ -2120,6 +2156,69 @@ const app = createApp({
       },
     );
 
+    // id 唯一性预检：点导出即拦（Event/Collection 的 id 是客户端路由主键，重复即数据错乱）。
+    // 与后端 pack_exporter_base 的同源硬校验一致，此处只为提前失败、快速反馈。
+    const checkPackIdDuplicate = async () => {
+      const t = exportType.value;
+      if (t !== "event" && t !== "collection") return "";
+      const idVal = String(
+        t === "event" ? exportConfig.value.eventId : exportConfig.value.collectionId || ""
+      ).trim();
+      const dir = srcDir.value.trim();
+      if (!idVal || !dir) return ""; // 缺 id 由必填校验处理；缺源目录由 runExport 兜底
+      let res = null;
+      try {
+        res = await checkPackId(dir, t, idVal);
+      } catch (err) {
+        // 预检失败不阻断，交给后端 execute 的硬校验兜底
+        stdWarn("[导出] id 唯一性预检失败（不阻断，由后端兜底）:", err);
+        return "";
+      }
+      if (!res || !res.exists) return "";
+      const label = t === "event" ? "Event" : "Collection";
+      const dupTitle = res.existingTitle ? `（已存在条目标题：${res.existingTitle}）` : "";
+      return `${label} 已存在 id='${idVal}' 的条目${dupTitle}，禁止重复导出（客户端以 id 为主键，重复会导致数据错乱）。请先在「回滚」页撤销上一次导出 (rollback) 后再导出，或改用一个新的 id。`;
+    };
+
+    // 正式导出前置：输出目录预检。目录缺 manifest.json 时弹窗确认（防「选错部署目录」）
+    const confirmOutDirIfNeeded = async () => {
+      const dir = outDir.value.trim();
+      if (!dir) return true; // 未填由 runExport 的必填校验兜底
+      let info = null;
+      try {
+        info = await checkOutDir(dir);
+      } catch (err) {
+        // 预检失败不阻断导出（网络/权限等非致命），仅记录
+        stdWarn("[导出] 输出目录预检失败（不阻断导出）:", err);
+        return true;
+      }
+      if (!info || info.hasManifest) return true;
+      const esc = (s) =>
+        String(s).replace(
+          /[&<>"]/g,
+          (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c])
+        );
+      const state = !info.exists
+        ? "该目录当前<b>不存在</b>（导出时会自动创建）。"
+        : info.isEmpty
+          ? "该目录存在但<b>完全为空</b>。"
+          : `该目录存在、含 ${Number(info.fileCount) || 0} 个顶层条目，但<b>没有 manifest.json</b>。`;
+      return await showConfirm({
+        title: "⚠️ 输出目录未检测到 manifest.json",
+        message: `目标输出目录：${esc(dir)}`,
+        html:
+          `${state}<br/><br/>` +
+          `正常部署目录应包含 <code>manifest.json</code>（历史导出的路由清单）。` +
+          `请确认：<b>是否第一次导出到该目录？是否选错了输出目录？</b><br/>` +
+          `若目录选错，正式导出的产物会写入错误位置，并在该目录新建/污染清单。`,
+        confirmText: "确认目录无误，继续导出",
+        cancelText: "返回检查目录",
+        danger: true,
+        requireCheck: true,
+        checkText: "我确认这是正确的输出目录（首次导出或已核对目录）",
+      });
+    };
+
     const startExport = async () => {
       // 数量上限硬拦截：与后端同源（后端仍会在导出器内按最终真实数量复核）
       if (exportOverLimit.value) {
@@ -2131,10 +2230,22 @@ const app = createApp({
         );
         return;
       }
+      // 点导出即拦：id 已存在直接中止（试导出/正式导出一致，避免白跑一次导出器）
+      const dupMsg = await checkPackIdDuplicate();
+      if (dupMsg) {
+        exportError.value = dupMsg;
+        showToast(
+          `导出中止：${exportType.value === "event" ? "Event" : "Collection"} 的 id 已存在，禁止重复导出`,
+          "error"
+        );
+        return;
+      }
       // 纯前端防呆：试导出直接执行；正式导出必须先过二次确认弹窗
       if (exportConfig.value.trial) {
         await runExport();
       } else {
+        // 仅正式导出做输出目录预检（试导出写 outDir/_trial_*/，不触碰真实 manifest）
+        if (!(await confirmOutDirIfNeeded())) return;
         formalConfirmChecked.value = false;
         confirmFormalOpen.value = true;
       }
@@ -2180,9 +2291,15 @@ const app = createApp({
           }
         }
       }
-      if ((exportType.value === "event" || exportType.value === "collection") && !exportConfig.value.title.trim()) {
-        exportError.value = "缺少英文标题：Event / Collection 导出前请填写英文标题 (Title)。";
-        showToast("导出中止：请填写英文标题 (Title)");
+      const packMiss = packMissingField();
+      if (packMiss) {
+        exportError.value =
+          packMiss === "id"
+            ? `缺少${packIdLabel()}：Event / Collection 必须填写唯一标识 ID（客户端以 id 为主键，缺失或重复都会导致数据错乱）。`
+            : "缺少英文标题：Event / Collection 导出前请填写英文标题 (Title)。";
+        showToast(
+          `导出中止：请填写${packMiss === "id" ? packIdLabel() : "英文标题 (Title)"}`
+        );
         return;
       }
       // 前端主动拦截重复图：不裸依赖后端兜底（后端失效时避免静默误导出重复素材）

@@ -107,6 +107,25 @@ export async function previewExport(payload) {
   return data;
 }
 
+/**
+ * 输出目录预检（只读）：判断目标目录是否存在/为空/是否已有 manifest.json。
+ * 正式导出前调用，用于「选错部署目录」防呆；任何失败都不应阻断导出流程。
+ */
+export async function checkOutDir(dir) {
+  const res = await fetch(`/api/export/check-outdir?dir=${encodeURIComponent(dir)}`);
+  return await parseJson(res, "输出目录预检");
+}
+
+/**
+ * Event/Collection 的 id 唯一性预检（只读）：点导出时先拦重复 id，
+ * 免走完整个向导才被后端拦住。导出器内仍有同源硬校验兜底。
+ */
+export async function checkPackId(dir, type, id) {
+  const params = new URLSearchParams({ dir, type, id });
+  const res = await fetch(`/api/export/check-pack-id?${params.toString()}`);
+  return await parseJson(res, "id 唯一性预检");
+}
+
 export async function fetchExportLimits() {
   const res = await fetch("/api/export/limits");
   const data = await parseJson(res, "导出限制");
