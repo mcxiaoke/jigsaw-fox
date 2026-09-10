@@ -232,7 +232,8 @@ def ensure_repo(studio_dir: Path) -> bool:
         if first_time:
             logger.info(
                 "[GIT_GUARD] 初始化完成 (跟踪范围: tags/ledger/logs；"
-                "忽略托管区: cache/staging/release/ledger/backups)"
+                "忽略托管区: cache/staging/release/ledger/backups + "
+                "产物扩展名: *.zip/*.png/*.jpg/*.webp/*.log)"
             )
         return True
     except Exception as e:  # noqa: BLE001

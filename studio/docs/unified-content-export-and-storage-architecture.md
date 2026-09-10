@@ -57,12 +57,15 @@
 
 ## 2. 统一工作区与输出拓扑布局 (Workspaces & Output Layout)
 
-### 2.1 源素材库私有工作区拓扑 (`srcDir/.studio/`)
+### 2.1 源素材库目录拓扑 (`srcDir/`)
 
 ```
 [用户素材源目录 srcDir]/
 ├── animals/                            <-- 原始高清素材大图 (只读)
 ├── landscape/
+│
+├── .logs/                              <-- 【运行日志】(隐藏目录，Scanner 自动忽略，可随时删除)
+│   └── studio-YYYYMMDD.log             <-- 服务端运行日志，行首 [src=库名] 标明归属库
 │
 └── .studio/                            <-- 【Studio 私有工作区】(隐藏目录，Scanner 自动忽略)
     ├── tags.json                       <-- 业务打标主文件 (由 Studio 界面写入)
@@ -82,6 +85,16 @@
         ├── events/
         └── collections/
 ```
+
+> **`.logs/` 与 `.studio/logs/` 的分工**（两者不可混淆）：
+> - `.studio/logs/*.jsonl` 是**结构化审计流水**，属于「有状态、需追溯」的资产元数据，
+>   随 `.studio` git 仓库版本化，删除会导致可追溯性丢失。
+> - `.logs/studio-YYYYMMDD.log` 是**诊断用运行日志**（纯派生产物，删掉无损）。
+>   之所以放在 `.studio` **之外**：`.studio` 是 git 仓库，日志进去只能靠 `*.log` 忽略规则
+>   挡住 `git add -A`，存在规则失效误入库的隐患；放在仓库之外则是结构性隔离。
+>   又因以点开头，`scanner.scan_images` 与 `scripts/studio_dedupe.py` 都会无条件跳过该目录，
+>   不会被当作素材扫描。日志不做自动清理，由用户按需手动删除。
+
 
 ### 2.2 用户指定导出目录拓扑 (`outDir/`)
 

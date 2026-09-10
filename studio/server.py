@@ -8,7 +8,6 @@ studio.server — Content Studio 本地打包工作台 HTTP 服务端
 from __future__ import annotations
 
 import argparse
-import contextvars
 import datetime as dt
 import hashlib
 import json
@@ -47,6 +46,12 @@ from studio.core.git_guard import (
     load_mode,
 )
 from studio.core.image_proc import HAS_PIL, generate_thumbnail_bytes
+from studio.core.log_routing import (
+    LibraryRoutingHandler,
+    SrcAwareFormatter,
+    SrcContextFilter,
+    bind_src,
+)
 from studio.core.quality_evaluator import evaluate_image, evaluate_images_batch
 from studio.core.scanner import (
     build_manual_order,
@@ -154,50 +159,12 @@ def _estimate_ratio(fmt: str, quality: int) -> float:
 
 
 # ---------------------------------------------------------------------------
-# 源库日志上下文：给日志行加 [src=库名] 前缀
+# 源库日志上下文：见 studio.core.log_routing
 # ---------------------------------------------------------------------------
-# 单文件运行日志里同时混着「服务自身」与「对某个源库的操作」，出问题时无法一眼
-# 分辨这行属于哪个库。这里用 contextvar 把当前请求绑定的源库记下来，由格式化器
-# 输出 [src=库名] 前缀（库名取源目录末级目录名）。
-#
-# 已知边界：contextvar 默认不跨线程传播，因此线程池里产生的日志没有前缀。
-# 目前只有质检 worker 是独立线程，已在 _quality_worker 内显式重新绑定。
-_SRC_CTX: contextvars.ContextVar[str] = contextvars.ContextVar(
-    "studio_src_label", default=""
-)
-
-
-def _src_label(root: Any) -> str:
-    """把源库路径折算为日志前缀用的库名（末级目录名）；空值返回空串。"""
-    if not root:
-        return ""
-    try:
-        name = Path(str(root)).name
-    except Exception:
-        return ""
-    return name or str(root)
-
-
-def _bind_src(value: Any) -> None:
-    """把某次请求/任务关联的源库绑定到当前上下文；无参数时显式清空，避免跨请求串味。"""
-    _SRC_CTX.set(_src_label(value))
-
-
-class _SrcContextFilter(logging.Filter):
-    """把当前上下文的库名挂到 LogRecord 上，供 _SrcAwareFormatter 渲染前缀。"""
-
-    def filter(self, record: logging.LogRecord) -> bool:
-        record.src = _SRC_CTX.get() or ""
-        return True
-
-
-class _SrcAwareFormatter(logging.Formatter):
-    """级别之后动态插入 [src=库名] 前缀；无源库上下文时不插入，避免噪音。"""
-
-    def format(self, record: logging.LogRecord) -> str:
-        src = getattr(record, "src", "")
-        record.src_tag = f"[src={src}] " if src else ""
-        return super().format(record)
+# 单文件运行日志里同时混着「服务自身」与「对某个源库的操作」。这里把当前请求/任务
+# 关联的源库记在 contextvar 里：日志行加 [src=库名] 前缀，且库相关日志由
+# LibraryRoutingHandler 分流到 <src>/.logs/studio-YYYYMMDD.log。
+_bind_src = bind_src
 
 
 def setup_logger(
@@ -207,8 +174,9 @@ def setup_logger(
     """
     配置 Content Studio 服务端日志：
     - 控制台输出：遵循请求级别 (默认为 INFO，启用 --debug 时为 DEBUG)
-    - 文件日志输出：默认保存到 temp/studio-YYYYMMDD.log（按日期命名，每天一个新文件）
-    - 级别策略：文件与控制台同一级别，默认 INFO；DEBUG（逐张缩略图、thumb 访问行等）
+    - 服务日志：temp/studio-YYYYMMDD.log（按日期命名，每天一个新文件）
+    - 源库日志：<src>/.logs/studio-YYYYMMDD.log（随源库走，`logfile=off` 时一并关闭）
+    - 级别策略：三个 handler 同一级别，默认 INFO；DEBUG（逐张缩略图、thumb 访问行等）
       只在 --debug 时落盘，否则单日日志会被缩略图噪音淹没
     - 前缀：日志行自动带 [src=库名]，标明该操作作用于哪个源库
     """
@@ -224,30 +192,36 @@ def setup_logger(
     # 1. 控制台 Handler
     console_handler = logging.StreamHandler(sys.stdout)
     console_handler.setLevel(level)
-    console_fmt = _SrcAwareFormatter(
+    console_fmt = SrcAwareFormatter(
         "[%(asctime)s] [%(levelname)s] %(src_tag)s%(message)s",
         datefmt="%Y-%m-%d %H:%M:%S",
     )
     console_handler.setFormatter(console_fmt)
-    console_handler.addFilter(_SrcContextFilter())
+    console_handler.addFilter(SrcContextFilter())
     logger.addHandler(console_handler)
 
-    # 2. 文件日志 Handler (保存在 temp/ 目录)
+    # 2. 文件日志 Handler (保存在 temp/ 目录) + 3. 源库日志 Handler
+    # logfile=off 时两个文件落点一并关闭，语义统一为「不写任何日志文件」。
     if logfile and str(logfile).strip().lower() not in ("none", "off", "false", ""):
         log_path = Path(logfile).resolve()
+        file_fmt = SrcAwareFormatter(
+            "[%(asctime)s] [%(levelname)s] %(src_tag)s(%(filename)s:%(lineno)d) %(message)s",
+            datefmt="%Y-%m-%d %H:%M:%S",
+        )
         try:
             log_path.parent.mkdir(parents=True, exist_ok=True)
             file_handler = logging.FileHandler(str(log_path), encoding="utf-8")
             file_handler.setLevel(level)
-            file_fmt = _SrcAwareFormatter(
-                "[%(asctime)s] [%(levelname)s] %(src_tag)s(%(filename)s:%(lineno)d) %(message)s",
-                datefmt="%Y-%m-%d %H:%M:%S",
-            )
             file_handler.setFormatter(file_fmt)
-            file_handler.addFilter(_SrcContextFilter())
+            file_handler.addFilter(SrcContextFilter())
             logger.addHandler(file_handler)
         except Exception as e:
             logger.warning(f"无法创建日志文件 {log_path}: {e}")
+
+        lib_handler = LibraryRoutingHandler(level)
+        lib_handler.setFormatter(file_fmt)
+        lib_handler.addFilter(SrcContextFilter())
+        logger.addHandler(lib_handler)
 
     return logger
 
