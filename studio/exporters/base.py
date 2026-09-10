@@ -92,6 +92,57 @@ def resolve_excluded(data: dict[str, Any]) -> set[str]:
 
 
 # ---------------------------------------------------------------------------
+# 导出表单「用户可见元数据」审计留痕
+# ---------------------------------------------------------------------------
+# 这些字段过去只写进 release/<module>/index.json，导出审计流水 (exports.jsonl)
+# 里完全缺失，出问题时无法回答「这次导出填的标题/描述/ID/月份是什么」。
+# 注意：trial 导出不会调用 log_export（_commit() 为 False），故这里不含 trial。
+_EXPORT_META_KEYS: tuple[str, ...] = (
+    "title",
+    "titleZh",
+    "description",
+    "descZh",
+    "id",
+    "eventId",
+    "collectionId",
+    "month",
+    "catalog",
+    "startOrder",
+    "version",
+    "status",
+    "displayOrder",
+    "sortBy",
+    "format",
+    "rename",
+    "quality",
+    "targetRatios",
+    "cropMode",
+    "outputMode",
+    "excludeExported",
+)
+
+
+def export_meta(data: dict[str, Any]) -> dict[str, Any]:
+    """提取本次导出的用户可见元数据（审计留痕用），仅保留非空字段。
+
+    只做「取出来」，不做任何合法性判断，因此某导出器不关心的字段也不会报错。
+    """
+    out: dict[str, Any] = {}
+    for k in _EXPORT_META_KEYS:
+        v = data.get(k)
+        if v is None:
+            continue
+        if isinstance(v, str):
+            v = v.strip()
+            if not v:
+                continue
+        elif isinstance(v, (list, dict)) and not v:
+            continue
+        out[k] = v
+    return out
+
+
+# ---------------------------------------------------------------------------
 # 单次导出数量上限（业务硬约束）
 # ---------------------------------------------------------------------------
 # 游戏侧一次内容更新（main / daily / event / collection）的绝对量不宜过大，

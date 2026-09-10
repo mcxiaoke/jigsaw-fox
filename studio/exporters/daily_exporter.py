@@ -33,6 +33,7 @@ from studio.exporters.base import (
     ExportResult,
     assert_max_images,
     assert_min_long,
+    export_meta,
     resolve_excluded,
     resolve_normalize,
     resolve_quality,
@@ -125,6 +126,14 @@ class DailyExporter(BaseExporter):
         )
         images = sort_images(images, sort_by, manual_order=manual_order)
         self.log(f"已按排序策略 [{sort_by}] 排定 {len(images)} 张图片顺序", "info")
+
+        # 导出参数留痕：月份/排序/输出格式等此前散落在运行日志里，审计流水缺失。
+        self.log(
+            f"导出参数: month={month} | count={len(images)} | sortBy={sort_by} | "
+            f"format={self.fmt} | quality={resolve_quality(self.data)} | "
+            f"rename={self.rename_rule}",
+            "info",
+        )
 
         # 0b. 单次导出数量上限硬拦截
         assert_max_images(images, self.log, exp_type="daily")
@@ -425,6 +434,7 @@ class DailyExporter(BaseExporter):
                         "zipHash": zip_hash,
                         "outDir": str(self.out_p),
                     },
+                    meta=export_meta(self.data),
                     result="ok",
                 )
                 self.log(f"已将 {len(exported_items)} 张图片记入源侧权威账本", "ok")

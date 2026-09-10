@@ -12,6 +12,7 @@ import json
 import os
 from pathlib import Path
 import shutil
+import sys
 import threading
 from typing import Any
 import logging
@@ -106,8 +107,13 @@ class StudioWorkspace:
             try:
                 with open(self.operations_log, "a", encoding="utf-8") as f:
                     f.write(line)
-            except Exception:
-                pass
+            except Exception as e:
+                # 审计流水写失败绝不能静默吞掉：否则「没记录」与「记录失败」无法区分。
+                # 审计属尽力而为，不向上抛（不阻断主流程），但必须告警到 stderr。
+                print(
+                    f"[workspace] 写入操作流水失败 {self.operations_log}: {e}",
+                    file=sys.stderr,
+                )
 
     def log_export(
         self,
@@ -176,8 +182,12 @@ class StudioWorkspace:
             try:
                 with open(log_path, "a", encoding="utf-8") as f:
                     f.write(line)
-            except Exception:
-                pass
+            except Exception as e:
+                # 同上：结构化审计（exports.jsonl / operations.jsonl）写失败必须可见。
+                print(
+                    f"[workspace] 写入结构化审计失败 {log_path}: {e}",
+                    file=sys.stderr,
+                )
 
     def promote_staging(self, module: str) -> None:
         """

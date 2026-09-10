@@ -32,6 +32,7 @@ from studio.exporters.base import (
     ExportResult,
     assert_max_images,
     assert_min_long,
+    export_meta,
     resolve_excluded,
     resolve_normalize,
     resolve_quality,
@@ -277,6 +278,16 @@ class MainExporter(BaseExporter):
             version = 1
 
         batch_id = self.data.get("batchId") or f"batch_{len(existing_batches) + 1:03d}"
+
+        # 导出参数留痕：起始序号/版本/批次/排序等此前只在运行日志里零散出现，
+        # 审计流水缺失，无法回溯「这次是按什么参数导的」。
+        self.log(
+            f"导出参数: batch={batch_id} | version={version} | "
+            f"startOrder={start_order} | count={len(images)} | sortBy={sort_by} | "
+            f"format={self.fmt} | quality={resolve_quality(self.data)} | "
+            f"rename={self.rename_rule}",
+            "info",
+        )
 
         # 批次目录自包含 (方案 A)：batches/{batchId}/index.json + batches/{batchId}/images/。
         # 一个批次 = 一个自包含单元（含清单与图片），撤销/发布/备份以批为边界，
@@ -542,6 +553,7 @@ class MainExporter(BaseExporter):
                         "endOrder": start_order + len(images) - 1,
                         "outDir": str(self.out_p),
                     },
+                    meta=export_meta(self.data),
                     result="ok",
                 )
                 self.log(f"已将 {len(exported_items)} 张图片记入源侧权威账本", "ok")

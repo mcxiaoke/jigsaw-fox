@@ -35,6 +35,7 @@ from studio.exporters.base import (
     ExportResult,
     assert_max_images,
     assert_min_long,
+    export_meta,
     resolve_excluded,
     resolve_normalize,
     resolve_quality,
@@ -71,6 +72,15 @@ class PackExporterBase(BaseExporter):
         desc_zh = (self.data.get("descZh") or "").strip()
         status = self.data.get("status", "active")
         display_order = int(self.data.get("displayOrder", 1))
+
+        # 表单元数据留痕：标题/描述此前只写进 index.json，导出面板与运行日志都查不到，
+        # 出问题时无法回溯「这次填了什么」。
+        self.log(
+            f"导出元数据: id={pack_id} | title={title!r} | titleZh={title_zh!r} | "
+            f"description={desc!r} | descZh={desc_zh!r} | "
+            f"status={status} | displayOrder={display_order}",
+            "info",
+        )
 
         ws = StudioWorkspace(self.src_p, read_only=self.is_trial)
         ledger = ExportsLedger(self.src_p, read_only=self.is_trial)
@@ -488,6 +498,7 @@ class PackExporterBase(BaseExporter):
                         "zipHash": zip_hash,
                         "outDir": str(self.out_p),
                     },
+                    meta=export_meta(self.data),
                     result="ok",
                 )
                 self.log(f"已将 {len(exported_items)} 张图片记入源侧权威账本", "ok")

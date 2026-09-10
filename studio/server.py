@@ -113,6 +113,23 @@ DEFAULT_LOG_FILE = _default_log_file()
 logger = logging.getLogger("studio")
 
 
+def _audit(root: Path | str | None, action: str, **fields: Any) -> None:
+    """写入源库操作审计流水 (<src>/.studio/logs/operations.jsonl)。
+
+    与导出审计 (exports.jsonl) 分离：这里记的是「人对素材库做了什么」
+    （删除素材、手动裁切、质检、试导出确认等）。此前这些操作只在 HTTP
+    访问行里留一个 URL，业务语义全丢，出问题无法回溯。
+
+    尽力而为：写失败只告警，绝不打断主流程——审计不应导致操作失败。
+    """
+    if not root:
+        return
+    try:
+        StudioWorkspace(Path(root)).record_audit(action, **fields)
+    except Exception as e:
+        logger.warning("[AUDIT] 写入操作审计失败 action=%s: %s", action, e)
+
+
 def _estimate_ratio(fmt: str, quality: int) -> float:
     """按输出格式与压缩质量粗估「预计产物体积 / 原图体积」比例。
 
@@ -1409,6 +1426,18 @@ class StudioRequestHandler(BaseHTTPRequestHandler):
             f"box=({coords[0]:.4f},{coords[1]:.4f},{coords[2]:.4f},{coords[3]:.4f}) "
             f"ratio={ratio} ok={ok}"
         )
+        _audit(
+            root,
+            "crop_manual_save",
+            scope="crop",
+            entity=hash_val,
+            after={
+                "cropBox": list(crop_box) if crop_box else None,
+                "ratio": ratio,
+                "ok": ok,
+            },
+            result="ok" if ok else "err",
+        )
         self._json({"ok": ok})
 
     def do_DELETE(self) -> None:
@@ -1443,6 +1472,14 @@ class StudioRequestHandler(BaseHTTPRequestHandler):
         with CacheDB(root) as db:
             ok = db.delete_user_override(hash_val)
         logger.info(f"[MANUAL_CROP] DELETE: hash={hash_val[:16]}... ok={ok}")
+        _audit(
+            root,
+            "crop_manual_delete",
+            scope="crop",
+            entity=hash_val,
+            after={"ok": ok},
+            result="ok" if ok else "err",
+        )
         self._json({"ok": ok})
 
     def _handle_delete_image(self, data: dict[str, Any]) -> None:
@@ -1555,6 +1592,19 @@ class StudioRequestHandler(BaseHTTPRequestHandler):
         logger.info(
             f"[DELETE] 已删除素材: {rel} -> {dest_rel} (hash={file_hash[:16]}...)"
         )
+        _audit(
+            root,
+            "delete_image",
+            scope="source",
+            entity=rel,
+            after={
+                "deletedTo": dest_rel,
+                "hash": file_hash,
+                "removedHashes": len(removed_hashes),
+                "cleaned": cleaned,
+            },
+            result="ok",
+        )
         self._json(
             {
                 "ok": True,
@@ -1645,6 +1695,22 @@ class StudioRequestHandler(BaseHTTPRequestHandler):
             force,
             max_workers or "auto",
         )
+        # 质检范围：指定清单 / 全量重算 / 仅未评分
+        qc_scope_kind = "selected" if paths else ("all" if force else "unscored")
+        _audit(
+            root,
+            "quality_batch_start",
+            scope="quality",
+            entity=client_task_id,
+            after={
+                "total": total,
+                "scopeKind": qc_scope_kind,
+                "limit": limit,
+                "force": force,
+                "workers": max_workers or "auto",
+            },
+            result="ok",
+        )
         self._json(
             {
                 "ok": True,
@@ -1661,6 +1727,16 @@ class StudioRequestHandler(BaseHTTPRequestHandler):
             self._error("缺少 task 参数", status=400)
             return
         ok = _job_cancel(task_id)
+        # 审计：job 表只存 taskId，源库目录需从请求或当前工作目录推断
+        dir_param = (data.get("dir") or "").strip()
+        _audit(
+            Path(dir_param).resolve() if dir_param else StudioRequestHandler.current_root_dir,
+            "quality_cancel",
+            scope="quality",
+            entity=task_id,
+            after={"ok": ok},
+            result="ok" if ok else "err",
+        )
         self._json({"ok": ok, "taskId": task_id})
 
     def _handle_thumb(self, qs: dict[str, list[str]]) -> None:
