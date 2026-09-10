@@ -99,8 +99,14 @@ class EventsContentPipeline {
 
       final updatedEvents = <PuzzleEventItem>[];
       var skipped = 0;
+      // P1-10 差集清理：收集远端 id 全集（含解析失败的原始 id，避免误删）
+      final remoteIds = <String>{};
       for (final raw in rawList) {
         if (raw is Map<String, dynamic>) {
+          final rawId = raw['id']?.toString();
+          if (rawId != null && rawId.isNotEmpty) {
+            remoteIds.add(rawId);
+          }
           try {
             // 相对路径 URL 递归解析 (RFC 3986)
             final cover = raw['coverUrl']?.toString();
@@ -155,10 +161,37 @@ class EventsContentPipeline {
         AppLogger.events.info('Auto-GC deleted $gcCount disabled events');
       }
 
+      // P1-10 差集清理：以远端 id 全集为基准，回收从 index.json 下架的活动
+      // （内存条目 + 本地解压目录），避免下架内容永久残留
+      final removedIds = _eventsMap.keys
+          .where((id) => !remoteIds.contains(id))
+          .toList();
+      if (removedIds.isNotEmpty) {
+        for (final id in removedIds) {
+          _eventsMap.remove(id);
+          final eventDir = Directory(p.join(eventsStorageBaseDir, id));
+          if (eventDir.existsSync()) {
+            try {
+              eventDir.deleteSync(recursive: true);
+            } catch (e, st) {
+              AppLogger.events.warning(
+                'syncWithRemote 移除下架活动目录失败 $id',
+                e,
+                st,
+              );
+            }
+          }
+          AppLogger.events.info('syncWithRemote 移除下架活动 $id');
+        }
+        AppLogger.events.info(
+          'syncWithRemote 差集清理完成 removed=${removedIds.length}',
+        );
+      }
+
       // 持久化到缓存
       await _persistToCache();
       AppLogger.events.info(
-        'syncWithRemote done events=${_eventsMap.length} updated=${updatedEvents.length} skipped=$skipped gc=$gcCount',
+        'syncWithRemote done events=${_eventsMap.length} updated=${updatedEvents.length} skipped=$skipped gc=$gcCount removed=${removedIds.length}',
       );
       return true;
     } catch (e, st) {

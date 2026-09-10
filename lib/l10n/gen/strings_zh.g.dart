@@ -366,6 +366,7 @@ class _Translations$crop$zh extends Translations$crop$en {
 	@override String get saveButton => '保存自制关卡';
 	@override String get optimizing => '正在优化画质并生成自制关卡...';
 	@override String saveFailedToast({required Object error}) => '保存失败: ${error}';
+	@override String get decodeFailedToast => '图片解析失败，请重新选择图片';
 }
 
 // Path: online
@@ -1380,6 +1381,7 @@ extension on TranslationsZh {
 			'crop.saveButton' => '保存自制关卡',
 			'crop.optimizing' => '正在优化画质并生成自制关卡...',
 			'crop.saveFailedToast' => ({required Object error}) => '保存失败: ${error}',
+			'crop.decodeFailedToast' => '图片解析失败，请重新选择图片',
 			'online.savedBanner' => ({required Object width, required Object height}) => '已存入素材库 (${width}×${height})',
 			'online.savedSourceSub' => '来源: 网络 · 点击查看',
 			'online.alreadyInBox' => '该图片已在下载箱中',

@@ -195,7 +195,8 @@
     "saving": "Saving...",
     "saveButton": "Save Custom Level",
     "optimizing": "Optimizing image quality and creating your custom puzzle...",
-    "saveFailedToast": "Save failed: {error}"
+"saveFailedToast": "Save failed: {error}",
+    "decodeFailedToast": "Image decode failed, please pick another image"
   },
   "online": {
     "savedBanner": "Saved to library ({width}×{height})",

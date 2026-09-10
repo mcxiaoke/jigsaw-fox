@@ -39,6 +39,19 @@ class DownloadManager {
 
   bool _initialized = false;
 
+  /// P1-13 下载 id 序号计数器：与毫秒时间戳拼接保证同毫秒并发不冲突
+  static int _idSeq = 0;
+
+  /// P1-13 生成带前缀的时间戳 + 单调序号 id（避免同毫秒互相覆盖）
+  static String _nextTimestampedId(String prefix) {
+    final seq = _idSeq++;
+    if (_idSeq > 0xFFFF) _idSeq = 0; // 防溢出，65536 内自循环
+    return '${prefix}_${DateTime.now().millisecondsSinceEpoch}_${seq.toRadixString(16)}';
+  }
+
+  /// P1-13 网络下载 id
+  static String _nextDownloadId() => _nextTimestampedId('dl');
+
   Box<dynamic> get _box => StorageManager.instance.collections;
 
   Future<void> init() async {
@@ -136,7 +149,7 @@ class DownloadManager {
           continue;
         }
 
-        final id = 'local_${DateTime.now().millisecondsSinceEpoch}_$i';
+        final id = '${_nextTimestampedId('local')}_$i';
         final ext = file.name.contains('.') ? file.name.split('.').last : 'jpg';
         final targetPath = '${cacheDir.path}/mat_$id.$ext';
         final targetFile = File(targetPath);
@@ -216,7 +229,7 @@ class DownloadManager {
       await cacheDir.create(recursive: true);
     }
 
-    final id = 'dl_${DateTime.now().millisecondsSinceEpoch}';
+    final id = _nextDownloadId();
     final filePath = '${cacheDir.path}/img_$id.jpg';
     final targetFile = File(filePath);
 

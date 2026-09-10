@@ -195,7 +195,8 @@
     "saving": "正在保存...",
     "saveButton": "保存自制关卡",
     "optimizing": "正在优化画质并生成自制关卡...",
-    "saveFailedToast": "保存失败: {error}"
+"saveFailedToast": "保存失败: {error}",
+    "decodeFailedToast": "图片解析失败，请重新选择图片"
   },
   "online": {
     "savedBanner": "已存入素材库 ({width}×{height})",

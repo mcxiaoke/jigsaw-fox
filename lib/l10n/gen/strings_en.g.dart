@@ -708,6 +708,9 @@ class Translations$crop$en {
 
 	/// en: 'Save failed: {error}'
 	String saveFailedToast({required Object error}) => 'Save failed: ${error}';
+
+	/// en: 'Image decode failed, please pick another image'
+	String get decodeFailedToast => 'Image decode failed, please pick another image';
 }
 
 // Path: online
@@ -2282,6 +2285,7 @@ extension on Translations {
 			'crop.saveButton' => 'Save Custom Level',
 			'crop.optimizing' => 'Optimizing image quality and creating your custom puzzle...',
 			'crop.saveFailedToast' => ({required Object error}) => 'Save failed: ${error}',
+			'crop.decodeFailedToast' => 'Image decode failed, please pick another image',
 			'online.savedBanner' => ({required Object width, required Object height}) => 'Saved to library (${width}×${height})',
 			'online.savedSourceSub' => 'From web · Tap to view',
 			'online.alreadyInBox' => 'This image is already in your download box',

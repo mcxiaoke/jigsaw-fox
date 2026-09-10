@@ -78,9 +78,9 @@ class AppLogger {
     // 监听所有 Logger
     Logger.root.onRecord.listen(_handleRecord);
 
-    // 异步初始化文件目录（不阻塞）
+    // P1-15: 等待文件 appender 就绪后再 complete，保证启动早期日志（含自检）可落盘
     if (!kIsWeb) {
-      unawaited(_initFileAppender());
+      await _initFileAppender();
     }
 
     _initialized = true;
@@ -312,7 +312,9 @@ class AppLogger {
         await _rotateToNextIndex();
       }
     } catch (e) {
-      // 落盘失败静默，不影响业务；尝试重建 sink
+      // P1-15: 落盘失败静默，不影响业务；尝试重建 sink，并把本次批次放回队首，
+      // 避免这批日志永久丢失（下次 flush 重试，时序不被打乱）
+      _pendingLines.insertAll(0, lines);
       try {
         await _sink?.close();
       } catch (_) {}

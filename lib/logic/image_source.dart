@@ -1,6 +1,5 @@
 import 'dart:typed_data';
 
-import 'package:dio/dio.dart';
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:image_picker/image_picker.dart';
 
@@ -54,41 +53,6 @@ class GallerySource implements PuzzleSource {
       throw const UserCancelledException();
     }
     return file.readAsBytes();
-  }
-}
-
-class NetworkSource implements PuzzleSource {
-  NetworkSource(this.url);
-  final String url;
-
-  @override
-  Future<Uint8List> loadBytes() async {
-    Response<List<int>>? response;
-    try {
-      response = await Dio().get<List<int>>(
-        url,
-        options: Options(responseType: ResponseType.bytes),
-      );
-    } catch (e, st) {
-      AppLogger.image.warning(
-        'NetworkSource load fail url=${AppLogger.sanitizeUrl(url)}',
-        e,
-        st,
-      );
-      rethrow;
-    }
-    final data = response.data;
-    if (data == null || data.isEmpty) {
-      AppLogger.image.warning(
-        'NetworkSource empty response url=${AppLogger.sanitizeUrl(url)}',
-      );
-      throw Exception('empty response: $url');
-    }
-    AppLogger.debug(
-      AppLogger.image,
-      'NetworkSource loaded bytes=${data.length} url=${AppLogger.sanitizeUrl(url)}',
-    );
-    return Uint8List.fromList(data);
   }
 }
 

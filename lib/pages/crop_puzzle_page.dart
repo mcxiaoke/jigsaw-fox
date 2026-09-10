@@ -135,6 +135,9 @@ class _CropPuzzlePageState extends State<CropPuzzlePage> {
   bool _isSaving = false;
   bool _needsResetMatrix = false;
 
+  /// P1-19 解码失败标志：置位后禁用保存按钮并提示用户重新选择
+  bool _decodeFailed = false;
+
   @override
   void initState() {
     super.initState();
@@ -155,6 +158,7 @@ class _CropPuzzlePageState extends State<CropPuzzlePage> {
           // 释放旧图避免 GPU 常驻泄漏（重复进裁切页场景）
           _decodedImage?.dispose();
           _decodedImage = frame.image;
+          _decodeFailed = false; // P1-19 解码成功时复位失败标志
           // Automatically suggest closest ratio matching the uploaded photo
           final detected = PuzzleAspectRatio.fromSize(
             frame.image.width.toDouble(),
@@ -174,6 +178,15 @@ class _CropPuzzlePageState extends State<CropPuzzlePage> {
         frame.image.dispose();
       }
     } catch (_) {
+      // P1-19 解码失败不再静默：置位失败标志，提示用户重新选择图片
+      if (mounted) {
+        setState(() => _decodeFailed = true);
+        GameToast.show(
+          context,
+          message: t.crop.decodeFailedToast,
+          type: GameToastType.error,
+        );
+      }
     } finally {
       codec?.dispose();
     }
@@ -801,7 +814,7 @@ class _CropPuzzlePageState extends State<CropPuzzlePage> {
                   width: double.infinity,
                   height: 48,
                   child: FilledButton.icon(
-                    onPressed: _isSaving
+                    onPressed: _isSaving || _decodeFailed
                         ? null
                         : () => _saveAndCreate(_currentViewportSize),
                     style: FilledButton.styleFrom(

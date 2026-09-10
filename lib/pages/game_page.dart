@@ -91,6 +91,11 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
 
   Timer? _saveDebounce;
   static const Duration _saveDebounceDuration = Duration(milliseconds: 800);
+
+  /// 解码失败后延迟退出拼图页的定时器（给 toast 展示时间，O-3）
+  Timer? _decodeFailPopTimer;
+  static const Duration _decodeFailPopDelay = Duration(milliseconds: 1200);
+
   bool _isSaving = false;
 
   /// 批量合并 UI 更新标志，避免 onProgressChanged + onStateUpdated 连续触发双重 setState
@@ -223,7 +228,7 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
     } catch (e, st) {
       AppLogger.game.severe('decodeFlameImage failed', e, st);
       if (mounted) {
-        // 坏图容错：避免永久转圈，提示并返回
+        // 坏图容错：提示后退出拼图界面，避免永久转圈（O-3）
         GameToast.show(
           context,
           message: LocaleSettings
@@ -233,6 +238,13 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
               .imageDecodeFailed,
           type: GameToastType.error,
         );
+        // GameToast 挂在页面 overlay 上，pop 即销毁；先停留片刻展示提示再退出
+        _decodeFailPopTimer?.cancel();
+        _decodeFailPopTimer = Timer(_decodeFailPopDelay, () {
+          if (mounted) {
+            Navigator.of(context).pop();
+          }
+        });
       }
       return;
     }
@@ -912,6 +924,7 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
       } catch (_) {}
     }
     _timer?.cancel();
+    _decodeFailPopTimer?.cancel();
     _secondsNotifier.dispose();
     _focusNode.dispose();
     _gameImage?.dispose();

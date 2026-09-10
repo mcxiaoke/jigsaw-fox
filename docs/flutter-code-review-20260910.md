@@ -10,12 +10,15 @@
 > 2. 复核二（`flutter-code-review-20260910-revision-msf.md`，Muse Spark 复核）：全量复核 5 P0 + 19 P1 + 7 P2 + 7 排除项，新增 12 项遗漏；二次实测 analyze 为 **242** 条（1 条波动为依赖版本）。
 > 3. 合并结论：**28 项主问题中 23 项确认真实、5 项描述不准确/夸大；§6 排除的 7 项全部成立**。定级修订：`P0-1` 降至 P2（记录为故意移除全局兜底）、`P0-5` 降至 P1（机理修正，单步原子 vs 多步 put 竞态拆分）、`P1-2/6/9/11/18` 降至 P2；`P1-15(3)` 删除（不存在 close() 方法）。新增遗漏 O-1~O-12（§7）。
 > 4. 行号以 2026-09-10 工作区为准；所有修订处均以 **【修订】** 标注。
+> **【2026-09-10 修复版说明】**
+> 按修复方案实施后，P1 及遗漏项已修复（详见各条 **【已修复】** 标注）：P1-10 差集清理、P1-13 下载 id 冲突、P1-14 死代码删除（NetworkSource 全库无调用方，事实真实但机理不成立，按删除处理）、P1-15 日志丢批/init 时序、P1-17 样例回滚、P1-19 解码失败提示、O-3 坏图解码失败 toast + 自动退出拼图页；全部通过 analyze/test/build 验证（详见 §0 与 `docs/CHANGES-20260910.md`）。
 
 ---
 
 ## 0. 静态分析基线（flutter analyze）
 
 - **0 error / 0 warning / 241~242 info**（两轮实测分别为 241 / 242，1 条波动为依赖版本差异）。
+- **【修复版】** 实施修复后实测（`flutter analyze --no-pub`）：**0 error / 0 warning / 241 info**，与基线一致；`flutter test` 313 passed / 8 skipped；`flutter build windows --debug` 编译通过。
 - info 集中在三类：`avoid_slow_async_io`（84 处，主线程同步 IO）、`discarded_futures`（72 处）、`unawaited_futures`（36 处）——与下文多个实际问题的成因高度吻合，说明这些 lint 不只是风格问题。
 - **【修订】** §4 按类别拆分统计归属，其中 `avoid_slow_async_io` 84 条中**内容管线占约 30 条**（原报告仅点名 2 处，详见 §4）；同批 242 条中含 `test/`、`tool/` 目录的 `unawaited/discarded`，非全部来自 `lib/`。
 
@@ -53,6 +56,7 @@
   3. 失败原因（目录创建失败、磁盘故障）无降级标志，问题会反复重演。
 - **【修订】** 影响面微调：Windows 下 `''/thumb_xxx.jpg` 实际解析为 `C:\thumb_xxx.jpg` 根目录，无权限写根会 `catch` **静默失败**（不会产生根目录垃圾文件）；Linux/Android 才可能真写根分区。另注意：修复若简单改为 `completeError()`，会使 `lib/main.dart:138` 组1 `Future.wait` 直接抛出导致启动白屏（见 §7 O-1）。
 - **建议**：失败时置**降级标志**（如 `_initFailed=true` 后 `getThumbnail*` 直接回退原图/网络），既阻止重复 init 又避免组1 白屏；`getThumbnailFilePath` 对 `_cacheDir == null` 返回 null 而非空串拼接；`completeError` 与降级标志二选一配合。
+- **【已修复 2026-09-10（上一批）】**：`getThumbnailFilePath` 返回类型 `String`→`String?`，`_cacheDir == null` 时返回 null，8 处调用点全部适配 null 契约（L2 命中/写盘/删除/回退路径 null 均安全）；按用户约束**未加**降级标志、未动 `complete()` 语义（组1 `Future.wait` 降级即 §7 O-1 仍未实施）。
 
 ### P0-3 缩略图写盘非原子，损坏缓存会永久污染两级缓存且无自愈 【修订：真实，确为 P0】
 - **位置**：`lib/logic/cache/image_cache_manager.dart` L315（本地）、L528/L547（网络）
@@ -62,6 +66,7 @@
 - **机理**：直接写最终路径 `thumb_<hash>_<dim>.jpg`，进程被杀/断电/磁盘满会留下**截断的损坏 JPEG**。下次启动 `_rebuildDiskKeyIndexAsync`（L156–188）按文件名模式收录该文件（只看名字不校验内容）；L2 命中时 `readAsBytes` 非空即返回并写入 L1（L264–277）——损坏字节被两级缓存固化，ImageProvider 解码失败后**没有任何剔除/重生成机制**，该图表现为永久裂图。对比：网络下载 tmp 文件本身有 `.part` + finally 清理（L568–571 已核实正确），但**最终写 L2 的这一步是裸写**。
 - **【修订】** 复核属实；补充修复面：仅 `.part`/finally 覆盖网络临时态，**L2 最终写未用 tmp+rename**。
 - **建议**：写 L2 改为 `写临时文件 + rename` 原子替换；L2 读取后可做**最小 JPEG 魔数（SOI/EOI）校验**，解码失败时摘索引并重生成一次。
+- **【已修复 2026-09-10（上一批）】**：本地与网络两条 L2 写盘路径均改为"写 `$targetPath.tmp` → 删旧文件 → rename 原子替换"，失败时经 `_deleteTempFile` 清理残留；按用户约束**未加** JPEG 魔数校验（读取侧自愈仍未实施）。
 
 ### P0-4 EXIF 方向在整条缩略图/裁剪管线中被忽略 【修订：真实，保持 P0（修复排期可缓）】
 - **位置**：`lib/logic/cache/thumbnail_generator.dart` L158、L267；全 `lib/` 检索 `bakeOrientation` / `exif` 无结果
@@ -130,6 +135,7 @@
   ```
 - **机理**：`_saveCustomPuzzle`（putJson）失败时内存列表已插入、UI 已显示，磁盘无此条，重启后拼图"凭空消失"；异常上抛到 crop_puzzle_page 的 catch 后不 pop，但列表中已残留假条目。对比同项目 `ProgressStore.save`（L270–291）有"失败回滚内存"的范本实现，此处未对齐。`deleteCustomPuzzle`（L337–368）是反方向的同类风险（先删内存/文件后删 key）。
 - **建议**：对齐 ProgressStore 的回滚模式；或先落盘成功再更新内存。
+- **【已修复 2026-09-10（上一批）】**：`addCustomPuzzle` 改为先 `await _saveCustomPuzzle(item)` 落盘成功后再插入内存列表并刷新 notifier；`putJson` 透传 Hive 写盘 Future，失败上抛后内存不变、crop 页 catch 会 toast 且不 pop。
 
 ### ~~P1-6 Engine 吸附/锁定/级联三套容差不一致，导致重复吸附与行为分裂~~ 【修订：事实真实但体感夸大，降 P2 见 §3】
 - 结论：6×6 `snapDist≈0.067>0.05`、12×12 `snapDist≈0.033<0.035` 的推演正确；但"重复音效 + undo 栈填满"仅发生在 0.05~0.067 误差带内**偶发**，非高频路径。仍建议由 `snapDist` 派生统一。
@@ -138,6 +144,7 @@
 - **位置**：`lib/logic/content/pipelines/collections_content_pipeline.dart` L246、L284（`temp_extract_{id}` 目录 deleteSync→createSync）；`events_content_pipeline.dart` L208–210、`daily_content_pipeline.dart` L61–62 同模式。`main_content_pipeline` 有 `_inFlightDownloads` 单飞（L73、L334–343，且 identical 复核写法正确），三条管线均无。
 - **机理**：同一图集/活动/月包被两个入口并发触发（快速双击下载、两个页面同时进入），第二个调用会在第一个正在写文件的 `temp_extract_{id}` 上 `deleteSync(recursive: true)`，双方都失败；交错更糟时可能把半解压目录 rename 到正式目录。`ContentManager._isSyncing` 只保护 sync 链路，不覆盖 `ensureXxxDownloaded`。
 - **建议**：复用 main 管线的 `_inFlightDownloads` 模式（含 identical 复核）。
+- **【已修复 2026-09-10（上一批）】**：抽取泛型单飞助手 `lib/logic/single_flight.dart`（`runSingleFlight<T>`，含 identical 复核），四条管线（main/collections/events/daily）统一接入，各管线保留独立 `_inFlightDownloads` 命名空间隔离。
 
 ### P1-8 manifest/events/collections 磁盘缓存写入非原子（与 main 管线不一致） 【修订：真实，保留 P1】
 - **位置**：`lib/logic/content/pipelines/manifest_router.dart` L128–132（`await file.writeAsString(jsonEncode(json), flush: true)` 直写目标文件）；events L340–347、collections L489–496 同模式。对比 `main_content_pipeline` L495–500 是 tmp+rename。
@@ -147,10 +154,11 @@
 ### ~~P1-9 内容 zip 下载声明了 zipSha256/hash 但从不校验~~ 【修订：事实真实但属预留，降 P2 见 §3】
 - 结论：字段仅声明于 `puzzle_collection_item.dart:23,74,122` 与 `puzzle_event_item.dart:16,52`，`scripts/publish/app_reference/integrations.dart:98` 曾注释掉校验——属**跨镜像一致性预留，非功能错误**。zipSha256 非空时校验失败回退下一镜像即可。
 
-### P1-10 events/collections 远端同步只增不删，下架内容永久残留 【修订：真实，保留 P1】
+### P1-10 events/collections 远端同步只增不删，下架内容永久残留 【修订：真实，保留 P1】**【已修复：差集清理】**
 - **位置**：`lib/logic/content/pipelines/events_content_pipeline.dart` L125–152、`collections_content_pipeline.dart` L155–186：远端列表逐条 upsert 进 map，从不删除"远端列表中已消失的 id"；Auto-GC 只清理 `isDisabled` 条目（events L167–176），collections 连 disabled 目录清理都没有。
 - **机理**：运营若直接从 index.json 移除条目（而非标记 disabled），其内存条目、解压目录、缓存 JSON 永久残留且继续出现在可见列表中，形成磁盘泄漏与下架语义漏洞。
 - **建议**：同步时以远端列表为全集做差集清理（保留本地已下载标记的按产品语义决定）。
+- **【已修复 2026-09-10】**：两条管线 `syncWithRemote` 均实现差集清理——先收集远端 id 全集（含解析失败的原始 id 防误删），同步后以 `map 内不在远端全集中的 key` 为下架集合，逐一从内存 map 移除、删除本地解压目录（deleteSync 清理），随后 `_persistToCache` 重写缓存；日志含 `removed=N` 计数。采用"直接清除本地文件"产品语义（下架即回收）。
 
 ### ~~P1-11 daily ensureMonthReady 解压 0 个文件仍返回成功，形成重复整包下载死循环~~ 【修订：事实真实，降 P2 见 §3】
 - 结论：`extracted`（L90）未校验即 `rename + return true`（L108/L117）属实；events 的 ensureEventDownloaded 同缺。`extracted==0` 视为失败清理即可。
@@ -160,7 +168,7 @@
 - **机理**：与 `app_content.dart` 注释"老客户端读到未来破坏性 schema 时明确失败而非静默解析错乱"的设计意图相悖——降级读磁盘缓存时，未来 schema 的 manifest 会被静默解析，字段错位表现为"内容全空但无报错"。
 - **建议**：`_loadFromDiskCache` 解析后做同一区间校验，越界返回 null。
 
-### P1-13 DownloadManager 下载 id 仅用毫秒时间戳，并发下载互相覆盖 【修订：真实，保留 P1】
+### P1-13 DownloadManager 下载 id 仅用毫秒时间戳，并发下载互相覆盖 【修订：真实，保留 P1】**【已修复：id 单调序号化】**
 - **位置**：`lib/logic/download_manager.dart` L219–221
   ```dart
   final id = 'dl_${DateTime.now().millisecondsSinceEpoch}';
@@ -168,19 +176,22 @@
   ```
 - **机理**：同毫秒两次下载（双击、批量）→ 相同 filePath 与相同 Hive key `material:dl_xxx`，两条流写同一目标文件相互覆盖，先完成记录的元数据（宽高/大小）与实际文件内容不符。本地导入路径（L141）有 `_i` 序号后缀，网络下载没有。同 URL 的去重检查基于 `itemsNotifier`（L200–206），而列表项在下载完成后才插入 → 并发同 URL 重复下载的窗口同样存在。
 - **建议**：id 追加随机后缀（`_rnd.nextInt(0xFFFF)`）或内容哈希；`saveOrDownloadImage` 入口加单飞。
+- **【已修复 2026-09-10】**：新增静态 `_nextTimestampedId(prefix)`（毫秒时间戳 + 单调递增序号 `_idSeq` 十六进制，65536 自循环），网络下载与本地导入两处 id 生成统一接入；id 格式变更无 `split('_')`/前缀格式依赖（全库已核实），Hive key 为字符串不敏感。并发同 ms 不再撞 id。单飞入口复用此前 P1-7 已实现的 `runSingleFlight` 体系，不重复实现。
 
-### P1-14 NetworkSource 裸 Dio() 无超时，弱网下可无限挂起 【修订：真实，保留 P1】
+### P1-14 NetworkSource 裸 Dio() 无超时，弱网下可无限挂起 【修订：真实但无调用方，死代码删除】**【已修复：删除 NetworkSource】**
 - **位置**：`lib/logic/image_source.dart` L65–71
   ```dart
   response = await Dio().get<List<int>>(url, options: Options(responseType: ResponseType.bytes));
   ```
 - **机理**：未配置 `connectTimeout/receiveTimeout`（对比 `ContentHttpClient` L14–15 明确配了 8s/15s），且全量 `response.data` 内存缓冲无大小防护。弱网/对端不响应时该 Future 可能挂起到 OS 层 TCP 超时；调用方在 UI 路径 await 它时表现为界面长时间无响应。
 - **建议**：补超时与最大字节数防护，或复用 ContentHttpClient。
+- **【修订：机理不成立】** 二次核验全库（`lib/` + `test/` + `studio/`）发现 `NetworkSource` 与 `PuzzleSource` 抽象**无任何实例化调用点**（import 该文件的 3 处仅使用 `assetSamples`/`AssetSource`）——属死代码/预留实现，"调用方在 UI 路径 await 它时界面无响应"场景当前不存在，P1 风险面不成立，按死代码处理。
+- **【已修复 2026-09-10】**：删除 `NetworkSource` 类及其裸 `Dio()` 依赖（含 dio import）；保留 `PuzzleSource` 抽象与 `AssetSource`/`GallerySource` 实现。`dio` 依赖仍被 `download_manager`/`content_http_client` 使用，不受影响。
 
-### P1-15 AppLogger 文件通道可靠性缺陷 【修订：2 真 1 假，删除第 3 点】
+### P1-15 AppLogger 文件通道可靠性缺陷 【修订：2 真 1 假，删除第 3 点】**【已修复：丢批恢复 + init 时序】**
 - **位置**：`lib/services/app_logger.dart`
-  1. **flush 失败丢批**（L294–324）：`lines` 从 `_pendingLines` 取走并 clear 后（L302–303），若 `_rotateIfNeeded()` 或写盘抛错，catch 块只关闭 sink，这批日志**永久丢失**且无计数。**【修订：真实，保留】**
-  2. **init 立即完成导致启动早期日志不落盘**（L79–92）：`_initialized = true; _initCompleter!.complete()`（L86–87）在 `unawaited(_initFileAppender())` 完成前执行，`_handleRecord` 里 `_fileEnabled`（L179）仍为 false → `main()` 启动后前 4~6 条关键日志（launch starting、ImageCache tuned 等）不会写文件。**【修订：真实，保留】**
+  1. **flush 失败丢批**（L294–324）：`lines` 从 `_pendingLines` 取走并 clear 后（L302–303），若 `_rotateIfNeeded()` 或写盘抛错，catch 块只关闭 sink，这批日志**永久丢失**且无计数。**【修订：真实，保留】** **【已修复：catch 中 `_pendingLines.insertAll(0, lines)` 放回队首，下次 flush 重试，时序不被打乱】**
+  2. **init 立即完成导致启动早期日志不落盘**（L79–92）：`_initialized = true; _initCompleter!.complete()`（L86–87）在 `unawaited(_initFileAppender())` 完成前执行，`_handleRecord` 里 `_fileEnabled`（L179）仍为 false → `main()` 启动后前 4~6 条关键日志（launch starting、ImageCache tuned 等）不会写文件。**【修订：真实，保留】** **【已修复：`init()` 改为 `await _initFileAppender()` 后再 complete，文件通道就绪才对外宣称已初始化，启动早期日志可落盘】**
   3. **close() 未保存 onRecord 订阅**（L79 与 L503–516）：close 后再次 init 会再挂一个 `Logger.root.onRecord.listen`，每条日志被处理两次。**【修订：不实，删除】** —— 全文件**不存在 `close()` 方法**（仅 `flush()` L503 / `clearAll()` L510 与内部 `_sink?.close()` L317/L354/L514），"close 后再 init 重复挂 listener"场景不存在。
 - **建议**：flush 失败把 lines 放回队首；文件 appender 就绪后再 complete（或 init 返回等待其就绪的 Future）。
 
@@ -189,18 +200,20 @@
 - **机理**：写失败时 UI 已显示新状态，重启后收藏状态回跳；与 `ProgressStore.save` 的回滚策略不一致。
 - **建议**：失败回滚缓存或上抛。
 
-### P1-17 首启样例植入存在"半套固化"窗口 【修订：真实，保留 P1】
+### P1-17 首启样例植入存在"半套固化"窗口 【修订：真实，保留 P1】**【已修复：失败回滚】**
 - **位置**：`lib/data/game_repository.dart` L264–285：三个样例逐条 `_saveCustomPuzzle`，任一失败 `allOk=false` 不置 `presetsInitialized` 标志；但已写入的 1–2 条留在 collections box 中，下次启动 `rawItems.isEmpty` 不成立 → 走 else 分支（L281–284）**直接把标志补置 true**，缺失样例永不补齐。
 - **机理**：与 L264–265 注释"避免半套样例"的声明相矛盾——注释防住了"永久跳过"，没防住"半套固化"。首次启动用户可能只看到 1 个样例。
 - **建议**：`!allOk` 时清理本轮已写入的样例 key，或改为按单样例 key 记录完成状态。
+- **【已修复 2026-09-10】**：采用方案 A 回滚——记录本轮成功写入的 `plantedSampleIds`，任一失败时逐条 `_deleteCustomPuzzleKey` 清理并打 warning 日志，保持"全有或全无"，下次启动 `rawItems` 为空重新完整植入。
 
 ### ~~P1-18 在线取图页 dispose 后长链路副作用继续执行~~ 【修订：部分夸大，降 P2 见 §3】
 - 结论：dispose（L88–92）仅取消 bannerTimer、`_webViewController` 未置 null 属实；但 `evaluateJavascript`（L173）有 try/catch、下载失败有 toast（L428–433）——"后台落盘"属**有意行为**（切走仍入素材库），仅缺 dispose 置 null + 入口短路。
 
-### P1-19 裁剪页解码失败静默假死 【修订：真实，保留 P1】
+### P1-19 裁剪页解码失败静默假死 【修订：真实，保留 P1】**【已修复：失败提示 + 按钮禁用】**
 - **位置**：`lib/pages/crop_puzzle_page.dart` L148–182：`_decodeImage` 的 `catch (_) {}`（L176）完全吞掉解码失败。
 - **机理**：解码失败时无任何提示或禁用，用户面对一个空的裁切框（`_saveAndCreate` L281 有 `_decodedImage == null` 兜底，不会崩，但等同页面假死）。
 - **建议**：catch 中 toast 并提供返回引导（或禁用保存按钮）。
+- **【已修复 2026-09-10】**：新增 `_decodeFailed` 状态——catch 中 `setState` 置位并 `GameToast.show` 错误提示（新增 i18n key `crop.decodeFailedToast`，zh/en 双语）；保存按钮 `onPressed` 在 `_isSaving || _decodeFailed` 时禁用；解码成功路径复位标志（防重入）。
 
 ---
 
@@ -230,14 +243,17 @@
 - `discarded_futures`（72）/ `unawaited_futures`（36）：P1-1、P0-1 即此模式的实际后果实例。**同批含 `test/`（settings_page_ui_test、victory_dialog_ui_test 等）与 `tool/` 目录条目，非全部来自 `lib/`。**
 - 另有少量 `avoid_equals_and_hash_code_on_mutable_classes`（14）等类别未在 §0 展开，属风格级。
 
-## 5. 修复优先级建议 【修订：整合两轮复核后的替换表】
+## 5. 修复优先级建议 【修订：整合两轮复核后的替换表】**【修复版：已修复条目移出待办清单】**
+
+> **【修复版】** 下表为两轮修复后的**剩余待办**：原"立即/近期/择期"中的 P0-2、P0-3、P1-5、P1-7（上一批完成）、P1-10、P1-13、P1-14、P1-15、P1-17、P1-19（本批完成）与 O-3（本批完成）均已实施并通过验证，见各条 **【已修复】** 标注与 `docs/CHANGES-20260910.md`。
 
 | 优先级 | 条目 | 说明 |
 |---|---|---|
-| **立即** | P0-2、P0-3、O-1、O-3 | 降级标志+非法路径防护；tmp+rename+JPEG 校验；组1 逐项 catch 降级；坏图错误态（§7） |
-| **近期** | P0-4、P0-5（addCoins 多步 put 部分）、P1-1、P1-3、P1-4、P1-5、P1-16、P1-17、O-4 | bakeOrientation；Economy Future 链串行化；Achievement 回滚/重试；淘汰复查；save 按 key 互斥；先落盘后内存/回滚；样例按单 key 补齐；Pack 管线对齐（§7） |
-| **择期** | P1-7、P1-8、P1-10、P1-12、P1-13、P1-14、O-5~O-12、P2 全部 | 管线单飞/原子写/差集清理/schema 校验/id 随机/Dio 超时；同步 IO 异步化；isSolved epsilon 统一；WebView 释放等（§7） |
+| **立即** | O-1 | 组1 逐项 catch 降级（§7） |
+| **近期** | P0-4、P0-5（addCoins 多步 put 部分）、P1-1、P1-3、P1-4、P1-16、O-4 | bakeOrientation；Economy Future 链串行化；Achievement 回滚/重试；淘汰复查；save 按 key 互斥；Pack 管线对齐（§7） |
+| **择期** | P1-8、P1-12、O-5~O-12、P2 全部 | 缓存原子写/schema 校验；同步 IO 异步化；isSolved epsilon 统一；WebView 释放等（§7） |
 | **降级/移除** | P0-1→P2、P1-2→P2、P1-6→P2、P1-9→P2、P1-11→P2、P1-15(3) 删除、P1-18→P2 | 均属"建议优化/低频边际"，见 §2/§3 修订说明；P0-5 保留 addCoins 多步 put 部分为 P1 |
+| **已修复** | P0-2、P0-3、P1-5、P1-7（上一批）；P1-10、P1-13、P1-14、P1-15、P1-17、P1-19、O-3（本批） | 见各条【已修复】标注；验证见 §0 修复版实测与 `docs/CHANGES-20260910.md` |
 
 ## 6. 已排除的疑点（复核阶段剔除，防止后续误修） 【修订：7 项全部成立，保留】
 
@@ -265,10 +281,11 @@
 - **问题**：存储初始化失败退化为"全内存"后全会话可玩，但**重启全部数据丢失**；无 UI/日志强提示"临时内存模式"，用户不知情。
 - **建议**：检测到 fallback 时顶部横幅 + AppLogger.severe 记录。
 
-### O-3 坏图解码失败后页面滞留 loading 态 【新增，P1】
-- **位置**：`lib/pages/game_page.dart` L215–238（`_loadImage`/`decodeFlameImage`）、`lib/game/jigsaw_puzzle_game.dart` L250（onLoad）
+### O-3 坏图解码失败后页面滞留 loading 态 【新增，P1】**【已修复：error toast + 自动退出】**
+- **位置**：`lib/pages/game_page.dart` L224–250（`_loadImage`/`decodeFlameImage`）、`lib/game/jigsaw_puzzle_game.dart` L250（onLoad）
 - **问题**：`decodeFlameImage` 失败 catch 仅 GameToast（'imageDecodeFailed'）并 return，`_game` 仍为 null → 页面持续展示进度圈，**无错误态、无返回/重试入口**（用户可手动返回，但无引导）。原报告未覆盖此路径。
 - **建议**：置错误态（如失败占位 + 重试按钮）。
+- **【已修复 2026-09-10】**：保留 error toast，新增 `_decodeFailPopTimer`（1.2s）延迟 `Navigator.pop` 退出拼图页——给 toast 展示时间（GameToast 挂在页面 overlay，pop 即销毁）后再退出，杜绝滞留 loading；dispose 同步取消定时器。
 
 ### O-4 Pack 内容管线整体漏审 【新增，P1】
 - **位置**：`lib/logic/content/pipelines/pack_content_pipeline.dart` L87/L133/L211/L329

@@ -264,9 +264,11 @@ class GameRepository {
       // 失败语义（§4.4）：全部成功才置 true，任一失败保持 false，
       // 下次启动重新植入完整样例，避免「半套样例 + 永久跳过」的脏状态
       var allOk = true;
+      final plantedSampleIds = <String>[];
       for (final s in samples) {
         try {
           await _saveCustomPuzzle(s);
+          plantedSampleIds.add(s.id);
         } catch (e, st) {
           allOk = false;
           AppLogger.repo.warning('Failed to plant sample ${s.id}', e, st);
@@ -276,6 +278,20 @@ class GameRepository {
         rawItems.addAll(samples);
         await stateBox.put(kKeyPresetsInitialized, true);
         AppLogger.repo.info('initCustom created default 3 samples');
+      } else {
+        // P1-17 回滚本轮已写入的样例：任一失败即删除已成功的样例 key，
+        // 保持「全有或全无」，下次启动重新植入完整样例，避免半套样例固化
+        for (final id in plantedSampleIds) {
+          try {
+            await _deleteCustomPuzzleKey(id);
+            AppLogger.repo.info('Rollback planted sample $id');
+          } catch (e, st) {
+            AppLogger.repo.warning('Rollback planted sample $id failed', e, st);
+          }
+        }
+        AppLogger.repo.warning(
+          'initCustom samples partial failure, rolled back ${plantedSampleIds.length}',
+        );
       }
     } else {
       if (presetsInitialized != true) {

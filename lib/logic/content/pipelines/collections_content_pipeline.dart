@@ -130,8 +130,14 @@ class CollectionsContentPipeline {
 
       final updatedCollections = <PuzzleCollectionItem>[];
       var skipped = 0;
+      // P1-10 差集清理：收集远端 id 全集（含解析失败的原始 id，避免误删）
+      final remoteIds = <String>{};
       for (final raw in rawList) {
         if (raw is Map<String, dynamic>) {
+          final rawId = raw['id']?.toString();
+          if (rawId != null && rawId.isNotEmpty) {
+            remoteIds.add(rawId);
+          }
           try {
             // 相对路径 URL 递归解析 (RFC 3986)
             final cover = raw['coverUrl']?.toString();
@@ -189,10 +195,37 @@ class CollectionsContentPipeline {
         }
       }
 
+      // P1-10 差集清理：以远端 id 全集为基准，回收从 index.json 下架的图集
+      // （内存条目 + 本地解压目录），避免下架内容永久残留
+      final removedIds = _collectionsMap.keys
+          .where((id) => !remoteIds.contains(id))
+          .toList();
+      if (removedIds.isNotEmpty) {
+        for (final id in removedIds) {
+          _collectionsMap.remove(id);
+          final colDir = Directory(p.join(collectionsStorageBaseDir, id));
+          if (colDir.existsSync()) {
+            try {
+              colDir.deleteSync(recursive: true);
+            } catch (e, st) {
+              AppLogger.content.warning(
+                'Collections syncWithRemote 移除下架图集目录失败 $id',
+                e,
+                st,
+              );
+            }
+          }
+          AppLogger.content.info('Collections syncWithRemote 移除下架图集 $id');
+        }
+        AppLogger.content.info(
+          'Collections syncWithRemote 差集清理完成 removed=${removedIds.length}',
+        );
+      }
+
       await _persistToCache();
       updateNotifier.value++;
       AppLogger.content.info(
-        'Collections syncWithRemote done total=${_collectionsMap.length} updated=${updatedCollections.length} skipped=$skipped',
+        'Collections syncWithRemote done total=${_collectionsMap.length} updated=${updatedCollections.length} skipped=$skipped removed=${removedIds.length}',
       );
       return true;
     } catch (e, st) {
