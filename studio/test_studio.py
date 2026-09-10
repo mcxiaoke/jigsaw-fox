@@ -1764,7 +1764,7 @@ class TestTrialExportNonPollution(unittest.TestCase):
 
 
 class TestImageDelete(unittest.TestCase):
-    """测试单图删除: 软删除至 <SourceDir>/Deleted/ + 数据侧同步 + 已导出保护"""
+    """测试单图删除: 软删除至 <SourceDir>/.deleted/ + 数据侧同步 + 已导出保护"""
 
     def setUp(self):
         import threading
@@ -1837,11 +1837,11 @@ class TestImageDelete(unittest.TestCase):
         )
         self.assertEqual(status, 200)
         self.assertTrue(res.get("ok"))
-        self.assertEqual(res.get("deletedTo"), "Deleted/sub/a.jpg")
+        self.assertEqual(res.get("deletedTo"), ".deleted/sub/a.jpg")
 
         # 文件被移动而非彻底删除，且保留原子目录结构
         self.assertFalse((self.test_dir / "sub" / "a.jpg").exists())
-        self.assertTrue((self.test_dir / "Deleted" / "sub" / "a.jpg").is_file())
+        self.assertTrue((self.test_dir / ".deleted" / "sub" / "a.jpg").is_file())
 
         # 数据库条目与随之失去引用的附属数据被清理
         with CacheDB(self.test_dir) as db:
@@ -1875,13 +1875,13 @@ class TestImageDelete(unittest.TestCase):
         self.assertEqual(status, 404)
 
     def test_delete_never_overwrites_existing_file_in_recycle_bin(self):
-        (self.test_dir / "Deleted").mkdir(parents=True, exist_ok=True)
-        (self.test_dir / "Deleted" / "c.jpg").write_bytes(b"OLD")
+        (self.test_dir / ".deleted").mkdir(parents=True, exist_ok=True)
+        (self.test_dir / ".deleted" / "c.jpg").write_bytes(b"OLD")
 
         status, res = self._post_delete({"dir": str(self.test_dir), "path": "c.jpg"})
         self.assertEqual(status, 200)
-        self.assertEqual((self.test_dir / "Deleted" / "c.jpg").read_bytes(), b"OLD")
-        self.assertTrue(str(res.get("deletedTo", "")).startswith("Deleted/c_"))
+        self.assertEqual((self.test_dir / ".deleted" / "c.jpg").read_bytes(), b"OLD")
+        self.assertTrue(str(res.get("deletedTo", "")).startswith(".deleted/c_"))
 
 
 if __name__ == "__main__":

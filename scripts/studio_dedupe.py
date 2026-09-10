@@ -13,13 +13,14 @@ studio_dedupe.py — 基于 SHA-256 的内容级重复文件清理（studio 素�
    - 否则现场递归计算 SHA-256 并聚合重复组。
 2. 每个「完全重复组」仅保留一个文件（默认保留相对路径最短者），
    其余候选项会被列出；只有加 --apply 才真正删除。
-3. 删除方式默认软删除：移入 <SRC>/<Deleted>/_dedupe/<时间戳>/<相对路径>，
-   可手工找回；--permanent 才物理删除（需同时加 --yes）。
+3. 删除方式默认软删除：移入 <SRC>/.deleted/_dedupe/<时间戳>/<相对路径>，
+   可手工找回（.deleted 以点开头，scanner 与资源管理器默认忽略，不易与素材目录混淆）；
+   --permanent 才物理删除（需同时加 --yes）。
 
 安全约束
 --------
 - 默认 dry-run（只预览、零改动）。
-- 只删除 <SRC> 内的文件；扫描自动忽略 .studio / Deleted / temp / 隐藏目录。
+- 只删除 <SRC> 内的文件；扫描自动忽略 .studio / .deleted / Deleted / temp / 隐藏目录。
 - --permanent 必须显式 --yes，否则拒绝执行。
 
 用法
@@ -27,7 +28,7 @@ studio_dedupe.py — 基于 SHA-256 的内容级重复文件清理（studio 素�
   # 预览（推荐先跑，看看将保留/删除哪些）
   python scripts/studio_dedupe.py "F:/Pictures/JigsawGame/Source"
 
-  # 确认后软删除（移入 Deleted/_dedupe/）
+  # 确认后软删除（移入 .deleted/_dedupe/）
   python scripts/studio_dedupe.py "F:/Pictures/JigsawGame/Source" --apply
 
   # 保留最旧的一份，并输出 JSON 报告
@@ -384,7 +385,7 @@ def main() -> int:
     ap.add_argument("src", help="源素材目录（studio 工作区或普通目录）")
     ap.add_argument("--apply", action="store_true", help="真正执行删除；缺省仅预览")
     ap.add_argument("--permanent", action="store_true",
-                    help="物理删除（默认软删除：移入 Deleted/_dedupe/时间戳/）")
+                    help="物理删除（默认软删除：移入 .deleted/_dedupe/时间戳/）")
     ap.add_argument("--yes", action="store_true", help="与 --permanent 搭配的二次确认")
     ap.add_argument("--keep", choices=KEEP_MODES, default="shortest",
                     help="每组保留哪个：shortest(默认)/oldest/newest")
@@ -394,8 +395,8 @@ def main() -> int:
                     help="缓存库模式下跳过磁盘一致性校验（更快，但陈旧缓存可能误判）")
     ap.add_argument("--all-files", action="store_true",
                     help="不限于图片扩展名，对所有文件去重")
-    ap.add_argument("--delete-dir", default="Deleted",
-                    help="软删除回收目录名（默认 Deleted）")
+    ap.add_argument("--delete-dir", default=".deleted",
+                    help="软删除回收目录名（默认 .deleted）")
     ap.add_argument("--workers", type=int, default=16, help="哈希计算并发线程数（默认 16）")
     ap.add_argument("--report", metavar="PATH", help="将去重计划/结果写入 JSON 报告")
 

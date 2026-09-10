@@ -209,7 +209,7 @@ export async function saveManualCrop(hash, box, ratio, dir = "") {
 }
 
 /**
- * 删除单张素材 (软删除: 移动到 <SourceDir>/Deleted/ 并从缓存数据库移除)
+ * 删除单张素材 (软删除: 移动到 <SourceDir>/.deleted/ 并从缓存数据库移除)
  * 已导出的图片由服务端拒绝并返回 error，前端应据此提示。
  */
 export async function deleteImage(dir, path, hash = "") {

@@ -940,7 +940,7 @@
               class="btn xs viewer-action-btn viewer-action-danger"
               v-if="!cropMode && currentViewerItem"
               :disabled="!canDeleteViewerItem || isDeletingImage"
-              :title="canDeleteViewerItem ? '删除该图片 (移动到 Deleted 目录)' : '已导出的图片不能删除'"
+              :title="canDeleteViewerItem ? '删除该图片 (移动到 .deleted 目录)' : '已导出的图片不能删除'"
               :style="{ opacity: canDeleteViewerItem ? 1 : 0.45, cursor: canDeleteViewerItem ? 'pointer' : 'not-allowed' }"
               @click="requestDeleteViewerItem"
             >
@@ -1086,7 +1086,7 @@
           </div>
           <p class="formal-confirm-title" style="margin-bottom:8px;">删除后将产生以下结果：</p>
           <ul class="formal-confirm-list">
-            <li>文件被移动到源目录下的 <code>Deleted/</code> 回收目录（<b>不是彻底删除</b>，可手工找回）。</li>
+            <li>文件被移动到源目录下的 <code>.deleted/</code> 回收目录（<b>不是彻底删除</b>，可手工找回）。</li>
             <li>该图片会从当前列表与缓存数据库中移除，重新扫描不会再出现。</li>
             <li>该图片的质检评分缓存与手动裁切框会一并失效清理。</li>
           </ul>

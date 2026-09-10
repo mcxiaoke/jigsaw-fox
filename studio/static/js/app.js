@@ -1539,7 +1539,7 @@ const app = createApp({
     // -----------------------------------------------------------------------
     // 大图查看器 (Viewer) 与单张快捷打标
     // -----------------------------------------------------------------------
-    // 删除素材: 软删除至 <SourceDir>/Deleted/ (服务端同侧拦截已导出图片)
+    // 删除素材: 软删除至 <SourceDir>/.deleted/ (服务端同侧拦截已导出图片)
     const deleteConfirmOpen = ref(false);
     const isDeletingImage = ref(false);
 
@@ -1566,7 +1566,7 @@ const app = createApp({
     };
 
     // -----------------------------------------------------------------------
-    // 删除素材 (二次确认 -> 移动至 Deleted/ -> 从列表与数据库移除)
+    // 删除素材 (二次确认 -> 移动至 .deleted/ -> 从列表与数据库移除)
     // -----------------------------------------------------------------------
     const requestDeleteViewerItem = () => {
       const item = currentViewerItem.value;
@@ -1612,7 +1612,7 @@ const app = createApp({
           selectedSet.value = next;
         }
         deleteConfirmOpen.value = false;
-        showToast("已删除，文件已移动到 Deleted/ 目录");
+        showToast("已删除，文件已移动到 .deleted/ 目录");
         stdInfo("[删除] 已软删除: " + removedPath);
         // 3) 修正 viewer 指针：列表空则关闭，越界则收敛到末位
         if (filteredRecords.value.length === 0) {

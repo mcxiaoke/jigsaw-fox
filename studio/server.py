@@ -94,9 +94,12 @@ _EXPORT_MODULE_OF_TYPE = {
     "collection": "collections",
 }
 
-# 素材删除回收目录名：删除 = 把文件移入 <SourceDir>/Deleted/（软删除，可手工找回）。
-# scanner.IGNORE_DIRS 已包含 "deleted"（大小写不敏感），故该目录不会被后续扫描重新纳入。
-DELETED_DIR_NAME = "Deleted"
+# 素材删除回收目录名：删除 = 把文件移入 <SourceDir>/.deleted/（软删除，可手工找回）。
+# 以点开头，避免与正常素材目录在资源管理器中混在一起；scanner 对隐藏目录（. 开头）天然忽略，
+# 故该目录不会被后续扫描重新纳入。
+# LEGACY_DELETED_DIR_NAMES：历史版本曾使用 "Deleted"，一并视为回收目录（拒绝二次删除/不被扫描）。
+DELETED_DIR_NAME = ".deleted"
+LEGACY_DELETED_DIR_NAMES = ("Deleted",)
 
 
 def _default_log_file() -> Path:
@@ -1447,11 +1450,12 @@ class StudioRequestHandler(BaseHTTPRequestHandler):
         POST /api/delete — 删除单张素材（软删除，可手工找回）。
 
         语义：
-        1. 把源文件移动到 <SourceDir>/Deleted/ 下的同名相对路径（保留原子目录结构）；
+        1. 把源文件移动到 <SourceDir>/.deleted/ 下的同名相对路径（保留原子目录结构）；
         2. 从 SQLite 缓存数据库移除该路径条目，并清理随之失去引用的用户覆盖记录；
         3. 已导出（账本命中 hash 或路径）的图片一律拒绝删除。
 
-        Deleted/ 已被 scanner.IGNORE_DIRS 忽略，因此后续扫描不会把回收目录重新纳入。
+        .deleted/ 以点开头，属隐藏目录，scanner 扫描时天然忽略，
+        因此后续扫描不会把回收目录重新纳入（历史 "Deleted/" 亦被视为回收目录）。
         """
         dir_param = (data.get("dir") or "").strip()
         path_s = (data.get("path") or "").strip()
@@ -1489,8 +1493,9 @@ class StudioRequestHandler(BaseHTTPRequestHandler):
         rel = src_res.relative_to(root).as_posix()
 
         dest_root = (root / DELETED_DIR_NAME).resolve()
-        if src_res == dest_root or dest_root in src_res.parents:
-            self._error("该文件已位于回收目录 Deleted/ 中", status=400)
+        recycle_roots = [dest_root] + [(root / n).resolve() for n in LEGACY_DELETED_DIR_NAMES]
+        if any(src_res == r or r in src_res.parents for r in recycle_roots):
+            self._error(f"该文件已位于回收目录 {DELETED_DIR_NAME}/ 中", status=400)
             return
 
         # 已导出保护：账本按 hash 或相对路径命中即视为已导出，禁止删除

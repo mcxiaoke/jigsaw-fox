@@ -191,7 +191,7 @@ class CacheDB:
 
     def delete_files(self, paths: Iterable[str]) -> list[str]:
         """
-        按相对路径删除文件缓存条目 (素材被移入 Deleted/ 后的数据侧同步)。
+        按相对路径删除文件缓存条目 (素材被移入 .deleted/ 后的数据侧同步)。
 
         返回被删除条目所关联的内容 hash 列表 (小写、已去重)，
         供调用方进一步判断是否要清理失去引用的用户覆盖记录。
