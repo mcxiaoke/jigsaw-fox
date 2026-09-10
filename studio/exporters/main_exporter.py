@@ -204,9 +204,7 @@ class MainExporter(BaseExporter):
         src_main_dir = ws.release_dir / "main"  # 读状态源 (release 镜像)
         write_main_dir = build_root / "main"  # 写构建根
         batches_dir = write_main_dir / "batches"
-        images_dir = write_main_dir / "images"
         batches_dir.mkdir(parents=True, exist_ok=True)
-        images_dir.mkdir(parents=True, exist_ok=True)
 
         # 读取已有 index.json 获取版本与批次信息 (统一 items 键) —— 一律从 release 状态源读
         src_index_path = src_main_dir / "index.json"
@@ -275,6 +273,13 @@ class MainExporter(BaseExporter):
             version = 1
 
         batch_id = self.data.get("batchId") or f"batch_{len(existing_batches) + 1:03d}"
+
+        # 批次目录自包含 (方案 A)：batches/{batchId}/index.json + batches/{batchId}/images/。
+        # 一个批次 = 一个自包含单元（含清单与图片），撤销/发布/备份以批为边界，
+        # 图片与批次 json 同目录相对引用（客户端 RFC3986 递归解析）。
+        batch_dir = batches_dir / batch_id
+        images_dir = batch_dir / "images"
+        images_dir.mkdir(parents=True, exist_ok=True)
 
         # 3. 历史查重与跨模块预警 (允许补丁修订同一个 logicalId，但严禁主线关卡互斥重复)
         is_patch = bool(self.data.get("isPatch", False))
@@ -410,7 +415,7 @@ class MainExporter(BaseExporter):
                 {
                     "id": logical_id,
                     "order": order,
-                    "url": f"../images/{img_name}",
+                    "url": f"images/{img_name}",
                     "tags": pl["tags"],
                     "hash": img_hash,
                     "addedAt": now_str,
@@ -450,26 +455,30 @@ class MainExporter(BaseExporter):
                 + "\n".join(detail_lines)
             )
 
-        # 5. 写入不可变批次文件 batches/batch_xxx.json (统一 items 键)
+        # 5. 写入批次自包含清单 batches/{batchId}/index.json (统一 items 键)
         batch_payload: dict[str, Any] = {
             "batchId": batch_id,
             "version": version,
             "count": len(batch_levels),
             "startOrder": start_order,
             "endOrder": start_order + len(batch_levels) - 1,
+            "createdAt": now_str,
+            "updatedAt": now_str,
             "items": batch_levels,
         }
         if is_patch:
             batch_payload["patch"] = True
             batch_payload["levelsAffected"] = [lvl["order"] for lvl in batch_levels]
 
-        batch_file = batches_dir / f"{batch_id}.json"
-        tmp_batch = batch_file.with_suffix(".tmp")
+        batch_file = batch_dir / "index.json"
+        tmp_batch = batch_file.with_name(batch_file.name + ".tmp")
         tmp_batch.write_text(
             json.dumps(batch_payload, ensure_ascii=False, indent=2), encoding="utf-8"
         )
         tmp_batch.replace(batch_file)
-        self.log(f"分卷批次已写入: {batch_id}.json ({len(batch_levels)} 个关卡)", "ok")
+        self.log(
+            f"分卷批次已写入: {batch_id}/index.json ({len(batch_levels)} 个关卡)", "ok"
+        )
 
         # 6. 更新主线分卷索引 index.json (统一 items 键)
         batch_entry: dict[str, Any] = {
@@ -478,7 +487,9 @@ class MainExporter(BaseExporter):
             "count": len(batch_levels),
             "startOrder": start_order,
             "endOrder": start_order + len(batch_levels) - 1,
-            "url": f"batches/{batch_id}.json",
+            "createdAt": now_str,
+            "updatedAt": now_str,
+            "url": f"batches/{batch_id}/index.json",
         }
         if is_patch:
             batch_entry["patch"] = True

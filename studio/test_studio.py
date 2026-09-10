@@ -388,14 +388,27 @@ class TestCoreAndExporters(unittest.TestCase):
         self.assertEqual(idx_data["totalCount"], 3)
         self.assertIn("updatedAt", idx_data)
         self.assertEqual(len(idx_data["items"]), 1)
+        entry = idx_data["items"][0]
+        self.assertEqual(entry["batchId"], "batch_001")
+        self.assertEqual(entry["url"], "batches/batch_001/index.json")
+        self.assertIn("createdAt", entry)
+        self.assertIn("updatedAt", entry)
 
-        batch_json = self.out_dir / "main" / "batches" / "batch_001.json"
+        # 批次目录自包含：batches/batch_001/{index.json, images/}
+        batch_dir = self.out_dir / "main" / "batches" / "batch_001"
+        batch_json = batch_dir / "index.json"
         self.assertTrue(batch_json.exists())
         b_data = json.loads(batch_json.read_text(encoding="utf-8"))
         self.assertEqual(b_data["count"], 3)
         self.assertEqual(len(b_data["items"]), 3)
         self.assertEqual(b_data["items"][0]["order"], 101)
         self.assertEqual(b_data["items"][0]["tags"], ["Pets"])
+        self.assertTrue(b_data["items"][0]["url"].startswith("images/"))
+        self.assertIn("addedAt", b_data["items"][0])
+        self.assertIn("createdAt", b_data)
+        self.assertIn("updatedAt", b_data)
+        self.assertTrue((batch_dir / "images").is_dir())
+        self.assertGreater(len(list((batch_dir / "images").glob("*"))), 0)
 
         # 验证 manifest.json 纯路由清单 (v2.3 规范相对路径与 schemaVersion 4)
         manifest_json = self.out_dir / "manifest.json"
@@ -439,12 +452,36 @@ class TestCoreAndExporters(unittest.TestCase):
         # 30 张 Daily 整月 + 3 张 Cats = 33 张，天数校验放行 (≥30 天)
         self.assertEqual(d_data["items"][0]["totalCount"], 33)
         self.assertIn("updatedAt", d_data["items"][0])
+        self.assertIn("createdAt", d_data["items"][0])
 
         manifest_json = self.out_dir / "manifest.json"
         self.assertTrue(manifest_json.exists())
         m_data = json.loads(manifest_json.read_text(encoding="utf-8"))
         self.assertIn("daily", m_data["modules"])
         self.assertEqual(m_data["modules"]["daily"]["count"], 33)
+
+        # 重导同月：createdAt 保留首次值（增量时间字段语义）
+        exporter2 = get_exporter(
+            exp_type="daily",
+            data={
+                "month": "202609",
+                "format": "webp" if HAS_PIL else "original",
+                "rename": "date",
+            },
+            src_p=self.src_dir,
+            out_p=self.out_dir,
+            http_base="http://test.local/data",
+            log_fn=lambda msg, lvl="info": logs.append((lvl, msg)),
+        )
+        exporter2.validate()
+        res2 = exporter2.execute()
+        self.assertTrue(res2.success)
+        d2 = json.loads(
+            (self.out_dir / "daily" / "index.json").read_text(encoding="utf-8")
+        )
+        self.assertEqual(len(d2["items"]), 1)
+        self.assertEqual(d2["items"][0]["month"], "202609")
+        self.assertEqual(d2["items"][0]["createdAt"], d_data["items"][0]["createdAt"])
 
     def test_event_exporter(self):
         logs = []
@@ -484,6 +521,7 @@ class TestCoreAndExporters(unittest.TestCase):
         self.assertEqual(ev_data["items"][0]["descZh"], "万圣节精彩拼图挑战")
         self.assertEqual(ev_data["items"][0]["totalCount"], 3)
         self.assertIn("updatedAt", ev_data["items"][0])
+        self.assertIn("createdAt", ev_data["items"][0])
 
     def test_collection_exporter(self):
         logs = []
@@ -525,6 +563,7 @@ class TestCoreAndExporters(unittest.TestCase):
         self.assertEqual(col_data["items"][0]["descZh"], "精选传世名画合集")
         self.assertEqual(col_data["items"][0]["totalCount"], 3)
         self.assertIn("updatedAt", col_data["items"][0])
+        self.assertIn("createdAt", col_data["items"][0])
 
     def test_pack_exporter_title_validation(self):
         # 验证未提供 title 或 title 为空时 validate() 抛出异常
@@ -1356,7 +1395,7 @@ class TestDuplicateHandling(unittest.TestCase):
             log_fn=lambda msg, level: logs.append((msg, level)),
         )
         res = exporter.execute()
-        batch_json = self.out_dir / "main" / "batches" / "batch_001.json"
+        batch_json = self.out_dir / "main" / "batches" / "batch_001" / "index.json"
         self.assertTrue(batch_json.exists())
         data = json.loads(batch_json.read_text(encoding="utf-8"))
         self.assertEqual(len(data["items"]), 2)
@@ -1619,7 +1658,7 @@ class TestTrialExportNonPollution(unittest.TestCase):
         # 产物落在 outDir/_trial_{ts}
         self.assertTrue(exporter._build_root.is_dir())
         self.assertTrue((exporter._build_root / "main" / "index.json").exists())
-        images_dir = exporter._build_root / "main" / "images"
+        images_dir = exporter._build_root / "main" / "batches" / "batch_001" / "images"
         self.assertTrue(images_dir.exists())
         webp_list = list(images_dir.glob("*.webp"))
         self.assertEqual(len(webp_list), 33)  # 30 Daily + 3 Cats

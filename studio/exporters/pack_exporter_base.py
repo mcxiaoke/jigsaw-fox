@@ -418,6 +418,7 @@ class PackExporterBase(BaseExporter):
             "zipSha256": zip_hash,
             "totalCount": len(images),
             "revision": rev,
+            "createdAt": now_str,
             "updatedAt": now_str,
             **self.build_item_extra(),
         }
@@ -426,10 +427,13 @@ class PackExporterBase(BaseExporter):
         if desc_zh:
             item_entry["descZh"] = desc_zh
 
-        # 查找替换或追加
+        # 查找替换或追加（替换时保留首次 createdAt）
         found = False
         for i, it in enumerate(existing_items):
             if isinstance(it, dict) and it.get("id") == pack_id:
+                old_created = it.get("createdAt")
+                if old_created:
+                    item_entry["createdAt"] = old_created
                 existing_items[i] = item_entry
                 found = True
                 break

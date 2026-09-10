@@ -180,7 +180,7 @@ class TestRollbackOperation(unittest.TestCase):
 class TestUndoMainRelease(unittest.TestCase):
     def setUp(self):
         self.test_dir = Path(tempfile.mkdtemp(prefix="studio_rollback_test_"))
-        # 预置 release/main 镜像：batch_001(1~100) + batch_002(101~120)
+        # 预置 release/main 镜像（批次目录自包含）：batch_001(1~100) + batch_002(101~120)
         main_rel = self.test_dir / ".studio" / "release" / "main"
         (main_rel / "batches").mkdir(parents=True, exist_ok=True)
         index_p = main_rel / "index.json"
@@ -192,14 +192,19 @@ class TestUndoMainRelease(unittest.TestCase):
             "updatedAt": "2026-09-09T00:00:00Z",
             "items": [
                 {"batchId": "batch_001", "version": 1, "count": 100,
-                 "startOrder": 1, "endOrder": 100, "url": "batches/batch_001.json"},
+                 "startOrder": 1, "endOrder": 100,
+                 "url": "batches/batch_001/index.json"},
                 {"batchId": "batch_002", "version": 2, "count": 20,
-                 "startOrder": 101, "endOrder": 120, "url": "batches/batch_002.json"},
+                 "startOrder": 101, "endOrder": 120,
+                 "url": "batches/batch_002/index.json"},
             ],
         }, ensure_ascii=False), encoding="utf-8")
         for bid in ("batch_001", "batch_002"):
-            (main_rel / "batches" / f"{bid}.json").write_text(
+            bdir = main_rel / "batches" / bid
+            (bdir / "images").mkdir(parents=True, exist_ok=True)
+            (bdir / "index.json").write_text(
                 json.dumps({"batchId": bid}), encoding="utf-8")
+            (bdir / "images" / f"{bid}.webp").write_bytes(b"img")
 
         # 记账：batch_002 两关（模拟一次导出）
         self.ledger = ExportsLedger(self.test_dir)
@@ -250,10 +255,11 @@ class TestUndoMainRelease(unittest.TestCase):
         # version 不回退
         self.assertEqual(index["version"], 2)
 
-        # 批次文件：batch_002 删除、batch_001 保留
+        # 批次目录：batch_002 整目录删除（含 index.json 与 images），batch_001 保留
         main_batches = self.test_dir / ".studio" / "release" / "main" / "batches"
-        self.assertFalse((main_batches / "batch_002.json").exists())
-        self.assertTrue((main_batches / "batch_001.json").exists())
+        self.assertFalse((main_batches / "batch_002").exists())
+        self.assertTrue((main_batches / "batch_001").exists())
+        self.assertTrue((main_batches / "batch_001" / "images").exists())
 
         # 事件流含 rollback；审计流水含 rollback_export；撤销前有快照
         events = self.test_dir / ".studio" / "ledger" / "exports_events.jsonl"

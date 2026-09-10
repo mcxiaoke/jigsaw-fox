@@ -368,13 +368,17 @@ class DailyExporter(BaseExporter):
             "fileSizeBytes": zip_size,
             "zipSha256": zip_hash,
             "revision": rev,
+            "createdAt": now_str,
             "updatedAt": now_str,
         }
 
-        # 查找替换或插入顶部
+        # 查找替换或插入顶部（替换时保留首次 createdAt）
         found = False
         for i, m in enumerate(existing_months):
             if isinstance(m, dict) and m.get("month") == month:
+                old_created = m.get("createdAt")
+                if old_created:
+                    month_entry["createdAt"] = old_created
                 existing_months[i] = month_entry
                 found = True
                 break

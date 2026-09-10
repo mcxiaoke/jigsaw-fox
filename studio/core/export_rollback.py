@@ -73,9 +73,9 @@ def _snapshot_file(path: Path, backup_dir: Path) -> Path | None:
 
 def _cleanup_main_release(src_dir: Path, batch_ids: set[str]) -> dict[str, Any]:
     """
-    main 模块 release 镜像投影回退：
+    main 模块 release 镜像投影回退（批次目录自包含组织）：
     - index.json 移除匹配 batchId 的 entry，重算 maxOrder/totalCount（version 不回退）；
-    - 删除 batches/{batchId}.json（若存在）。
+    - 删除 batches/{batchId}/ 整个批次目录（含 index.json 与 images/，物理清理零孤儿）。
     返回 {removedEntries, deletedFiles, indexPath}。
     """
     result: dict[str, Any] = {"removedEntries": 0, "deletedFiles": [], "indexPath": None}
@@ -130,13 +130,13 @@ def _cleanup_main_release(src_dir: Path, batch_ids: set[str]) -> dict[str, Any]:
                     result["removedEntries"] = removed
 
     for bid in sorted(batch_ids):
-        batch_p = ws.release_dir / "main" / "batches" / f"{bid}.json"
-        if batch_p.exists():
+        batch_dir = ws.release_dir / "main" / "batches" / bid
+        if batch_dir.exists():
             try:
-                batch_p.unlink()
-                result["deletedFiles"].append(str(batch_p))
+                shutil.rmtree(batch_dir)
+                result["deletedFiles"].append(str(batch_dir))
             except Exception as e:
-                result["error"] = f"批次文件删除失败 {batch_p.name}: {e}"
+                result["error"] = f"批次目录删除失败 {batch_dir.name}: {e}"
     return result
 
 
