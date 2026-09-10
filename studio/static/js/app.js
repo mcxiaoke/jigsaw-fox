@@ -33,8 +33,6 @@ const app = createApp({
     // 分类元数据 (从 /api/taxonomy 动态获取，前端单一事实源)
     // -----------------------------------------------------------------------
     const mainTags = ref([]);
-    const catalogs = ref([]);
-    const specificTags = ref([]);
     const tagZh = ref({});
     const catalogToTags = ref({});
     const tagToCatalogs = ref({});
@@ -50,10 +48,6 @@ const app = createApp({
       for (const t of mainTags.value) map[t.id] = t.desc;
       return map;
     });
-
-    // 双行排布拆分 (Row 1: 前 7 个大类 + 全部共 8 项; Row 2: 后 7 个大类共 7 项)
-    const mainTagsRow1 = computed(() => mainTags.value.slice(0, 7));
-    const mainTagsRow2 = computed(() => mainTags.value.slice(7));
 
     // -----------------------------------------------------------------------
     // 标签不变量（单一事实源）
@@ -81,10 +75,9 @@ const app = createApp({
       const lowConf = r.confidence != null && !Number.isNaN(conf) && conf > 0 && conf < 0.75;
       return isOthers(r) || lowConf;
     };
-    // 写入标签并同步 catalogs / 待复核态，保证不变量恒成立
+    // 写入标签并同步待复核态，保证不变量恒成立
     const applyTags = (r, tags) => {
       r.tags = normalizeTags(tags);
-      r.catalogs = [...r.tags];
       r.review_required = deriveReview(r); // 复核纯派生，不再允许手动切换
       r.is_manual = true; // 显式手动标记：打标/清空/追加/移除/重置/单改可经此路径都标记为手动(权威)
       unsavedCount.value++;
@@ -1323,11 +1316,6 @@ const app = createApp({
       return lines.join("\n");
     };
 
-    // 辅助同步单个 record 的 catalogs
-    const updateRecordCatalogs = (item) => {
-      item.catalogs = [...normalizeTags(item.tags)];
-    };
-
     // -----------------------------------------------------------------------
     // 用户手动批量增删改 Tags 核心功能
     // -----------------------------------------------------------------------
@@ -1787,16 +1775,6 @@ const app = createApp({
       exportModalOpen.value = false;
     };
 
-    // 结果态重新导出（当前 UI 不再暴露；重导=关闭后再打开，函数保留防回归/未来复用）
-    const restartExport = () => {
-      if (isExporting.value) return;
-      exportLogs.value = [];
-      exportSummary.value = "";
-      exportProgress.value = "";
-      exportDone.value = false;
-      exportStep.value = 1;
-    };
-
     const goExportStep = async (n) => {
       // 完成态点击步骤条 = 开启新一轮配置，先清空上一次结果
       if (exportDone.value) {
@@ -2087,6 +2065,12 @@ const app = createApp({
         showToast("导出中止：请填写英文标题 (Title)");
         return;
       }
+      // 前端主动拦截重复图：不裸依赖后端兜底（后端失效时避免静默误导出重复素材）
+      if (hasDuplicateInExportScope.value) {
+        exportError.value = "待导出范围内检测到内容重复的图片 (相同内容哈希)：请先取消勾选或清理重复素材，避免主线关卡重复 / 日历缺天数。";
+        showToast("导出中止：待导出范围内存在重复图片", "error");
+        return;
+      }
       persistConfig();
       stdInfo(`[导出] 任务启动: type=${exportType.value}, format=${exportConfig.value.format}, 试导出=${Boolean(exportConfig.value.trial)}`);
       isExporting.value = true;
@@ -2356,8 +2340,6 @@ const app = createApp({
       try {
         const tax = await fetchTaxonomy();
         mainTags.value = tax.main_tags || tax.tags || tax.catalogs || [];
-        catalogs.value = mainTags.value;
-        specificTags.value = mainTags.value;
         tagZh.value = tax.tag_zh || {};
         catalogToTags.value = tax.catalog_to_tags || {};
         tagToCatalogs.value = tax.tag_to_catalogs || {};
@@ -2365,8 +2347,6 @@ const app = createApp({
         stdError("[初始化分类体系]", err);
         if (window.TAXONOMY && window.TAXONOMY.main_tags) {
           mainTags.value = window.TAXONOMY.main_tags || [];
-          catalogs.value = mainTags.value;
-          specificTags.value = mainTags.value;
           tagZh.value = window.TAXONOMY.tag_zh || {};
         } else {
           showToast(`初始化分类体系失败: ${err.message}`, "error");
@@ -2446,12 +2426,8 @@ const app = createApp({
       handleImageError,
       viewerIndex,
       mainTags,
-      mainTagsRow1,
-      mainTagsRow2,
       tagIcon,
       tagDesc,
-      catalogs,
-      specificTags,
       tagZh,
       srcDir,
       outDir,
@@ -2524,7 +2500,6 @@ const app = createApp({
       randomShuffleOrder,
       moveExportItem,
       removeFromPreview,
-      restartExport,
       onOutputChange,
       exportError,
       exportPollLost,

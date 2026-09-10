@@ -478,7 +478,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
   position: relative;
   width: 100%;
   aspect-ratio: 4 / 3;
-  background: #0f172a;
+  background: #e2e8f0;
   overflow: hidden;
   cursor: pointer;
 }
