@@ -1,0 +1,96 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "daily/index.json",
+  "description": "日历模块索引：按月分片，每片一条 ZIP 包记录（zipUrl 相对路径 + zipUrls 绝对兜底地址）。",
+  "type": "object",
+  "properties": {
+    "module": {
+      "const": "daily"
+    },
+    "version": {
+      "$ref": "common.schema.json#/$defs/positiveInt"
+    },
+    "currentMonth": {
+      "type": "string",
+      "pattern": "^\\d{6}$"
+    },
+    "updatedAt": {
+      "$ref": "common.schema.json#/$defs/timestamp"
+    },
+    "items": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/dailyEntry"
+      },
+      "minItems": 1,
+      "uniqueItems": true
+    }
+  },
+  "required": [
+    "module",
+    "version",
+    "currentMonth",
+    "updatedAt",
+    "items"
+  ],
+  "additionalProperties": false,
+  "$defs": {
+    "dailyEntry": {
+      "type": "object",
+      "title": "月度 ZIP 条目",
+      "properties": {
+        "month": {
+          "type": "string",
+          "pattern": "^\\d{6}$"
+        },
+        "totalCount": {
+          "$ref": "common.schema.json#/$defs/positiveInt"
+        },
+        "zipUrl": {
+          "type": "string",
+          "pattern": "^zips/\\d{6}\\.zip$"
+        },
+        "fileSizeBytes": {
+          "$ref": "common.schema.json#/$defs/nonNegativeInt"
+        },
+        "zipSha256": {
+          "$ref": "common.schema.json#/$defs/hash64"
+        },
+        "revision": {
+          "$ref": "common.schema.json#/$defs/positiveInt"
+        },
+        "createdAt": {
+          "$ref": "common.schema.json#/$defs/timestamp"
+        },
+        "updatedAt": {
+          "$ref": "common.schema.json#/$defs/timestamp"
+        },
+        "zipKey": {
+          "type": "string",
+          "pattern": "^daily/zips/\\d{6}\\.zip$"
+        },
+        "zipUrls": {
+          "type": "array",
+          "items": {
+            "$ref": "common.schema.json#/$defs/absUrl"
+          },
+          "minItems": 1,
+          "uniqueItems": true
+        }
+      },
+      "required": [
+        "month",
+        "totalCount",
+        "zipUrl",
+        "fileSizeBytes",
+        "zipSha256",
+        "revision",
+        "createdAt",
+        "updatedAt",
+        "zipKey",
+        "zipUrls"
+      ],
+      "additionalProperties": false
+    }
+  }
+}

@@ -1,0 +1,133 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "manifest.json",
+  "description": "发布根清单：模块纯路由，只允许 main / daily / events / collections 四个白名单模块，禁止未知字段。",
+  "type": "object",
+  "properties": {
+    "schemaVersion": {
+      "const": 4
+    },
+    "updatedAt": {
+      "$ref": "common.schema.json#/$defs/timestamp"
+    },
+    "appConfig": {
+      "type": "object",
+      "title": "客户端应用配置",
+      "properties": {
+        "notice": {
+          "type": "string"
+        },
+        "minAppVersion": {
+          "type": "integer",
+          "minimum": 1
+        }
+      },
+      "required": [
+        "notice",
+        "minAppVersion"
+      ],
+      "additionalProperties": false
+    },
+    "modules": {
+      "type": "object",
+      "title": "模块路由表（白名单）",
+      "properties": {
+        "main": {
+          "$ref": "#/$defs/moduleEntry",
+          "required": [
+            "url",
+            "version",
+            "updatedAt",
+            "hash",
+            "totalCount"
+          ]
+        },
+        "daily": {
+          "$ref": "#/$defs/moduleEntry",
+          "required": [
+            "url",
+            "version",
+            "updatedAt",
+            "hash",
+            "currentMonth",
+            "count"
+          ]
+        },
+        "events": {
+          "$ref": "#/$defs/moduleEntry",
+          "required": [
+            "url",
+            "version",
+            "updatedAt",
+            "hash",
+            "count"
+          ]
+        },
+        "collections": {
+          "$ref": "#/$defs/moduleEntry",
+          "required": [
+            "url",
+            "version",
+            "updatedAt",
+            "hash",
+            "count"
+          ]
+        }
+      },
+      "required": [
+        "main",
+        "daily",
+        "events",
+        "collections"
+      ],
+      "additionalProperties": false,
+      "minProperties": 4,
+      "maxProperties": 4
+    }
+  },
+  "required": [
+    "schemaVersion",
+    "updatedAt",
+    "appConfig",
+    "modules"
+  ],
+  "additionalProperties": false,
+  "$defs": {
+    "moduleEntry": {
+      "type": "object",
+      "title": "模块入口",
+      "description": "各模块均含 url(相对路径)/version/updatedAt/hash；main 额外有 totalCount，daily 额外有 currentMonth 与 count，events/collections 额外有 count。",
+      "properties": {
+        "url": {
+          "$ref": "common.schema.json#/$defs/relPath"
+        },
+        "version": {
+          "$ref": "common.schema.json#/$defs/positiveInt"
+        },
+        "updatedAt": {
+          "$ref": "common.schema.json#/$defs/timestamp"
+        },
+        "hash": {
+          "$ref": "common.schema.json#/$defs/hash64"
+        },
+        "totalCount": {
+          "$ref": "common.schema.json#/$defs/positiveInt"
+        },
+        "count": {
+          "$ref": "common.schema.json#/$defs/positiveInt"
+        },
+        "currentMonth": {
+          "type": "string",
+          "pattern": "^\\d{6}$"
+        }
+      },
+      "required": [
+        "url",
+        "version",
+        "updatedAt",
+        "hash"
+      ],
+      "additionalProperties": false
+    }
+  }
+}

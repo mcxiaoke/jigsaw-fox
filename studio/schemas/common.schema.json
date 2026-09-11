@@ -1,0 +1,100 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "jigsaw-data 公共定义",
+  "description": "被各模块 schema 复用的公共定义：哈希、时间戳、相对路径、绝对地址、正整数等。",
+  "$defs": {
+    "hash64": {
+      "type": "string",
+      "title": "SHA-256 十六进制摘要",
+      "description": "64 位小写十六进制字符串。",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "timestamp": {
+      "type": "string",
+      "title": "ISO 8601 时间戳",
+      "description": "UTC 时间戳，格式如 2026-09-10T10:34:08.776694Z（微秒级）。",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?Z$"
+    },
+    "positiveInt": {
+      "type": "integer",
+      "title": "正整数",
+      "minimum": 1
+    },
+    "nonNegativeInt": {
+      "type": "integer",
+      "title": "非负整数",
+      "minimum": 0
+    },
+    "relPath": {
+      "type": "string",
+      "title": "相对路径",
+      "description": "发布通道内相对路径，禁止 http(s) 绝对地址与跨层回退。",
+      "pattern": "^(?!https?://).*$"
+    },
+    "absUrl": {
+      "type": "string",
+      "title": "绝对 URL",
+      "pattern": "^https?://[^\\s/$.?#].[^\\s]*$"
+    },
+    "moduleName": {
+      "type": "string",
+      "title": "模块名",
+      "enum": [
+        "main",
+        "daily",
+        "events",
+        "collections"
+      ]
+    },
+    "zipEntry": {
+      "type": "object",
+      "title": "ZIP 包条目（daily / events / collections 共用）",
+      "properties": {
+        "zipUrl": {
+          "$ref": "#/$defs/relPath"
+        },
+        "fileSizeBytes": {
+          "$ref": "#/$defs/nonNegativeInt"
+        },
+        "zipSha256": {
+          "$ref": "#/$defs/hash64"
+        },
+        "zipKey": {
+          "type": "string"
+        },
+        "zipUrls": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/absUrl"
+          },
+          "minItems": 1,
+          "uniqueItems": true
+        },
+        "revision": {
+          "$ref": "#/$defs/positiveInt"
+        },
+        "totalCount": {
+          "$ref": "#/$defs/positiveInt"
+        },
+        "createdAt": {
+          "$ref": "#/$defs/timestamp"
+        },
+        "updatedAt": {
+          "$ref": "#/$defs/timestamp"
+        }
+      },
+      "required": [
+        "zipUrl",
+        "fileSizeBytes",
+        "zipSha256",
+        "revision",
+        "totalCount",
+        "createdAt",
+        "updatedAt",
+        "zipKey",
+        "zipUrls"
+      ],
+      "additionalProperties": false
+    }
+  }
+}

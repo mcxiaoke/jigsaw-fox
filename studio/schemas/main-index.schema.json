@@ -1,0 +1,84 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "main/index.json",
+  "description": "主线模块索引：按批次（batch）分片，批次条目为纯路由（url 指向 batches/batch_XXX/index.json），仅含 batch 级别字段。",
+  "type": "object",
+  "properties": {
+    "module": {
+      "const": "main"
+    },
+    "version": {
+      "$ref": "common.schema.json#/$defs/positiveInt"
+    },
+    "totalCount": {
+      "$ref": "common.schema.json#/$defs/positiveInt"
+    },
+    "maxOrder": {
+      "$ref": "common.schema.json#/$defs/positiveInt"
+    },
+    "updatedAt": {
+      "$ref": "common.schema.json#/$defs/timestamp"
+    },
+    "items": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/batchRef"
+      },
+      "minItems": 1
+    }
+  },
+  "required": [
+    "module",
+    "version",
+    "totalCount",
+    "maxOrder",
+    "updatedAt",
+    "items"
+  ],
+  "additionalProperties": false,
+  "$defs": {
+    "batchRef": {
+      "type": "object",
+      "title": "批次引用",
+      "properties": {
+        "batchId": {
+          "type": "string",
+          "pattern": "^batch_\\d{3}$"
+        },
+        "version": {
+          "$ref": "common.schema.json#/$defs/positiveInt"
+        },
+        "count": {
+          "$ref": "common.schema.json#/$defs/positiveInt"
+        },
+        "startOrder": {
+          "$ref": "common.schema.json#/$defs/positiveInt"
+        },
+        "endOrder": {
+          "$ref": "common.schema.json#/$defs/positiveInt"
+        },
+        "createdAt": {
+          "$ref": "common.schema.json#/$defs/timestamp"
+        },
+        "updatedAt": {
+          "$ref": "common.schema.json#/$defs/timestamp"
+        },
+        "url": {
+          "type": "string",
+          "pattern": "^batches/batch_\\d{3}/index\\.json$"
+        }
+      },
+      "required": [
+        "batchId",
+        "version",
+        "count",
+        "startOrder",
+        "endOrder",
+        "createdAt",
+        "updatedAt",
+        "url"
+      ],
+      "additionalProperties": false
+    }
+  }
+}

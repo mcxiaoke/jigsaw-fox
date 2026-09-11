@@ -1,0 +1,95 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "main/batches/batch_XXX/index.json",
+  "description": "主线批次索引：图片条目含 id(order 全局)、url(images/###.webp)、tags、hash、fileSizeBytes。标签集合遵循项目 taxonomy（请随 data/taxonomy.json 同步）。",
+  "type": "object",
+  "properties": {
+    "batchId": {
+      "type": "string",
+      "pattern": "^batch_\\d{3}$"
+    },
+    "version": {
+      "$ref": "common.schema.json#/$defs/positiveInt"
+    },
+    "count": {
+      "$ref": "common.schema.json#/$defs/positiveInt"
+    },
+    "startOrder": {
+      "$ref": "common.schema.json#/$defs/positiveInt"
+    },
+    "endOrder": {
+      "$ref": "common.schema.json#/$defs/positiveInt"
+    },
+    "createdAt": {
+      "$ref": "common.schema.json#/$defs/timestamp"
+    },
+    "updatedAt": {
+      "$ref": "common.schema.json#/$defs/timestamp"
+    },
+    "items": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/imageEntry"
+      },
+      "minItems": 1,
+      "uniqueItems": true
+    }
+  },
+  "required": [
+    "batchId",
+    "version",
+    "count",
+    "startOrder",
+    "endOrder",
+    "createdAt",
+    "updatedAt",
+    "items"
+  ],
+  "additionalProperties": false,
+  "$defs": {
+    "imageEntry": {
+      "type": "object",
+      "title": "图片条目",
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^main:\\d+$"
+        },
+        "order": {
+          "$ref": "common.schema.json#/$defs/positiveInt"
+        },
+        "url": {
+          "type": "string",
+          "pattern": "^images/\\d{3}\\.webp$"
+        },
+        "tags": {
+          "type": "array",
+          "description": "标签数组：允许为空；非空时每一元素必须是 data/taxonomy.json 中 main_tags 的主标签 id（由 verify_data.py 动态读取 taxonomy.json 校验，schema 不硬编码枚举，避免双源漂移）",
+          "items": {
+            "type": "string"
+          },
+          "uniqueItems": true
+        },
+        "hash": {
+          "$ref": "common.schema.json#/$defs/hash64"
+        },
+        "addedAt": {
+          "$ref": "common.schema.json#/$defs/timestamp"
+        },
+        "fileSizeBytes": {
+          "$ref": "common.schema.json#/$defs/positiveInt"
+        }
+      },
+      "required": [
+        "id",
+        "order",
+        "url",
+        "tags",
+        "hash",
+        "addedAt",
+        "fileSizeBytes"
+      ],
+      "additionalProperties": false
+    }
+  }
+}
