@@ -76,6 +76,8 @@ class _SettingsPageState extends State<SettingsPage> {
     }
   }
 
+  // 清空图片缓存入口暂时隐藏期间，此方法暂无调用方；保留代码待入口重新开放
+  // ignore: unused_element
   Future<void> _clearThumbnailCache() async {
     if (_clearingCache) return;
     setState(() => _clearingCache = true);
@@ -343,32 +345,33 @@ class _SettingsPageState extends State<SettingsPage> {
               // Group 4: Data Management
               _buildSectionHeader(t.settings.sectionsData, palette, styles),
               _buildCardContainer([
-                ListTile(
-                  leading: Icon(
-                    PhosphorIconsBold.database,
-                    color: palette.info,
-                  ),
-                  title: Text(
-                    t.settings.dataCacheTitle,
-                    style: styles.bodyBold,
-                  ),
-                  subtitle: Text(
-                    t.settings.dataCacheDesc(size: _cacheSize),
-                    style: styles.caption,
-                  ),
-                  trailing: _clearingCache
-                      ? const SizedBox(
-                          width: 20,
-                          height: 20,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : TextButton.icon(
-                          onPressed: _clearThumbnailCache,
-                          icon: const Icon(PhosphorIconsBold.broom, size: 16),
-                          label: Text(t.settings.dataClear),
-                        ),
-                ),
-                Divider(height: 1, indent: 56, color: palette.divider),
+                // 清空图片缓存入口暂时隐藏（代码保留，待后续版本再开放入口）
+                // ListTile(
+                //   leading: Icon(
+                //     PhosphorIconsBold.database,
+                //     color: palette.info,
+                //   ),
+                //   title: Text(
+                //     t.settings.dataCacheTitle,
+                //     style: styles.bodyBold,
+                //   ),
+                //   subtitle: Text(
+                //     t.settings.dataCacheDesc(size: _cacheSize),
+                //     style: styles.caption,
+                //   ),
+                //   trailing: _clearingCache
+                //       ? const SizedBox(
+                //           width: 20,
+                //           height: 20,
+                //           child: CircularProgressIndicator(strokeWidth: 2),
+                //         )
+                //       : TextButton.icon(
+                //           onPressed: _clearThumbnailCache,
+                //           icon: const Icon(PhosphorIconsBold.broom, size: 16),
+                //           label: Text(t.settings.dataClear),
+                //         ),
+                // ),
+                // Divider(height: 1, indent: 56, color: palette.divider),
                 ListTile(
                   leading: Icon(
                     PhosphorIconsBold.fileText,
