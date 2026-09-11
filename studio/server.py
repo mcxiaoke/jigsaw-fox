@@ -74,6 +74,7 @@ from studio.exporters import get_exporter
 from studio.exporters.base import (
     EXPORT_IMAGE_LIMITS,
     MAX_EXPORT_IMAGES_PER_JOB,
+    normalize_pack_id,
     resolve_export_limit,
 )
 from studio.taxonomy import (
@@ -2057,13 +2058,19 @@ class StudioRequestHandler(BaseHTTPRequestHandler):
         """
         src = (qs.get("dir") or qs.get("srcDir") or [""])[0].strip()
         exp_type = (qs.get("type") or [""])[0].strip().lower()
-        pack_id = (qs.get("id") or [""])[0].strip()
-        if not src or not exp_type or not pack_id:
+        raw_id = (qs.get("id") or [""])[0].strip()
+        if not src or not exp_type or not raw_id:
             self._error("缺少参数：dir / type / id")
             return
         module = _EXPORT_MODULE_OF_TYPE.get(exp_type, exp_type)
         if module not in ("events", "collections"):
             self._error(f"check-pack-id 仅支持 event / collection，收到: {exp_type}")
+            return
+        # 与导出器同源规范化（补 event- / collection- 前缀，幂等）：
+        # 预检必须与 execute() 落到 index.json 的 id 完全一致，否则预检会漏判。
+        pack_id = normalize_pack_id(module, raw_id)
+        if not pack_id:
+            self._error("缺少参数：dir / type / id")
             return
         root = Path(src)
         if not root.is_dir():

@@ -244,6 +244,40 @@ const app = createApp({
     // Event/Collection 字段标签与必填校验（id / 英文标题，与后端 pack_exporter_base 同源强制）
     const packIdLabel = () =>
       exportType.value === "event" ? "活动 ID (eventId)" : "合集 ID (collectionId)";
+    // 包 ID 前缀：events / collections 的 zip 以扁平文件名上传到 Release，
+    // 无前缀时两者产物混在一起无法分辨归属。后端 normalize_pack_id 为同源权威实现
+    // （studio/exporters/base.py），前端只负责让用户看到并送出带前缀的最终 ID。
+    const PACK_ID_PREFIX = { event: "event-", collection: "collection-" };
+    const packIdPrefix = () => PACK_ID_PREFIX[exportType.value] || "";
+    // 规范化：去空白 + 幂等补前缀（用户粘贴 event-xxx 也不会变成 event-event-xxx）
+    const normalizePackId = (raw, type = exportType.value) => {
+      const prefix = PACK_ID_PREFIX[type] || "";
+      let s = String(raw ?? "").trim();
+      if (!prefix) return s;
+      while (s.toLowerCase().startsWith(prefix)) s = s.slice(prefix.length).trim();
+      return s ? prefix + s : "";
+    };
+    // 当前模块的「最终包 ID」（= index.json 的 id = zip / 封面基名）
+    const activePackId = () =>
+      normalizePackId(
+        exportType.value === "event"
+          ? exportConfig.value.eventId
+          : exportConfig.value.collectionId
+      );
+    // 输入框只保存前缀之后的部分（前缀由固定标签展示）：粘贴整串时自动剥掉前缀。
+    // 用显式 :value + @input 而非 v-model：剥离后必须同步回写 DOM，
+    // 否则输入框会残留被剥掉的前缀、与 model 不一致。
+    const onPackIdInput = (key, ev) => {
+      const el = ev && ev.target;
+      let s = el ? String(el.value ?? "") : String(exportConfig.value[key] ?? "");
+      const prefix = packIdPrefix();
+      if (prefix) {
+        while (s.toLowerCase().startsWith(prefix)) s = s.slice(prefix.length);
+      }
+      s = s.replace(/^\s+/, "");
+      exportConfig.value[key] = s;
+      if (el && el.value !== s) el.value = s;
+    };
     const exportConfig = ref({
       format: "webp",
       // main 默认数字序号命名，让「文件名 = order」，手动拖拽的顺序在产物上直接可见
@@ -273,9 +307,8 @@ const app = createApp({
     const packMissingField = () => {
       const t = exportType.value;
       if (t !== "event" && t !== "collection") return "";
-      const idVal =
-        t === "event" ? exportConfig.value.eventId : exportConfig.value.collectionId;
-      if (!String(idVal || "").trim()) return "id";
+      // 只需判断前缀之后的正文是否为空（前缀固定补全，无需用户填）
+      if (!activePackId().slice(packIdPrefix().length)) return "id";
       if (!exportConfig.value.title.trim()) return "title";
       return "";
     };
@@ -2161,9 +2194,8 @@ const app = createApp({
     const checkPackIdDuplicate = async () => {
       const t = exportType.value;
       if (t !== "event" && t !== "collection") return "";
-      const idVal = String(
-        t === "event" ? exportConfig.value.eventId : exportConfig.value.collectionId || ""
-      ).trim();
+      // 送带前缀的最终 ID，与 execute() 写入 index.json 的 id 完全同源
+      const idVal = activePackId();
       const dir = srcDir.value.trim();
       if (!idVal || !dir) return ""; // 缺 id 由必填校验处理；缺源目录由 runExport 兜底
       let res = null;
@@ -2445,8 +2477,9 @@ const app = createApp({
         startOrder: parseInt(exportConfig.value.startOrder || 1, 10),
         version: exportConfig.value.version,
         month: exportConfig.value.month,
-        eventId: exportConfig.value.eventId,
-        collectionId: exportConfig.value.collectionId,
+        // Event/Collection：送出带模块前缀的最终包 ID（后端 normalize_pack_id 幂等兜底）
+        eventId: normalizePackId(exportConfig.value.eventId, "event"),
+        collectionId: normalizePackId(exportConfig.value.collectionId, "collection"),
         title: exportConfig.value.title.trim(),
         titleZh: exportConfig.value.titleZh.trim(),
         description: exportConfig.value.description.trim(),
@@ -2713,6 +2746,10 @@ const app = createApp({
       exportModalOpen,
       exportType,
       exportConfig,
+      packIdLabel,
+      packIdPrefix,
+      activePackId,
+      onPackIdInput,
       hasDuplicateInExportScope,
       isExporting,
       exportLogs,

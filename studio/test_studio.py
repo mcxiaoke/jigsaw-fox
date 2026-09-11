@@ -46,6 +46,7 @@ from studio.core.tags_manager import (
     save_tags_file,
 )
 from studio.exporters import get_exporter
+from studio.exporters.base import normalize_pack_id
 from studio.server import DEFAULT_LOG_FILE, logger, setup_logger
 from studio.test_frontend import TestFrontendSmoke
 from studio.taxonomy import (
@@ -409,6 +410,13 @@ class TestCoreAndExporters(unittest.TestCase):
         self.assertIn("addedAt", b_data["items"][0])
         self.assertIn("createdAt", b_data)
         self.assertIn("updatedAt", b_data)
+        # 散图条目同样带 fileSizeBytes（= 转码产物真实大小，与 zip 类条目同口径）
+        for it in b_data["items"]:
+            self.assertIn("fileSizeBytes", it)
+            self.assertGreater(int(it["fileSizeBytes"]), 0)
+            img_p = batch_dir / it["url"]
+            self.assertTrue(img_p.is_file())
+            self.assertEqual(int(it["fileSizeBytes"]), img_p.stat().st_size)
         self.assertTrue((batch_dir / "images").is_dir())
         self.assertGreater(len(list((batch_dir / "images").glob("*"))), 0)
 
@@ -511,7 +519,8 @@ class TestCoreAndExporters(unittest.TestCase):
 
         self.assertTrue(result.success)
         self.assertEqual(result.count, 3)
-        event_zip = self.out_dir / "events" / "packs" / "test_event_2026.zip"
+        # 包 ID 自动补 event- 前缀：id 与 zip 基名一致（Release 扁平发布可辨识）
+        event_zip = self.out_dir / "events" / "packs" / "event-test_event_2026.zip"
         self.assertTrue(event_zip.exists())
 
         events_json = self.out_dir / "events" / "index.json"
@@ -519,7 +528,8 @@ class TestCoreAndExporters(unittest.TestCase):
         ev_data = json.loads(events_json.read_text(encoding="utf-8"))
         self.assertIn("items", ev_data)
         self.assertEqual(len(ev_data["items"]), 1)
-        self.assertEqual(ev_data["items"][0]["id"], "test_event_2026")
+        self.assertEqual(ev_data["items"][0]["id"], "event-test_event_2026")
+        self.assertEqual(ev_data["items"][0]["zipUrl"], "packs/event-test_event_2026.zip")
         self.assertEqual(ev_data["items"][0]["title"], "Spooky Halloween")
         self.assertEqual(ev_data["items"][0]["titleZh"], "万圣节狂欢")
         self.assertEqual(ev_data["items"][0]["desc"], "Halloween puzzles")
@@ -552,7 +562,7 @@ class TestCoreAndExporters(unittest.TestCase):
 
         self.assertTrue(result.success)
         self.assertEqual(result.count, 3)
-        col_zip = self.out_dir / "collections" / "packs" / "test_col_2026.zip"
+        col_zip = self.out_dir / "collections" / "packs" / "collection-test_col_2026.zip"
         self.assertTrue(col_zip.exists())
 
         cols_json = self.out_dir / "collections" / "index.json"
@@ -560,7 +570,10 @@ class TestCoreAndExporters(unittest.TestCase):
         col_data = json.loads(cols_json.read_text(encoding="utf-8"))
         self.assertIn("items", col_data)
         self.assertEqual(len(col_data["items"]), 1)
-        self.assertEqual(col_data["items"][0]["id"], "test_col_2026")
+        self.assertEqual(col_data["items"][0]["id"], "collection-test_col_2026")
+        self.assertEqual(
+            col_data["items"][0]["zipUrl"], "packs/collection-test_col_2026.zip"
+        )
         self.assertEqual(col_data["items"][0]["title"], "Masterpieces Vol 1")
         self.assertEqual(col_data["items"][0]["titleZh"], "名画系列第一辑")
         self.assertEqual(
@@ -628,7 +641,66 @@ class TestCoreAndExporters(unittest.TestCase):
             (self.out_dir / "events" / "index.json").read_text(encoding="utf-8")
         )
         self.assertEqual(len(ev_data["items"]), 1)
-        self.assertEqual(ev_data["items"][0]["id"], "dup_event_2026")
+        self.assertEqual(ev_data["items"][0]["id"], "event-dup_event_2026")
+
+
+class TestPackIdPrefix(unittest.TestCase):
+    """Event/Collection 包 ID 前缀规范化：zip 扁平发布到 Release 后靠前缀区分模块归属。
+
+    index.json 的 id / packs/{id}.zip / covers/{id}.webp 三者同基名，前缀必须
+    在「包 ID 出炉」这一处统一补齐，且幂等（粘贴整串不会变成 event-event-xxx）。
+    """
+
+    def test_normalize_pack_id_adds_module_prefix(self):
+        self.assertEqual(
+            normalize_pack_id("events", "halloween2026"), "event-halloween2026"
+        )
+        self.assertEqual(
+            normalize_pack_id("collections", "masterpieces_v1"),
+            "collection-masterpieces_v1",
+        )
+        # 首尾空白
+        self.assertEqual(
+            normalize_pack_id("events", "  halloween2026  "), "event-halloween2026"
+        )
+
+    def test_normalize_pack_id_is_idempotent(self):
+        # 已带前缀（含大小写差异）不重复叠加，统一回写标准前缀
+        self.assertEqual(
+            normalize_pack_id("events", "event-halloween2026"), "event-halloween2026"
+        )
+        self.assertEqual(
+            normalize_pack_id("events", "Event-halloween2026"), "event-halloween2026"
+        )
+        self.assertEqual(normalize_pack_id("events", "event-event-x"), "event-x")
+        self.assertEqual(
+            normalize_pack_id("collections", "COLLECTION-col_x"), "collection-col_x"
+        )
+
+    def test_normalize_pack_id_empty_cases(self):
+        # 只有前缀无正文 / 全空白 → 空串（视为缺 ID，由必填校验拦下）
+        self.assertEqual(normalize_pack_id("events", "event-"), "")
+        self.assertEqual(normalize_pack_id("collections", "   "), "")
+        self.assertEqual(normalize_pack_id("events", None), "")
+
+    def test_normalize_pack_id_keeps_unprefixed_modules(self):
+        # main / daily 不带前缀，原样返回（前缀表之外不受影响）
+        self.assertEqual(normalize_pack_id("main", " 101 "), "101")
+        self.assertEqual(normalize_pack_id("daily", "202609"), "202609")
+
+    def test_pack_exporter_validate_rejects_prefix_only_id(self):
+        """只填前缀（无正文）必须视为缺 ID，避免产出 event-.zip 这类脏产物。"""
+        exporter = get_exporter(
+            exp_type="event",
+            data={"eventId": "event-", "title": "X", "outputMode": "zip"},
+            src_p=Path(tempfile.gettempdir()),
+            out_p=Path(tempfile.gettempdir()),
+            http_base="http://test.local/data",
+            log_fn=lambda msg, lvl="info": None,
+        )
+        with self.assertRaises(ValueError) as ctx:
+            exporter.validate()
+        self.assertIn("必须指定唯一标识 ID", str(ctx.exception))
 
 
 class TestExportTracker(unittest.TestCase):
@@ -1509,7 +1581,10 @@ class TestDuplicateHandling(unittest.TestCase):
                 {
                     "module": "events",
                     "version": 2,
-                    "items": [{"id": "dup_event_api", "title": "Dup API Event"}],
+                    # 条目按带前缀的最终 ID 入库（与 execute() 写入 index.json 同源）
+                    "items": [
+                        {"id": "event-dup_event_api", "title": "Dup API Event"}
+                    ],
                 },
                 ensure_ascii=False,
             ),
@@ -1532,19 +1607,37 @@ class TestDuplicateHandling(unittest.TestCase):
                 with urllib.request.urlopen(url) as resp:
                     return json.loads(resp.read().decode("utf-8"))
 
+            # 只填后半段：预检必须自动补 event- 前缀，与实际写入的 id 对齐后命中
             dup = get_pack_id(
                 {"dir": str(self.src_dir), "type": "event", "id": "dup_event_api"}
             )
             self.assertTrue(dup["ok"])
             self.assertTrue(dup["exists"])
+            self.assertEqual(dup["id"], "event-dup_event_api")
             self.assertEqual(dup["existingTitle"], "Dup API Event")
             self.assertEqual(dup["module"], "events")
+
+            # 粘贴整串（已带前缀）：幂等，不叠加成 event-event- 前缀，同样命中
+            dup_full = get_pack_id(
+                {"dir": str(self.src_dir), "type": "event", "id": "event-dup_event_api"}
+            )
+            self.assertTrue(dup_full["exists"])
+            self.assertEqual(dup_full["id"], "event-dup_event_api")
 
             free = get_pack_id(
                 {"dir": str(self.src_dir), "type": "event", "id": "brand_new_id"}
             )
             self.assertTrue(free["ok"])
             self.assertFalse(free["exists"])
+            self.assertEqual(free["id"], "event-brand_new_id")
+
+            # collection 走 collection- 前缀，与 event 互不串味
+            col_free = get_pack_id(
+                {"dir": str(self.src_dir), "type": "collection", "id": "dup_event_api"}
+            )
+            self.assertTrue(col_free["ok"])
+            self.assertFalse(col_free["exists"])
+            self.assertEqual(col_free["id"], "collection-dup_event_api")
 
             # 仅支持 event / collection：其它类型按 400 拒绝
             with self.assertRaises(urllib.error.HTTPError) as ctx:

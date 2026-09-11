@@ -642,8 +642,17 @@
             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
               <div class="field-group">
                 <label>{{ exportType === 'event' ? '活动 ID (eventId)' : '合集 ID (collectionId)' }} <span style="color: #dc2626;">*必填</span></label>
-                <input class="field-input" type="text" v-model="exportConfig.eventId" v-if="exportType === 'event'" placeholder="halloween2026" />
-                <input class="field-input" type="text" v-model="exportConfig.collectionId" v-else placeholder="masterpieces_v1" />
+                <div class="pack-id-input">
+                  <span class="pack-id-prefix">{{ packIdPrefix() }}</span>
+                  <input class="field-input" type="text" :value="exportConfig.eventId" v-if="exportType === 'event'" placeholder="halloween2026" @input="onPackIdInput('eventId', $event)" />
+                  <input class="field-input" type="text" :value="exportConfig.collectionId" v-else placeholder="masterpieces_v1" @input="onPackIdInput('collectionId', $event)" />
+                </div>
+                <div style="font-size:12px;color:#6b7280;margin-top:4px;">
+                  前缀 <code>{{ packIdPrefix() }}</code> 自动补全，只需填后半段。最终 ID
+                  <code>{{ activePackId() || '—' }}</code> → 产物
+                  <code>{{ (activePackId() || 'xxx') + '.zip' }}</code>
+                  （zip 扁平发布到 Release，靠前缀区分 Event / Collection）
+                </div>
               </div>
               <div class="field-group">
                 <label>打包输出模式</label>
@@ -818,6 +827,13 @@
               <template v-if="exportType === 'main'">起始序号 <b>{{ exportConfig.startOrder }}</b> · </template>版本 <b>{{ exportConfig.version || ('自增 → ' + (suggestedVersion + 1)) }}</b> ·
               质量 <b>{{ exportConfig.quality }}%</b> · 排序 <b>{{ exportConfig.sortBy }}</b>
               <span v-if="previewStats.alreadyExported > 0" style="color:#b45309; font-weight:600; margin-left:8px;">含 {{ previewStats.alreadyExported }} 张已导出的历史图片</span>
+            </div>
+            <!-- Event/Collection：最终包 ID 与产物名（带固定前缀，确认无误再导出） -->
+            <div v-if="exportType === 'event' || exportType === 'collection'" style="margin-top:8px; padding:10px 14px; background:#f8fafc; border:1px solid #e2e8f0; border-radius:6px; font-size:13px; color:#334155;">
+              包 ID <b><code>{{ activePackId() || '—' }}</code></b> ·
+              ZIP <b><code>{{ (activePackId() || 'xxx') + '.zip' }}</code></b> ·
+              封面 <b><code>{{ (activePackId() || 'xxx') + '.webp' }}</code></b>
+              <div style="font-size:11px;color:#6b7280;margin-top:2px;">id 与产物同基名，Release 上靠 <code>{{ packIdPrefix() }}</code> 前缀区分模块归属。</div>
             </div>
             <!-- 单次导出数量上限：超出时禁止导出并给出分批指引 -->
             <div v-if="exportOverLimit" style="margin-top:10px; padding:10px 14px; background:#fef2f2; border:1px solid #fecaca; border-radius:6px; font-size:13px; color:#b91c1c;">

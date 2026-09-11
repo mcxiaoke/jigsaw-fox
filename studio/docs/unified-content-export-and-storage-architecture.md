@@ -32,7 +32,7 @@
 * **存储策略说明**：现代硬盘容量充沛，多留一份 release 镜像仅占数百 MB，普通标准文件拷贝跨磁盘、跨操作系统绝对兼容可靠。（*备注：同一 NTFS 磁盘分区下，未来可选 hardlink 作为纯性能优化项，首版直接采用标准稳健拷贝*）。
 
 ### 准则三：物理纯净命名与稳定逻辑 ID (Clean Filenames & Stable IDs)
-* **文件名保持人类可读**：采纳用户拍板的**方案 B**，物理文件名严禁添加 `-hash` 后缀，保持清爽直观（如 `images/0201.webp`、`zips/202609.zip`、`packs/halloween2026.zip`）；
+* **文件名保持人类可读**：采纳用户拍板的**方案 B**，物理文件名严禁添加 `-hash` 后缀，保持清爽直观（如 `images/201.webp`、`zips/202609.zip`、`packs/event-halloween2026.zip`）；
 * **Hash 属性化**：原图 SHA-256 与目标文件 SHA-256 仅作为元数据属性存放于 JSON 清单中；
 * **显式 ID 契约与防漂移保证**：
   * **清单显式下发 ID**：关卡唯一 Canonical ID（如 `main:201`、`daily:20260901`）由远端 Manifest 清单中显式下发，客户端**无条件以清单显式 `id` 为准**；
@@ -41,7 +41,7 @@
   * 每日日历内部文件名保持 `20260901.webp`，完美契合客户端正则。
 
 ### 准则四：不可变批次与确定性分卷 (Immutable Batches & Deterministic)
-* **发布即冻结**：所有生成的分卷清单（`batches/batch_xxx.json`）与图片、ZIP 归档，一旦发布，**终生只读、永不修改**；
+* **发布即冻结**：所有生成的分卷清单（`batches/{batchId}/index.json`）与图片、ZIP 归档，一旦发布，**终生只读、永不修改**；
 * **极速增量与 CDN 强缓存**：
   * 主线按不可变批次（Batches）持续递增；
   * 老客户端检测更新时，仅按差集拉取当次新增的批次 JSON（如 2KB），历史批次永久命中本地与 CDN 强缓存；
@@ -106,12 +106,15 @@
 │
 ├── main/                               <-- 【主线关卡模块】
 │   ├── index.json                      <-- [公开] 主线分卷索引指针
-│   ├── batches/                        <-- [公开] 不可变批次清单目录 (发布后永不修改)
-│   │   ├── batch_001.json              <-- 关卡 101~200 (相对路径引用 ../images/...)
-│   │   └── batch_002.json              <-- 关卡 201~230
-│   └── images/                         <-- [公开] 关卡 WebP 图片池 (纯数字命名，只追加不覆盖)
-│       ├── 0101.webp ~ 0200.webp
-│       └── 0201.webp ~ 0230.webp
+│   ├── batches/                        <-- [公开] 不可变批次目录 (发布后永不修改，自包含)
+│   │   ├── batch_001/                  <-- 关卡 101~200
+│   │   │   ├── index.json              <-- 本批次清单 (url 相对本目录)
+│   │   │   └── images/                 <-- 本批次图片池（与清单同级，故无 ../）
+│   │   │       └── 101.webp ~ 200.webp
+│   │   └── batch_002/                  <-- 关卡 201~230
+│   │       ├── index.json
+│   │       └── images/
+│   │           └── 201.webp ~ 230.webp
 │
 ├── daily/                              <-- 【每日挑战模块】
 │   ├── index.json                      <-- [公开] 日历月度总索引清单
@@ -122,17 +125,23 @@
 ├── events/                             <-- 【限时活动模块】(与 collections 高度同构)
 │   ├── index.json                      <-- [公开] 活动中心总索引清单 (状态/时间/包指针)
 │   ├── covers/                         <-- [公开] 活动封面缩略图
-│   │   └── halloween2026.webp
+│   │   └── event-halloween2026.webp    <-- 基名 = 包 ID（含 event- 前缀）
 │   └── packs/                          <-- [公开] 活动独立 ZIP 归档包 (不可变)
-│       └── halloween2026.zip
+│       └── event-halloween2026.zip     <-- 扁平上传 Release，靠前缀区分归属
 │
 └── collections/                        <-- 【主题图集模块】(与 events 高度同构)
     ├── index.json                      <-- [公开] 图集中心总索引清单 (价格/分类/包指针)
     ├── covers/                         <-- [公开] 图集封面缩略图
-    │   └── masterpieces_v1.webp
+    │   └── collection-masterpieces_v1.webp
     └── packs/                          <-- [公开] 图集独立 ZIP 归档包 (不可变)
-        └── masterpieces_v1.zip
+        └── collection-masterpieces_v1.zip
 ```
+
+> **包 ID 前缀（2026-09-11 起）**：`events` 一律 `event-` 开头、`collections` 一律
+> `collection-` 开头。前缀在导出器内统一补齐（`studio/exporters/base.py`
+> 的 `normalize_pack_id`，幂等），`index.json` 的 `id` 与 `packs/{zip}`、`covers/{cover}`
+> 三者同基名——这些 zip 会以扁平文件名上传到 Release，无前缀无法分辨模块归属。
+> 导出面板只让用户填前缀之后的正文，前缀作为固定标签展示。
 
 ---
 
@@ -198,7 +207,9 @@
       "count": 100,
       "startOrder": 101,
       "endOrder": 200,
-      "url": "batches/batch_001.json"
+      "createdAt": "2026-09-05T21:45:00Z",
+      "updatedAt": "2026-09-05T21:45:00Z",
+      "url": "batches/batch_001/index.json"
     },
     {
       "batchId": "batch_002",
@@ -206,14 +217,19 @@
       "count": 30,
       "startOrder": 201,
       "endOrder": 230,
-      "url": "batches/batch_002.json"
+      "createdAt": "2026-09-05T21:50:00Z",
+      "updatedAt": "2026-09-05T21:50:00Z",
+      "url": "batches/batch_002/index.json"
     }
   ]
 }
 ```
 
-#### B. 不可变分卷：`out/main/batches/batch_002.json`
-> **RFC 3986 路径纠正**：由于当前批次文件位于 `main/batches/` 下，引用平级上一层的图片资源时，**必须严格写为 `../images/0201.webp`**；容器键统一为 `items`：
+#### B. 不可变分卷（自包含批次目录）：`out/main/batches/batch_002/index.json`
+> **批次目录自包含**（2026-09-10 起）：一个批次 = 一个自包含单元，清单与图片同目录，
+> 撤销/发布/备份以批为边界。因此批次清单位于 `batches/{batchId}/index.json`、
+> 图片位于**同级** `images/` 下，`url` 写为 `images/201.webp`（**没有 `../`**）。
+> 详见 `main-batch-dir-selfcontained-and-time-fields-design-20260910.md`。
 
 ```json
 {
@@ -222,63 +238,91 @@
   "count": 30,
   "startOrder": 201,
   "endOrder": 230,
+  "createdAt": "2026-09-05T21:45:00Z",
+  "updatedAt": "2026-09-05T21:45:00Z",
   "items": [
     {
       "id": "main:201",
       "order": 201,
-      "url": "../images/0201.webp",
+      "url": "images/201.webp",
       "tags": ["landscape", "forest"],
       "hash": "8f481e19582e...",
+      "fileSizeBytes": 184320,
       "addedAt": "2026-09-05T21:45:00Z"
     },
     ...
     {
       "id": "main:230",
       "order": 230,
-      "url": "../images/0230.webp",
+      "url": "images/230.webp",
       "tags": ["animal"],
       "hash": "3a7b9c12def0...",
+      "fileSizeBytes": 152100,
       "addedAt": "2026-09-05T21:45:00Z"
     }
   ]
 }
 ```
 
+> **字段口径**
+> - `fileSizeBytes`：**转码后产物**的真实字节数（2026-09-11 起随散图条目写入，
+>   此前只有 zip 类条目带该字段）。
+> - `url` 命名：普通导出走 `rename` 规则（`sequence` = `{order:03d}.{fmt}`，如 `201.webp`）；
+>   补丁修订走 `{order:04d}-r{rev}.{fmt}`（如 `0201-r2.webp`）——两者位数不同（3 位 vs 4 位），
+>   是历史实现差异，客户端一律以 `url` 为准，不得自行拼名。
+> - 目录内实际文件：`out/main/batches/batch_002/images/201.webp`。
+
 #### C. 独立补丁批次与单关修图规范 (Patch Batches)
 正常导出永远是**纯追加新关卡**，绝不进行覆盖判断。对于极低频的**单关修图/调色替换**（如美工重修第 201 关），系统通过独立的“追加式补丁批次”实现，依然严格遵循**不可变哲学（WORM）**：
 
 1. **原文件永不覆盖**：
-   * 原图 `images/0201.webp` 物理保持不变，继续享受 CDN 永久强缓存；
-   * 新图输出为修订版本 `images/0201-r2.webp`（通过账本历史动态递增修订位 `-r{rev}`，99%+ 关卡仍是纯序号）；
+   * 原图 `batches/batch_002/images/201.webp` 物理保持不变，继续享受 CDN 永久强缓存；
+   * 新图输出为修订版本 `batches/batch_003/images/0201-r2.webp`（通过账本历史动态递增修订位 `-r{rev}`）；
 2. **索引中追加补丁批次条目**：
    * 在 `main/index.json` 的 `items` 中追加一条标记为 `"patch": true` 的补丁分卷：
    ```json
    {
      "batchId": "batch_003",
      "version": 103,
-     "url": "batches/batch_003.json",
+     "count": 1,
+     "startOrder": 201,
+     "endOrder": 201,
+     "createdAt": "2026-09-05T22:00:00Z",
+     "updatedAt": "2026-09-05T22:00:00Z",
+     "url": "batches/batch_003/index.json",
      "patch": true,
      "levelsAffected": [201]
    }
    ```
 3. **补丁分卷内容自闭环**：
-   * `main/batches/batch_003.json` 只包含被修改的关卡条目，逻辑 ID 保持稳定：
+   * `main/batches/batch_003/index.json` 只包含被修改的关卡条目（图片落在**本批次自己的**
+     `images/` 下），逻辑 ID 保持稳定：
    ```json
    {
      "batchId": "batch_003",
+     "version": 103,
+     "count": 1,
+     "startOrder": 201,
+     "endOrder": 201,
+     "createdAt": "2026-09-05T22:00:00Z",
+     "updatedAt": "2026-09-05T22:00:00Z",
      "patch": true,
+     "levelsAffected": [201],
      "items": [
        {
          "id": "main:201",
          "order": 201,
-         "url": "../images/0201-r2.webp",
+         "url": "images/0201-r2.webp",
+         "tags": ["landscape", "forest"],
          "hash": "e5f6a7b8c9d0...",
+         "fileSizeBytes": 190210,
          "addedAt": "2026-09-05T22:00:00Z"
        }
      ]
    }
    ```
-4. **秒级零风险回滚**：由于 `0201.webp` 物理从未被删除，若线上发现新图有问题，只需再发一个补丁批次重新指回 `../images/0201.webp`，1 秒完成平滑回滚！
+   * 账本侧该条记录会带 `supersedes`（指向被取代的 recordId）与 `revision: 2`。
+4. **秒级零风险回滚**：由于 `batches/batch_002/images/201.webp` 物理从未被删除，若线上发现新图有问题，只需再发一个补丁批次把该关卡重新指回 `images/201.webp`，1 秒完成平滑回滚！
 
 ---
 
@@ -335,8 +379,7 @@
   "updatedAt": "2026-09-05T21:45:00Z",
   "items": [
     {
-      "id": "halloween2026",
-      "eventId": "halloween2026",
+      "id": "event-halloween2026",
       "title": "Halloween Mystery",
       "desc": "Explore pumpkins and spooky puzzles",
       "titleZh": "万圣节奇妙夜",
@@ -345,8 +388,8 @@
       "displayOrder": 1,
       "startTime": "2026-10-25T00:00:00Z",
       "endTime": "2026-11-05T23:59:59Z",
-      "coverUrl": "covers/halloween2026.webp",
-      "zipUrl": "packs/halloween2026.zip",
+      "coverUrl": "covers/event-halloween2026.webp",
+      "zipUrl": "packs/event-halloween2026.zip",
       "fileSizeBytes": 12582912,
       "zipSha256": "5e6f7a8b...",
       "totalCount": 15,
@@ -364,8 +407,7 @@
   "updatedAt": "2026-09-05T21:45:00Z",
   "items": [
     {
-      "id": "masterpieces_v1",
-      "collectionId": "masterpieces_v1",
+      "id": "collection-masterpieces_v1",
       "title": "World Masterpieces",
       "desc": "Classic paintings from Van Gogh, Monet and more",
       "titleZh": "世界名画经典",
@@ -374,8 +416,8 @@
       "displayOrder": 1,
       "category": "art",
       "unlockCoins": 300,
-      "coverUrl": "covers/masterpieces_v1.webp",
-      "zipUrl": "packs/masterpieces_v1.zip",
+      "coverUrl": "covers/collection-masterpieces_v1.webp",
+      "zipUrl": "packs/collection-masterpieces_v1.zip",
       "fileSizeBytes": 15728640,
       "zipSha256": "6a7b8c9d...",
       "totalCount": 20,
@@ -406,7 +448,7 @@
       "logicalId": "main:201",
       "order": 201,
       "batchId": "batch_002",
-      "targetFile": "main/images/0201.webp",
+      "targetFile": "main/images/201.webp",
       "targetHash": "8f481e19582e...",
       "revision": 1,
       "supersedes": null,
@@ -427,7 +469,7 @@
    * 原图若被允许跨模块复用（如先导出至 `daily`，后运营二次确认复用至 `main`），在列表中各记一条独立记录，绝不发生相互覆盖；
 2. **修图与回滚全流程审计**：
    * 补丁修图时追加一条新记录（如 `revision: 2, supersedes: "rec_0001", targetFile: "main/images/0201-r2.webp"`）；
-   * 若发生回滚，再追加一条记录（如 `revision: 3, supersedes: "rec_0002", targetFile: "main/images/0201.webp"`），所有变动在账本中完整留痕；
+   * 若发生回滚，再追加一条记录（如 `revision: 3, supersedes: "rec_0002", targetFile: "main/images/201.webp"`），所有变动在账本中完整留痕；
 3. **内存哈希加速**：
    * Studio 启动加载账本时，在内存中动态构建 `sourceHash -> List[Record]` 与 `logicalId -> Record` 倒排索引，查重检测仍然是毫秒级 `O(1)`。
 
@@ -478,13 +520,16 @@
           │     └─ 若为 "https://cdn2.other-storage.com/main/index.json" (跨 CDN 绝对路径)
           │          └─► 直接使用: "https://cdn2.other-storage.com/main/index.json" (模块 Base URI)
           │
-          └── [Level 2] 模块内部资源 (以 main/index.json 或 batches/*.json 为自身 Base 递归解析)
-                ├─ batches[].url: "batches/batch_001.json"
-                │    └─► 相对模块 Base 解析: "{moduleBaseUri}/batches/batch_001.json"
+          └── [Level 2] 模块内部资源 (以 main/index.json 为自身 Base 递归解析)
+                ├─ batches[].url: "batches/batch_001/index.json"
+                │    └─► 相对模块 Base 解析: "{moduleBaseUri}/batches/batch_001/index.json" (批次 Base URI)
                 │
-                └─ levels[].url: "../images/0201.webp"
-                     └─► 相对批次 Base 解析: "{batchBaseUri}/../images/0201.webp" 
-                          == "{moduleBaseUri}/images/0201.webp" ✅ (RFC 3986 标准行为)
+                └─ levels[].url: "images/201.webp"
+                     └─► 相对**批次** Base 解析: "{batchBaseUri}/images/201.webp"
+                          == "{moduleBaseUri}/batches/batch_002/images/201.webp" ✅ (RFC 3986 标准行为)
+
+> 批次 Base URI 是**批次清单所在目录**（`.../main/batches/batch_002/`），不是 `batches/`；
+> 正因如此 2026-09-10 自包含改造后 `url` 不再需要 `../`。
 ```
 
 ---
@@ -594,7 +639,7 @@ flowchart TD
        if (url == null || url.trim().isEmpty) return null;
 
        // 核心修复：优先使用清单显式下发的稳定 id (如 main:201)，坚决杜绝从 URL 动态反推
-       // 若根据补丁 URL ("../images/0201-r2.webp") 反推会得出错误 ID ("main:0201-r2") 产生孪生关卡
+       // 若根据补丁 URL ("images/0201-r2.webp") 反推会得出错误 ID ("main:0201-r2") 产生孪生关卡
        final canonicalId = raw['id']?.toString() ??
            CanonicalId.fromSource(
              sourceModule: CanonicalId.prefixMain,
@@ -659,13 +704,13 @@ rclone sync ./out remote:puzzles-cdn
 | :--- | :--- | :--- |
 | `manifest.json` | `no-cache, must-revalidate` + ETag | 根指针，秒级感知模块更新 |
 | `*/index.json` | `max-age=60, must-revalidate` + ETag | 模块分卷指针，短缓存 |
-| `main/batches/*.json` | `public, max-age=31536000, immutable` | 不可变批次分卷，发布后永不修改 |
-| `main/images/*.webp` | `public, max-age=31536000, immutable` | 关卡图片，追加写入 |
+| `main/batches/*/index.json` | `public, max-age=31536000, immutable` | 不可变批次分卷，发布后永不修改 |
+| `main/batches/*/images/*.webp` | `public, max-age=31536000, immutable` | 关卡图片，追加写入 |
 | `*/zips/*.zip`, `*/packs/*.zip` | `public, max-age=31536000, immutable` | 月度与活动归档整包，只读不可变 |
 
 ### 7.2 未来面向 GitHub / GitHub Pages / Releases 部署说明
 未来若将游戏内容资产部署至 GitHub 环境（如 GitHub Pages、GitHub Releases 或 Raw CDN）：
-1. **统一相对路径自适应**：Studio 输出的 `manifest.json`、`index.json` 和 `batch_xxx.json` 内部一律采用标准 RFC 3986 相对路径（如 `main/index.json`、`../images/0101.webp`），因此不论 Base URL 挂载在顶级域名（`https://cdn.example.com/`）还是 GitHub Pages 的二级子路径（`https://user.github.io/jigsaw-assets/`），均由客户端以当前 Manifest 自身的 Base URI 为准递归解析，**无需修改 Studio 导出的任何内部文件内容**；
+1. **统一相对路径自适应**：Studio 输出的 `manifest.json`、`index.json` 和批次清单内部一律采用标准 RFC 3986 相对路径（如 `main/index.json`、`batches/batch_002/index.json`、`images/201.webp`），因此不论 Base URL 挂载在顶级域名（`https://cdn.example.com/`）还是 GitHub Pages 的二级子路径（`https://user.github.io/jigsaw-assets/`），均由客户端以当前 Manifest 自身的 Base URI 为准递归解析，**无需修改 Studio 导出的任何内部文件内容**；
 2. **大文件与分流由部署脚本接管**：若超过单文件大小限制，或需将 ZIP / WebP 自动托管至 GitHub Releases 或第三方对象存储，URL Base 注入与路径映射均由独立的 CI/CD 自动化部署脚本处理，Studio 核心构建与相对路径契约保持规范一致。
 
 ---
@@ -677,7 +722,7 @@ rclone sync ./out remote:puzzles-cdn
 2. **Phase 2: 共享包导出引擎 (`studio/exporters/pack_exporter_base.py`)**
    * 抽取 Events 与 Collections 的共享流水线（Staging 转码、不可变 ZIP 压缩、纯净封面输出）；
 3. **Phase 3: 四大导出器改造与对齐**
-   * `MainExporter`：输出至 `.studio/release/main/`（自包含、不可变 `batches/`、纯数字命名 `0201.webp`、相对路径引用 `../images/`）；
+   * `MainExporter`：输出至 `.studio/release/main/`（自包含 `batches/{batchId}/` 含同级 `images/`、纯数字命名 `201.webp`、清单内相对引用 `images/201.webp`）；
    * `DailyExporter`：输出至 `.studio/release/daily/`；
    * `EventExporter` / `CollectionExporter`：基于基类输出至 `.studio/release/events/` 与 `collections/`；
    * `ManifestManager`：统一生成纯净根 `manifest.json`；

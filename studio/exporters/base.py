@@ -143,6 +143,40 @@ def export_meta(data: dict[str, Any]) -> dict[str, Any]:
 
 
 # ---------------------------------------------------------------------------
+# Event/Collection 包 ID 前缀（Release 扁平发布可辨识）
+# ---------------------------------------------------------------------------
+# events / collections 的 zip 会以**扁平文件名**上传到 Release 资产列表
+# （见 scripts/deploy/export_data.py 把 zipUrl 改写为 RELEASE_PREFIX/{文件名}），
+# 没有前缀时两者的产物在同一 Release 里完全无法分辨归属。
+# 前缀同时进入 index.json 的 id，保证「id == zip 基名 == cover 基名」，客户端
+# 路由主键与产物文件始终一一对应（validate_out.py 亦按 id 校验收尾）。
+PACK_ID_PREFIXES: dict[str, str] = {
+    "events": "event-",
+    "collections": "collection-",
+}
+
+
+def pack_id_prefix(module: str) -> str:
+    """返回指定导出器 module 的包 ID 前缀（无前缀的模块返回空串）。"""
+    return PACK_ID_PREFIXES.get((module or "").strip().lower(), "")
+
+
+def normalize_pack_id(module: str, raw: Any) -> str:
+    """规范化包 ID：去首尾空白 + 幂等补齐模块前缀。
+
+    幂等：输入已带前缀（含大小写差异）时不重复叠加，统一回写为标准前缀，
+    避免产生 event-event-xxx 这类脏 ID。仅前缀无正文时返回空串（视为缺 ID）。
+    """
+    s = str(raw or "").strip()
+    prefix = pack_id_prefix(module)
+    if not prefix:
+        return s
+    while s.lower().startswith(prefix):
+        s = s[len(prefix):].strip()
+    return f"{prefix}{s}" if s else ""
+
+
+# ---------------------------------------------------------------------------
 # 单次导出数量上限（业务硬约束）
 # ---------------------------------------------------------------------------
 # 游戏侧一次内容更新（main / daily / event / collection）的绝对量不宜过大，

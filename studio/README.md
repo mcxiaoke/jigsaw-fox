@@ -218,4 +218,11 @@ python studio/test_frontend.py
 # 3. 游戏客户端健全性检查 (针对主工程)
 flutter analyze
 flutter test
+
+# 4. 已导出内容目录体检（发布前自检：文件存在 / 字段完整 / 哈希 / 大小 / zip 条目数 / manifest）
+python -m studio.verify_data F:\Pictures\JigsawGame\Output
+python -m studio.verify_data F:\Pictures\JigsawGame\Output F:\Pictures\JigsawGame\jigsaw-data  # 多目录
+python -m studio.verify_data F:\Pictures\JigsawGame\Output --json   # 机器可读（CI 用，退出码非 0 即有问题）
 ```
+`verify_data` 只读不写，输入内容根（或含 `release/` 的发布仓库根，会自动下钻），
+按目录输出简洁统计；有任何不一致时退出码为 1。

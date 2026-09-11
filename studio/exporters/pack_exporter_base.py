@@ -36,6 +36,7 @@ from studio.exporters.base import (
     assert_max_images,
     assert_min_long,
     export_meta,
+    normalize_pack_id,
     resolve_excluded,
     resolve_normalize,
     resolve_quality,
@@ -50,7 +51,9 @@ class PackExporterBase(BaseExporter):
     id_field: str = ""  # 由子类定义: "eventId" 或 "collectionId"
 
     def validate(self) -> None:
-        pack_id = (self.data.get("id") or self.data.get(self.id_field) or "").strip()
+        pack_id = normalize_pack_id(
+            self.module, self.data.get("id") or self.data.get(self.id_field)
+        )
         if not pack_id:
             raise ValueError(f"必须指定唯一标识 ID (id 或 {self.id_field})")
         title = (self.data.get("title") or "").strip()
@@ -65,7 +68,14 @@ class PackExporterBase(BaseExporter):
         pass
 
     def execute(self) -> ExportResult:
-        pack_id = (self.data.get("id") or self.data.get(self.id_field) or "").strip()
+        # 包 ID 统一在此规范化：补模块前缀（event- / collection-），使
+        # index.json 的 id、packs/{id}.zip、covers/{id}.webp 三者同源一致。
+        # 前缀由 normalize_pack_id 幂等保证，前端已带前缀时不会重复叠加。
+        pack_id = normalize_pack_id(
+            self.module, self.data.get("id") or self.data.get(self.id_field)
+        )
+        if not pack_id:
+            raise ValueError(f"必须指定唯一标识 ID (id 或 {self.id_field})")
         title = (self.data.get("title") or "").strip() or pack_id
         desc = (self.data.get("description") or self.data.get("desc") or "").strip()
         title_zh = (self.data.get("titleZh") or "").strip()

@@ -197,6 +197,23 @@ button, input, select, textarea { font: inherit; color: inherit; }
 }
 .field-input:focus { border-color: var(--primary); box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.12); }
 
+/* Event/Collection 包 ID 输入：模块前缀固定展示，用户只填后半段 */
+.pack-id-input { display: flex; align-items: stretch; }
+.pack-id-input .pack-id-prefix {
+  display: inline-flex;
+  align-items: center;
+  padding: 0 8px;
+  border: 1px solid var(--line);
+  border-right: 0;
+  border-radius: var(--radius-sm) 0 0 var(--radius-sm);
+  background: #eef2f7;
+  color: #475569;
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  font-size: 13px;
+  white-space: nowrap;
+}
+.pack-id-input .field-input { border-radius: 0 var(--radius-sm) var(--radius-sm) 0; }
+
 /* 主工作区分栏 (针对大屏与 4K 显示器优化) */
 .studio-workspace {
   display: flex;

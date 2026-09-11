@@ -425,6 +425,12 @@ class MainExporter(BaseExporter):
             logical_id = pl["logical_id"]
             img_name = pl["img_name"]
             img_hash = res.get("dst_hash") or ""
+            # 产物体积：zip 类条目一直有 fileSizeBytes（客户端据此预估下载量/磁盘占用），
+            # 散图条目此前缺失。取转码后的真实产物大小（不是源图大小）。
+            # dst_size 由并行 worker 直接返回；极端回退路径下 stat 兜底。
+            out_size = int(res.get("dst_size") or 0)
+            if out_size <= 0 and pl["dst"].exists():
+                out_size = pl["dst"].stat().st_size
 
             batch_levels.append(
                 {
@@ -433,6 +439,7 @@ class MainExporter(BaseExporter):
                     "url": f"images/{img_name}",
                     "tags": pl["tags"],
                     "hash": img_hash,
+                    "fileSizeBytes": out_size,
                     "addedAt": now_str,
                 }
             )
