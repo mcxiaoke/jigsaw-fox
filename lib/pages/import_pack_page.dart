@@ -29,11 +29,6 @@ class _ImportPackPageState extends State<ImportPackPage> {
   bool _isImporting = false;
   String _statusMessage = '';
 
-  static const String _sampleTestUrl =
-      'http://192.168.1.118/data/www/game/test/packs/cyberpunk_with_manifest.zip';
-  static const String _samplePureUrl =
-      'http://192.168.1.118/data/www/game/test/packs/cats_pure_images.zip';
-
   @override
   void dispose() {
     _localPathController.dispose();
@@ -275,54 +270,6 @@ class _ImportPackPageState extends State<ImportPackPage> {
                 }
                 setState(() {});
               },
-            ),
-            const SizedBox(height: 8),
-
-            // Quick-fill test URL chips
-            Wrap(
-              spacing: 8,
-              children: [
-                ActionChip(
-                  avatar: Icon(
-                    PhosphorIconsRegular.lightning,
-                    size: 14,
-                    color: palette.warning,
-                  ),
-                  label: Text(
-                    t.importPack.testChip1,
-                    style: const TextStyle(fontSize: 11.5),
-                  ),
-                  backgroundColor: palette.warning.withValues(alpha: 0.12),
-                  onPressed: _isImporting
-                      ? null
-                      : () {
-                          setState(() {
-                            _networkUrlController.text = _sampleTestUrl;
-                            _localPathController.clear();
-                          });
-                        },
-                ),
-                ActionChip(
-                  avatar: Icon(
-                    PhosphorIconsRegular.lightning,
-                    size: 14,
-                    color: palette.info,
-                  ),
-                  label: Text(
-                    t.importPack.testChip2,
-                    style: const TextStyle(fontSize: 11.5),
-                  ),
-                  backgroundColor: palette.info.withValues(alpha: 0.12),
-                  onPressed: _isImporting
-                      ? null
-                      : () {
-                          setState(() {
-                            _networkUrlController.text = _samplePureUrl;
-                            _localPathController.clear();
-                          });
-                        },
-                ),
-              ],
             ),
             const SizedBox(height: 36),
 

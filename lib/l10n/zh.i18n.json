@@ -235,9 +235,7 @@
     "methodLocal": "方式一：从本地文件选择",
     "browseHint": "点击右侧按钮选择 .zip 文件",
     "browse": "浏览...",
-    "methodNetwork": "方式二：输入网络下载地址",
-    "testChip1": "测试包: 赛博霓虹",
-    "testChip2": "测试包: 纯图片猫咪",
+"methodNetwork": "方式二：输入网络下载地址",
     "startImport": "开始导入并解析"
   },
   "background": {

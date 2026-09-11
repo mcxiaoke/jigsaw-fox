@@ -838,12 +838,6 @@ class Translations$importPack$en {
 	/// en: 'Method 2: Enter a download URL'
 	String get methodNetwork => 'Method 2: Enter a download URL';
 
-	/// en: 'Test pack: Cyber Neon'
-	String get testChip1 => 'Test pack: Cyber Neon';
-
-	/// en: 'Test pack: Cat Images'
-	String get testChip2 => 'Test pack: Cat Images';
-
 	/// en: 'Start Import'
 	String get startImport => 'Start Import';
 }
@@ -2319,8 +2313,6 @@ extension on Translations {
 			'importPack.browseHint' => 'Tap the button on the right to pick a .zip file',
 			'importPack.browse' => 'Browse...',
 			'importPack.methodNetwork' => 'Method 2: Enter a download URL',
-			'importPack.testChip1' => 'Test pack: Cyber Neon',
-			'importPack.testChip2' => 'Test pack: Cat Images',
 			'importPack.startImport' => 'Start Import',
 			'background.title' => 'Change Puzzle Background',
 			'background.tableLabel' => ({required Object index}) => 'Table ${index}',

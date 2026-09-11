@@ -235,9 +235,7 @@
     "methodLocal": "Method 1: Choose a local file",
     "browseHint": "Tap the button on the right to pick a .zip file",
     "browse": "Browse...",
-    "methodNetwork": "Method 2: Enter a download URL",
-    "testChip1": "Test pack: Cyber Neon",
-    "testChip2": "Test pack: Cat Images",
+"methodNetwork": "Method 2: Enter a download URL",
     "startImport": "Start Import"
   },
   "background": {

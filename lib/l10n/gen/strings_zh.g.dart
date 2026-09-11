@@ -427,8 +427,6 @@ class _Translations$importPack$zh extends Translations$importPack$en {
 	@override String get browseHint => '点击右侧按钮选择 .zip 文件';
 	@override String get browse => '浏览...';
 	@override String get methodNetwork => '方式二：输入网络下载地址';
-	@override String get testChip1 => '测试包: 赛博霓虹';
-	@override String get testChip2 => '测试包: 纯图片猫咪';
 	@override String get startImport => '开始导入并解析';
 }
 
@@ -1415,8 +1413,6 @@ extension on TranslationsZh {
 			'importPack.browseHint' => '点击右侧按钮选择 .zip 文件',
 			'importPack.browse' => '浏览...',
 			'importPack.methodNetwork' => '方式二：输入网络下载地址',
-			'importPack.testChip1' => '测试包: 赛博霓虹',
-			'importPack.testChip2' => '测试包: 纯图片猫咪',
 			'importPack.startImport' => '开始导入并解析',
 			'background.title' => '更换拼图背景',
 			'background.tableLabel' => ({required Object index}) => '桌板 ${index}',
