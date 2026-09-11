@@ -29,6 +29,13 @@ import sys
 import zipfile
 from pathlib import Path
 
+if hasattr(sys.stdout, "reconfigure"):
+    try:
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+        sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
+
 # 需要核对的模块（缺省按此顺序探测，实际以目录内是否含 index.json 为准）
 MODULES = ("main", "daily", "events", "collections")
 

@@ -30,6 +30,7 @@ assetmap.py — 多平台 assets 的 key↔URL 映射唯一逻辑（发布脚本
 from __future__ import annotations
 
 import json
+import os
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -76,7 +77,8 @@ class Channel:
 
 # ----------------------------- 加载 -----------------------------
 def load_channels(path: Path | None = None) -> list[Channel]:
-    p = path or CHANNELS_JSON
+    env_path = os.environ.get("JIGSAW_CHANNELS_JSON")
+    p = path or (Path(env_path) if env_path else CHANNELS_JSON)
     doc = json.loads(Path(p).read_text(encoding="utf-8"))
     prefix_sets = doc.get("prefixSets", {})
     channels: list[Channel] = []
@@ -107,7 +109,9 @@ def load_channels(path: Path | None = None) -> list[Channel]:
 
 
 def load_doc(path: Path | None = None) -> dict:
-    return json.loads(Path(path or CHANNELS_JSON).read_text(encoding="utf-8"))
+    env_path = os.environ.get("JIGSAW_CHANNELS_JSON")
+    target = Path(path or (env_path if env_path else CHANNELS_JSON))
+    return json.loads(target.read_text(encoding="utf-8"))
 
 
 # ----------------------------- key 空间工具 -----------------------------

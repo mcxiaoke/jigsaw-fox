@@ -1,18 +1,19 @@
-# jigsaw-data 素材发布工具（v2）
+# jigsaw-data 素材发布工具（v3）
 
-> 方案原文：[`docs/assets-publish-workflow-v2-20260910.md`](../../docs/assets-publish-workflow-v2-20260910.md)
+> 方案原文：[`scripts/publish/PUBLISH_WORKFLOW_V3_DESIGN.md`](PUBLISH_WORKFLOW_V3_DESIGN.md) ｜ 前序：[`docs/assets-publish-workflow-v2-20260910.md`](../../docs/assets-publish-workflow-v2-20260910.md)  
 > 本目录是**唯一的素材发布编排入口**，日常发布全部通过 `publish.py` 完成。
 
 ## 1. 设计原则
 
 | # | 原则 | 说明 |
 |---|---|---|
-| 1 | **同构目录，零路径改写** | Studio 导出的 `Output` 结构就是远端托管结构。`zipUrl` 恒为相对路径，严禁改写成绝对地址。 |
-| 2 | **预演前缀隔离** | R2 上 `_stage/`（测试预演）与 `release/`（正式生产）两个顶层前缀，先预演验证，通过后再秒级 promote。 |
-| 3 | **相对 URL + Release 兜底镜像** | `zipUrl` 相对、随环境自洽解析；`zipUrls` 只放 Gitee/GitHub Release 的**绝对**地址作容灾备用。 |
-| 4 | **备源先上，主源再切** | 先上传两端 Release 附件，最后才把 R2 切到生产，杜绝容灾真空期。 |
-| 5 | **单 master 分支 + 固定移动标签 `assets`** | zip 只追加不覆盖，不需要频繁建分支和 tag。 |
-| 6 | **最小凭证依赖** | JSON 缓存由 Cloudflare Cache Rule 绕过，流水线不需要 CF API Token。 |
+| 1 | **本地测试先行** | **“本地全绿方可触网，预演全绿方可晋产”**。向云端发送任何字节前，必须在本地离线 100% 通过全部数据与客户端模型体检。 |
+| 2 | **发布状态机强约束** | 状态严格单调推进（`INIT -> PREPARED -> LOCAL_VERIFIED -> STAGED -> ... -> PROMOTED`），强制核验前置状态，彻底杜绝越级 promote。 |
+| 3 | **同构目录，零路径改写** | Studio 导出的 `Output` 结构就是远端托管结构。`zipUrl` 恒为相对路径，严禁改写成绝对地址。 |
+| 4 | **预演前缀隔离** | R2 上 `_stage/`（测试预演）与 `release/`（正式生产）两个顶层前缀，先预演验证，通过后再秒级 promote。 |
+| 5 | **相对 URL + Release 兜底镜像** | `zipUrl` 相对、随环境自洽解析；`zipUrls` 只放 Gitee/GitHub Release 的**绝对**地址作容灾备用。 |
+| 6 | **备源先上，主源再切** | 先上传两端 Release 附件，最后才把 R2 切到生产，杜绝容灾真空期。 |
+| 7 | **全场景自愈与防死锁** | `prepare` 随时作为全新迭代入口重置状态，支持原地重试续传、`reset` 清理复位与 `--force` 紧急运维逃生通道。 |
 
 ---
 
@@ -73,13 +74,15 @@ PY=C:/Home/Develop/venv/Scripts/python.exe
 
 | 子命令 | 作用 | 常用选项 |
 |---|---|---|
-| `prepare` | 白名单拷贝 + 注入 `zipUrls` + 重算模块 hash + 本地硬门禁 + 变化检测 | `--force`（忽略无变化拦截） |
-| `stage` | 同步本地 `release/` 到 R2 `_stage/` | `--dry-run` |
-| `verify` | 巡检 | `--env stage\|prod`、`--include-mirrors`、`--keys-only` |
-| `release` | 上传新增 zip 到 GitHub / Gitee Release | `--dry-run`、`--force` |
-| `promote` | R2 桶内服务端复制 `_stage` → `release`，完成后自动跑 `verify --env prod` | `--dry-run` |
-| `all` | 按安全时序跑 `prepare → stage → verify(stage) → release → promote` | `--dry-run` |
-| `git` | 提交并推送 `jigsaw-data` 的 json/webp | `-m <message>` |
+| `prepare` | 白名单拷贝 + 注入 `zipUrls` + 重算模块 hash + 硬门禁 + 变化检测（状态 -> PREPARED） | `--force`（忽略无变化拦截） |
+| `test` (别名 `check-local`) | **本地全量深度门禁**（`studio.verify_data` 静态体检 + WebP 解码核验 + Flutter 客户端模型契约） | `--skip-flutter`、`-v`、`--force` |
+| `stage` | 同步本地 `release/` 到 R2 `_stage/`（需通过 test 门禁） | `--dry-run`、`--force` |
+| `verify` | 巡检（JSON sha256 + 图片/zip 可达性） | `--env stage\|prod`、`--dry-run`、`--include-mirrors`、`--force` |
+| `release` | 上传新增 zip 到 GitHub / Gitee Release（需 stage 巡检合格） | `--dry-run`、`--force` |
+| `promote` | R2 桶内服务端复制 `_stage` → `release`，随后自动跑 `verify --env prod`（严禁越级调用） | `--dry-run`、`--force` |
+| `all` | **按安全时序跑全套**（`prepare → test → stage → verify(stage) → release → promote`） | `--dry-run`（只读模拟演练）、`--skip-flutter`、`--force`（忽略无变化/状态拦截） |
+| `reset` | **重置发布会话**：清理进行中状态回 `INIT`，解除任何异常锁定 | — |
+| `git` | 提交并推送 `jigsaw-data` 的 json/webp（需 promote 成功后执行） | `-m <message>`、`--dry-run`、`--force` |
 | `purge` | 手动清 Cloudflare 边缘缓存（仅应急） | 需 `CF_API_TOKEN` / `CF_ZONE_ID` |
 
 > `git` 故意**不并入** `all`：Git 提交需要人工确认后再执行。
@@ -96,33 +99,33 @@ PY=C:/Home/Develop/venv/Scripts/python.exe
 "$PY" scripts/publish/publish.py prepare
 ```
 
-依次完成：
+### Step 2 · 本地全量体检（核心前置门禁，0 网络）
 
-1. **白名单拷贝**：清空 `jigsaw-data/release/`，只拷贝 `manifest.json`、`main/`、`daily/`、`events/`、`collections/`，任何以 `.` 开头的路径（含 `Output/.git`）一律排除。
-2. **源文件数守卫**：白名单内少于 200 个文件即中断（当前基线 213），防止误拷贝空目录。
-3. **`zipUrls` 注入**：在 `daily/events/collections/index.json` 的每个条目上补 `zipUrls`（Gitee + GitHub Release 绝对地址）与 `zipKey`（保留的兼容字段），**`zipUrl` 保持相对路径不变**。
-4. **重算模块 hash**：按 Studio 同算法（index.json 字节流的 sha256）回写 `manifest.json`。
-5. **硬门禁**：zip 全部本地存在、basename 无重名（Release 扁平命名安全）、`main.version` 递增校验。
-6. **变化检测**：与上一次已完成发布做文件级比对，打印变化清单；若完全无变化且远端已同步，直接中止（详见 §7）。
+```bash
+"$PY" scripts/publish/publish.py test
+```
 
-### Step 2 · 同步到预演区
+依次执行三层深度验证：
+1. **静态完整性体检**（`studio.verify_data`）：文件引用存在、字段完整、内容哈希、ZIP CRC32 坏块排查、条目数等于 `totalCount`、Manifest 自洽性、`taxonomy.json` 标签白名单；
+2. **WebP 解码核验**：PIL 全量实测解码所有 WebP 图片，杜绝空图与坏图；
+3. **Flutter 客户端契约测试**：`flutter test test/logic/jigsawdata_local_verify_test.dart`，用真实 App 数据模型反序列化本地产物，断言 0 异常。
+
+> ❌ **只要本地测试有任何一项不通过，流水线严禁向远端推任何数据，远端 0 污染。**
+
+### Step 3 · 同步到预演区与巡检
 
 ```bash
 "$PY" scripts/publish/publish.py stage
 "$PY" scripts/publish/publish.py verify --env stage
 ```
 
-巡检内容：7 个 JSON 逐字节比对 sha256、192 张 WebP 可达、14 个 zip 主地址可达。
-
-### Step 3 · 备源附件先行就位
+### Step 4 · 备源附件先行就位
 
 ```bash
 "$PY" scripts/publish/publish.py release
 ```
 
-按文件名幂等判断，只上传缺失的 zip。**若判定需强制重传（见 §6.2）则加 `--force`**。
-
-### Step 4 · 生产生效
+### Step 5 · 生产生效
 
 ```bash
 "$PY" scripts/publish/publish.py promote
@@ -130,15 +133,13 @@ PY=C:/Home/Develop/venv/Scripts/python.exe
 
 R2 桶内 Server-Side Copy，数据不经过本地，秒级完成；随后自动执行 `verify --env prod`。
 
-### Step 5 · Git 备份推送
+### Step 6 · Git 备份推送
 
 ```bash
 "$PY" scripts/publish/publish.py git -m "publish assets 20260911"
 ```
 
-推送到 `origin` 与 `gitee` 两个远端。`*.zip` 已被 `.gitignore` 排除。
-
-### Step 6 · 三通道全量终检
+### Step 7 · 三通道全量终检
 
 ```bash
 "$PY" scripts/publish/verify_channels.py --env prod --include-mirrors
@@ -170,9 +171,10 @@ R2 桶内 Server-Side Copy，数据不经过本地，秒级完成；随后自动
 
 **基线从哪来**（按序尝试，无需额外维护任何文件）：
 
-1. 本地工作副本 `jigsaw-data/release/manifest.json` —— 它就是上次发布的产物，`prepare` 在**清空该目录之前**先读取它；
-2. 远端 R2 生产区的 `release/manifest.json` —— 本地副本缺失时兜底（新机器克隆、工作副本被清）；
-3. 都拿不到 -> 视为首次发布。
+1. `.publish/latest.json` —— 上一次真正**成功完成发布**的归档快照，杜绝被前一次失败的半成品误导；
+2. 远端 R2 生产区的 `release/manifest.json` —— 本地台账缺失时兜底（新机器克隆、工作副本被清）；
+3. 本地工作副本 `jigsaw-data/release/manifest.json` —— 降级兼容；
+4. 都拿不到 -> 视为首次发布。
 
 > `jigsaw-data/release/manifest.json` 在 Step 5 会随 `git push` 提交入库，因此基线天然持久化且可跨机共享，**不需要任何独立的基线文件**。
 
@@ -259,10 +261,10 @@ curl -sS -H "Authorization: token $GITEE_TOKEN" \
 |---|---|
 | 无变化 + 远端已同步 | **中止**（退出码 3），提示"没有需要发布的变更"，需 `--force` 才继续 |
 | 无变化 + 远端不一致/被清空 | 允许继续（用于把远端补全量内容） |
-| 无变化 + `--force` | 放行 |
+| 无变化 + `--force` | 放行（`all --force` 会透传该选项至 `prepare` 强制推进） |
 | 无历史台账 | 按首次发布处理，不拦截 |
 
-`all` 遇到退出码 3 会打印「判定无需发布」并正常结束（返回 0），不算失败。
+`all` 遇到退出码 3 会打印「判定无需发布」并正常结束（返回 0），不算失败；若确需全链路强制重新发布（如重发 Release 附件），请使用 `python publish.py all --force`。
 
 ### 7.4 关于 main.version
 
@@ -328,11 +330,12 @@ flutter test test/logic/jigsawdata_three_channel_verify_test.dart \
 
 | 文件 | 状态 | 说明 |
 |---|---|---|
-| `publish.py` | 在用 | v2 唯一编排入口 |
+| `publish.py` | 在用 | v3 唯一编排入口（内置发布状态机与各子命令门禁） |
+| `check_local.py` | 在用 | 本地离线全量体检门禁（`studio.verify_data` + WebP解码 + Flutter反序列化） |
 | `gitee_release.py` | 在用 | Gitee OpenAPI v5 附件增量上传（跳过已有 + 800MB 软告警） |
-| `verify_channels.py` | 在用 | 本地契约 + 网络巡检 |
+| `verify_channels.py` | 在用 | 远端网络可达性与一致性巡检 |
 | `channels.json` | 在用 | 唯一真源：路径、releaseTag、三通道定义 |
-| `ledger.py` | 在用 | 文件级指纹、变化清单、`.publish/` 台账读写与滚动归档 |
+| `ledger.py` | 在用 | 流水线状态机、文件级指纹、变化清单、`.publish/` 台账读写与归档 |
 | `assetmap.py` | 在用 | key ↔ URL 映射、zipKey/is_zip_key/冲突检测等工具 |
 | `normalize.py` | **遗留** | v1 的 `zipKey` 注入逻辑，v2 已并入 `prepare`，保留仅供对照 |
 | `gitee_publish.py` | **遗留** | 存在 `sys.environ` 拼写 bug 且无跳过逻辑，已由 `gitee_release.py` 取代 |

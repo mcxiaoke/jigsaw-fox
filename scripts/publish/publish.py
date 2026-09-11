@@ -51,9 +51,17 @@ import time
 import urllib.request
 from pathlib import Path
 
+if hasattr(sys.stdout, "reconfigure"):
+    try:
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+        sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
+
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 from assetmap import load_channels, load_doc  # noqa: E402
+import check_local  # noqa: E402
 import ledger  # noqa: E402
 
 # C:/Home/Projects/jigsawpuzzle  （scripts/publish/publish.py -> 上溯三级）
@@ -244,41 +252,27 @@ def _gate_zips_exist(publish_root: Path, doc: dict) -> list[str]:
     return referenced
 
 
-def _read_prev_main_version(doc: dict, publish_root: Path) -> int | None:
+def _read_prev_main_version(doc: dict, repo: Path, publish_root: Path) -> int | None:
     """读取「上一版已发布」的 main.version，作为递增门禁的基线。
 
     优先级：
-      1. 本地工作副本 <publishRoot>/manifest.json —— 它就是上一次发布的产物，
-         且 Step 5（publish.py git）会把它提交进 Git，**天然持久化、可跨机共享**，
-         因此不需要任何额外的基线文件；
-      2. 远端 R2 生产区 manifest.json —— 兜底本地副本缺失的场景（如新机器克隆、
-         工作副本被清）；
-      3. 都没有 -> None，视为首次发布。
-
-    ⚠️ 必须在 prepare 清空 publishRoot 之前调用，否则读到的就是本次新产物了。
+      1. .publish/latest.json —— 上一次真正成功完成发布的快照，
+         杜绝被上一次失败的半成品误导；
+      2. 远端 R2 生产区 manifest.json —— 兜底本地副本与台账缺失的场景；
+      3. 本地工作副本 <publishRoot>/manifest.json —— 降级兼容；
+      4. 都没有 -> None，视为首次发布。
     """
-    mf = publish_root / "manifest.json"
-    if mf.exists():
-        try:
-            modules = json.loads(mf.read_text(encoding="utf-8")).get("modules") or {}
-            return int((modules.get("main") or {}).get("version") or 0)
-        except Exception:
-            print("[prepare][warn] 本地上一版 manifest.json 解析失败，改读远端基线")
-
     d = doc["dist"]
-    url = (f"{d['r2Host'].rstrip('/')}/{d['releasePrefix']}/"
-           f"{d.get('manifestName', 'manifest.json')}")
-    try:
-        req = urllib.request.Request(url, headers={"User-Agent": "jigsaw-publish/2.0"})
-        with urllib.request.urlopen(req, timeout=10) as r:
-            if r.status == 200:
-                modules = json.loads(r.read().decode("utf-8")).get("modules") or {}
-                v = int((modules.get("main") or {}).get("version") or 0)
-                print(f"[prepare] 本地无上一版，取远端基线 main.version={v} ({url})")
-                return v
-    except Exception:
-        pass
-    return None
+    url = (
+        f"{d['r2Host'].rstrip('/')}/{d['releasePrefix']}/"
+        f"{d.get('manifestName', 'manifest.json')}"
+    )
+    v = ledger.load_baseline_main_version(repo, r2_url=url)
+    if v is not None:
+        print(f"[prepare] 读取上一版基线 main.version={v}")
+    else:
+        print("[prepare] 无历史已发布基线（首次发布或首次建台账），放行")
+    return v
 
 
 def _gate_main_version(publish_root: Path, prev: int | None) -> None:
@@ -287,7 +281,7 @@ def _gate_main_version(publish_root: Path, prev: int | None) -> None:
     客户端 MainContentPipeline 有 `remoteVersion <= _localVersion` 的短路：
     版本不涨，已装机 App 完全不会重新拉取内容。故此处做门禁提前拦住。
 
-      prev is None -> 首次发布（或有任何历史基线），放行
+      prev is None -> 首次发布（或无历史基线），放行
       cur  >  prev -> 通过
       cur == prev  -> 告警放行（允许同版本重复 prepare 重试）
       cur  <  prev -> 中断（版本回退；确需回滚请见 README §8，回滚版本号要更高）
@@ -327,8 +321,8 @@ def do_prepare(args) -> int:
         )
     print(f"[prepare] 源文件 {len(keys)} 个（目录总文件 {total_all} 个，已排除隐藏路径）")
 
-    # 基线必须在覆盖 publishRoot 之前读取（此时它还是"上一版已发布"的产物）
-    prev_version = _read_prev_main_version(doc, publish_root)
+    # 基线优先从已归档台账或生产区读取
+    prev_version = _read_prev_main_version(doc, _repo, publish_root)
 
     # 源指纹：同样要在覆盖前算，此时 dist 内还是未被改动的原始导出产物
     src_fp, src_count = ledger.source_fingerprint(dist, keys)
@@ -413,10 +407,39 @@ def do_prepare(args) -> int:
     return 0
 
 
+# ------------------------------------------------------------------ test
+def do_test(args) -> int:
+    doc = load_doc()
+    _, repo, publish_root = _ctx(doc)
+    ledger.assert_pipeline_state(
+        repo,
+        ("PREPARED", "LOCAL_VERIFIED"),
+        "test",
+        force=getattr(args, "force", False) or getattr(args, "dry_run", False),
+    )
+    skip_flutter = getattr(args, "skip_flutter", False)
+    verbose = getattr(args, "verbose", False)
+    rc = check_local.run_all_local_checks(
+        publish_root,
+        repo_root=REPO_ROOT,
+        skip_flutter=skip_flutter,
+        verbose=verbose,
+    )
+    if rc == 0 and not getattr(args, "dry_run", False):
+        ledger.set_pipeline_state(repo, "LOCAL_VERIFIED", {"test": {"rc": 0}})
+    return rc
+
+
 # ------------------------------------------------------------------ stage
 def do_stage(args) -> int:
     doc = load_doc()
-    publish_root = _ctx(doc)[2]
+    _, repo, publish_root = _ctx(doc)
+    ledger.assert_pipeline_state(
+        repo,
+        ("LOCAL_VERIFIED", "STAGED"),
+        "stage",
+        force=getattr(args, "force", False) or getattr(args, "dry_run", False),
+    )
     d = doc["dist"]
     if not publish_root.exists():
         raise SystemExit(f"[stage][FATAL] publishRoot 不存在，请先运行 prepare: {publish_root}")
@@ -438,6 +461,10 @@ def do_stage(args) -> int:
     )
     if not args.dry_run:
         _note(doc, "stage", {"rc": rc, "files": n, "target": target})
+        if rc == 0:
+            ledger.set_pipeline_state(
+                repo, "STAGED", {"stage": {"rc": rc, "files": n, "target": target}}
+            )
     return rc
 
 
@@ -447,7 +474,24 @@ def _verify_cmd(env: str) -> list:
 
 
 def do_verify(args) -> int:
-    return _run(_verify_cmd(args.env))
+    doc = load_doc()
+    _, repo, _ = _ctx(doc)
+    if args.env == "stage":
+        ledger.assert_pipeline_state(
+            repo,
+            ("STAGED", "STAGE_VERIFIED"),
+            "verify(stage)",
+            force=getattr(args, "force", False) or getattr(args, "dry_run", False),
+        )
+    if getattr(args, "dry_run", False):
+        print(f"[verify] DRY-RUN：模拟针对 {args.env} 巡检通过")
+        return 0
+    rc = _run(_verify_cmd(args.env))
+    if rc == 0 and args.env == "stage":
+        ledger.set_pipeline_state(
+            repo, "STAGE_VERIFIED", {"verify_stage": {"rc": 0}}
+        )
+    return rc
 
 
 # ------------------------------------------------------------------ release
@@ -509,7 +553,13 @@ def _gitee_release(publish_root: Path, doc: dict, force: bool = False) -> int:
 
 def do_release(args) -> int:
     doc = load_doc()
-    publish_root = _ctx(doc)[2]
+    _, repo, publish_root = _ctx(doc)
+    ledger.assert_pipeline_state(
+        repo,
+        ("STAGE_VERIFIED", "RELEASED"),
+        "release",
+        force=getattr(args, "force", False) or getattr(args, "dry_run", False),
+    )
     if not publish_root.exists():
         raise SystemExit(f"[release][FATAL] publishRoot 不存在，请先运行 prepare: {publish_root}")
     if args.dry_run:
@@ -529,6 +579,16 @@ def do_release(args) -> int:
     if rc1 or rc2:
         print(f"[release][warn] github rc={rc1} gitee rc={rc2}")
         return 1
+    ledger.set_pipeline_state(
+        repo, "RELEASED", {
+            "release": {
+                "rc": 0,
+                "githubRc": rc1,
+                "giteeRc": rc2,
+                "zips": [z.name for z in _release_zips(publish_root)],
+            }
+        }
+    )
     print("[release] 备源附件已全部就位")
     return 0
 
@@ -536,6 +596,13 @@ def do_release(args) -> int:
 # ------------------------------------------------------------------ promote
 def do_promote(args) -> int:
     doc = load_doc()
+    _, repo, _ = _ctx(doc)
+    ledger.assert_pipeline_state(
+        repo,
+        ("RELEASED", "PROMOTED"),
+        "promote",
+        force=getattr(args, "force", False) or getattr(args, "dry_run", False),
+    )
     d = doc["dist"]
     src = f"{d['r2Remote']}/{d['stagePrefix']}"
     dst = f"{d['r2Remote']}/{d['releasePrefix']}"
@@ -552,22 +619,33 @@ def do_promote(args) -> int:
     _note(doc, "promote", {"rc": rc, "verifyRc": vrc})
     if vrc:
         return vrc
+    ledger.set_pipeline_state(
+        repo, "PROMOTED", {"promote": {"rc": rc, "verifyRc": vrc}}
+    )
     # 全流程完成 -> 台账归档
-    repo = _ctx(doc)[1]
     run_id, _ = _current_run(repo)
     if run_id:
-        latest = ledger.finish_run(repo, run_id)
+        latest = ledger.finish_run(repo, run_id, state="PROMOTED")
         print(f"[ledger] 本次发布已归档 -> {latest}")
         print(f"[ledger] 摘要已追加 -> {ledger.pub_dir(repo) / 'history.ndjson'}")
     return 0
 
 
-# ------------------------------------------------------------------ all / git / purge
+# ------------------------------------------------------------------ all / git / reset / purge
 def do_all(args) -> int:
     steps = (
-        ("prepare", do_prepare, None),
+        ("prepare", do_prepare, args),
+        ("test", do_test, args),
         ("stage", do_stage, args),
-        ("verify(stage)", do_verify, argparse.Namespace(env="stage")),
+        (
+            "verify(stage)",
+            do_verify,
+            argparse.Namespace(
+                env="stage",
+                force=args.force,
+                dry_run=getattr(args, "dry_run", False),
+            ),
+        ),
         ("release", do_release, args),
         ("promote", do_promote, args),
     )
@@ -584,11 +662,30 @@ def do_all(args) -> int:
     return 0
 
 
+def do_reset(_args) -> int:
+    doc = load_doc()
+    _, repo, _ = _ctx(doc)
+    ok = ledger.reset_run(repo)
+    if ok:
+        print("[reset] ✅ 已重置当前发布会话，状态已恢复为 INIT。")
+        return 0
+    return 1
+
+
 def do_git(args) -> int:
     """提交并推送 jigsaw-data 的 json/webp（zip 被 .gitignore 排除）。需显式调用。"""
     doc = load_doc()
-    repo = _ctx(doc)[1]
+    _, repo, _ = _ctx(doc)
+    ledger.assert_pipeline_state(
+        repo,
+        ("PROMOTED", "FINISHED"),
+        "git",
+        force=getattr(args, "force", False) or getattr(args, "dry_run", False),
+    )
     msg = args.message or f"publish assets {time.strftime('%Y%m%d')}"
+    if getattr(args, "dry_run", False):
+        print(f"[git] DRY-RUN：模拟提交与推送 (commit: '{msg}')")
+        return 0
     if _run(["git", "-C", str(repo), "add", "-A"]):
         return 1
     rc = _run(["git", "-C", str(repo), "commit", "-m", msg])
@@ -597,6 +694,10 @@ def do_git(args) -> int:
     for remote in ("origin", "gitee"):
         if _run(["git", "-C", str(repo), "push", remote, "master"]):
             return 1
+    ledger.set_pipeline_state(repo, "FINISHED", {"git": {"rc": 0}})
+    run_id, _ = _current_run(repo)
+    if run_id:
+        ledger.finish_run(repo, run_id, state="FINISHED")
     return 0
 
 
@@ -622,33 +723,47 @@ def do_purge(_args) -> int:
 
 # ------------------------------------------------------------------ main
 def main() -> int:
-    ap = argparse.ArgumentParser(prog="publish.py", description="jigsaw-data v2 素材发布编排器")
+    ap = argparse.ArgumentParser(prog="publish.py", description="jigsaw-data v3 素材发布编排器")
     sub = ap.add_subparsers(dest="cmd", required=True)
 
     pp = sub.add_parser("prepare", help="白名单拷贝 + 注入 zipUrls + 重算 hash + 硬门禁 + 变化检测")
     pp.add_argument("--force", action="store_true",
                     help="忽略「内容与上次发布完全一致」的拦截，强制继续")
 
+    tp = sub.add_parser("test", aliases=["check-local"], help="本地全量深度体检门禁（静态体检 + WebP解码 + Flutter反序列化）")
+    tp.add_argument("--skip-flutter", action="store_true", help="跳过 flutter test 步骤")
+    tp.add_argument("-v", "--verbose", action="store_true", help="打印全部问题明细")
+    tp.add_argument("--force", action="store_true", help="强制忽略状态门禁")
+
     sp = sub.add_parser("stage", help="rclone sync -> r2:_stage")
     sp.add_argument("--dry-run", action="store_true")
+    sp.add_argument("--force", action="store_true", help="强制忽略状态门禁")
 
     sv = sub.add_parser("verify", help="巡检")
     sv.add_argument("--env", choices=("stage", "prod"), default="prod")
+    sv.add_argument("--dry-run", action="store_true")
+    sv.add_argument("--force", action="store_true", help="强制忽略状态门禁")
 
     sr = sub.add_parser("release", help="上传新增 zip 到 GitHub / Gitee Release")
     sr.add_argument("--dry-run", action="store_true")
     sr.add_argument("--force", action="store_true",
-                    help="忽略远端已有附件，强制重传全部 zip"
-                         "（用于内容重导但文件名未变的场景，否则主备内容会分裂）")
+                    help="忽略远端已有附件/状态门禁，强制重传全部 zip")
 
     spp = sub.add_parser("promote", help="R2 服务端 _stage -> release 并巡检生产")
     spp.add_argument("--dry-run", action="store_true")
+    spp.add_argument("--force", action="store_true", help="强制忽略状态门禁")
 
-    sa = sub.add_parser("all", help="按安全时序跑全套")
+    sa = sub.add_parser("all", help="按安全时序跑全套 (prepare -> test -> stage -> verify -> release -> promote)")
     sa.add_argument("--dry-run", action="store_true")
+    sa.add_argument("--skip-flutter", action="store_true", help="跳过 flutter test")
+    sa.add_argument("--force", action="store_true", help="强制忽略无变化/状态拦截")
+
+    sub.add_parser("reset", help="重置当前发布会话，清理进行中状态回 INIT")
 
     sg = sub.add_parser("git", help="提交并推送 jigsaw-data")
+    sg.add_argument("--dry-run", action="store_true")
     sg.add_argument("--message", "-m", default=None)
+    sg.add_argument("--force", action="store_true", help="强制忽略状态门禁")
 
     sub.add_parser("purge", help="手动清 Cloudflare 缓存（应急）")
 
@@ -657,13 +772,21 @@ def main() -> int:
         args.dry_run = False
     if not hasattr(args, "force"):
         args.force = False
+    if not hasattr(args, "skip_flutter"):
+        args.skip_flutter = False
+    if not hasattr(args, "verbose"):
+        args.verbose = False
+
     handlers = {
         "prepare": do_prepare,
+        "test": do_test,
+        "check-local": do_test,
         "stage": do_stage,
         "verify": do_verify,
         "release": do_release,
         "promote": do_promote,
         "all": do_all,
+        "reset": do_reset,
         "git": do_git,
         "purge": do_purge,
     }
