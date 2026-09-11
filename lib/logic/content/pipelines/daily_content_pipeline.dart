@@ -176,8 +176,24 @@ class DailyContentPipeline {
     String yyyyMm, {
     DateTime? overrideToday,
   }) {
-    final monthDir = Directory(p.join(dailyStorageBaseDir, yyyyMm));
-    if (!monthDir.existsSync()) return const [];
+    final cleanMm = yyyyMm.replaceAll('-', '');
+    final dashMm = cleanMm.length == 6
+        ? '${cleanMm.substring(0, 4)}-${cleanMm.substring(4, 6)}'
+        : yyyyMm;
+    var monthDir = Directory(p.join(dailyStorageBaseDir, yyyyMm));
+    if (!monthDir.existsSync()) {
+      final altDir = Directory(p.join(dailyStorageBaseDir, cleanMm));
+      if (altDir.existsSync()) {
+        monthDir = altDir;
+      } else {
+        final altDir2 = Directory(p.join(dailyStorageBaseDir, dashMm));
+        if (altDir2.existsSync()) {
+          monthDir = altDir2;
+        } else {
+          return const [];
+        }
+      }
+    }
 
     final now = overrideToday ?? DateTime.now();
     final todayStr =
@@ -228,8 +244,46 @@ class DailyContentPipeline {
     return items;
   }
 
-  /// 获取今日的每日挑战关卡 (若已就绪)
-  PuzzleLevelItem? getTodayLevel({DateTime? overrideToday}) {
+  /// 获取本地所有已就绪且关卡非空的月份列表 (格式为 YYYYMM，按降序排列)
+  List<String> getLocalReadyMonths() {
+    final baseDir = Directory(dailyStorageBaseDir);
+    if (!baseDir.existsSync()) return const [];
+
+    final monthSet = <String>{};
+    try {
+      final subDirs = baseDir.listSync().whereType<Directory>().toList();
+      for (final dir in subDirs) {
+        final dirName = p.basename(dir.path);
+        if (RegExp(r'^\d{6}$').hasMatch(dirName) ||
+            RegExp(r'^\d{4}-\d{2}$').hasMatch(dirName)) {
+          final normalized = dirName.replaceAll('-', '');
+          if (getLevelsForMonth(normalized).isNotEmpty) {
+            monthSet.add(normalized);
+          }
+        }
+      }
+    } catch (e, st) {
+      AppLogger.daily.warning('getLocalReadyMonths failed', e, st);
+    }
+    return monthSet.toList()..sort((a, b) => b.compareTo(a));
+  }
+
+  /// 获取所有本地实际已就绪的历史每日挑战关卡 (按日期升序排序)
+  List<PuzzleLevelItem> getAllLocalHistoryLevels({DateTime? overrideToday}) {
+    final readyMonths = getLocalReadyMonths();
+    if (readyMonths.isEmpty) return const [];
+
+    final result = <PuzzleLevelItem>[];
+    for (final month in readyMonths) {
+      final levels = getLevelsForMonth(month, overrideToday: overrideToday);
+      result.addAll(levels);
+    }
+    result.sort((a, b) => (a.dailyDate ?? '').compareTo(b.dailyDate ?? ''));
+    return result;
+  }
+
+  /// 获取当天官方发布的正式每日挑战关卡 (严格模式：本地无则返回 null，不进行离线兜底)
+  PuzzleLevelItem? getOfficialTodayLevel({DateTime? overrideToday}) {
     final now = overrideToday ?? DateTime.now();
     final yyyyMm =
         '${now.year.toString().padLeft(4, '0')}${now.month.toString().padLeft(2, '0')}';
@@ -240,6 +294,89 @@ class DailyContentPipeline {
     } catch (_) {
       return null;
     }
+  }
+
+  /// 获取用于 Banner / 推荐展示的每日挑战关卡。
+  ///
+  /// 若当天官方正式关卡已就绪，直接返回；
+  /// 若当天关卡因离线多天等原因在本地不存在，则从本地所有历史关卡中按当天日期确定性选择一张历史关卡作为今日挑战。
+  /// 严禁使用内置 demo 静态样本图（assetSamples）。
+  PuzzleLevelItem? getDailyBannerLevel({
+    DateTime? overrideToday,
+    List<PuzzleLevelItem>? fallbackLocalLevels,
+  }) {
+    final official = getOfficialTodayLevel(overrideToday: overrideToday);
+    if (official != null) return official;
+
+    final now = overrideToday ?? DateTime.now();
+    final yyyyMm =
+        '${now.year.toString().padLeft(4, '0')}${now.month.toString().padLeft(2, '0')}';
+    final todayStr = '$yyyyMm${now.day.toString().padLeft(2, '0')}';
+    return _deriveFallbackDailyLevel(
+      todayStr: todayStr,
+      now: now,
+      extraFallbacks: fallbackLocalLevels,
+    );
+  }
+
+  /// 从本地已下载的历史关卡中按日期确定性选取一张作为当天的每日挑战
+  PuzzleLevelItem? _deriveFallbackDailyLevel({
+    required String todayStr,
+    required DateTime now,
+    List<PuzzleLevelItem>? extraFallbacks,
+  }) {
+    // 1. 优先从历史每日挑战关卡中选取
+    final history = getAllLocalHistoryLevels(overrideToday: now);
+    final candidates = history.where((l) {
+      if (l.localPath == null || !File(l.localPath!).existsSync()) return false;
+      return (l.dailyDate ?? '').compareTo(todayStr) <= 0;
+    }).toList();
+
+    if (candidates.isNotEmpty) {
+      final index = todayStr.hashCode.abs() % candidates.length;
+      final picked = candidates[index];
+      AppLogger.daily.info(
+        'DailyPipeline: Derived offline today daily level from history level ${picked.dailyDate} (${picked.localPath}) for $todayStr',
+      );
+      return PuzzleLevelItem(
+        id: CanonicalId.forDaily(todayStr),
+        localPath: picked.localPath,
+        isLocalFile: true,
+        sourceModule: CanonicalId.prefixDaily,
+        dailyDate: todayStr,
+        order: int.tryParse(todayStr) ?? 0,
+        addedAt: now,
+      );
+    }
+
+    // 2. 若无历史每日挑战，从传入的本地历史关卡（如已就绪的主线关卡）选取
+    if (extraFallbacks != null && extraFallbacks.isNotEmpty) {
+      final validExtra = extraFallbacks.where((l) {
+        return l.localPath != null && File(l.localPath!).existsSync();
+      }).toList();
+      if (validExtra.isNotEmpty) {
+        final index = todayStr.hashCode.abs() % validExtra.length;
+        final picked = validExtra[index];
+        AppLogger.daily.info(
+          'DailyPipeline: Derived offline today daily level from local extra level ${picked.id} (${picked.localPath}) for $todayStr',
+        );
+        return PuzzleLevelItem(
+          id: CanonicalId.forDaily(todayStr),
+          localPath: picked.localPath,
+          isLocalFile: true,
+          sourceModule: CanonicalId.prefixDaily,
+          dailyDate: todayStr,
+          order: int.tryParse(todayStr) ?? 0,
+          addedAt: now,
+        );
+      }
+    }
+
+    // 严禁使用内置样本 demo 图，无历史数据时返回 null
+    AppLogger.daily.warning(
+      'DailyPipeline: No local history levels found to derive offline daily for $todayStr',
+    );
+    return null;
   }
 
   static Archive _decodeZipIsolate(List<int> bytes) {

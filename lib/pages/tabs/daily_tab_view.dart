@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -10,7 +11,6 @@ import 'package:jigsawpuzzle/l10n/gen/strings.g.dart';
 import 'package:jigsawpuzzle/logic/content/app_content.dart';
 import 'package:jigsawpuzzle/logic/content/models/canonical_id.dart';
 import 'package:jigsawpuzzle/logic/content/models/puzzle_level_item.dart';
-import 'package:jigsawpuzzle/logic/image_source.dart';
 import 'package:jigsawpuzzle/pages/game_page.dart';
 import 'package:jigsawpuzzle/services/app_logger.dart';
 import 'package:jigsawpuzzle/services/locale_service.dart';
@@ -19,7 +19,6 @@ import 'package:jigsawpuzzle/theme/app_palette.dart';
 import 'package:jigsawpuzzle/theme/app_text_styles.dart';
 import 'package:jigsawpuzzle/widgets/app_cached_image.dart';
 import 'package:jigsawpuzzle/widgets/choose_difficulty_sheet.dart';
-import 'package:path/path.dart' as p;
 import 'package:phosphoricons_flutter/phosphoricons_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -42,9 +41,25 @@ class _DailyTabViewState extends State<DailyTabView> {
     final now = DateTime.now();
     final curMonth = '${now.year}-${now.month.toString().padLeft(2, '0')}';
     _expandedMonthKeys.add(curMonth);
-    _loadFoldPrefs();
+    unawaited(_loadFoldPrefs());
     AppContent.instance.contentUpdateNotifier.addListener(_onContentUpdate);
     LocaleService.instance.addListener(_onLocaleChanged);
+    _ensureDailyIndexMetadata();
+  }
+
+  void _ensureDailyIndexMetadata() {
+    if (!AppContent.instance.isInitialized) return;
+    final manager = AppContent.instance.manager;
+    if (manager.availableDailyMonths.isEmpty) {
+      unawaited(
+        manager.fetchDailyIndexMetadata().then((_) {
+          if (mounted) {
+            _cleanInvalidFoldPrefs();
+            setState(() {});
+          }
+        }),
+      );
+    }
   }
 
   @override
@@ -60,6 +75,7 @@ class _DailyTabViewState extends State<DailyTabView> {
 
   void _onContentUpdate() {
     AppLogger.daily.info('DailyTabView: contentUpdateNotifier triggered');
+    _cleanInvalidFoldPrefs();
     if (mounted) setState(() {});
   }
 
@@ -77,6 +93,7 @@ class _DailyTabViewState extends State<DailyTabView> {
         ..clear()
         ..add(curMonth);
     }
+    _cleanInvalidFoldPrefs();
     AppLogger.daily.info(
       'DailyTabView: Loaded fold preferences: $_expandedMonthKeys',
     );
@@ -86,9 +103,15 @@ class _DailyTabViewState extends State<DailyTabView> {
     for (final monthKey in _expandedMonthKeys) {
       final yyyyMm = monthKey.replaceAll('-', '');
       if (yyyyMm.length == 6) {
-        _ensureMonthDownloaded(yyyyMm);
+        unawaited(_ensureMonthDownloaded(yyyyMm));
       }
     }
+  }
+
+  void _cleanInvalidFoldPrefs() {
+    final availableMonths = _getAvailableMonths();
+    final availableKeys = availableMonths.map(_formatMonthKey).toSet();
+    _expandedMonthKeys.removeWhere((k) => !availableKeys.contains(k));
   }
 
   Future<void> _toggleMonth(String monthKey) async {
@@ -109,7 +132,7 @@ class _DailyTabViewState extends State<DailyTabView> {
     if (isExpanding) {
       final yyyyMm = monthKey.replaceAll('-', '');
       if (yyyyMm.length == 6) {
-        _ensureMonthDownloaded(yyyyMm);
+        unawaited(_ensureMonthDownloaded(yyyyMm));
       }
     }
   }
@@ -124,13 +147,22 @@ class _DailyTabViewState extends State<DailyTabView> {
     }
 
     if (AppContent.instance.isInitialized) {
-      final existing = AppContent.instance.manager
+      final manager = AppContent.instance.manager;
+      final existing = manager
           .getDailyLevelsForMonth(yyyyMm)
           .where((lvl) => !lvl.isTimeLocked)
           .toList();
       if (existing.isNotEmpty) {
         AppLogger.daily.info(
           'DailyTabView: Month $yyyyMm already ready with ${existing.length} levels, skipping download',
+        );
+        return;
+      }
+
+      // 关键防线：若远端 daily/index.json 中没有该月份，绝不触发下载，避免 404 与报错展示
+      if (!manager.isDailyMonthAvailable(yyyyMm)) {
+        AppLogger.daily.warning(
+          'DailyTabView: Month $yyyyMm is not available in daily index, skipping download',
         );
         return;
       }
@@ -183,40 +215,37 @@ class _DailyTabViewState extends State<DailyTabView> {
   }
 
   /// 获取所有可用月份列表 (降序排列)
+  ///
+  /// 严格以权威数据源为准，杜绝盲目推断不存在的历史月份：
+  /// 1. 远端 daily/index.json 中声明的有效月份 (availableDailyMonths)
+  /// 2. 本地已存在且关卡文件非空的有效历史月份 (过滤空目录残留)
+  /// 3. 若远端索引未拉取且本地无历史数据，仅以 manifest 的 currentMonth 或当月作为最小兜底展示
   List<String> _getAvailableMonths() {
-    final now = DateTime.now();
-    final nowMm = '${now.year}${now.month.toString().padLeft(2, '0')}';
-    final monthSet = <String>{nowMm};
-    // 默认展示近3个月（当月及前2个月）
-    for (var i = 1; i <= 2; i++) {
-      final prevDate = DateTime(now.year, now.month - i);
-      final prevMm =
-          '${prevDate.year}${prevDate.month.toString().padLeft(2, '0')}';
-      monthSet.add(prevMm);
-    }
+    final monthSet = <String>{};
 
     if (AppContent.instance.isInitialized) {
-      final pipeline = AppContent.instance.manager.dailyPipeline;
-      final baseDir = Directory(pipeline.dailyStorageBaseDir);
-      if (baseDir.existsSync()) {
-        try {
-          for (final entity in baseDir.listSync()) {
-            if (entity is Directory) {
-              final name = p.basename(entity.path);
-              if (RegExp(r'^\d{6}$').hasMatch(name)) {
-                monthSet.add(name);
-              }
-            }
-          }
-        } catch (_) {}
-      }
+      final manager = AppContent.instance.manager;
 
-      final manifestMonth =
-          AppContent.instance.manager.currentManifest?.dailyModule.currentMonth;
-      if (manifestMonth != null && manifestMonth.isNotEmpty) {
-        monthSet.add(manifestMonth);
+      // 1. 权威远端每日索引声明的所有月份
+      monthSet.addAll(manager.availableDailyMonths);
+
+      // 2. 本地已解压且关卡有效非空的历史月份 (由管线统一负责探测与过滤空目录)
+      monthSet.addAll(manager.localReadyDailyMonths);
+
+      // 3. 极端冷启动兜底：若远端索引尚未返回且本地无任何月份，仅允许当前配置的 currentMonth
+      if (monthSet.isEmpty) {
+        final manifestMonth = manager.currentManifest?.dailyModule.currentMonth;
+        if (manifestMonth != null && manifestMonth.isNotEmpty) {
+          monthSet.add(manifestMonth);
+        }
       }
-      monthSet.addAll(AppContent.instance.manager.availableDailyMonths);
+    }
+
+    // 4. 极端保底（AppContent 未初始化或全为空时，仅保留当月单个月份，绝不臆造历史月份）
+    if (monthSet.isEmpty) {
+      final now = DateTime.now();
+      final nowMm = '${now.year}${now.month.toString().padLeft(2, '0')}';
+      monthSet.add(nowMm);
     }
 
     final list = monthSet.toList()..sort((a, b) => b.compareTo(a));
@@ -251,21 +280,37 @@ class _DailyTabViewState extends State<DailyTabView> {
 
     Uint8List imgBytes;
     try {
-      if (level.localPath != null && await File(level.localPath!).exists()) {
+      if (level.localPath != null && File(level.localPath!).existsSync()) {
         imgBytes = await File(level.localPath!).readAsBytes();
       } else {
-        final bytes = await rootBundle.load(assetSamples[0]);
-        imgBytes = bytes.buffer.asUint8List(
-          bytes.offsetInBytes,
-          bytes.lengthInBytes,
+        AppLogger.daily.warning(
+          'Daily level file does not exist: ${level.localPath}',
+        );
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                t.daily.loadMonthFailed(month: level.dailyDate ?? ''),
+              ),
+              duration: const Duration(seconds: 2),
+            ),
+          );
+        }
+        return;
+      }
+    } catch (e, st) {
+      AppLogger.daily.severe('Failed to read daily level file bytes', e, st);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              t.daily.loadMonthFailed(month: level.dailyDate ?? ''),
+            ),
+            duration: const Duration(seconds: 2),
+          ),
         );
       }
-    } catch (_) {
-      final bytes = await rootBundle.load(assetSamples[0]);
-      imgBytes = bytes.buffer.asUint8List(
-        bytes.offsetInBytes,
-        bytes.lengthInBytes,
-      );
+      return;
     }
     if (!mounted) return;
 
@@ -400,20 +445,10 @@ class _DailyTabViewState extends State<DailyTabView> {
     final availableMonths = _getAvailableMonths();
     final monthGroups = <String, List<PuzzleLevelItem>>{};
 
-    PuzzleLevelItem? todayItem;
+    PuzzleLevelItem? dailyBannerItem;
     if (AppContent.instance.isInitialized) {
-      todayItem = AppContent.instance.manager.getTodayDailyLevel();
+      dailyBannerItem = AppContent.instance.manager.getDailyBannerLevel();
     }
-    final todayStr =
-        '${now.year}${now.month.toString().padLeft(2, '0')}${now.day.toString().padLeft(2, '0')}';
-    final effectiveTodayItem =
-        todayItem ??
-        PuzzleLevelItem(
-          id: CanonicalId.forDaily(todayStr),
-          dailyDate: todayStr,
-          localPath: assetSamples[0],
-          isLocalFile: true,
-        );
 
     var totalCompletedCount = 0;
     var totalVisibleCount = 0;
@@ -454,146 +489,143 @@ class _DailyTabViewState extends State<DailyTabView> {
       color: palette.brand,
       child: CustomScrollView(
         slivers: [
-          // Today's Challenge Banner
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
-              child: Container(
-                decoration: BoxDecoration(
-                  color: palette.surfaceContainer,
-                  borderRadius: BorderRadius.circular(22),
-                  border: Border.all(
-                    color: palette.brand.withValues(alpha: 0.2),
-                  ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: palette.brand.withValues(alpha: 0.08),
-                      blurRadius: 12,
-                      offset: const Offset(0, 4),
-                    ),
-                  ],
-                ),
-                clipBehavior: Clip.antiAlias,
+          // Today's Challenge Banner (当且仅当存在今日关卡或本地历史推导关卡时展示)
+          if (dailyBannerItem != null)
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
                 child: Container(
-                  padding: const EdgeInsets.all(16),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              children: [
-                                Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 8,
-                                    vertical: 2,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: palette.brand.withValues(
-                                      alpha: 0.12,
-                                    ),
-                                    borderRadius: BorderRadius.circular(8),
-                                  ),
-                                  child: Text(
-                                    'TODAY',
-                                    style: TextStyle(
-                                      color: palette.brand,
-                                      fontSize: 11,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                ),
-                                const SizedBox(width: 6),
-                                Expanded(
-                                  child: Text(
-                                    t.daily.dateCaption(
-                                      month: now.month,
-                                      day: now.day,
-                                    ),
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: styles.caption.copyWith(
-                                      color: palette.secondaryText,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 8),
-                            Text(
-                              t.daily.todayTitle(
-                                month: now.month,
-                                day: now.day,
-                              ),
-                              style: styles.h2.copyWith(
-                                color: palette.primaryText,
-                              ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                            const SizedBox(height: 14),
-                            Builder(
-                              builder: (context) {
-                                final prog = ProgressStore.instance
-                                    .getLevelProgress(effectiveTodayItem.id);
-                                return FilledButton.icon(
-                                  onPressed: () =>
-                                      _openDaily(effectiveTodayItem),
-                                  icon: Icon(
-                                    prog.isCompleted
-                                        ? PhosphorIconsBold.arrowsClockwise
-                                        : PhosphorIconsFill.play,
-                                    size: 18,
-                                  ),
-                                  label: Text(
-                                    prog.isCompleted
-                                        ? t.daily.btnClearedReplay
-                                        : (prog.progressPercent > 0
-                                              ? t.daily.btnResume
-                                              : t.daily.btnStart),
-                                    style: const TextStyle(
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                  style: FilledButton.styleFrom(
-                                    backgroundColor: palette.brand,
-                                    foregroundColor: palette.surface,
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(20),
-                                    ),
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 18,
-                                      vertical: 8,
-                                    ),
-                                  ),
-                                );
-                              },
-                            ),
-                          ],
-                        ),
+                  decoration: BoxDecoration(
+                    color: palette.surfaceContainer,
+                    borderRadius: BorderRadius.circular(22),
+                    border: Border.all(
+                      color: palette.brand.withValues(alpha: 0.2),
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: palette.brand.withValues(alpha: 0.08),
+                        blurRadius: 12,
+                        offset: const Offset(0, 4),
                       ),
-                      const SizedBox(width: 12),
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(16),
-                        child: SizedBox(
-                          width: 130,
-                          height: 120,
-                          child: AppCachedImage(
-                            imagePathOrUrl: effectiveTodayItem.displayPath,
-                            errorWidget: Image.asset(
-                              assetSamples[0],
-                              fit: BoxFit.cover,
+                    ],
+                  ),
+                  clipBehavior: Clip.antiAlias,
+                  child: Container(
+                    padding: const EdgeInsets.all(16),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 8,
+                                      vertical: 2,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: palette.brand.withValues(
+                                        alpha: 0.12,
+                                      ),
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    child: Text(
+                                      'TODAY',
+                                      style: TextStyle(
+                                        color: palette.brand,
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 6),
+                                  Expanded(
+                                    child: Text(
+                                      t.daily.dateCaption(
+                                        month: now.month,
+                                        day: now.day,
+                                      ),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: styles.caption.copyWith(
+                                        color: palette.secondaryText,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 8),
+                              Text(
+                                t.daily.todayTitle(
+                                  month: now.month,
+                                  day: now.day,
+                                ),
+                                style: styles.h2.copyWith(
+                                  color: palette.primaryText,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              const SizedBox(height: 14),
+                              Builder(
+                                builder: (context) {
+                                  final prog = ProgressStore.instance
+                                      .getLevelProgress(dailyBannerItem!.id);
+                                  return FilledButton.icon(
+                                    onPressed: () =>
+                                        _openDaily(dailyBannerItem!),
+                                    icon: Icon(
+                                      prog.isCompleted
+                                          ? PhosphorIconsBold.arrowsClockwise
+                                          : PhosphorIconsFill.play,
+                                      size: 18,
+                                    ),
+                                    label: Text(
+                                      prog.isCompleted
+                                          ? t.daily.btnClearedReplay
+                                          : (prog.progressPercent > 0
+                                                ? t.daily.btnResume
+                                                : t.daily.btnStart),
+                                      style: const TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                    style: FilledButton.styleFrom(
+                                      backgroundColor: palette.brand,
+                                      foregroundColor: palette.surface,
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(20),
+                                      ),
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 18,
+                                        vertical: 8,
+                                      ),
+                                    ),
+                                  );
+                                },
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(16),
+                          child: SizedBox(
+                            width: 130,
+                            height: 120,
+                            child: AppCachedImage(
+                              imagePathOrUrl: dailyBannerItem.displayPath,
                             ),
                           ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
               ),
             ),
-          ),
 
           // Stats Bar
           SliverToBoxAdapter(
@@ -916,7 +948,6 @@ class _DailyTabViewState extends State<DailyTabView> {
           children: [
             AppCachedImage(
               imagePathOrUrl: item.displayPath,
-              errorWidget: Image.asset(assetSamples[0], fit: BoxFit.cover),
             ),
             Container(
               decoration: BoxDecoration(

@@ -11,7 +11,6 @@ import 'package:jigsawpuzzle/logic/cache/level_image_resolver.dart';
 import 'package:jigsawpuzzle/logic/content/app_content.dart';
 import 'package:jigsawpuzzle/logic/content/models/puzzle_event_item.dart';
 import 'package:jigsawpuzzle/logic/content/models/puzzle_level_item.dart';
-import 'package:jigsawpuzzle/logic/image_source.dart';
 import 'package:jigsawpuzzle/pages/event_levels_page.dart';
 import 'package:jigsawpuzzle/pages/game_page.dart';
 import 'package:jigsawpuzzle/services/app_logger.dart';
@@ -314,8 +313,8 @@ class _HomeTabViewState extends State<HomeTabView> {
     final allLevels = _getLevels();
     final filteredLevels = _getFilteredLevels(allLevels);
     final now = DateTime.now();
-    final todayDaily = AppContent.instance.isInitialized
-        ? AppContent.instance.manager.getTodayDailyLevel()
+    final dailyBannerItem = AppContent.instance.isInitialized
+        ? AppContent.instance.manager.getDailyBannerLevel()
         : null;
 
     return RefreshIndicator(
@@ -342,7 +341,7 @@ class _HomeTabViewState extends State<HomeTabView> {
           // ── Header 可横滑（每日+活动），不吸顶，随滚动
           SliverToBoxAdapter(
             child: _HeaderCarousel(
-              todayDaily: todayDaily,
+              dailyBannerItem: dailyBannerItem,
               now: now,
               palette: palette,
               styles: styles,
@@ -424,14 +423,14 @@ class _HomeTabViewState extends State<HomeTabView> {
 // ═══════════════════════════════════════════════════
 class _HeaderCarousel extends StatefulWidget {
   const _HeaderCarousel({
-    required this.todayDaily,
+    required this.dailyBannerItem,
     required this.now,
     required this.palette,
     required this.styles,
     required this.onTapDaily,
   });
 
-  final PuzzleLevelItem? todayDaily;
+  final PuzzleLevelItem? dailyBannerItem;
   final DateTime now;
   final AppPalette palette;
   final AppTextStyles styles;
@@ -465,23 +464,24 @@ class _HeaderCarouselState extends State<_HeaderCarousel> {
         : <PuzzleEventItem>[];
 
     final bannerItems = <HeroBannerItem>[
-      // 1. 每日挑战焦点卡片
-      HeroBannerItem(
-        id: 'daily_${widget.now.toIso8601String()}',
-        title: t.home.bannerDailyTitle(
-          month: widget.now.month,
-          day: widget.now.day,
+      // 1. 每日挑战焦点卡片 (当且仅当存在今日关卡或历史推导关卡时展示，严禁使用内置样本 demo 图)
+      if (widget.dailyBannerItem != null)
+        HeroBannerItem(
+          id: 'daily_${widget.now.toIso8601String()}',
+          title: t.home.bannerDailyTitle(
+            month: widget.now.month,
+            day: widget.now.day,
+          ),
+          subtitle: t.home.bannerDailySub,
+          imagePathOrUrl: widget.dailyBannerItem!.imagePathOrUrl,
+          badgeText: t.home.bannerDailyBadge,
+          badgeEmoji: '🔥',
+          badgeColor: widget.palette.brand,
+          onTap: () {
+            SoundService.I.play(Sfx.tap);
+            widget.onTapDaily();
+          },
         ),
-        subtitle: t.home.bannerDailySub,
-        imagePathOrUrl: widget.todayDaily?.imagePathOrUrl ?? assetSamples[0],
-        badgeText: t.home.bannerDailyBadge,
-        badgeEmoji: '🔥',
-        badgeColor: widget.palette.brand,
-        onTap: () {
-          SoundService.I.play(Sfx.tap);
-          widget.onTapDaily();
-        },
-      ),
       // 2. 活跃活动卡片
       for (final ev in events)
         HeroBannerItem(

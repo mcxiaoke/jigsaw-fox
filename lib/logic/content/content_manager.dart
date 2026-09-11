@@ -1,3 +1,6 @@
+import 'dart:convert';
+import 'dart:io';
+
 import 'package:jigsawpuzzle/logic/content/models/puzzle_collection_item.dart';
 import 'package:jigsawpuzzle/logic/content/models/puzzle_event_item.dart';
 import 'package:jigsawpuzzle/logic/content/models/puzzle_level_item.dart';
@@ -50,7 +53,11 @@ class ContentManager {
          packsBaseDir: p.join(appSupportDir, 'levels', 'packs'),
          httpClient: httpClient,
        ),
-       _httpClient = httpClient ?? ContentHttpClient();
+       _httpClient = httpClient ?? ContentHttpClient(),
+       _dailyIndexCacheFilePath = p.join(
+         appSupportDir,
+         'daily_index_cache.json',
+       );
 
   final ContentHttpClient _httpClient;
   final ManifestRouter manifestRouter;
@@ -59,6 +66,7 @@ class ContentManager {
   final EventsContentPipeline eventsPipeline;
   final CollectionsContentPipeline collectionsPipeline;
   final PackContentPipeline packPipeline;
+  final String _dailyIndexCacheFilePath;
 
   RootManifest? get currentManifest => manifestRouter.currentManifest;
 
@@ -67,41 +75,93 @@ class ContentManager {
 
   /// 是否有网络同步正在进行（含后台全量轮）。UI 据此避免等待互斥轮导致转圈。
   bool get isSyncing => _isSyncing;
+  bool _hasFetchedDailyIndex = false;
   final Map<String, String> _dailyMonthZipUrls = {};
   final Map<String, List<String>> _dailyMonthMirrorUrls = {};
   List<String> get availableDailyMonths => _dailyMonthZipUrls.keys.toList();
+
+  /// 检查某月份是否在每日挑战远端索引中存在有效 ZIP 地址
+  bool isDailyMonthAvailable(String yyyyMm) =>
+      _dailyMonthZipUrls.containsKey(yyyyMm);
 
   /// 指定月份的每日挑战 zip 备用镜像（zipUrl 主地址失败时轮询）
   List<String> dailyMonthMirrorUrls(String yyyyMm) =>
       _dailyMonthMirrorUrls[yyyyMm] ?? const [];
 
-  /// 解析指定月份每日挑战 ZIP 地址 (优先读缓存，无则拉取 daily/index.json 解析)
-  Future<String?> resolveDailyMonthZipUrl(String yyyyMm) async {
-    if (_dailyMonthZipUrls.containsKey(yyyyMm)) {
-      AppLogger.daily.info(
-        'resolveDailyMonthZipUrl cache hit $yyyyMm -> ${_dailyMonthZipUrls[yyyyMm]}',
-      );
-      return _dailyMonthZipUrls[yyyyMm];
+  Future<void> _initializeDailyIndexFromCache() async {
+    try {
+      final file = File(_dailyIndexCacheFilePath);
+      if (file.existsSync()) {
+        final text = await file.readAsString();
+        final json = jsonDecode(text);
+        if (json is Map<String, dynamic>) {
+          final rawZips = json['zipUrls'];
+          if (rawZips is Map<String, dynamic>) {
+            rawZips.forEach((k, v) {
+              if (v is String) _dailyMonthZipUrls[k] = v;
+            });
+          }
+          final rawMirrors = json['mirrorUrls'];
+          if (rawMirrors is Map<String, dynamic>) {
+            rawMirrors.forEach((k, v) {
+              if (v is List) {
+                _dailyMonthMirrorUrls[k] = v.map((e) => e.toString()).toList();
+              }
+            });
+          }
+          AppLogger.daily.info(
+            'Daily index initialized from cache: ${_dailyMonthZipUrls.keys.toList()}',
+          );
+        }
+      }
+    } catch (e, st) {
+      AppLogger.daily.warning('Failed to load daily index cache', e, st);
+    }
+  }
+
+  Future<void> _saveDailyIndexCache() async {
+    try {
+      final file = File(_dailyIndexCacheFilePath);
+      if (!file.parent.existsSync()) {
+        file.parent.createSync(recursive: true);
+      }
+      final data = {
+        'zipUrls': _dailyMonthZipUrls,
+        'mirrorUrls': _dailyMonthMirrorUrls,
+      };
+      await file.writeAsString(jsonEncode(data), flush: true);
+      AppLogger.daily.fine('Daily index cache saved successfully');
+    } catch (e, st) {
+      AppLogger.daily.warning('Failed to save daily index cache', e, st);
+    }
+  }
+
+  /// 同步远端 daily/index.json 元数据 (带本地磁盘缓存与单飞防并发)
+  Future<void> fetchDailyIndexMetadata({bool forceRefresh = false}) async {
+    if (_hasFetchedDailyIndex && !forceRefresh) {
+      return;
     }
     final manifest = currentManifest;
     if (manifest == null || manifest.dailyModule.url.isEmpty) {
       AppLogger.daily.warning(
-        'resolveDailyMonthZipUrl failed: manifest is null or dailyModule.url is empty',
+        'fetchDailyIndexMetadata failed: manifest is null or dailyModule.url is empty',
       );
-      return null;
+      return;
     }
     final dailyIndexUrl = ContentHttpClient.resolveUrl(
       manifest.baseUri,
       manifest.dailyModule.url,
     );
     AppLogger.daily.info(
-      'resolveDailyMonthZipUrl fetching daily index from $dailyIndexUrl for month $yyyyMm',
+      'fetchDailyIndexMetadata fetching daily index from $dailyIndexUrl',
     );
     try {
       final dailyJson = await _httpClient.fetchJson(dailyIndexUrl);
       if (dailyJson is Map<String, dynamic>) {
         final rawMonths = dailyJson['items'];
         if (rawMonths is List) {
+          _dailyMonthZipUrls.clear();
+          _dailyMonthMirrorUrls.clear();
           for (final m in rawMonths) {
             if (m is Map<String, dynamic>) {
               final monthStr = m['month']?.toString();
@@ -128,21 +188,36 @@ class ContentManager {
               }
             }
           }
+          _hasFetchedDailyIndex = true;
           AppLogger.daily.info(
-            'resolveDailyMonthZipUrl parsed ${rawMonths.length} months from daily index: ${_dailyMonthZipUrls.keys.toList()}',
+            'fetchDailyIndexMetadata parsed ${rawMonths.length} months from daily index: ${_dailyMonthZipUrls.keys.toList()}',
           );
+          await _saveDailyIndexCache();
         } else {
           AppLogger.daily.warning(
-            'resolveDailyMonthZipUrl unexpected items type: ${rawMonths.runtimeType}',
+            'fetchDailyIndexMetadata unexpected items type: ${rawMonths.runtimeType}',
           );
         }
       }
     } catch (e, st) {
       AppLogger.daily.warning(
-        'Failed to fetch daily index for month $yyyyMm from $dailyIndexUrl',
+        'Failed to fetch daily index from $dailyIndexUrl',
         e,
         st,
       );
+    }
+  }
+
+  /// 解析指定月份每日挑战 ZIP 地址 (优先读缓存，无则拉取 daily/index.json 解析)
+  Future<String?> resolveDailyMonthZipUrl(String yyyyMm) async {
+    if (_dailyMonthZipUrls.containsKey(yyyyMm)) {
+      AppLogger.daily.info(
+        'resolveDailyMonthZipUrl cache hit $yyyyMm -> ${_dailyMonthZipUrls[yyyyMm]}',
+      );
+      return _dailyMonthZipUrls[yyyyMm];
+    }
+    if (!_hasFetchedDailyIndex) {
+      await fetchDailyIndexMetadata();
     }
     final resolvedUrl = _dailyMonthZipUrls[yyyyMm];
     AppLogger.daily.info(
@@ -169,6 +244,7 @@ class ContentManager {
         mainPipeline.initializeFromCache(),
         eventsPipeline.initializeFromCache(),
         collectionsPipeline.initializeFromCache(),
+        _initializeDailyIndexFromCache(),
         packPipeline.loadAllPacks(),
       ]);
       AppLogger.content.info(
@@ -260,8 +336,8 @@ class ContentManager {
   }
 
   Future<void> _syncAllCore({
-    DateTime? overrideToday,
     required bool includeDailyZip,
+    DateTime? overrideToday,
   }) async {
     AppLogger.content.info(
       'syncAll start overrideToday=$overrideToday includeDailyZip=$includeDailyZip',
@@ -384,15 +460,33 @@ class ContentManager {
 
   // --- 每日挑战 Daily 模块便捷代理 ---
 
+  /// 本地已实际就绪且关卡非空的每日挑战月份列表 (按降序排列)
+  List<String> get localReadyDailyMonths => dailyPipeline.getLocalReadyMonths();
+
   /// 获取指定月份每日关卡 (带时间锁)
   List<PuzzleLevelItem> getDailyLevelsForMonth(
     String yyyyMm, {
     DateTime? overrideToday,
   }) => dailyPipeline.getLevelsForMonth(yyyyMm, overrideToday: overrideToday);
 
-  /// 获取今日挑战关卡
+  /// 获取当天官方发布的正式每日挑战关卡 (严格模式：本地无则返回 null)
+  PuzzleLevelItem? getOfficialTodayLevel({DateTime? overrideToday}) =>
+      dailyPipeline.getOfficialTodayLevel(overrideToday: overrideToday);
+
+  /// 获取用于 Banner / 推荐展示的每日挑战关卡 (若当天关卡未下载，自动从本地历史已下载数据中按日期确定性选取)
+  PuzzleLevelItem? getDailyBannerLevel({DateTime? overrideToday}) {
+    final localMain = mainPipeline.levels
+        .where((l) => l.isLocalFile && l.localPath != null)
+        .toList();
+    return dailyPipeline.getDailyBannerLevel(
+      overrideToday: overrideToday,
+      fallbackLocalLevels: localMain,
+    );
+  }
+
+  /// 兼容历史命名
   PuzzleLevelItem? getTodayDailyLevel({DateTime? overrideToday}) =>
-      dailyPipeline.getTodayLevel(overrideToday: overrideToday);
+      getDailyBannerLevel(overrideToday: overrideToday);
 
   /// 确保某月份每日关卡已下载就绪 (支持历史月份懒加载)
   Future<bool> ensureDailyMonthReady(
@@ -401,6 +495,12 @@ class ContentManager {
   }) async {
     final explicitZip = await resolveDailyMonthZipUrl(yyyyMm);
     final pattern = currentManifest?.dailyModule.zipUrlPattern ?? '';
+    if ((explicitZip == null || explicitZip.isEmpty) && pattern.isEmpty) {
+      AppLogger.daily.warning(
+        'ensureDailyMonthReady: Month $yyyyMm not found in daily index and pattern is empty, skipping download',
+      );
+      return false;
+    }
     return dailyPipeline.ensureMonthReady(
       yyyyMm: yyyyMm,
       zipUrlPattern: pattern,

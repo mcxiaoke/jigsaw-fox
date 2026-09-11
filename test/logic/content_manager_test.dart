@@ -541,4 +541,43 @@ void main() {
     },
     skip: skipUnlessTestServer,
   );
+
+  group('Daily Index Cache and Availability Tests', () {
+    test(
+      'Restores availableDailyMonths from local cache and guards unavailable months',
+      () async {
+        final cacheFile = File(p.join(supportDir, 'daily_index_cache.json'));
+        await cacheFile.writeAsString('''
+{
+  "zipUrls": {
+    "202609": "https://example.com/daily/zips/202609.zip",
+    "202608": "https://example.com/daily/zips/202608.zip"
+  },
+  "mirrorUrls": {
+    "202609": ["https://mirror.example.com/202609.zip"]
+  }
+}
+''');
+
+        final manager = ContentManager(
+          bootstrapUrls: ['http://127.0.0.1:9999/manifest.json'],
+          appSupportDir: supportDir,
+        );
+
+        await manager.initialize(offlineOnly: true);
+
+        // 验证从本地缓存恢复了 202609 和 202608
+        expect(manager.availableDailyMonths, containsAll(['202609', '202608']));
+        expect(manager.isDailyMonthAvailable('202609'), isTrue);
+        expect(manager.isDailyMonthAvailable('202608'), isTrue);
+
+        // 关键验证：未声明的 202607 为不可用
+        expect(manager.isDailyMonthAvailable('202607'), isFalse);
+
+        // 验证未声明月份不会进入 pipeline 下载流程，直接返回 false
+        final ready = await manager.ensureDailyMonthReady('202607');
+        expect(ready, isFalse);
+      },
+    );
+  });
 }

@@ -276,15 +276,14 @@ void main() {
 
       expect(find.text('TODAY'), findsOneWidget);
       expect(find.textContaining('连胜'), findsOneWidget);
-      expect(find.textContaining('2026年8月'), findsOneWidget);
+      final now = DateTime.now();
+      final curMonthTitle = '${now.year}年${now.month}月';
+      expect(find.textContaining(curMonthTitle), findsOneWidget);
 
-      // Scroll until 2026年7月 month header is visible
-      await tester.scrollUntilVisible(
-        find.textContaining('2026年7月'),
-        300,
-        scrollable: find.byType(Scrollable),
-      );
-      expect(find.textContaining('2026年7月'), findsOneWidget);
+      // 验证未在每日索引声明的历史月份（如 7 月）绝不凭空显示
+      final twoMonthsAgo = DateTime(now.year, now.month - 2);
+      final twoMonthsAgoTitle = '${twoMonthsAgo.year}年${twoMonthsAgo.month}月';
+      expect(find.textContaining(twoMonthsAgoTitle), findsNothing);
     });
 
     testWidgets(
