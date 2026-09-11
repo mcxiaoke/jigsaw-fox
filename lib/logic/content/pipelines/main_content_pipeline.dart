@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'package:crypto/crypto.dart';
 import 'package:jigsawpuzzle/logic/content/models/canonical_id.dart';
 import 'package:jigsawpuzzle/logic/content/models/puzzle_level_item.dart';
 import 'package:jigsawpuzzle/logic/content/network/content_http_client.dart';
@@ -293,11 +294,59 @@ class MainContentPipeline {
                 );
               }
             } else {
-              // 全新关卡
+              // 全新关卡：若本地存在同名旧图，优先用 fileSizeBytes 快速筛查；
+              // 无 fileSizeBytes 或大小匹配时再走 sha256 严格校验。
               final localFile = File(_getLocalImagePath(level.id, level.url));
-              final isLocal = await localFile.exists();
+              var isLocal = false;
+              String? localPath = localFile.path;
+              if (await localFile.exists()) {
+                final expectedSize = level.fileSizeBytes;
+                if (expectedSize != null && expectedSize > 0) {
+                  try {
+                    final actualSize = await localFile.length();
+                    if (actualSize != expectedSize) {
+                      await localFile.delete();
+                      AppLogger.mainPipe.info(
+                        'Removed stale local image for new level ${level.id} '
+                        'size mismatch expected=$expectedSize actual=$actualSize',
+                      );
+                      localPath = null;
+                    }
+                  } catch (_) {
+                    AppLogger.mainPipe.warning(
+                      'File size check failed for new level ${level.id}',
+                    );
+                  }
+                }
+                // fileSizeBytes 匹配或无法获取时，继续走 sha256 校验
+                if (localPath != null) {
+                  if (level.hash != null && level.hash!.isNotEmpty) {
+                    final expectedHash = level.hash!;
+                    final actualHash = await _sha256File(localFile);
+                    if (actualHash != null && actualHash != expectedHash) {
+                      try {
+                        await localFile.delete();
+                        AppLogger.mainPipe.info(
+                          'Removed stale local image for new level ${level.id} '
+                          'expected=${expectedHash.substring(0, 12)} actual=${actualHash.substring(0, 12)}',
+                        );
+                        localPath = null;
+                      } catch (_) {
+                        AppLogger.mainPipe.warning(
+                          'Failed to delete stale local image for new level ${level.id}',
+                        );
+                      }
+                    } else {
+                      isLocal = true;
+                    }
+                  } else {
+                    // 无 hash 时保守复用
+                    isLocal = true;
+                  }
+                }
+              }
               _levelsMap[level.id] = level.copyWith(
-                localPath: isLocal ? localFile.path : null,
+                localPath: isLocal ? localPath : null,
                 isLocalFile: isLocal,
               );
               hasNewItems = true;
@@ -353,12 +402,46 @@ class MainContentPipeline {
     final localPath = _getLocalImagePath(level.id, level.url);
     final localFile = File(localPath);
     if (await localFile.exists()) {
-      final updated = level.copyWith(localPath: localPath, isLocalFile: true);
-      _levelsMap[level.id] = updated;
-      AppLogger.mainPipe.fine(
-        'ensureDownloaded hit local file ${level.id} -> ${AppLogger.sanitizePath(localPath)}',
-      );
-      return updated;
+      // fileSizeBytes 快速筛查：服务端已有下发时优先比对，不匹配直接删旧图重下
+      final expectedSize = level.fileSizeBytes;
+      if (expectedSize != null && expectedSize > 0) {
+        try {
+          final actualSize = await localFile.length();
+          if (actualSize != expectedSize) {
+            await localFile.delete();
+            AppLogger.mainPipe.info(
+              'Removed stale local image for ${level.id} '
+              'size mismatch expected=$expectedSize actual=$actualSize',
+            );
+            // 继续执行下面的下载逻辑
+          } else {
+            final updated = level.copyWith(
+              localPath: localPath,
+              isLocalFile: true,
+            );
+            _levelsMap[level.id] = updated;
+            AppLogger.mainPipe.fine(
+              'ensureDownloaded hit local file ${level.id} -> ${AppLogger.sanitizePath(localPath)}',
+            );
+            return updated;
+          }
+        } catch (e) {
+          AppLogger.mainPipe.warning(
+            'File size check failed for ${level.id}, fallback to sha256',
+          );
+        }
+      } else {
+        // 无 fileSizeBytes 时走保守路径（保持原有行为）
+        final updated = level.copyWith(
+          localPath: localPath,
+          isLocalFile: true,
+        );
+        _levelsMap[level.id] = updated;
+        AppLogger.mainPipe.fine(
+          'ensureDownloaded hit local file ${level.id} -> ${AppLogger.sanitizePath(localPath)}',
+        );
+        return updated;
+      }
     }
 
     AppLogger.mainPipe.info(
@@ -421,6 +504,7 @@ class MainContentPipeline {
         : null;
 
     final title = raw['title']?.toString().trim();
+    final fileSizeBytes = (raw['fileSizeBytes'] as num?)?.toInt();
 
     return PuzzleLevelItem(
       id: canonicalId,
@@ -433,6 +517,7 @@ class MainContentPipeline {
       addedAt: addedAt,
       unlockCoins: (raw['unlockCoins'] as num?)?.toInt(),
       unlockCode: raw['unlockCode']?.toString(),
+      fileSizeBytes: fileSizeBytes,
     );
   }
 
@@ -496,6 +581,17 @@ class MainContentPipeline {
       );
     } catch (e, st) {
       AppLogger.mainPipe.warning('Persist cache failed', e, st);
+    }
+  }
+
+  /// 计算本地文件 SHA-256 十六进制字符串，失败返回 null
+  Future<String?> _sha256File(File file) async {
+    try {
+      final bytes = await file.readAsBytes();
+      return sha256.convert(bytes).toString();
+    } catch (e) {
+      AppLogger.mainPipe.warning('SHA-256 failed for ${file.path}', e);
+      return null;
     }
   }
 }

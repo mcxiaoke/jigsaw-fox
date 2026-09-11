@@ -23,6 +23,7 @@ class PuzzleLevelItem {
     this.addedAt,
     this.unlockCoins,
     this.unlockCode,
+    this.fileSizeBytes,
   });
 
   factory PuzzleLevelItem.fromJson(Map<String, dynamic> json) {
@@ -46,6 +47,7 @@ class PuzzleLevelItem {
           : null,
       unlockCoins: json['unlockCoins'] as int?,
       unlockCode: json['unlockCode'] as String?,
+      fileSizeBytes: (json['fileSizeBytes'] as num?)?.toInt(),
     );
   }
 
@@ -61,6 +63,9 @@ class PuzzleLevelItem {
 
   /// 资源内容指纹 (SHA-256)，用于补丁换图与缓存失效检测
   final String? hash;
+
+  /// 服务端下发的原始文件大小（字节），用于快速不匹配筛查，避免每次 sha256
+  final int? fileSizeBytes;
 
   final bool? _isLocalFile;
 
@@ -159,6 +164,8 @@ class PuzzleLevelItem {
     bool clearUnlockCoins = false,
     String? unlockCode,
     bool clearUnlockCode = false,
+    int? fileSizeBytes,
+    bool clearFileSizeBytes = false,
   }) {
     return PuzzleLevelItem(
       id: id ?? this.id,
@@ -181,6 +188,7 @@ class PuzzleLevelItem {
       addedAt: clearAddedAt ? null : (addedAt ?? this.addedAt),
       unlockCoins: clearUnlockCoins ? null : (unlockCoins ?? this.unlockCoins),
       unlockCode: clearUnlockCode ? null : (unlockCode ?? this.unlockCode),
+      fileSizeBytes: clearFileSizeBytes ? null : (fileSizeBytes ?? this.fileSizeBytes),
     );
   }
 
@@ -207,6 +215,7 @@ class PuzzleLevelItem {
       'addedAt': addedAt?.toIso8601String(),
       if (unlockCoins != null) 'unlockCoins': unlockCoins,
       if (unlockCode != null) 'unlockCode': unlockCode,
+      if (fileSizeBytes != null) 'fileSizeBytes': fileSizeBytes,
     };
   }
 
