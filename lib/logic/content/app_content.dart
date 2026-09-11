@@ -82,16 +82,17 @@ class AppContent {
   /// 全局响应式通知：当内容更新时触发 UI 刷新
   final ValueNotifier<int> contentUpdateNotifier = ValueNotifier<int>(0);
 
-  /// 默认主备 CDN 端点列表（ManifestRouter 顺序轮询，单 URL 4s 超时）。
-  /// 恢复 D10 多源（2026-09-07）：fastly.jsdelivr（海外主）→ gitee raw（国内主，
-  /// macitee 镜像仓库）→ raw.githubusercontent（海外备）。
-  /// ⚠️ 镜像仓库内容必须与 mcxiaoke/jigsaw-data 同步一致，否则轮询回退会拉到
-  /// 版本不一致的 manifest；modelscope / Cloudflare R2 备用在 URL 就绪后追加
-  /// （见 docs/home-network-migration-and-boot-init-design-20260907.md §3.6 / §8）。
+  /// 默认主备通道端点列表（ManifestRouter 顺序轮询，单 URL 4s 超时）。
+  ///
+  /// v2 素材发布方案（docs/assets-publish-workflow-v2-20260910.md §3.1）：
+  /// R2 主通道 → Gitee 国内备用 → GitHub 海外备用，三者均指向各自托管的
+  /// `release/manifest.json`（同构目录，与本地 jigsaw-data/release/ 一致）。
+  /// 测试/开发版可将首个 URL 换成 `.../_stage/manifest.json` 走预演区。
+  /// ⚠️ 三条通道的内容必须同源；Gitee/GitHub 镜像仓库需与 mcxiaoke/jigsaw-data 同步。
   static const List<String> defaultBootstrapUrls = [
-    'https://fastly.jsdelivr.net/gh/mcxiaoke/jigsaw-data@master/manifest.json',
-    'https://raw.giteeusercontent.com/macitee/jigsaw-data/raw/master/manifest.json',
-    'https://raw.githubusercontent.com/mcxiaoke/jigsaw-data/refs/heads/master/manifest.json',
+    'https://jigsawdata.umao.top/release/manifest.json',
+    'https://gitee.com/macitee/jigsaw-data/raw/master/release/manifest.json',
+    'https://raw.githubusercontent.com/mcxiaoke/jigsaw-data/master/release/manifest.json',
   ];
 
   /// 组1 纯本地初始化：构建 manager + 读磁盘缓存，**不发任何网络请求**。
@@ -111,12 +112,10 @@ class AppContent {
     );
     final sw = Stopwatch()..start();
     final supportDir = await getApplicationSupportDirectory();
-    final documentsDir = await getApplicationDocumentsDirectory();
 
     _manager = ContentManager(
       bootstrapUrls: bootstrapUrls ?? defaultBootstrapUrls,
       appSupportDir: supportDir.path,
-      appDocumentsDir: documentsDir.path,
     );
 
     // 纯本地：offlineOnly=true 时 manifest 磁盘未命中不请求网络

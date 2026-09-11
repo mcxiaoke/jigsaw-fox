@@ -12,7 +12,7 @@ import 'package:path_provider/path_provider.dart';
 ///
 /// - 若 `level.isLocalFile && File.exists` 直接返回本地路径
 /// - 若 `assets/` 直接返回（无需下载）
-/// - 若 `http(s)` 则下载到 `appDocumentsDir/network_levels/<hash>.webp`（单次落盘，幂等）
+/// - 若 `http(s)` 则下载到 `{appSupportDir}/levels/network/<hash>.webp`（单次落盘，幂等）
 ///   后续缩略与 `GamePage` 复用同一文件，离线可玩
 class LevelImageResolver {
   LevelImageResolver._();
@@ -23,8 +23,8 @@ class LevelImageResolver {
 
   Future<String> _getNetworkLevelsDir() async {
     if (_networkLevelsDir != null) return _networkLevelsDir!;
-    final docDir = await getApplicationDocumentsDirectory();
-    final dir = Directory(p.join(docDir.path, 'network_levels'));
+    final supportDir = await getApplicationSupportDirectory();
+    final dir = Directory(p.join(supportDir.path, 'levels', 'network'));
     if (!await dir.exists()) {
       await dir.create(recursive: true);
     }

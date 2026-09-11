@@ -9,7 +9,7 @@ import 'package:phosphoricons_flutter/phosphoricons_flutter.dart';
 
 /// 懒落地关卡缩略：可视时后台下载原图到本地，再以本地文件生成缩略
 ///
-/// 保证“见缩略必可玩”：缩略显示即代表原图已在 `appDocumentsDir` 落盘，
+/// 保证“见缩略必可玩”：缩略显示即代表原图已在 `{appSupportDir}/levels/` 目录落盘，
 /// 点击直接 `File.readAsBytes` 进 `GamePage`，飞行模式亦可。
 class LazyLevelImage extends StatefulWidget {
   const LazyLevelImage({

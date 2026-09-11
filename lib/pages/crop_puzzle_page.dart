@@ -14,6 +14,7 @@ import 'package:jigsawpuzzle/logic/puzzle_model.dart';
 import 'package:jigsawpuzzle/services/recommend_service.dart';
 import 'package:jigsawpuzzle/theme/app_palette.dart';
 import 'package:jigsawpuzzle/widgets/game_toast.dart';
+import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:phosphoricons_flutter/phosphoricons_flutter.dart';
 
@@ -384,7 +385,7 @@ class _CropPuzzlePageState extends State<CropPuzzlePage> {
       }
 
       final dir = await getApplicationSupportDirectory();
-      final customDir = Directory('${dir.path}/custom_puzzles');
+      final customDir = Directory(p.join(dir.path, 'levels', 'custom'));
       if (!await customDir.exists()) {
         await customDir.create(recursive: true);
       }

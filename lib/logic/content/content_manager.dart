@@ -17,7 +17,6 @@ class ContentManager {
   ContentManager({
     required List<String> bootstrapUrls,
     required String appSupportDir,
-    required String appDocumentsDir,
     ContentHttpClient? httpClient,
   }) : manifestRouter = ManifestRouter(
          bootstrapUrls: bootstrapUrls,
@@ -26,25 +25,29 @@ class ContentManager {
        ),
        mainPipeline = MainContentPipeline(
          cacheFilePath: p.join(appSupportDir, 'main_levels_cache.json'),
-         imagesStorageDir: p.join(appDocumentsDir, 'levels', 'main'),
+         imagesStorageDir: p.join(appSupportDir, 'levels', 'main'),
          httpClient: httpClient,
        ),
        dailyPipeline = DailyContentPipeline(
-         dailyStorageBaseDir: p.join(appDocumentsDir, 'daily'),
+         dailyStorageBaseDir: p.join(appSupportDir, 'levels', 'daily'),
          httpClient: httpClient,
        ),
        eventsPipeline = EventsContentPipeline(
          cacheFilePath: p.join(appSupportDir, 'events_cache.json'),
-         eventsStorageBaseDir: p.join(appDocumentsDir, 'events'),
+         eventsStorageBaseDir: p.join(appSupportDir, 'levels', 'events'),
          httpClient: httpClient,
        ),
        collectionsPipeline = CollectionsContentPipeline(
          cacheFilePath: p.join(appSupportDir, 'collections_cache.json'),
-         collectionsStorageBaseDir: p.join(appDocumentsDir, 'collections'),
+         collectionsStorageBaseDir: p.join(
+           appSupportDir,
+           'levels',
+           'collections',
+         ),
          httpClient: httpClient,
        ),
        packPipeline = PackContentPipeline(
-         packsBaseDir: p.join(appDocumentsDir, 'packs'),
+         packsBaseDir: p.join(appSupportDir, 'levels', 'packs'),
          httpClient: httpClient,
        ),
        _httpClient = httpClient ?? ContentHttpClient();

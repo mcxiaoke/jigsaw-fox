@@ -32,7 +32,6 @@ void main() {
     final manager = ContentManager(
       bootstrapUrls: [],
       appSupportDir: tempDir.path,
-      appDocumentsDir: tempDir.path,
     );
     await manager.initialize(offlineOnly: true);
     AppContent.instance.setManagerForTest(manager);
