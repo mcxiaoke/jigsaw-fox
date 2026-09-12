@@ -2,8 +2,10 @@ import 'dart:math';
 
 import 'package:jigsawpuzzle/logic/geometry/edge_curve.dart';
 import 'package:jigsawpuzzle/logic/geometry/edge_type.dart';
+import 'package:meta/meta.dart';
 
 /// 单个拼图碎片四条边缘几何描述的结构体集合。
+@immutable
 class PieceEdges {
   const PieceEdges({
     required this.top,

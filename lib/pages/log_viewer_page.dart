@@ -232,6 +232,8 @@ class _LogViewerPageState extends State<LogViewerPage> {
     var lines = const <String>[];
     try {
       lines = await AppLogger.readTodayLogLines();
+      // best-effort：清理/降级失败可静默
+      // ignore: avoid_catches_without_on_clauses
     } catch (_) {
       lines = const [];
     }
@@ -364,6 +366,8 @@ class _LogViewerPageState extends State<LogViewerPage> {
     _clearEpoch++;
     try {
       await AppLogger.clearAll();
+      // best-effort：清理/降级失败可静默
+      // ignore: avoid_catches_without_on_clauses
     } catch (_) {
       // clearAll 内部已兜底，失败不阻断视图清空
     }

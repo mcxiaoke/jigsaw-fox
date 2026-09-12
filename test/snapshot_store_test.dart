@@ -15,8 +15,8 @@ void main() {
   group('SnapshotStore & ProgressStore Tests', () {
     setUp(() async {
       sm = await initTestStorage();
-      await SnapshotStore.instance.init();
-      // 每个测试独立 box：清空内存索引（box 本身为空，等价全新 init）
+      // 快照目录已由 initTestStorage 注入隔离临时目录（P1-7），
+      // 不再调 init()——那会在测试环境回退到全局 %TEMP%\jigsaw_snapshots。
       await ProgressStore.instance.reset();
     });
 

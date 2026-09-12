@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 
 import 'package:jigsawpuzzle/l10n/gen/strings.g.dart';
+import 'package:meta/meta.dart';
 
 /// 关卡图片导出长边上限像素。
 ///
@@ -170,6 +171,7 @@ enum PuzzleAspectRatio {
 }
 
 /// Puzzle grid difficulty level.
+@immutable
 class PuzzleDifficulty {
   const PuzzleDifficulty({
     required this.label,

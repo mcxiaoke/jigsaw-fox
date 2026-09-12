@@ -121,6 +121,8 @@ class _ShareCardGeneratorState extends State<ShareCardGenerator>
           icon: PhosphorIconsFill.checkCircle,
         );
       }
+      // best-effort：失败降级，不阻断主流程
+      // ignore: avoid_catches_without_on_clauses
     } catch (e) {
       if (mounted) {
         GameToast.show(

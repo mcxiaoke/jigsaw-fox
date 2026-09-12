@@ -102,7 +102,8 @@ class _OnlineImagePickerPageState extends State<OnlineImagePickerPage> {
           _canGoForward = canForward;
         });
       }
-    } catch (_) {}
+      // best-effort：清理/降级失败可静默
+    } catch (_) {} // ignore: avoid_catches_without_on_clauses
   }
 
   void _switchSite(GallerySite site) {
@@ -191,6 +192,8 @@ class _OnlineImagePickerPageState extends State<OnlineImagePickerPage> {
           );
         }
       }
+      // best-effort：记录后降级继续
+      // ignore: avoid_catches_without_on_clauses
     } catch (e) {
       AppLogger.webview.severe(
         '[WebView:InAppFetch:Error] In-webview fetch error: $e',
@@ -333,6 +336,8 @@ class _OnlineImagePickerPageState extends State<OnlineImagePickerPage> {
       final raw = result?.toString().trim() ?? '';
       AppLogger.webview.info('[WebView:Sniff:Result] Sniffed URL: $raw');
       return raw;
+      // best-effort：记录后降级继续
+      // ignore: avoid_catches_without_on_clauses
     } catch (e) {
       AppLogger.webview.severe(
         '[WebView:Sniff:Error] Sniff execution failed: $e',
@@ -390,6 +395,8 @@ class _OnlineImagePickerPageState extends State<OnlineImagePickerPage> {
       if (mounted) {
         _triggerDownloadBanner(item);
       }
+      // best-effort：记录后降级继续
+      // ignore: avoid_catches_without_on_clauses
     } catch (e) {
       AppLogger.webview.severe(
         '[WebView:DownloadAction:Error] Download failed: $e',

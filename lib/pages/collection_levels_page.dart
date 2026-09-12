@@ -63,6 +63,8 @@ class _CollectionLevelsPageState extends State<CollectionLevelsPage> {
       AppLogger.content.info(
         'CollectionLevels loaded id=${_currentCollection.id} count=${_levels.length}',
       );
+      // best-effort：记录后降级继续
+      // ignore: avoid_catches_without_on_clauses
     } catch (e, st) {
       AppLogger.content.warning(
         'CollectionLevels load failed id=${_currentCollection.id}',
@@ -152,6 +154,8 @@ class _CollectionLevelsPageState extends State<CollectionLevelsPage> {
       } else if (File(localPath).existsSync()) {
         imgBytes = await File(localPath).readAsBytes();
       }
+      // best-effort：记录后降级继续
+      // ignore: avoid_catches_without_on_clauses
     } catch (e, st) {
       AppLogger.content.warning(
         'CollectionLevels openLevel image fail id=${level.id}',
@@ -186,7 +190,6 @@ class _CollectionLevelsPageState extends State<CollectionLevelsPage> {
         context: context,
         canonicalId: canonicalId,
         fallbackDifficulty: fallbackDiff,
-        isCompleted: progress.isCompleted,
         title: t.levels.titleOf(
           title: _currentCollection.displayTitle,
           index: index,

@@ -104,37 +104,6 @@ class _AchievementsPageState extends State<AchievementsPage> {
     }
   }
 
-  // Ensure all achievementsPage keys appear contiguously for verification
-  // ignore: unused_element
-  void _ensureAchievementsPageKeys() {
-    final a = t.achievementsPage.title;
-    final b = t.achievementsPage.stats;
-    final c = t.achievementsPage.totalStars;
-    final d = t.achievementsPage.totalSolved;
-    final e = t.achievementsPage.totalSnaps;
-    final f = t.achievementsPage.totalTime;
-    final g = t.achievementsPage.wall;
-    final h = t.achievementsPage.unlocked;
-    final i = t.achievementsPage.locked;
-    final j = t.achievementsPage.claim;
-    final k = t.achievementsPage.claimed;
-    final l = t.achievementsPage.coins(count: 1);
-    // LocaleSettings.instance.currentTranslations.achievementsPage.title
-    // LocaleSettings.instance.currentTranslations.achievementsPage.stats
-    // LocaleSettings.instance.currentTranslations.achievementsPage.totalStars
-    // LocaleSettings.instance.currentTranslations.achievementsPage.totalSolved
-    // LocaleSettings.instance.currentTranslations.achievementsPage.totalSnaps
-    // LocaleSettings.instance.currentTranslations.achievementsPage.totalTime
-    // LocaleSettings.instance.currentTranslations.achievementsPage.wall
-    // LocaleSettings.instance.currentTranslations.achievementsPage.unlocked
-    // LocaleSettings.instance.currentTranslations.achievementsPage.locked
-    // LocaleSettings.instance.currentTranslations.achievementsPage.claim
-    // LocaleSettings.instance.currentTranslations.achievementsPage.claimed
-    // LocaleSettings.instance.currentTranslations.achievementsPage.coins
-    // ignore: avoid_print
-    print('$a$b$c$d$e$f$g$h$i$j$k$l');
-  }
-
   @override
   Widget build(BuildContext context) {
     final palette = AppPalette.of(context);

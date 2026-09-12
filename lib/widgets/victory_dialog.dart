@@ -225,6 +225,8 @@ class _VictoryDialogState extends State<VictoryDialog>
           icon: PhosphorIconsFill.checkCircle,
         );
       }
+      // best-effort：记录后降级继续
+      // ignore: avoid_catches_without_on_clauses
     } catch (e, st) {
       AppLogger.ui.warning('VictoryDialog save wallpaper failed', e, st);
       if (mounted) {

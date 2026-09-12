@@ -200,6 +200,8 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
         _headerBarColor = blended;
         _headerIconColor = isDarkBar ? Colors.white : scheme.onPrimaryContainer;
       });
+      // best-effort：清理/降级失败可静默
+      // ignore: avoid_catches_without_on_clauses
     } catch (_) {
       // 解析失败时保持默认白底/深色前景
     } finally {
@@ -225,6 +227,8 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
     ui.Image? img;
     try {
       img = await decodeFlameImage(widget.imageBytes);
+      // best-effort：记录后降级继续
+      // ignore: avoid_catches_without_on_clauses
     } catch (e, st) {
       AppLogger.game.severe('decodeFlameImage failed', e, st);
       if (mounted) {
@@ -284,6 +288,8 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
             img.height.toDouble(),
           );
         }
+        // best-effort：记录后降级继续
+        // ignore: avoid_catches_without_on_clauses
       } catch (e, st) {
         AppLogger.game.warning('Failed to parse initialSnapshotJson', e, st);
         effectiveDiff = widget.difficulty.adaptiveForSize(
@@ -420,6 +426,8 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
           'flushSync saved ok cid=$canonicalId percent=$percent',
         );
       }
+      // best-effort：记录后降级继续
+      // ignore: avoid_catches_without_on_clauses
     } catch (e, st) {
       AppLogger.game.warning('flushSync save failed', e, st);
     }
@@ -470,6 +478,8 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
     String snapshot;
     try {
       snapshot = _game!.exportSnapshotJson(elapsedSeconds: _seconds);
+      // best-effort：记录后降级继续
+      // ignore: avoid_catches_without_on_clauses
     } catch (e, st) {
       AppLogger.game.warning('exportSnapshot failed', e, st);
       _isSaving = false;
@@ -506,6 +516,8 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
       } else {
         return;
       }
+      // best-effort：记录后降级继续
+      // ignore: avoid_catches_without_on_clauses
     } catch (e, st) {
       AppLogger.game.warning('doSave updateProgress failed', e, st);
     } finally {
@@ -667,6 +679,8 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
         ]);
         reward = results[0] as SettlementRewardResult;
         newAchievements = results[1] as List<AchievementDefinition>;
+        // best-effort：记录后降级继续
+        // ignore: avoid_catches_without_on_clauses
       } catch (e, st) {
         // 经济/成就失败不阻断结算：记日志并用空奖励继续。
         AppLogger.game.warning(
@@ -700,6 +714,8 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
           AppLogger.game.warning('delete snapshot failed after win', e, st);
         }),
       );
+      // best-effort：记录后降级继续
+      // ignore: avoid_catches_without_on_clauses
     } catch (e, st) {
       AppLogger.game.warning('Settlement chain failed cid=$cid', e, st);
     } finally {
@@ -792,7 +808,8 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
         nextIndex,
         nextLevel.difficulty,
       );
-    } catch (_) {}
+      // best-effort：清理/降级失败可静默
+    } catch (_) {} // ignore: avoid_catches_without_on_clauses
     if (!mounted) return;
     Navigator.of(context).pushReplacement(
       MaterialPageRoute<void>(
@@ -967,7 +984,8 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
     if (!_isSolved) {
       try {
         _flushSync();
-      } catch (_) {}
+        // best-effort：清理/降级失败可静默
+      } catch (_) {} // ignore: avoid_catches_without_on_clauses
     }
     _timer?.cancel();
     _decodeFailPopTimer?.cancel();
@@ -1001,6 +1019,8 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
           SoundService.I.play(Sfx.tap);
           try {
             await _flushSave();
+            // best-effort：记录后降级继续
+            // ignore: avoid_catches_without_on_clauses
           } catch (e, st) {
             AppLogger.game.warning('flush save error on back pressed', e, st);
           }
@@ -1174,6 +1194,8 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
         SoundService.I.play(Sfx.tap);
         try {
           await _flushSave();
+          // best-effort：记录后降级继续
+          // ignore: avoid_catches_without_on_clauses
         } catch (e, st) {
           AppLogger.game.warning('flush save error on pop gesture', e, st);
         }

@@ -71,6 +71,8 @@ class LinenTextureManager {
         ..shader = shader
         ..blendMode = BlendMode.srcOver
         ..isAntiAlias = true;
+      // best-effort：清理/降级失败可静默
+      // ignore: avoid_catches_without_on_clauses
     } catch (_) {
       // 容错降级：若生成异常不阻断游戏正常渲染
     } finally {

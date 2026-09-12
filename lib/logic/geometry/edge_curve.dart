@@ -3,6 +3,7 @@ import 'dart:ui' show Offset, Path;
 
 import 'package:jigsawpuzzle/logic/geometry/edge_type.dart';
 import 'package:jigsawpuzzle/logic/geometry/piece_shape.dart' show Overhang;
+import 'package:meta/meta.dart';
 
 /// 经典拼图凸头（Tab）形状枚举，对应 Jigsaw Explorer 预设的四大经典几何模具。
 enum EdgeShapeType {
@@ -141,6 +142,7 @@ class JigexCurves {
 ///
 /// 封装了单条边的几何属性（形状类型、凹凸方向、镜像反转、深度缩放），
 /// 并提供精准将曲线绘制追加到 Flutter [Path] 上的数学变换能力。
+@immutable
 class EdgeCurveDescriptor {
   const EdgeCurveDescriptor({
     required this.edgeType,

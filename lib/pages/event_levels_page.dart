@@ -70,6 +70,8 @@ class _EventLevelsPageState extends State<EventLevelsPage> {
       AppLogger.events.info(
         'EventLevels loaded id=${_currentEvent.id} count=${_levels.length}',
       );
+      // best-effort：记录后降级继续
+      // ignore: avoid_catches_without_on_clauses
     } catch (e, st) {
       AppLogger.events.warning(
         'EventLevels load failed id=${_currentEvent.id}',
@@ -167,6 +169,8 @@ class _EventLevelsPageState extends State<EventLevelsPage> {
       } else if (File(localPath).existsSync()) {
         imgBytes = await File(localPath).readAsBytes();
       }
+      // best-effort：记录后降级继续
+      // ignore: avoid_catches_without_on_clauses
     } catch (e, st) {
       AppLogger.events.warning(
         'EventLevels openLevel image fail id=${level.id}',

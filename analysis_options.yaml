@@ -24,7 +24,7 @@ linter:
     public_member_api_docs: false       # 不强制公开 API 文档注释
     lines_longer_than_80_chars: false   # Flutter 代码行普遍较长
     flutter_style_todos: false          # 不强制 TODO 格式
-    avoid_catches_without_on_clauses: false #catch 未指定异常类型，需逐个确认异常范围
+    avoid_catches_without_on_clauses: true # catch 未指定异常类型，需逐个确认异常范围（P1-4 恢复启用）
     cascade_invocations: false # 	涉及 await/多行表达式/链式访问，需人工审查
     sort_pub_dependencies: false # Flutter 项目习惯 flutter SDK 前置
     prefer_int_literals: false # min/max 上下文中 .0 是 double 类型推断所需

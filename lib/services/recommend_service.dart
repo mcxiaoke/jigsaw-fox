@@ -1,3 +1,5 @@
+// P1-4：服务层 best-effort：功能失败降级，不阻断主流程
+// ignore_for_file: avoid_catches_without_on_clauses
 import 'package:jigsawpuzzle/data/progress_store.dart';
 import 'package:jigsawpuzzle/logic/puzzle_model.dart';
 import 'package:jigsawpuzzle/services/app_logger.dart';
@@ -102,7 +104,8 @@ class RecommendService {
   int get recommendedTierIndex => _recommendedTierIndex;
 
   /// 全局推荐档 tierLevel（'L2' ~ 'L5'）
-  String get recommendedTierLevel => RecommendRule.levelOf(_recommendedTierIndex);
+  String get recommendedTierLevel =>
+      RecommendRule.levelOf(_recommendedTierIndex);
 
   /// 是否已完成过统计
   bool get isComputed => _computed;

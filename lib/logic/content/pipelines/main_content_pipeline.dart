@@ -1,3 +1,5 @@
+// P1-4：外部内容（manifest/JSON/网络）解析防御：脏数据跳过降级，不中断启动
+// ignore_for_file: avoid_catches_without_on_clauses
 import 'dart:convert';
 import 'dart:io';
 import 'package:crypto/crypto.dart';

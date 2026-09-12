@@ -27,15 +27,14 @@ class ResumeInfo {
 class ResumeHelper {
   /// 读取当前可续玩的快照（若无则返回 null）
   ///
-  /// 规则：不再以 `isCompleted` 阻断（已通关重玩的残局仍需可继续）；仅按
+  /// 规则：不再以「是否已通关」阻断（已通关重玩的残局仍需可继续）；仅按
   /// `hasSnapshot` + 快照存在且未通关（`percent < 100` 且非 isSolved）判定；
   /// `percent==0` 的自由摆放也视为可续玩（修复 P1-5）。
   /// 若索引为 true 但文件丢失，会自动执行对账自愈（修复 P1-8）。
   static Future<ResumeInfo?> fetchResume(
     String canonicalId,
-    PuzzleDifficulty fallbackDifficulty, {
-    bool? isCompleted,
-  }) async {
+    PuzzleDifficulty fallbackDifficulty,
+  ) async {
     final progress = await ProgressStore.instance.load(canonicalId);
     if (!progress.hasSnapshot) return null;
     final dkey = progress.activeDifficultyKey.isNotEmpty
@@ -214,7 +213,6 @@ class ResumeHelper {
 
   /// 一站式：若有存档则弹对话框并处理分支，返回 true 表示已处理（调用方应直接 return），
   /// false 表示无存档，调用方应继续走 ChooseDifficultySheet。
-  /// `isCompleted` 已废弃，仅为兼容保留。
   static Future<bool> tryHandleResumeFlow({
     required BuildContext context,
     required String canonicalId,
@@ -225,7 +223,6 @@ class ResumeHelper {
     required Future<void> Function(PuzzleDifficulty diff, String? jsonStr)
     onPushGame,
     required VoidCallback onCancelled,
-    bool isCompleted = false,
   }) async {
     final result = await maybeShowResumeDialog(
       context: context,

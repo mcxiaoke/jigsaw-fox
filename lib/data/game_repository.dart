@@ -1,3 +1,5 @@
+// P1-4：持久层防御式容错：损坏数据/IO 异常必须降级而非崩溃，本文件统一豁免裸 catch
+// ignore_for_file: avoid_catches_without_on_clauses
 import 'dart:convert';
 import 'dart:io';
 
@@ -85,13 +87,6 @@ class GameRepository {
       _prefs?.getString(_keySelectedBackground) ?? kBackgroundAssets[0];
   set selectedBackground(String v) =>
       _prefs?.setString(_keySelectedBackground, v);
-
-  /// 累计通关数（历史累加字段，全库已统一以 ProgressStore.instance.getTotalSolved() 去重图数为 SSOT；
-  /// 原 prefs 累加 key 已按 §2.3 丢弃，恒返回 0）
-  @Deprecated(
-    'Use ProgressStore.instance.getTotalSolved() for distinct solved count',
-  )
-  int get totalCompletedLevels => 0;
 
   /// 注意：以下两个 stat getter 直接读 app-state-v1 box（fail-fast），
   /// **前置条件：必须先执行 StorageManager.openAll()**——main() 中在 runApp 前

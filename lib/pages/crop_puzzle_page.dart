@@ -18,6 +18,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:phosphoricons_flutter/phosphoricons_flutter.dart';
 
 /// Dynamic crop ratio option derived from [PuzzleAspectRatio] (Plug & Play architecture).
+@immutable
 class CropRatioOption {
   const CropRatioOption(this.aspectRatio);
   final PuzzleAspectRatio aspectRatio;
@@ -177,6 +178,8 @@ class _CropPuzzlePageState extends State<CropPuzzlePage> {
         // 未挂载时及时释放，避免后台解码泄漏
         frame.image.dispose();
       }
+      // best-effort：清理/降级失败可静默
+      // ignore: avoid_catches_without_on_clauses
     } catch (_) {
       // P1-19 解码失败不再静默：置位失败标志，提示用户重新选择图片
       if (mounted) {
@@ -409,6 +412,8 @@ class _CropPuzzlePageState extends State<CropPuzzlePage> {
       if (mounted) {
         Navigator.of(context).pop(customItem);
       }
+      // best-effort：失败降级，不阻断主流程
+      // ignore: avoid_catches_without_on_clauses
     } catch (e) {
       if (mounted) {
         GameToast.show(

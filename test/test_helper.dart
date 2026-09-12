@@ -1,11 +1,15 @@
+// P1-4：测试有意触发失败路径以验证容错逻辑，统一豁免
+// ignore_for_file: avoid_catches_without_on_clauses
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hive_ce/hive_ce.dart';
 import 'package:jigsawpuzzle/data/favorite_store.dart';
 import 'package:jigsawpuzzle/data/progress_store.dart';
+import 'package:jigsawpuzzle/data/snapshot_store.dart';
 import 'package:jigsawpuzzle/data/storage_manager.dart';
 import 'package:jigsawpuzzle/logic/download_manager.dart';
+import 'package:path/path.dart' as p;
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// 每个测试独立目录 + mock 单例（设计 §10.2）。
@@ -20,6 +24,12 @@ Future<StorageManager> initTestStorage() async {
   // getApplicationSupportDirectory()
   StorageManager.setMockInstance(sm);
   await sm.openAll();
+  // 快照目录隔离（P1-7）：挂临时 home 下并标记已初始化——避免 SnapshotStore
+  // 在测试环境回退到全局 %TEMP%\jigsaw_snapshots 互相污染；tearDown 删 home
+  // 时随之一并物理清理。initForTest 后业务路径的 init() 自动短路。
+  SnapshotStore.instance.initForTest(
+    Directory(p.join(dir.path, 'snapshots')),
+  );
   return sm;
 }
 
@@ -30,6 +40,10 @@ Future<StorageManager> initTestStorageWithBackups() async {
   final sm = StorageManager.forTestWithBackups(dir.path);
   StorageManager.setMockInstance(sm);
   await sm.openAll();
+  // 与 initTestStorage 相同的快照目录隔离（P1-7）
+  SnapshotStore.instance.initForTest(
+    Directory(p.join(dir.path, 'snapshots')),
+  );
   return sm;
 }
 

@@ -1,3 +1,5 @@
+// P1-4：外部内容（manifest/JSON/网络）解析防御：脏数据跳过降级，不中断启动
+// ignore_for_file: avoid_catches_without_on_clauses
 import 'package:jigsawpuzzle/data/game_repository.dart';
 import 'package:jigsawpuzzle/data/snapshot_store.dart';
 import 'package:jigsawpuzzle/l10n/gen/strings.g.dart';

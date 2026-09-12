@@ -58,6 +58,8 @@ void _initLifecycleHooks() {
         // 释放音频播放器池（audioplayers 原生实例），
         // 此前 dispose() 从未被接线，关窗时原生资源只能靠进程终止回收
         await SoundService.I.dispose();
+        // best-effort：记录后降级继续
+        // ignore: avoid_catches_without_on_clauses
       } catch (e, st) {
         AppLogger.system.warning('exit cleanup failed', e, st);
         // 清理失败不阻止退出
@@ -114,6 +116,8 @@ void main() async {
   // 语言服务需在 runApp 前完成（避免首帧闪烁，且 LocaleHelper 真源就绪）
   try {
     await LocaleService.instance.init();
+    // best-effort：记录后降级继续
+    // ignore: avoid_catches_without_on_clauses
   } catch (e, st) {
     AppLogger.system.warning('LocaleService init failed', e, st);
   }

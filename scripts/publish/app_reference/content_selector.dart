@@ -1,3 +1,5 @@
+// P1-4：发布参考实现（离线工具），统一豁免
+// ignore_for_file: avoid_catches_without_on_clauses
 // content_selector.dart — 国内外分流 + 主备切换（manifest 竞速选路 + 粘性 + 熔断）
 //
 // 取代现有 ManifestRouter「顺序轮询、单 URL 4s 超时」的慢路径：
@@ -18,7 +20,14 @@ class SourceSelector {
     Dio? dio,
     this.raceTimeout = const Duration(seconds: 6),
     this.stickyFile,
-  }) : _dio = dio ?? Dio(BaseOptions(responseType: ResponseType.plain, connectTimeout: const Duration(seconds: 6)));
+  }) : _dio =
+           dio ??
+           Dio(
+             BaseOptions(
+               responseType: ResponseType.plain,
+               connectTimeout: const Duration(seconds: 6),
+             ),
+           );
 
   final ChannelResolver resolver;
   final String region; // 'cn' | 'global'
@@ -55,7 +64,13 @@ class SourceSelector {
 
     // 2. 竞速：并行请求所有候选通道，先到先用
     final urls = manifestCandidates(resolver, region);
-    final futures = urls.map((u) => _dio.get<String>(u, options: Options(receiveTimeout: raceTimeout)))
+    final futures = urls
+        .map(
+          (u) => _dio.get<String>(
+            u,
+            options: Options(receiveTimeout: raceTimeout),
+          ),
+        )
         .toList();
     try {
       final resp = await Future.any(futures);
@@ -101,7 +116,10 @@ class SourceSelector {
 
   Future<String?> _tryFetch(String url) async {
     try {
-      final r = await _dio.get<String>(url, options: Options(receiveTimeout: raceTimeout));
+      final r = await _dio.get<String>(
+        url,
+        options: Options(receiveTimeout: raceTimeout),
+      );
       if (r.statusCode == 200 && r.data != null) return r.data!;
     } catch (_) {}
     return null;
@@ -142,7 +160,11 @@ List<String> buildZipMirrors({
   }
   // 旧端兼容：JSON 自带 zipUrl / zipUrls
   final primary = item['zipUrl'] as String?;
-  final extras = (item['zipUrls'] as List?)?.map((e) => e.toString()).toList() ?? [];
-  final all = <String>[if (primary != null && primary.isNotEmpty) primary, ...extras];
+  final extras =
+      (item['zipUrls'] as List?)?.map((e) => e.toString()).toList() ?? [];
+  final all = <String>[
+    if (primary != null && primary.isNotEmpty) primary,
+    ...extras,
+  ];
   return all.where((u) => u.isNotEmpty).toSet().toList();
 }

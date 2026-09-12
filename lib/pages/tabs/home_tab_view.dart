@@ -28,16 +28,6 @@ import 'package:jigsawpuzzle/widgets/game_toast.dart';
 import 'package:jigsawpuzzle/widgets/lazy_level_image.dart';
 import 'package:phosphoricons_flutter/phosphoricons_flutter.dart';
 
-// 热门N个（横滑常驻，末位固定入口之后展开全部 18 个黄金矩阵标签）
-const List<String> kHotTagIds = [
-  'Pets',
-  'Landscapes',
-  'Flowers',
-  'Structures',
-  'Food',
-  'Art',
-];
-
 class HomeTabView extends StatefulWidget {
   const HomeTabView({required this.onSwitchToDaily, super.key});
 
@@ -163,6 +153,8 @@ class _HomeTabViewState extends State<HomeTabView> {
       } else if (File(localPath).existsSync()) {
         imgBytes = await File(localPath).readAsBytes();
       }
+      // best-effort：记录后降级继续
+      // ignore: avoid_catches_without_on_clauses
     } catch (e, st) {
       AppLogger.game.warning(
         'Home openLevel image fail id=${level.id}',
@@ -207,7 +199,6 @@ class _HomeTabViewState extends State<HomeTabView> {
       context: context,
       canonicalId: canonicalId,
       fallbackDifficulty: fallbackDifficulty,
-      isCompleted: prog.isCompleted,
       title: title,
       imageBytes: imgBytes,
       onClearRepo: (k) => GameRepository.instance.updateGenericProgress(
@@ -493,6 +484,8 @@ class _HeaderCarouselState extends State<_HeaderCarousel> {
           );
         }
       }
+      // best-effort：记录后降级继续
+      // ignore: avoid_catches_without_on_clauses
     } catch (e, st) {
       AppLogger.events.warning(
         'Home download event exception id=${item.id}',

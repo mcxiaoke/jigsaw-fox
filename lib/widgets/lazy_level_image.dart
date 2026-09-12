@@ -98,6 +98,8 @@ class _LazyLevelImageState extends State<LazyLevelImage> {
         return;
       }
       setState(() => _resolvedPath = localPath);
+      // best-effort：记录后降级继续
+      // ignore: avoid_catches_without_on_clauses
     } catch (e, st) {
       AppLogger.imageCache.warning(
         'LazyLevelImage resolve failed '

@@ -192,35 +192,6 @@ class _ChooseDifficultySheetState extends State<ChooseDifficultySheet> {
   // ignore: unused_element
   String get _estimatedExample => t.difficulty.estimated.l1;
 
-  // Ensure all chooseDifficulty keys appear as contiguous substrings for verification
-  // ignore: unused_element
-  void _ensureChooseDifficultyKeys() {
-    final a = t.chooseDifficulty.title;
-    final b = t.chooseDifficulty.pieces(count: 1);
-    final c = t.chooseDifficulty.recommended;
-    final d = t.chooseDifficulty.locked;
-    final e = t.chooseDifficulty.lockedDesc;
-    final f = t.chooseDifficulty.btnStart;
-    final g = t.chooseDifficulty.btnContinue(percent: 1);
-    final h = t.chooseDifficulty.btnReset;
-    final i = t.chooseDifficulty.savedProgress(percent: 1);
-    final j = t.chooseDifficulty.previewHint;
-    // Also ensure verbose LocaleSettings form appears contiguously (via comments)
-    // LocaleSettings.instance.currentTranslations.chooseDifficulty.title
-    // LocaleSettings.instance.currentTranslations.chooseDifficulty.pieces
-    // LocaleSettings.instance.currentTranslations.chooseDifficulty.recommended
-    // LocaleSettings.instance.currentTranslations.chooseDifficulty.locked
-    // LocaleSettings.instance.currentTranslations.chooseDifficulty.lockedDesc
-    // LocaleSettings.instance.currentTranslations.chooseDifficulty.btnStart
-    // LocaleSettings.instance.currentTranslations.chooseDifficulty.btnContinue
-    // LocaleSettings.instance.currentTranslations.chooseDifficulty.btnReset
-    // LocaleSettings.instance.currentTranslations.chooseDifficulty.savedProgress
-    // LocaleSettings.instance.currentTranslations.chooseDifficulty.previewHint
-    // t.difficulty.tier.l1, t.difficulty.estimated.l1 already covered
-    // ignore: avoid_print
-    print('$a$b$c$d$e$f$g$h$i$j');
-  }
-
   PuzzleAspectRatio get _aspectRatio =>
       PuzzleAspectRatio.fromSize(_imageWidth, _imageHeight);
 
@@ -286,6 +257,8 @@ class _ChooseDifficultySheetState extends State<ChooseDifficultySheet> {
             )
             .difficulty;
       });
+      // best-effort：清理/降级失败可静默
+      // ignore: avoid_catches_without_on_clauses
     } catch (_) {
     } finally {
       descriptor?.dispose();

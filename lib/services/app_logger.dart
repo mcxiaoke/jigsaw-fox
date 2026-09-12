@@ -1,3 +1,5 @@
+// P1-4：日志器自身绝不能再抛异常（避免掩盖原始故障），统一豁免
+// ignore_for_file: avoid_catches_without_on_clauses
 import 'dart:async';
 import 'dart:developer' as developer;
 import 'dart:io';

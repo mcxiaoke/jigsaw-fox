@@ -56,6 +56,8 @@ class _ImportPackPageState extends State<ImportPackPage> {
           });
         }
       }
+      // best-effort：失败降级，不阻断主流程
+      // ignore: avoid_catches_without_on_clauses
     } catch (e) {
       if (mounted) {
         GameToast.show(
@@ -108,6 +110,8 @@ class _ImportPackPageState extends State<ImportPackPage> {
 
       // Import success: auto-close fullscreen page and return result
       Navigator.of(context).pop(pack);
+      // best-effort：失败降级，不阻断主流程
+      // ignore: avoid_catches_without_on_clauses
     } catch (e) {
       if (mounted) {
         GameToast.show(
@@ -251,8 +255,7 @@ class _ImportPackPageState extends State<ImportPackPage> {
                           size: 18,
                           color: palette.secondaryText,
                         ),
-                        onPressed: () =>
-                            setState(_networkUrlController.clear),
+                        onPressed: () => setState(_networkUrlController.clear),
                       )
                     : null,
                 border: OutlineInputBorder(

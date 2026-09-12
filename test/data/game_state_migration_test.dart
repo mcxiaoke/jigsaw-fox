@@ -1,3 +1,5 @@
+// P1-4：测试有意触发失败路径以验证容错逻辑，统一豁免
+// ignore_for_file: avoid_catches_without_on_clauses
 import 'dart:io';
 
 import 'package:flutter/services.dart';
@@ -60,7 +62,10 @@ void main() {
       expect(sm.state.get('stat:totalPiecesSnapped'), 12);
       expect(sm.state.get('stat:totalPlayTimeSeconds'), 345);
       // 无 {"v":...} 包装
-      expect(sm.state.get('stat:totalPiecesSnapped'), isNot(isA<Map<dynamic, dynamic>>()));
+      expect(
+        sm.state.get('stat:totalPiecesSnapped'),
+        isNot(isA<Map<dynamic, dynamic>>()),
+      );
     });
 
     test('经济默认值：key 缺失时读 0，绝不硬编码 100', () async {
@@ -140,7 +145,8 @@ void main() {
       // 预置一条用户设置（须保留）
       SharedPreferences.setMockInitialValues({'jigsaw_setting_sound': false});
 
-      await GameRepository.instance.init(); // 植入 3 样例（_initLevels 已注释：不再植入 100 关 demo）
+      await GameRepository.instance
+          .init(); // 植入 3 样例（_initLevels 已注释：不再植入 100 关 demo）
       await EconomyService.instance.init();
       await AchievementStore.instance.init();
       await FavoriteStore.instance.init();

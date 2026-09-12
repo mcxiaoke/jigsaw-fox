@@ -386,6 +386,8 @@ class JigsawPuzzleGame extends FlameGame
         AppLogger.game.info(
           'Snapshot restored pieces=${restored.pieces.length} solved=${restored.isSolved}',
         );
+        // best-effort：记录后降级继续
+        // ignore: avoid_catches_without_on_clauses
       } catch (e, st) {
         AppLogger.game.warning('Snapshot restore failed', e, st);
       }

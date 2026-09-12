@@ -1,3 +1,5 @@
+// P1-4：服务层 best-effort：功能失败降级，不阻断主流程
+// ignore_for_file: avoid_catches_without_on_clauses
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';

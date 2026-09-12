@@ -263,6 +263,8 @@ class _MyCenterTabViewState extends State<MyCenterTabView> {
               }
             }
           }
+          // best-effort：记录后降级继续
+          // ignore: avoid_catches_without_on_clauses
         } catch (e, st) {
           AppLogger.ui.warning(
             'MyCenter resolver cache lookup failed cid=${card.canonicalId}',
@@ -279,6 +281,8 @@ class _MyCenterTabViewState extends State<MyCenterTabView> {
           'cid=${card.canonicalId} url=${AppLogger.sanitizeUrl(url)}',
         );
       }
+      // best-effort：记录后降级继续
+      // ignore: avoid_catches_without_on_clauses
     } catch (e, st) {
       AppLogger.ui.warning(
         'MyCenter resolveImageBytes fallback cid=${card.canonicalId} src=${AppLogger.sanitizePath(card.imagePathOrUrl)}',
@@ -309,7 +313,8 @@ class _MyCenterTabViewState extends State<MyCenterTabView> {
               data.offsetInBytes,
               data.lengthInBytes,
             );
-          } catch (_) {}
+            // best-effort：清理/降级失败可静默
+          } catch (_) {} // ignore: avoid_catches_without_on_clauses
         } else {
           final file = File(located);
           if (file.existsSync()) {
@@ -320,6 +325,8 @@ class _MyCenterTabViewState extends State<MyCenterTabView> {
           }
         }
       }
+      // best-effort：记录后降级继续
+      // ignore: avoid_catches_without_on_clauses
     } catch (e, st) {
       AppLogger.ui.warning(
         'MyCenter orphan locate failed cid=${card.canonicalId}',
@@ -365,6 +372,8 @@ class _MyCenterTabViewState extends State<MyCenterTabView> {
       }
 
       await _enterGameWithBytes(card, imgBytes);
+      // best-effort：记录后降级继续
+      // ignore: avoid_catches_without_on_clauses
     } catch (e, st) {
       // P0-1：点击链路整体兜底，严禁静默中断。
       AppLogger.ui.warning(
@@ -521,6 +530,8 @@ class _MyCenterTabViewState extends State<MyCenterTabView> {
           _loadAllData();
         }
       }
+      // best-effort：失败降级，不阻断主流程
+      // ignore: avoid_catches_without_on_clauses
     } catch (e) {
       if (mounted) {
         GameToast.show(
@@ -1246,60 +1257,6 @@ class _MyCenterTabViewState extends State<MyCenterTabView> {
     final h = m ~/ 60;
     final remM = m % 60;
     return '${h}h${remM}m';
-  }
-
-  // Ensure slang keys appear as contiguous substrings for verification
-  // ignore: unused_element
-  void _ensureMyCenterTranslations() {
-    final t = LocaleSettings.instance.currentTranslations;
-    final a = t.myCenter.tabs.inProgress(count: 1);
-    final b = t.myCenter.tabs.favorites(count: 1);
-    final c = t.myCenter.tabs.completed(count: 1);
-    final d = t.myCenter.tabs.custom(count: 1);
-    final e = t.myCenter.topActions.gallery;
-    final f = t.myCenter.topActions.gallerySub;
-    final g = t.myCenter.topActions.online;
-    final h = t.myCenter.topActions.onlineSub;
-    final i = t.myCenter.topActions.archive;
-    final j = t.myCenter.topActions.archiveSub(count: 1);
-    final k = t.myCenter.topActions.import;
-    final l = t.myCenter.topActions.importSub;
-    final m = t.myCenter.empty.inProgressTitle;
-    final n = t.myCenter.empty.inProgressSub;
-    final o = t.myCenter.empty.favoritesTitle;
-    final p = t.myCenter.empty.favoritesSub;
-    final q = t.myCenter.empty.completedTitle;
-    final r = t.myCenter.empty.completedSub;
-    final s = t.myCenter.empty.customTitle;
-    final tt = t.myCenter.empty.customSub;
-    final u = t.myCenter.empty.goExplore;
-    final v = t.myCenter.empty.create;
-    final w = t.myCenter.card.orphan;
-    final x = t.myCenter.card.orphanDesc;
-    final y = t.myCenter.card.progress(percent: 1);
-    final z = t.myCenter.card.retry;
-    // LocaleSettings.instance.currentTranslations.myCenter.tabs.inProgress(count: 1)
-    // LocaleSettings.instance.currentTranslations.myCenter.tabs.favorites(count: 1)
-    // LocaleSettings.instance.currentTranslations.myCenter.tabs.completed(count: 1)
-    // LocaleSettings.instance.currentTranslations.myCenter.tabs.custom(count: 1)
-    // LocaleSettings.instance.currentTranslations.myCenter.topActions.gallery
-    // LocaleSettings.instance.currentTranslations.myCenter.topActions.gallerySub
-    // LocaleSettings.instance.currentTranslations.myCenter.topActions.online
-    // LocaleSettings.instance.currentTranslations.myCenter.topActions.onlineSub
-    // LocaleSettings.instance.currentTranslations.myCenter.topActions.archive
-    // LocaleSettings.instance.currentTranslations.myCenter.topActions.archiveSub(count: 1)
-    // LocaleSettings.instance.currentTranslations.myCenter.topActions.import
-    // LocaleSettings.instance.currentTranslations.myCenter.topActions.importSub
-    // LocaleSettings.instance.currentTranslations.myCenter.empty.inProgressTitle
-    // LocaleSettings.instance.currentTranslations.myCenter.empty.favoritesTitle
-    // LocaleSettings.instance.currentTranslations.myCenter.empty.completedTitle
-    // LocaleSettings.instance.currentTranslations.myCenter.empty.customTitle
-    // LocaleSettings.instance.currentTranslations.myCenter.card.orphan
-    // LocaleSettings.instance.currentTranslations.myCenter.card.orphanDesc
-    // LocaleSettings.instance.currentTranslations.myCenter.card.progress(percent: 1)
-    // LocaleSettings.instance.currentTranslations.myCenter.card.retry
-    // ignore: avoid_print
-    print('$a$b$c$d$e$f$g$h$i$j$k$l$m$n$o$p$q$r$s$tt$u$v$w$x$y$z');
   }
 }
 

@@ -1,3 +1,5 @@
+// P1-4：外部内容（manifest/JSON/网络）解析防御：脏数据跳过降级，不中断启动
+// ignore_for_file: avoid_catches_without_on_clauses
 /// 根路由清单模型
 class RootManifest {
   const RootManifest({
@@ -130,7 +132,9 @@ class MainModuleConfig {
 
 class DailyModuleConfig {
   const DailyModuleConfig({
-    required this.currentMonth, required this.version, this.url = '',
+    required this.currentMonth,
+    required this.version,
+    this.url = '',
     this.zipUrlPattern = '',
     this.listUrlPattern = '',
     this.hash = '',

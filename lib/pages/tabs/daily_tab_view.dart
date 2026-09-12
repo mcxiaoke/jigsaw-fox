@@ -198,6 +198,8 @@ class _DailyTabViewState extends State<DailyTabView> {
       if (!success) {
         _failedMonths.add(yyyyMm);
       }
+      // best-effort：记录后降级继续
+      // ignore: avoid_catches_without_on_clauses
     } catch (e, st) {
       _failedMonths.add(yyyyMm);
       AppLogger.daily.severe(
@@ -319,6 +321,8 @@ class _DailyTabViewState extends State<DailyTabView> {
         }
         return;
       }
+      // best-effort：记录后降级继续
+      // ignore: avoid_catches_without_on_clauses
     } catch (e, st) {
       AppLogger.daily.severe('Failed to read daily level file bytes', e, st);
       if (mounted) {
@@ -345,7 +349,6 @@ class _DailyTabViewState extends State<DailyTabView> {
       context: context,
       canonicalId: canonicalId,
       fallbackDifficulty: fallbackDifficulty,
-      isCompleted: progress.isCompleted,
       title: title,
       imageBytes: imgBytes,
       onClearRepo: (k) => GameRepository.instance.updateGenericProgress(

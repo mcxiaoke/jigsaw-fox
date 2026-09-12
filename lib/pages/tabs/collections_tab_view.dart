@@ -92,6 +92,8 @@ class _CollectionsTabViewState extends State<CollectionsTabView> {
           );
         }
       }
+      // best-effort：记录后降级继续
+      // ignore: avoid_catches_without_on_clauses
     } catch (e, st) {
       AppLogger.events.warning(
         'Collections download event exception id=${item.id}',
@@ -144,6 +146,8 @@ class _CollectionsTabViewState extends State<CollectionsTabView> {
           );
         }
       }
+      // best-effort：记录后降级继续
+      // ignore: avoid_catches_without_on_clauses
     } catch (e, st) {
       AppLogger.content.warning(
         'Collections download exception id=${item.id}',
@@ -204,7 +208,10 @@ class _CollectionsTabViewState extends State<CollectionsTabView> {
           SoundService.I.play(Sfx.tap);
           // P0-2：已下架且本地无数据者禁用下载入口；已下载者仍可进入游玩。
           if (ev.isDelisted && !isDownloaded) {
-            GameToast.show(context, message: t.collections.delistedCantDownload);
+            GameToast.show(
+              context,
+              message: t.collections.delistedCantDownload,
+            );
             return;
           }
           // 未下载的 Zip 活动禁止进入关卡页，点击就地触发下载

@@ -1,3 +1,5 @@
+// P1-4：测试有意触发失败路径以验证容错逻辑，统一豁免
+// ignore_for_file: avoid_catches_without_on_clauses
 import 'dart:convert';
 import 'dart:io';
 

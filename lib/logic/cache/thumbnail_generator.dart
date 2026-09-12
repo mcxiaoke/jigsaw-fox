@@ -1,3 +1,5 @@
+// P1-4：图片/下载链路 best-effort：失败仅降级到备用来源，不阻断主流程
+// ignore_for_file: avoid_catches_without_on_clauses
 import 'dart:math';
 
 import 'package:flutter/foundation.dart';

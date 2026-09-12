@@ -1,3 +1,5 @@
+// P1-4：持久层防御式容错：损坏数据/IO 异常必须降级而非崩溃，本文件统一豁免裸 catch
+// ignore_for_file: avoid_catches_without_on_clauses
 import 'package:flutter/foundation.dart';
 import 'package:hive_ce/hive_ce.dart';
 import 'package:jigsawpuzzle/data/storage_manager.dart';

@@ -49,6 +49,8 @@ class _BootGatePageState extends State<BootGatePage> {
       AppLogger.content.info('BootGate initialize success');
       if (!mounted) return;
       _enterMain();
+      // best-effort：记录后降级继续
+      // ignore: avoid_catches_without_on_clauses
     } catch (e, st) {
       AppLogger.content.severe('BootGate initialize failed', e, st);
       if (!mounted) return;

@@ -1,9 +1,12 @@
+// P1-4：持久层防御式容错：损坏数据/IO 异常必须降级而非崩溃，本文件统一豁免裸 catch
+// ignore_for_file: avoid_catches_without_on_clauses
 import 'dart:convert';
 import 'dart:io';
 
 import 'package:jigsawpuzzle/logic/models/puzzle_state.dart';
 import 'package:jigsawpuzzle/logic/puzzle_model.dart';
 import 'package:jigsawpuzzle/services/app_logger.dart';
+import 'package:meta/meta.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
@@ -50,6 +53,23 @@ class SnapshotStore {
       await _cleanupTempFiles();
       _initialized = true;
     }
+  }
+
+  /// 测试专用：跳过 path_provider，直接注入隔离快照目录并标记已初始化。
+  ///
+  /// 纯 Dart 测试环境缺少 path_provider 平台插件，[init] 会落入 catch 回退
+  /// 分支、写全局 `%TEMP%\jigsaw_snapshots`——真实调试数据与各测试互相污染。
+  /// 注入目录由测试基建（test_helper.dart）创建在临时 home 下，并随其清理；
+  /// 注入后 `_initialized=true`，业务路径（如 GameRepository.init）中的
+  /// init() 调用自动短路，不会再触全局回退目录。
+  @visibleForTesting
+  void initForTest(Directory dir) {
+    // save() 不负责建目录（由 init() 承担），注入时同步建好（幂等）。
+    if (!dir.existsSync()) {
+      dir.createSync(recursive: true);
+    }
+    _snapshotsDir = dir;
+    _initialized = true;
   }
 
   /// 清理残留的 .tmp / .bak 临时文件（P21 崩溃恢复）
