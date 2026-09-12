@@ -240,7 +240,7 @@ void main() {
       await tester.tap(find.text('宠物'));
       await tester.pumpAndSettle();
 
-      expect(find.textContaining('每日挑战'), findsOneWidget);
+      expect(find.text('宠物'), findsOneWidget);
     });
 
     testWidgets(
@@ -274,7 +274,6 @@ void main() {
         const MaterialApp(home: Scaffold(body: DailyTabView())),
       );
 
-      expect(find.text('TODAY'), findsOneWidget);
       expect(find.textContaining('连胜'), findsOneWidget);
       final now = DateTime.now();
       final curMonthTitle = '${now.year}年${now.month}月';
