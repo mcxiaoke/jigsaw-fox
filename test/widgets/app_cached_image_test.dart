@@ -98,6 +98,36 @@ void main() {
       expect(find.text('CustomError'), findsOneWidget);
     });
 
+    testWidgets('Tapping errorWidget triggers retry and recovers on success', (
+      tester,
+    ) async {
+      fakeHttpClient.shouldFail = true;
+      const testUrl = 'https://example.com/retry_download.png';
+
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: Scaffold(
+            body: AppCachedImage(
+              imagePathOrUrl: testUrl,
+              errorWidget: Text('CustomError'),
+            ),
+          ),
+        ),
+      );
+
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 50));
+      expect(find.text('CustomError'), findsOneWidget);
+
+      // Network recovers, user taps to retry
+      fakeHttpClient.shouldFail = false;
+      await tester.tap(find.text('CustomError'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 50));
+
+      expect(find.byType(Image), findsOneWidget);
+    });
+
     testWidgets('Renders FileImage with ResizeImage for valid local file', (
       tester,
     ) async {
@@ -162,6 +192,42 @@ void main() {
           find.byType(AppCachedImage),
         );
         expect(cachedImage.imagePathOrUrl, equals(localPath));
+      },
+    );
+
+    testWidgets(
+      'LazyLevelImage tapping errorWidget triggers retry and recovers',
+      (tester) async {
+        fakeHttpClient.shouldFail = true;
+        const url = 'https://example.com/lazy_fail_and_retry.png';
+
+        const level = PuzzleLevelItem(
+          id: 'main:202',
+          url: url,
+        );
+
+        await tester.pumpWidget(
+          const MaterialApp(
+            home: Scaffold(
+              body: LazyLevelImage(
+                level: level,
+                errorWidget: Text('LazyErrorWidget'),
+              ),
+            ),
+          ),
+        );
+
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 50));
+        expect(find.text('LazyErrorWidget'), findsOneWidget);
+
+        // Network recovers, user taps to retry
+        fakeHttpClient.shouldFail = false;
+        await tester.tap(find.text('LazyErrorWidget'));
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 50));
+
+        expect(find.byType(AppCachedImage), findsOneWidget);
       },
     );
 

@@ -38,10 +38,25 @@ class EventsContentPipeline {
   /// 进行中的下载单飞表 (同 id 并发 ensure 复用同一 Future，防互删临时目录)
   final Map<String, Future<bool>> _inFlightDownloads = {};
 
+  /// 节流：上次通知进度的时间戳 (eventId -> timestamp ms)，至多 2 秒派发一次
+  final Map<String, int> _lastProgressReportMs = {};
+
   bool isDownloading(String id) => _inFlightDownloads.containsKey(id);
   double getDownloadProgress(String id) => progressNotifier.value[id] ?? 0.0;
 
   void _updateDownloadProgress(String id, double progress) {
+    final now = DateTime.now().millisecondsSinceEpoch;
+    final last = _lastProgressReportMs[id] ?? 0;
+    final isTerminal = progress <= 0.0 || progress >= 1.0;
+    // 节流：终态（0% 或 100%）必须立即放行；中间进度至多 2 秒派发一次
+    if (!isTerminal && (now - last < 2000)) {
+      return;
+    }
+    _lastProgressReportMs[id] = now;
+    if (isTerminal) {
+      _lastProgressReportMs.remove(id);
+    }
+
     final next = Map<String, double>.from(progressNotifier.value);
     next[id] = progress;
     progressNotifier.value = next;

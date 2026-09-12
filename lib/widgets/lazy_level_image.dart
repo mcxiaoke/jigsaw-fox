@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -42,19 +43,26 @@ class _LazyLevelImageState extends State<LazyLevelImage> {
   void initState() {
     super.initState();
     _checkSyncHit();
-    _resolve();
+    unawaited(_resolve());
   }
 
   @override
   void didUpdateWidget(covariant LazyLevelImage oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.level.id != widget.level.id ||
-        oldWidget.level.imagePathOrUrl != widget.level.imagePathOrUrl) {
+        oldWidget.level.imagePathOrUrl != widget.level.imagePathOrUrl ||
+        (_failed && _resolvedPath == null)) {
       _resolvedPath = null;
       _failed = false;
       _checkSyncHit();
-      _resolve();
+      unawaited(_resolve());
     }
+  }
+
+  void _retry() {
+    if (!mounted) return;
+    setState(() => _failed = false);
+    unawaited(_resolve());
   }
 
   void _checkSyncHit() {
@@ -123,16 +131,22 @@ class _LazyLevelImageState extends State<LazyLevelImage> {
     }
 
     if (_failed) {
-      return widget.errorWidget ??
+      final errorChild =
+          widget.errorWidget ??
           Container(
             color: Colors.grey.shade200,
             alignment: Alignment.center,
             child: Icon(
-              PhosphorIconsRegular.imageBroken,
+              PhosphorIconsRegular.arrowClockwise,
               color: Colors.grey.shade400,
               size: 24,
             ),
           );
+      return GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: _retry,
+        child: errorChild,
+      );
     }
 
     return AppCachedImage(

@@ -101,7 +101,7 @@ class AppCachedImage extends StatelessWidget {
       color: Colors.grey.shade200,
       alignment: Alignment.center,
       child: Icon(
-        PhosphorIconsRegular.imageBroken,
+        PhosphorIconsRegular.arrowClockwise,
         color: Colors.grey.shade400,
         size: 24,
       ),
@@ -226,11 +226,17 @@ class _NetworkImageLoaderState extends State<_NetworkImageLoader> {
   @override
   void didUpdateWidget(covariant _NetworkImageLoader oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.url != widget.url) {
+    if (oldWidget.url != widget.url || (_failed && _localPath == null)) {
       _localPath = null;
       _failed = false;
       unawaited(_load());
     }
+  }
+
+  void _retry() {
+    if (!mounted) return;
+    setState(() => _failed = false);
+    unawaited(_load());
   }
 
   Future<void> _load() async {
@@ -248,7 +254,13 @@ class _NetworkImageLoaderState extends State<_NetworkImageLoader> {
 
   @override
   Widget build(BuildContext context) {
-    if (_failed) return widget.errorWidget;
+    if (_failed) {
+      return GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: _retry,
+        child: widget.errorWidget,
+      );
+    }
     if (_localPath == null) {
       var ph = widget.placeholder;
       if (widget.borderRadius != null) {
