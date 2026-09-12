@@ -1804,6 +1804,85 @@ class JigsawPuzzleGame extends FlameGame
     updatePiecesStateAndPriorities();
   }
 
+  /// 吸附结算共用管线（H3 重构：消除 dragEnd / hint 两处逐行重复）。
+  ///
+  /// [handlePieceDragEnd] 与 hint 在各自算出 [BoardTransitionResult] 后，都要执行
+  /// 完全相同的五段收尾：**同步 clusterId/rot → 动画受影响的碎片 → 刷新可见性与
+  /// 托盘状态 → 派发四个回调 → 胜负判定**。此前这两段各自复制了一份（约 90 行），
+  /// 任何一侧漏改都会造成「吸附判定与动画/回调静默分叉」，是全项目维护风险最高的
+  /// 重复块。现收敛到本方法，两侧只传差异参数。
+  ///
+  /// 差异参数（唯一真正不同的地方）：
+  /// - [animateDuration]：dragEnd 用默认（null），hint 用 0.25s 平滑归位；
+  /// - [affectedPieceIds]：affectedPieceIds 为空时的兜底动画目标（hint 需兜底到提示片）；
+  /// - [affectsTopPriority]：hint 需显式提升层级（`_topPriority += 2`）确保提示片置顶；
+  /// - [logTag]：日志区分来源（dragEnd / hint）。
+  ///
+  /// 调用方负责：设置 `_boardState`、`undoManager.record`、以及 play(Sfx.snap)
+  /// （hint 的音效时机与 undo 语义不同，不并入本方法）。
+  void _applySnapSettlement({
+    required BoardTransitionResult result,
+    required List<int> affectedPieceIds,
+    required String logTag,
+    double? animateDuration,
+    bool affectsTopPriority = false,
+  }) {
+    final finalAffectedIds = affectedPieceIds.isNotEmpty
+        ? affectedPieceIds
+        : const <int>[];
+
+    if (affectsTopPriority) {
+      _topPriority += 2;
+    }
+
+    // 全量同步 clusterId / rot：确保级联合并后的状态一致
+    for (final p in _boardState.pieces) {
+      final comp = _pieces[p.id];
+      if (comp != null) {
+        comp.clusterId = p.clusterId;
+        comp.rot = p.rot;
+      }
+    }
+
+    for (final affectedId in finalAffectedIds) {
+      final statePiece = _boardState.pieceById(affectedId);
+      final comp = _pieces[affectedId];
+      if (comp == null) continue; // 防御：跳过 _pieces 中不存在的碎片
+      if (affectsTopPriority) comp.priority = _topPriority;
+      comp.isInTray = false;
+      comp.scale.setFrom(Vector2.all(_zoom));
+      comp.clusterId = statePiece.clusterId;
+      comp.rot = statePiece.rot;
+      final targetScreenPos = _normalizedToScreen(
+        statePiece.nx,
+        statePiece.ny,
+      );
+      if (animateDuration == null) {
+        comp.animateTo(targetScreenPos);
+      } else {
+        comp.animateTo(targetScreenPos, duration: animateDuration);
+      }
+      comp.triggerSnapGlow();
+    }
+
+    updatePieceVisibility();
+    updatePiecesStateAndPriorities();
+    _checkEdgeCompleteAutoDismiss();
+    missingPieceCheck();
+
+    onPieceSnapped?.call();
+    onProgressChanged?.call(solvedCount);
+    onStateUpdated?.call();
+
+    if ((result.isCompleted || _boardState.isSolved) && !_isSolved) {
+      _isSolved = true;
+      AppLogger.game.info(
+        '$logTag solved! pieces=$totalPieces solved=$solvedCount trigger onSolved',
+      );
+      onSolved();
+    }
+  }
+
   /// Called when user releases drag. Executes snap resolution & cluster merge.
   void handlePieceDragEnd(PuzzlePieceComponent piece) {
     final inTrayArea = piece.position.y >= trayPosition.y - pieceSize.y * 0.25;
@@ -1922,46 +2001,12 @@ class JigsawPuzzleGame extends FlameGame
       _boardState = result.state;
       undoManager.record(prevState);
 
-      // 全量同步 clusterId，确保级联合并后的状态一致
-      for (final p in _boardState.pieces) {
-        final comp = _pieces[p.id];
-        if (comp != null) {
-          comp.clusterId = p.clusterId;
-          comp.rot = p.rot;
-        }
-      }
-
-      for (final affectedId in result.affectedPieceIds) {
-        final statePiece = _boardState.pieceById(affectedId);
-        final comp = _pieces[affectedId];
-        if (comp == null) continue;
-        comp.isInTray = false;
-        comp.scale.setFrom(Vector2.all(_zoom));
-        comp.clusterId = statePiece.clusterId;
-        comp.rot = statePiece.rot;
-        final targetScreenPos = _normalizedToScreen(
-          statePiece.nx,
-          statePiece.ny,
-        );
-        comp.animateTo(targetScreenPos);
-        comp.triggerSnapGlow();
-      }
-
-      updatePieceVisibility();
-      updatePiecesStateAndPriorities();
-      _checkEdgeCompleteAutoDismiss();
-      missingPieceCheck();
-      onPieceSnapped?.call();
-      onProgressChanged?.call(solvedCount);
-      onStateUpdated?.call();
-
-      if ((result.isCompleted || _boardState.isSolved) && !_isSolved) {
-        _isSolved = true;
-        AppLogger.game.info(
-          'Game solved! pieces=$totalPieces solved=$solvedCount trigger onSolved',
-        );
-        onSolved();
-      }
+      // 共用结算管线（H3：与 hint 消除 90 行重复）
+      _applySnapSettlement(
+        result: result,
+        affectedPieceIds: result.affectedPieceIds,
+        logTag: 'dragEnd',
+      );
     } else {
       // 未吸附 -> 轻落位音 + 保持棋盘当前 _zoom 尺寸
       SoundService.I.play(Sfx.place);
@@ -2417,52 +2462,17 @@ class JigsawPuzzleGame extends FlameGame
     // 音效前置：在重计算之前立即入队平台通道调用，避免同步逻辑阻塞导致超时丢音
     SoundService.I.play(Sfx.snap);
 
-    // 全量同步 clusterId
-    for (final p in _boardState.pieces) {
-      final comp = _pieces[p.id];
-      if (comp != null) {
-        comp.clusterId = p.clusterId;
-        comp.rot = p.rot;
-      }
-    }
-
-    // ONLY animate the hinted piece and its directly affected cluster members
-    final affectedIds = result.affectedPieceIds.isNotEmpty
-        ? result.affectedPieceIds
-        : [targetPieceId];
-
-    _topPriority += 2;
-    for (final id in affectedIds) {
-      final statePiece = _boardState.pieceById(id);
-      final c = _pieces[id];
-      if (c == null) continue; // 防御：跳过 _pieces 中不存在的碎片
-      c.priority = _topPriority;
-      c
-        ..isInTray = false
-        ..scale.setFrom(Vector2.all(_zoom))
-        ..clusterId = statePiece.clusterId;
-      c
-        ..rot = statePiece.rot
-        ..animateTo(
-          _normalizedToScreen(statePiece.nx, statePiece.ny),
-          duration: 0.25,
-        );
-      c.triggerSnapGlow();
-    }
-
-    updatePieceVisibility();
-    updatePiecesStateAndPriorities();
-    _checkEdgeCompleteAutoDismiss();
-    missingPieceCheck();
-
-    onPieceSnapped?.call();
-    onProgressChanged?.call(solvedCount);
-    onStateUpdated?.call();
-
-    if ((result.isCompleted || _boardState.isSolved) && !_isSolved) {
-      _isSolved = true;
-      onSolved();
-    }
+    // 共用结算管线（H3：与 handlePieceDragEnd 消除 90 行重复）。
+    // diff：0.25s 平滑归位 + 层级提升 + 空结果兜底动画提示片。
+    _applySnapSettlement(
+      result: result,
+      affectedPieceIds: result.affectedPieceIds.isNotEmpty
+          ? result.affectedPieceIds
+          : [targetPieceId],
+      animateDuration: 0.25,
+      affectsTopPriority: true,
+      logTag: 'hint',
+    );
   }
 
   /// “失踪碎片”防丢自检与自愈机制：

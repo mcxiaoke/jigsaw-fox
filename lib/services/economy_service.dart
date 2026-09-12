@@ -99,9 +99,9 @@ class EconomyService {
     _initialized = true;
     // 新手赠送（仅首次启动一次，标记防重复）：5 券 + 100 金币（设计 §6.2）
     if (!(_box.get(_keyStarterGranted) as bool? ?? false)) {
-      await _box.put(_keyCoins, kInitialCoins);
-      await _box.put(_keyCoupons, kInitialHintCoupons);
-      await _box.put(_keyStarterGranted, true);
+      await putRaw(_box, _keyCoins, kInitialCoins);
+      await putRaw(_box, _keyCoupons, kInitialHintCoupons);
+      await putRaw(_box, _keyStarterGranted, true);
     }
   }
 
@@ -109,11 +109,11 @@ class EconomyService {
   /// 保证 resetAllData 后当前会话金币=100/券=5，无需杀进程重启补发
   Future<void> reset() async {
     _initialized = true;
-    await _box.put(_keyCoins, kInitialCoins);
-    await _box.put(_keyCoupons, kInitialHintCoupons);
-    await _box.put(_keyStarterGranted, true);
-    await _box.put(_keyDailyEarned, 0);
-    await _box.put(_keyDailyDate, '');
+    await putRaw(_box, _keyCoins, kInitialCoins);
+    await putRaw(_box, _keyCoupons, kInitialHintCoupons);
+    await putRaw(_box, _keyStarterGranted, true);
+    await putRaw(_box, _keyDailyEarned, 0);
+    await putRaw(_box, _keyDailyDate, '');
     AppLogger.repo.info('EconomyService.reset done (starter re-granted)');
   }
 
@@ -135,12 +135,12 @@ class EconomyService {
       final remainingCap = math.max(0, kDailyCoinCap - currentDaily);
       actualEarned = math.min(amount, remainingCap);
       currentDaily += actualEarned;
-      await _box.put(_keyDailyDate, today);
-      await _box.put(_keyDailyEarned, currentDaily);
+      await putRaw(_box, _keyDailyDate, today);
+      await putRaw(_box, _keyDailyEarned, currentDaily);
     }
 
     final newTotal = coins + actualEarned;
-    await _box.put(_keyCoins, newTotal);
+    await putRaw(_box, _keyCoins, newTotal);
     AppLogger.repo.info(
       'EconomyService.addCoins +$actualEarned (total=$newTotal daily=$currentDaily bypass=$bypassCap)',
     );
@@ -152,7 +152,7 @@ class EconomyService {
     await init();
     if (count <= 0) return;
     final newTotal = hintCoupons + count;
-    await _box.put(_keyCoupons, newTotal);
+    await putRaw(_box, _keyCoupons, newTotal);
     AppLogger.repo.info(
       'EconomyService.addHintCoupons +$count (total=$newTotal)',
     );
@@ -206,7 +206,7 @@ class EconomyService {
     await init();
     // 1. 优先扣免费提示券
     if (hintCoupons > 0) {
-      await _box.put(_keyCoupons, hintCoupons - 1);
+      await putRaw(_box, _keyCoupons, hintCoupons - 1);
       AppLogger.repo.info(
         'EconomyService.consumeHint used coupon (remaining=${hintCoupons - 1})',
       );
@@ -218,7 +218,7 @@ class EconomyService {
     final price = kHintPrices[safeTier];
     if (coins >= price) {
       final newTotal = coins - price;
-      await _box.put(_keyCoins, newTotal);
+      await putRaw(_box, _keyCoins, newTotal);
       AppLogger.repo.info(
         'EconomyService.consumeHint used coins -$price (remaining=$newTotal)',
       );

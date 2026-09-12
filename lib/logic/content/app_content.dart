@@ -107,10 +107,27 @@ class AppContent {
 
   /// 组1 纯本地初始化：构建 manager + 读磁盘缓存，**不发任何网络请求**。
   /// manifest 磁盘未命中时返回 offline fallback，是否联网初始化由 BootGate 决定。
+  ///
+  /// **失败可重试（H4 修复）**：初始化抛错时（磁盘 manifest 损坏 / 版本不兼容 /
+  /// 目录不可写）必须清除 `_initFuture` 缓存并透传错误。若像原先那样无条件缓存
+  /// future，failed future 会被永久复用——此后 BootGate 或任何重试入口都命中同一
+  /// 失败结果，**进程生命周期内永远失败，只能重启 App**。
   Future<void> initFromDiskCache({List<String>? bootstrapUrls}) {
     final existing = _initFuture;
     if (existing != null) return existing;
-    final future = _initFromDiskCache(bootstrapUrls);
+    final future = _initFromDiskCache(bootstrapUrls).onError((
+      Object e,
+      StackTrace st,
+    ) {
+      // 失败清除缓存：允许上层修复后重试（重试入口可再次调用本方法）
+      _initFuture = null;
+      AppLogger.content.warning(
+        'AppContent initFromDiskCache failed (cache cleared for retry)',
+        e,
+        st,
+      );
+      return Future<void>.error(e, st);
+    });
     _initFuture = future;
     return future;
   }

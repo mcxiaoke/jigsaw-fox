@@ -87,6 +87,25 @@ Future<void> putJson(Box<dynamic> box, String key, Map<String, dynamic> value) {
   return f;
 }
 
+/// 原生类型 box（state）统一写入：int / String / bool 直接落盘，不做 jsonEncode。
+///
+/// 与 [putJson] 同源设计——**所有写入必须经过此处或 [putJson]**，否则不会纳入
+/// `_pendingWrites` 挂起队列，关窗/强杀时可能静默丢档（P05 防护缺口）。
+/// 经济（金币/券）与成就（计数/解锁/领取/星标）即为此前遗漏的写入方。
+Future<void> putRaw(Box<dynamic> box, String key, Object? value) {
+  final f = box.put(key, value);
+  // 纳入全局挂起队列（P05 关窗丢档防护）
+  StorageManager.instance._trackWrite(f);
+  return f;
+}
+
+/// 原生类型 box（state）统一删除：与 [putRaw] 对称，纳入 `_pendingWrites` 队列。
+Future<void> deleteRaw(Box<dynamic> box, String key) {
+  final f = box.delete(key);
+  StorageManager.instance._trackWrite(f);
+  return f;
+}
+
 /// 与 [putJson] 配对的读取（jsonDecode 任何层级都返回 Map[String, dynamic]）。
 Map<String, dynamic>? getJson(Box<dynamic> box, String key) {
   final raw = box.get(key);

@@ -276,7 +276,7 @@ class GameRepository {
       }
       if (allOk) {
         rawItems.addAll(samples);
-        await stateBox.put(kKeyPresetsInitialized, true);
+        await putRaw(stateBox, kKeyPresetsInitialized, true);
         AppLogger.repo.info('initCustom created default 3 samples');
       } else {
         // P1-17 回滚本轮已写入的样例：任一失败即删除已成功的样例 key，
@@ -296,7 +296,7 @@ class GameRepository {
     } else {
       if (presetsInitialized != true) {
         // 有历史数据但标志缺失（理论不可达，防御性补写）
-        await stateBox.put(kKeyPresetsInitialized, true);
+        await putRaw(stateBox, kKeyPresetsInitialized, true);
       }
     }
 
@@ -336,7 +336,10 @@ class GameRepository {
 
   /// 删除单条元数据
   Future<void> _deleteCustomPuzzleKey(String id) async {
-    await StorageManager.instance.collections.delete('$_customKeyPrefix$id');
+    await deleteRaw(
+      StorageManager.instance.collections,
+      '$_customKeyPrefix$id',
+    );
   }
 
   /// Adds a new user custom puzzle.
@@ -890,13 +893,15 @@ class GameRepository {
     try {
       final stateBox = StorageManager.instance.state;
       if (pieceCount > 0) {
-        await stateBox.put(
+        await putRaw(
+          stateBox,
           _keyStatPiecesSnapped,
           totalPiecesSnapped + pieceCount,
         );
       }
       if (durationSeconds > 0) {
-        await stateBox.put(
+        await putRaw(
+          stateBox,
           _keyStatPlayTime,
           totalPlayTimeSeconds + durationSeconds,
         );

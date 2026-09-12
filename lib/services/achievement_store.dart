@@ -147,29 +147,57 @@ class AchievementStore {
   }
 
   // --- 单条落盘（原整 JSON Map / StringList 全量重写已被逐条 put 取代） ---
+  //
+  // 全部走 [putRaw]：与 progress/favorite 一致纳入 `_pendingWrites` 挂起队列，
+  // 关窗/强杀时由 `flushPendingWrites` 等待，避免成就资产静默丢失。
+  // 写失败必须留痕（原先 4 处 `catch (_) {}` 全静默，故障完全不可诊断）。
 
   Future<void> _putCounter(String metricKey, int value) async {
     try {
-      await _box.put('$_prefixCounter$metricKey', value);
-    } catch (_) {}
+      await putRaw(_box, '$_prefixCounter$metricKey', value);
+    } catch (e, st) {
+      AppLogger.repo.warning(
+        'AchievementStore._putCounter fail metric=$metricKey',
+        e,
+        st,
+      );
+    }
   }
 
   Future<void> _putUnlock(String achievementId, String iso) async {
     try {
-      await _box.put('$_prefixUnlock$achievementId', iso);
-    } catch (_) {}
+      await putRaw(_box, '$_prefixUnlock$achievementId', iso);
+    } catch (e, st) {
+      AppLogger.repo.warning(
+        'AchievementStore._putUnlock fail id=$achievementId',
+        e,
+        st,
+      );
+    }
   }
 
   Future<void> _putClaimed(String achievementId) async {
     try {
-      await _box.put('$_prefixClaimed$achievementId', true);
-    } catch (_) {}
+      await putRaw(_box, '$_prefixClaimed$achievementId', true);
+    } catch (e, st) {
+      AppLogger.repo.warning(
+        'AchievementStore._putClaimed fail id=$achievementId',
+        e,
+        st,
+      );
+    }
   }
 
   Future<void> _putStarred(String canonicalId) async {
     try {
-      await _box.put('$_prefixStarred$canonicalId', true);
-    } catch (_) {}
+      await putRaw(_box, '$_prefixStarred$canonicalId', true);
+    } catch (e, st) {
+      AppLogger.repo.warning(
+        'AchievementStore._putStarred fail cid=$canonicalId',
+        e,
+        st,
+      );
+    }
   }
 
   /// 重置（§7.6 步骤 4，本次新建）：清 4 个内存缓存 + 删除 box 中 ach:* 条目
@@ -193,8 +221,14 @@ class AchievementStore {
           .toList();
       for (final key in keys) {
         try {
-          await _box.delete(key);
-        } catch (_) {}
+          await deleteRaw(_box, key);
+        } catch (e, st) {
+          AppLogger.repo.warning(
+            'AchievementStore.reset delete fail key=$key',
+            e,
+            st,
+          );
+        }
       }
     } catch (e, st) {
       AppLogger.repo.warning(
