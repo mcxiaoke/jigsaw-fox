@@ -5,6 +5,7 @@ import 'dart:math' as math;
 import 'package:flutter/foundation.dart';
 import 'package:jigsawpuzzle/logic/content/content_manager.dart';
 import 'package:jigsawpuzzle/logic/content/pipelines/collections_content_pipeline.dart';
+import 'package:jigsawpuzzle/logic/content/pipelines/events_content_pipeline.dart';
 import 'package:jigsawpuzzle/logic/content/pipelines/pack_content_pipeline.dart';
 import 'package:jigsawpuzzle/services/app_logger.dart';
 import 'package:path_provider/path_provider.dart';
@@ -64,12 +65,21 @@ class AppContent {
         collectionsStorageBaseDir: '',
       );
 
+  static final EventsContentPipeline _fallbackEvents = EventsContentPipeline(
+    cacheFilePath: '',
+    eventsStorageBaseDir: '',
+  );
+
   /// 扩展图包管线快捷访问 (带安全 Fallback)
   PackContentPipeline get packs => _manager?.packPipeline ?? _fallbackPacks;
 
   /// 图集管线快捷访问 (带安全 Fallback)
   CollectionsContentPipeline get collections =>
       _manager?.collectionsPipeline ?? _fallbackCollections;
+
+  /// 活动管线快捷访问 (带安全 Fallback)
+  EventsContentPipeline get events =>
+      _manager?.eventsPipeline ?? _fallbackEvents;
 
   bool _isInitialized = false;
   bool get isInitialized => _isInitialized;
@@ -204,7 +214,7 @@ class AppContent {
         manifest.schemaVersion > kMaxSupportedSchemaVersion) {
       throw StateError(
         'manifest schemaVersion=${manifest.schemaVersion} not supported '
-        '(supported ${kMinSupportedSchemaVersion}~$kMaxSupportedSchemaVersion); '
+        '(supported $kMinSupportedSchemaVersion~$kMaxSupportedSchemaVersion); '
         'app may be outdated',
       );
     }

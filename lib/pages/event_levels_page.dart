@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'dart:typed_data';
 
@@ -45,25 +46,45 @@ class _EventLevelsPageState extends State<EventLevelsPage> {
   void initState() {
     super.initState();
     _currentEvent = widget.event;
-    _loadLevels();
+    unawaited(_loadLevels());
   }
 
   Future<void> _loadLevels() async {
     setState(() => _isLoading = true);
     try {
+      if (_content.isEventDownloaded(_currentEvent)) {
+        final cachedLevels = _content.getEventLevels(_currentEvent);
+        if (cachedLevels.isNotEmpty) {
+          if (mounted) {
+            setState(() {
+              _levels = cachedLevels;
+              _isLoading = false;
+            });
+          }
+          return;
+        }
+      }
+
       await _content.ensureEventDownloaded(_currentEvent);
       _levels = _content.getEventLevels(_currentEvent);
       AppLogger.events.info(
         'EventLevels loaded id=${_currentEvent.id} count=${_levels.length}',
       );
     } catch (e, st) {
-      // P13 永久 loading 防护：网络失败仍需置位
       AppLogger.events.warning(
         'EventLevels load failed id=${_currentEvent.id}',
         e,
         st,
       );
       _levels = [];
+      if (mounted) {
+        GameToast.show(
+          context,
+          icon: PhosphorIconsRegular.warning,
+          message: t.levels.networkFail,
+          type: GameToastType.error,
+        );
+      }
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -159,7 +180,7 @@ class _EventLevelsPageState extends State<EventLevelsPage> {
         ),
       ),
       body: _isLoading
-          ? Center(child: CircularProgressIndicator(color: palette.brand))
+          ? const Center(child: CircularProgressIndicator())
           : _levels.isEmpty
           ? Center(
               child: Column(

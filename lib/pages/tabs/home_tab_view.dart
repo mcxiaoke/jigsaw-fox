@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -22,6 +23,7 @@ import 'package:jigsawpuzzle/theme/app_text_styles.dart';
 import 'package:jigsawpuzzle/utils/locale_helper.dart';
 import 'package:jigsawpuzzle/widgets/adaptive_hero_banner.dart';
 import 'package:jigsawpuzzle/widgets/choose_difficulty_sheet.dart';
+import 'package:jigsawpuzzle/widgets/download_badge.dart';
 import 'package:jigsawpuzzle/widgets/game_toast.dart';
 import 'package:jigsawpuzzle/widgets/lazy_level_image.dart';
 import 'package:phosphoricons_flutter/phosphoricons_flutter.dart';
@@ -445,6 +447,8 @@ class _HeaderCarouselState extends State<_HeaderCarousel> {
   void initState() {
     super.initState();
     AppContent.instance.contentUpdateNotifier.addListener(_onContentUpdate);
+    AppContent.instance.events.updateNotifier.addListener(_onContentUpdate);
+    AppContent.instance.events.progressNotifier.addListener(_onContentUpdate);
   }
 
   void _onContentUpdate() {
@@ -454,7 +458,56 @@ class _HeaderCarouselState extends State<_HeaderCarousel> {
   @override
   void dispose() {
     AppContent.instance.contentUpdateNotifier.removeListener(_onContentUpdate);
+    AppContent.instance.events.updateNotifier.removeListener(_onContentUpdate);
+    AppContent.instance.events.progressNotifier.removeListener(
+      _onContentUpdate,
+    );
     super.dispose();
+  }
+
+  Future<void> _startDownloadEvent(PuzzleEventItem item) async {
+    SoundService.I.play(Sfx.tap);
+    AppLogger.events.info(
+      'Home start download event id=${item.id} title=${item.displayTitle} isZip=${item.isZipType}',
+    );
+    try {
+      final ok = await AppContent.instance.events.ensureEventDownloaded(item);
+      if (mounted) {
+        if (ok) {
+          AppLogger.events.info('Home download event ok id=${item.id}');
+          GameToast.show(
+            context,
+            icon: PhosphorIconsFill.checkCircle,
+            message: t.collections.toastReady(title: item.displayTitle),
+            type: GameToastType.success,
+          );
+        } else {
+          AppLogger.events.warning(
+            'Home download event failed id=${item.id}',
+          );
+          GameToast.show(
+            context,
+            icon: PhosphorIconsRegular.warning,
+            message: t.collections.toastFailed,
+            type: GameToastType.error,
+          );
+        }
+      }
+    } catch (e, st) {
+      AppLogger.events.warning(
+        'Home download event exception id=${item.id}',
+        e,
+        st,
+      );
+      if (mounted) {
+        GameToast.show(
+          context,
+          icon: PhosphorIconsRegular.warning,
+          message: t.collections.toastError(error: '$e'),
+          type: GameToastType.error,
+        );
+      }
+    }
   }
 
   @override
@@ -484,22 +537,62 @@ class _HeaderCarouselState extends State<_HeaderCarousel> {
         ),
       // 2. 活跃活动卡片
       for (final ev in events)
-        HeroBannerItem(
-          id: ev.id,
-          title: ev.displayTitle,
-          subtitle: ev.displayDesc.isNotEmpty
-              ? ev.displayDesc
-              : t.events.subFallback,
-          imagePathOrUrl:
-              ev.coverUrl ?? (ev.levels.isNotEmpty ? ev.levels.first : ''),
-          badgeText: t.events.badgeLimited,
-          badgeEmoji: '⭐',
-          badgeColor: const Color(0xFFD97706),
-          onTap: () {
-            SoundService.I.play(Sfx.tap);
-            EventLevelsPage.open(context, ev);
-          },
-        ),
+        () {
+          final isDownloaded = AppContent.instance.manager.isEventDownloaded(
+            ev,
+          );
+          final isDownloading = AppContent.instance.events.isDownloading(ev.id);
+          final downloadProgress = AppContent.instance.events
+              .getDownloadProgress(ev.id);
+
+          return HeroBannerItem(
+            id: ev.id,
+            title: ev.displayTitle,
+            subtitle: ev.displayDesc.isNotEmpty
+                ? ev.displayDesc
+                : t.events.subFallback,
+            imagePathOrUrl:
+                ev.coverUrl ?? (ev.levels.isNotEmpty ? ev.levels.first : ''),
+            badgeText: t.events.badgeLimited,
+            badgeEmoji: '⭐',
+            badgeColor: const Color(0xFFD97706),
+            topRightBadge: DownloadBadge(
+              isDownloaded: isDownloaded,
+              isDownloading: isDownloading,
+              downloadProgress: downloadProgress,
+              isZipType: ev.isZipType,
+              displayFileSize: ev.displayFileSize,
+            ),
+            onTap: () {
+              SoundService.I.play(Sfx.tap);
+              // 未下载的 Zip 活动禁止进入关卡页，点击就地触发下载
+              if (ev.isZipType && !isDownloaded) {
+                if (isDownloading) {
+                  GameToast.show(
+                    context,
+                    icon: PhosphorIconsRegular.downloadSimple,
+                    message: t.collections.downloading(
+                      title: ev.displayTitle,
+                      percent: (downloadProgress * 100).toInt(),
+                    ),
+                  );
+                } else {
+                  GameToast.show(
+                    context,
+                    icon: PhosphorIconsRegular.downloadSimple,
+                    message: t.collections.startDownload(
+                      title: ev.displayTitle,
+                    ),
+                  );
+                  unawaited(_startDownloadEvent(ev));
+                }
+                return;
+              }
+
+              unawaited(EventLevelsPage.open(context, ev));
+            },
+          );
+        }(),
     ];
 
     return Padding(

@@ -515,9 +515,18 @@ class ContentManager {
   /// 获取所有可见活动 (过滤掉 disabled)
   List<PuzzleEventItem> getVisibleEvents() => eventsPipeline.visibleEvents;
 
+  /// 检查活动关卡是否已在本地就绪
+  bool isEventDownloaded(PuzzleEventItem event) =>
+      eventsPipeline.isEventDownloaded(event);
+
   /// 确保活动资源就绪 (Zip 模式自动下载解压)
-  Future<bool> ensureEventDownloaded(PuzzleEventItem event) =>
-      eventsPipeline.ensureEventDownloaded(event);
+  Future<bool> ensureEventDownloaded(
+    PuzzleEventItem event, {
+    void Function(double progress)? onProgress,
+  }) => eventsPipeline.ensureEventDownloaded(
+    event,
+    onProgress: onProgress,
+  );
 
   /// 获取指定活动的所有关卡
   List<PuzzleLevelItem> getEventLevels(PuzzleEventItem event) =>

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:jigsawpuzzle/l10n/gen/strings.g.dart';
 import 'package:jigsawpuzzle/logic/content/app_content.dart';
@@ -12,6 +14,7 @@ import 'package:jigsawpuzzle/theme/app_palette.dart';
 import 'package:jigsawpuzzle/theme/app_text_styles.dart';
 import 'package:jigsawpuzzle/widgets/adaptive_hero_banner.dart';
 import 'package:jigsawpuzzle/widgets/app_cached_image.dart';
+import 'package:jigsawpuzzle/widgets/download_badge.dart';
 import 'package:jigsawpuzzle/widgets/game_toast.dart';
 import 'package:phosphoricons_flutter/phosphoricons_flutter.dart';
 
@@ -35,6 +38,8 @@ class _CollectionsTabViewState extends State<CollectionsTabView> {
     super.initState();
     _content.contentUpdateNotifier.addListener(_onUpdated);
     _content.collections.updateNotifier.addListener(_onUpdated);
+    _content.events.updateNotifier.addListener(_onUpdated);
+    _content.events.progressNotifier.addListener(_onUpdated);
     LocaleService.instance.addListener(_onUpdated);
   }
 
@@ -43,11 +48,58 @@ class _CollectionsTabViewState extends State<CollectionsTabView> {
     LocaleService.instance.removeListener(_onUpdated);
     _content.contentUpdateNotifier.removeListener(_onUpdated);
     _content.collections.updateNotifier.removeListener(_onUpdated);
+    _content.events.updateNotifier.removeListener(_onUpdated);
+    _content.events.progressNotifier.removeListener(_onUpdated);
     super.dispose();
   }
 
   void _onUpdated() {
     if (mounted) setState(() {});
+  }
+
+  Future<void> _startDownloadEvent(PuzzleEventItem item) async {
+    SoundService.I.play(Sfx.tap);
+    AppLogger.events.info(
+      'Collections start download event id=${item.id} title=${item.displayTitle} isZip=${item.isZipType}',
+    );
+    try {
+      final ok = await _content.events.ensureEventDownloaded(item);
+      if (mounted) {
+        if (ok) {
+          AppLogger.events.info('Collections download event ok id=${item.id}');
+          GameToast.show(
+            context,
+            icon: PhosphorIconsFill.checkCircle,
+            message: t.collections.toastReady(title: item.displayTitle),
+            type: GameToastType.success,
+          );
+        } else {
+          AppLogger.events.warning(
+            'Collections download event failed id=${item.id}',
+          );
+          GameToast.show(
+            context,
+            icon: PhosphorIconsRegular.warning,
+            message: t.collections.toastFailed,
+            type: GameToastType.error,
+          );
+        }
+      }
+    } catch (e, st) {
+      AppLogger.events.warning(
+        'Collections download event exception id=${item.id}',
+        e,
+        st,
+      );
+      if (mounted) {
+        GameToast.show(
+          context,
+          icon: PhosphorIconsRegular.warning,
+          message: t.collections.toastError(error: '$e'),
+          type: GameToastType.error,
+        );
+      }
+    }
   }
 
   Future<void> _startDownload(PuzzleCollectionItem item) async {
@@ -110,6 +162,10 @@ class _CollectionsTabViewState extends State<CollectionsTabView> {
 
     final heroItems = visibleEvents.map((ev) {
       final isNew = ev.isNew;
+      final isDownloaded = _content.manager.isEventDownloaded(ev);
+      final isDownloading = _content.events.isDownloading(ev.id);
+      final downloadProgress = _content.events.getDownloadProgress(ev.id);
+
       return HeroBannerItem(
         id: ev.id,
         title: ev.displayTitle,
@@ -121,9 +177,38 @@ class _CollectionsTabViewState extends State<CollectionsTabView> {
         badgeText: isNew ? 'NEW' : t.events.badgeLimited,
         badgeEmoji: isNew ? '✨' : '🔥',
         badgeColor: isNew ? const Color(0xFFC97A2E) : const Color(0xFFD97706),
+        topRightBadge: DownloadBadge(
+          isDownloaded: isDownloaded,
+          isDownloading: isDownloading,
+          downloadProgress: downloadProgress,
+          isZipType: ev.isZipType,
+          displayFileSize: ev.displayFileSize,
+        ),
         onTap: () {
           SoundService.I.play(Sfx.tap);
-          EventLevelsPage.open(context, ev);
+          // 未下载的 Zip 活动禁止进入关卡页，点击就地触发下载
+          if (ev.isZipType && !isDownloaded) {
+            if (isDownloading) {
+              GameToast.show(
+                context,
+                icon: PhosphorIconsRegular.downloadSimple,
+                message: t.collections.downloading(
+                  title: ev.displayTitle,
+                  percent: (downloadProgress * 100).toInt(),
+                ),
+              );
+            } else {
+              GameToast.show(
+                context,
+                icon: PhosphorIconsRegular.downloadSimple,
+                message: t.collections.startDownload(title: ev.displayTitle),
+              );
+              unawaited(_startDownloadEvent(ev));
+            }
+            return;
+          }
+
+          unawaited(EventLevelsPage.open(context, ev));
         },
       );
     }).toList();
@@ -333,13 +418,13 @@ class _CollectionsTabViewState extends State<CollectionsTabView> {
                   icon: PhosphorIconsRegular.downloadSimple,
                   message: t.collections.startDownload(title: col.title),
                 );
-                _startDownload(col);
+                unawaited(_startDownload(col));
               }
               return;
             }
 
             // 已就绪（已下载或在线图集），方可进入关卡列表
-            CollectionLevelsPage.open(context, col);
+            unawaited(CollectionLevelsPage.open(context, col));
           },
           borderRadius: BorderRadius.circular(14),
           child: Container(
@@ -410,11 +495,12 @@ class _CollectionsTabViewState extends State<CollectionsTabView> {
                 Positioned(
                   right: 8,
                   top: 8,
-                  child: _buildDownloadBadge(
-                    col: col,
+                  child: DownloadBadge(
+                    isDownloaded: col.isLocalDownloaded,
                     isDownloading: isDownloading,
                     downloadProgress: downloadProgress,
-                    palette: palette,
+                    isZipType: col.isZipType,
+                    displayFileSize: col.displayFileSize,
                   ),
                 ),
 
@@ -471,118 +557,5 @@ class _CollectionsTabViewState extends State<CollectionsTabView> {
         );
       },
     );
-  }
-
-  Widget _buildDownloadBadge({
-    required PuzzleCollectionItem col,
-    required bool isDownloading,
-    required double downloadProgress,
-    required AppPalette palette,
-  }) {
-    // 1. 已下载完成
-    if (col.isLocalDownloaded) {
-      return Container(
-        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-        decoration: BoxDecoration(
-          color: Colors.black.withValues(alpha: 0.55),
-          borderRadius: BorderRadius.circular(10),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Icon(
-              PhosphorIconsBold.check,
-              color: Colors.greenAccent,
-              size: 11,
-            ),
-            const SizedBox(width: 3),
-            Text(
-              t.collections.badgeDownloaded,
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 10,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-          ],
-        ),
-      );
-    }
-
-    // 2. 下载中
-    if (isDownloading) {
-      return Container(
-        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-        decoration: BoxDecoration(
-          color: Colors.black.withValues(alpha: 0.65),
-          borderRadius: BorderRadius.circular(10),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            SizedBox(
-              width: 10,
-              height: 10,
-              child: CircularProgressIndicator(
-                value: downloadProgress > 0 ? downloadProgress : null,
-                color: palette.brand,
-                strokeWidth: 2,
-              ),
-            ),
-            const SizedBox(width: 5),
-            Text(
-              '${(downloadProgress * 100).toInt()}%',
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 10,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-          ],
-        ),
-      );
-    }
-
-    // 3. Zip 未下载：显示醒目的下载按钮
-    if (col.isZipType) {
-      return Container(
-        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-        decoration: BoxDecoration(
-          color: palette.brand.withValues(alpha: 0.92),
-          borderRadius: BorderRadius.circular(10),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.25),
-              blurRadius: 4,
-              offset: const Offset(0, 1),
-            ),
-          ],
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Icon(
-              PhosphorIconsBold.downloadSimple,
-              color: Colors.white,
-              size: 11,
-            ),
-            const SizedBox(width: 3),
-            Text(
-              col.displayFileSize.isNotEmpty
-                  ? col.displayFileSize
-                  : t.collections.badgeDownload,
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 10,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-          ],
-        ),
-      );
-    }
-
-    // 4. Array 在线类型（不需要下载）
-    return const SizedBox.shrink();
   }
 }

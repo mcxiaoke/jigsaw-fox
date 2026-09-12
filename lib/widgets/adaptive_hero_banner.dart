@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 
-import 'package:jigsawpuzzle/logic/cache/image_cache_manager.dart';
 import 'package:jigsawpuzzle/theme/app_palette.dart';
 import 'package:jigsawpuzzle/theme/app_text_styles.dart';
 import 'package:jigsawpuzzle/widgets/app_cached_image.dart';
@@ -15,6 +14,7 @@ class HeroBannerItem {
     this.badgeEmoji = '',
     this.badgeColor,
     this.subtitle = '',
+    this.topRightBadge,
     this.onTap,
   });
 
@@ -25,6 +25,7 @@ class HeroBannerItem {
   final String badgeEmoji;
   final Color? badgeColor;
   final String subtitle;
+  final Widget? topRightBadge;
   final VoidCallback? onTap;
 }
 
@@ -32,7 +33,8 @@ class HeroBannerItem {
 /// 移动端自然露边 Peek 引导，桌面与宽屏自然平铺多卡，彻底消灭拉伸失真与裁切问题
 class AdaptiveHeroBanner extends StatelessWidget {
   const AdaptiveHeroBanner({
-    required this.items, super.key,
+    required this.items,
+    super.key,
     this.cardWidth = 290.0,
     this.cardHeight = 156.0,
     this.padding = const EdgeInsets.symmetric(horizontal: 16),
@@ -162,7 +164,15 @@ class AdaptiveHeroBanner extends StatelessWidget {
                     ),
                   ),
 
-                // 4. 底部图文信息
+                // 4. 右上角徽章 (如下载状态)
+                if (item.topRightBadge != null)
+                  Positioned(
+                    right: 12,
+                    top: 12,
+                    child: item.topRightBadge!,
+                  ),
+
+                // 5. 底部图文信息
                 Positioned(
                   left: 14,
                   right: 14,

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -25,8 +26,28 @@ class EventsContentPipeline {
 
   final Map<String, PuzzleEventItem> _eventsMap = {};
 
+  /// 供活动卡片或详情页监听下载进度的通知器 (eventId -> progress 0.0~1.0)
+  final ValueNotifier<Map<String, double>> progressNotifier =
+      ValueNotifier<Map<String, double>>({});
+
+  /// 活动列表/状态更新通知器 (供 UI 响应式刷新)
+  final ValueNotifier<int> updateNotifier = ValueNotifier<int>(0);
+
   /// 进行中的下载单飞表 (同 id 并发 ensure 复用同一 Future，防互删临时目录)
   final Map<String, Future<bool>> _inFlightDownloads = {};
+
+  bool isDownloading(String id) => _inFlightDownloads.containsKey(id);
+  double getDownloadProgress(String id) => progressNotifier.value[id] ?? 0.0;
+
+  void _updateDownloadProgress(String id, double progress) {
+    final next = Map<String, double>.from(progressNotifier.value);
+    next[id] = progress;
+    progressNotifier.value = next;
+  }
+
+  /// 检查活动关卡是否已在本地就绪
+  bool isEventDownloaded(PuzzleEventItem event) =>
+      _isEventLocalDownloaded(event);
 
   static final RegExp _imageFileRegex = RegExp(
     r'\.(webp|jpg|jpeg|png)$',
@@ -190,6 +211,7 @@ class EventsContentPipeline {
 
       // 持久化到缓存
       await _persistToCache();
+      updateNotifier.value++;
       AppLogger.events.info(
         'syncWithRemote done events=${_eventsMap.length} updated=${updatedEvents.length} skipped=$skipped gc=$gcCount removed=${removedIds.length}',
       );
@@ -224,16 +246,29 @@ class EventsContentPipeline {
   ///
   /// 单飞（P1-7）：同 id 进行中的调用复用同一 Future，避免并发下载互删
   /// temp_extract 临时目录。
-  Future<bool> ensureEventDownloaded(PuzzleEventItem event) {
+  Future<bool> ensureEventDownloaded(
+    PuzzleEventItem event, {
+    void Function(double progress)? onProgress,
+  }) {
     return runSingleFlight(
       _inFlightDownloads,
       event.id,
-      () => _ensureEventDownloadedImpl(event),
+      () => _ensureEventDownloadedImpl(event, onProgress: onProgress),
     );
   }
 
-  Future<bool> _ensureEventDownloadedImpl(PuzzleEventItem event) async {
-    if (event.isLocalDownloaded && _isEventLocalDownloaded(event)) {
+  Future<bool> _ensureEventDownloadedImpl(
+    PuzzleEventItem event, {
+    void Function(double progress)? onProgress,
+  }) async {
+    // 关键修复：只要本地磁盘已有有效关卡图片，直接标记就绪，绝不重新下载
+    if (_isEventLocalDownloaded(event)) {
+      if (!event.isLocalDownloaded) {
+        _eventsMap[event.id] = event.copyWith(isLocalDownloaded: true);
+        unawaited(_persistToCache());
+        updateNotifier.value++;
+      }
+      _updateDownloadProgress(event.id, 1.0);
       AppLogger.events.fine('ensureEventDownloaded already ready ${event.id}');
       return true;
     }
@@ -257,13 +292,26 @@ class EventsContentPipeline {
         p.join(eventsStorageBaseDir, 'temp_extract_${event.id}'),
       );
 
+      _updateDownloadProgress(event.id, 0.0);
+
       try {
-        // 1. 下载 Zip 包 (D10：zipUrl 主地址 + zipUrls 备用镜像按序轮询)
+        // 1. 下载 Zip 包 (带 25s 超时与进度回调)
         final zipFile = await _httpClient.downloadFileWithMirrors(
           [event.zipUrl!, ...event.zipUrls.where((u) => u != event.zipUrl)],
           tempZipPath,
+          timeout: const Duration(seconds: 25),
+          onProgress: (received, total) {
+            if (total > 0) {
+              final pVal = (received / total).clamp(0.0, 1.0);
+              _updateDownloadProgress(event.id, pVal * 0.85);
+              onProgress?.call(pVal * 0.85);
+            }
+          },
         );
         final bytes = await zipFile.readAsBytes();
+
+        _updateDownloadProgress(event.id, 0.9);
+        onProgress?.call(0.9);
 
         // 2. 解压到临时目录（P07 Isolate）
         final archive = await compute(_decodeZipIsolate, bytes);
@@ -296,9 +344,13 @@ class EventsContentPipeline {
 
         _eventsMap[event.id] = event.copyWith(isLocalDownloaded: true);
         await _persistToCache();
+        _updateDownloadProgress(event.id, 1.0);
+        onProgress?.call(1.0);
+        updateNotifier.value++;
         AppLogger.events.info('ensureEventDownloaded success ${event.id}');
         return true;
       } catch (e, st) {
+        _updateDownloadProgress(event.id, 0.0);
         AppLogger.events.severe(
           'ensureEventDownloaded failed ${event.id}',
           e,
@@ -319,6 +371,8 @@ class EventsContentPipeline {
       }
     } else {
       // Array 模式无需整包下载，即刻标记就绪
+      _eventsMap[event.id] = event.copyWith(isLocalDownloaded: true);
+      _updateDownloadProgress(event.id, 1.0);
       return true;
     }
   }
@@ -382,7 +436,10 @@ class EventsContentPipeline {
   bool _isEventLocalDownloaded(PuzzleEventItem event) {
     if (event.isArrayType) return true;
     final dir = Directory(p.join(eventsStorageBaseDir, event.id));
-    return dir.existsSync() && dir.listSync().isNotEmpty;
+    if (!dir.existsSync()) return false;
+    return dir.listSync().whereType<File>().any(
+      (f) => _imageFileRegex.hasMatch(f.path),
+    );
   }
 
   Future<void> _persistToCache() async {
