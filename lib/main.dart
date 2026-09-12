@@ -6,7 +6,7 @@ import 'package:jigsawpuzzle/data/favorite_store.dart';
 import 'package:jigsawpuzzle/data/game_repository.dart';
 import 'package:jigsawpuzzle/data/storage_manager.dart';
 import 'package:jigsawpuzzle/l10n/gen/strings.g.dart';
-import 'package:jigsawpuzzle/logic/cache/image_cache_manager.dart';
+import 'package:jigsawpuzzle/logic/cache/level_image_resolver.dart';
 import 'package:jigsawpuzzle/logic/content/app_content.dart';
 import 'package:jigsawpuzzle/logic/download_manager.dart';
 import 'package:jigsawpuzzle/pages/boot_gate_page.dart';
@@ -135,7 +135,7 @@ void main() async {
   // AppContent.initFromDiskCache 纯本地（5~15ms，无网络），runApp 前据此判定
   // initialHome = MainScreen(秒开) 或 BootGatePage(首启初始化)。
   await Future.wait([
-    ImageCacheManager.instance.init(),
+    LevelImageResolver.instance.warmup(),
     GameRepository.instance.init(),
     EconomyService.instance.init(),
     AchievementStore.instance.init(),
@@ -158,6 +158,7 @@ void main() async {
         'SoundService init done ${sw.elapsedMilliseconds}ms',
       );
     }),
+    LevelImageResolver.instance.cleanLegacyThumbnailCache(),
   ];
   // 不阻塞首帧，后台并行；首帧先出壳由 contentUpdateNotifier 刷新
   Future.wait(bgFutures).then((_) {

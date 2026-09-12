@@ -8,7 +8,6 @@ import 'package:flutter/material.dart';
 import 'package:jigsawpuzzle/data/game_repository.dart';
 import 'package:jigsawpuzzle/data/models/custom_puzzle_item.dart';
 import 'package:jigsawpuzzle/l10n/gen/strings.g.dart';
-import 'package:jigsawpuzzle/logic/cache/image_cache_manager.dart';
 import 'package:jigsawpuzzle/logic/image_upscaler.dart';
 import 'package:jigsawpuzzle/logic/puzzle_model.dart';
 import 'package:jigsawpuzzle/services/recommend_service.dart';
@@ -404,9 +403,6 @@ class _CropPuzzlePageState extends State<CropPuzzlePage> {
         sourcePlatform: widget.sourcePlatform,
         sourceUrl: widget.sourceUrl,
       );
-
-      // Pre-warm thumbnail cache in background
-      ImageCacheManager.instance.prewarmThumbnail(file.path);
 
       await GameRepository.instance.addCustomPuzzle(customItem);
 

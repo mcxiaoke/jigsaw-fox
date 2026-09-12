@@ -1,6 +1,8 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
 import 'package:jigsawpuzzle/logic/content/app_content.dart';
 import 'package:jigsawpuzzle/logic/content/models/puzzle_level_item.dart';
 import 'package:jigsawpuzzle/logic/content/network/content_http_client.dart';
@@ -8,18 +10,53 @@ import 'package:jigsawpuzzle/services/app_logger.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
-/// 网络关卡原图懒落地解析器：保证“见缩略必可玩”
+/// 网络关卡与封面原图懒落地解析器：保证“见缩略必可玩”与离线秒显
 ///
 /// - 若 `level.isLocalFile && File.exists` 直接返回本地路径
 /// - 若 `assets/` 直接返回（无需下载）
-/// - 若 `http(s)` 则下载到 `{appSupportDir}/levels/network/<hash>.webp`（单次落盘，幂等）
+/// - 若 `http(s)` 则单飞原子下载到 `{appSupportDir}/levels/network/net_<hash>.<ext>`（单次落盘，幂等）
 ///   后续缩略与 `GamePage` 复用同一文件，离线可玩
 class LevelImageResolver {
   LevelImageResolver._();
   static final LevelImageResolver instance = LevelImageResolver._();
 
-  final ContentHttpClient _httpClient = ContentHttpClient();
+  ContentHttpClient _httpClient = ContentHttpClient();
+  final Map<String, Future<String>> _inFlight = <String, Future<String>>{};
   String? _networkLevelsDir;
+
+  @visibleForTesting
+  void resetForTest({
+    String? networkLevelsDirOverride,
+    ContentHttpClient? httpClientOverride,
+  }) {
+    _networkLevelsDir = networkLevelsDirOverride;
+    if (httpClientOverride != null) {
+      _httpClient = httpClientOverride;
+    }
+    _inFlight.clear();
+  }
+
+  @visibleForTesting
+  Map<String, Future<String>> get inFlightForTest => _inFlight;
+
+  /// 预热网络关卡落地根目录，确保冷启动首帧同步探测可用
+  Future<void> warmup() async {
+    await _getNetworkLevelsDir();
+  }
+
+  /// 一次性清理旧版遗留的 thumbnail_cache 目录（若存在）
+  Future<void> cleanLegacyThumbnailCache() async {
+    try {
+      final supportDir = await getApplicationSupportDirectory();
+      final legacyDir = Directory(p.join(supportDir.path, 'thumbnail_cache'));
+      if (await legacyDir.exists()) {
+        await legacyDir.delete(recursive: true);
+        AppLogger.system.info('Cleaned legacy thumbnail_cache directory');
+      }
+    } catch (e, st) {
+      AppLogger.imageCache.warning('cleanLegacyThumbnailCache failed', e, st);
+    }
+  }
 
   Future<String> _getNetworkLevelsDir() async {
     if (_networkLevelsDir != null) return _networkLevelsDir!;
@@ -32,7 +69,7 @@ class LevelImageResolver {
     return dir.path;
   }
 
-  /// FNV-1a 63 位哈希，与 ImageCacheManager.getCacheKey 同算法，保证同 URL 同哈希
+  /// FNV-1a 63 位哈希，保证同 URL 同哈希
   String _hashUrl(String url) {
     final clean = url.replaceAll(r'\', '/');
     // FNV-1a offset basis; safe on native (non-JS) targets.
@@ -56,7 +93,87 @@ class LevelImageResolver {
     return '.jpg';
   }
 
-  /// 解析关卡本地路径：本地/资产直接返回；网络则后台下载落盘（幂等，单飞由调用方队列保证）
+  /// 底层通用网络落地私有方法（Single-Flight 并发去重，防止 .part 临时文件竞态损坏）
+  Future<String> _downloadToNetworkDirWithSingleFlight(
+    String url,
+    String targetPath,
+  ) {
+    final existingFile = File(targetPath);
+    if (existingFile.existsSync() && existingFile.lengthSync() > 0) {
+      return Future.value(targetPath);
+    }
+
+    final inFlight = _inFlight[targetPath];
+    if (inFlight != null) return inFlight;
+
+    final future = () async {
+      try {
+        final hash = p.basenameWithoutExtension(targetPath);
+        AppLogger.content.info(
+          'LevelImageResolver downloading $hash -> $targetPath url=${AppLogger.sanitizeUrl(url)}',
+        );
+        final downloaded = await _httpClient.downloadFile(url, targetPath);
+        if (downloaded.existsSync() && downloaded.lengthSync() > 0) {
+          AppLogger.content.info(
+            'LevelImageResolver done $hash bytes=${downloaded.lengthSync()}',
+          );
+          return downloaded.path;
+        }
+        return '';
+      } catch (e, st) {
+        AppLogger.content.warning(
+          'LevelImageResolver download failed url=${AppLogger.sanitizeUrl(url)}',
+          e,
+          st,
+        );
+        return '';
+      } finally {
+        unawaited(_inFlight.remove(targetPath));
+      }
+    }();
+
+    _inFlight[targetPath] = future;
+    return future;
+  }
+
+  /// 同步快查：若该远端 URL 已经落盘，直接返回本地文件绝对路径；否则返回 null
+  String? getUrlLocalPathIfAvailable(String url) {
+    if (_networkLevelsDir == null || url.isEmpty || !url.startsWith('http')) {
+      return null;
+    }
+    try {
+      final hash = _hashUrl(url);
+      final ext = _extensionForUrl(url);
+      final targetPath = p.join(_networkLevelsDir!, 'net_$hash$ext');
+      final file = File(targetPath);
+      if (file.existsSync() && file.lengthSync() > 0) {
+        return targetPath;
+      }
+    } catch (_) {}
+    return null;
+  }
+
+  /// 通用 URL 异步落盘方法（用于 Event/Collection 封面等网络图片）：
+  /// 内部全量 try-catch 保护，Single-Flight 防并发冲突
+  Future<String> resolveUrlLocalPath(String url) async {
+    if (url.isEmpty || !url.startsWith('http')) return '';
+    try {
+      final dir = await _getNetworkLevelsDir();
+      final hash = _hashUrl(url);
+      final ext = _extensionForUrl(url);
+      final targetPath = p.join(dir, 'net_$hash$ext');
+      return await _downloadToNetworkDirWithSingleFlight(url, targetPath);
+    } catch (e, st) {
+      AppLogger.content.warning(
+        'LevelImageResolver resolveUrlLocalPath failed url=${AppLogger.sanitizeUrl(url)}',
+        e,
+        st,
+      );
+      return '';
+    }
+  }
+
+  /// 解析关卡本地路径：本地/资产直接返回；网络则后台下载落盘（幂等单飞，保留管线逻辑）
   Future<String> resolveLevelLocalPath(PuzzleLevelItem level) async {
     // 1. 本地文件快路径：有 localPath 就优先用 localPath
     final local = level.localPath;
@@ -117,23 +234,12 @@ class LevelImageResolver {
         final hash = _hashUrl(remoteUrl);
         final ext = _extensionForUrl(remoteUrl);
         final targetPath = p.join(dir, 'net_$hash$ext');
-        final targetFile = File(targetPath);
-        if (targetFile.existsSync() && await targetFile.length() > 0) {
-          return targetPath;
-        }
-
-        AppLogger.content.info(
-          'LevelImageResolver downloading $hash -> $targetPath url=${AppLogger.sanitizeUrl(remoteUrl)}',
-        );
-        final downloaded = await _httpClient.downloadFile(
+        final downloadedPath = await _downloadToNetworkDirWithSingleFlight(
           remoteUrl,
           targetPath,
         );
-        if (downloaded.existsSync() && await downloaded.length() > 0) {
-          AppLogger.content.info(
-            'LevelImageResolver done $hash bytes=${await downloaded.length()}',
-          );
-          return downloaded.path;
+        if (downloadedPath.isNotEmpty) {
+          return downloadedPath;
         }
       } catch (e, st) {
         AppLogger.content.warning(
@@ -160,15 +266,7 @@ class LevelImageResolver {
     final remoteUrl = level.url;
     if (remoteUrl.startsWith('assets/')) return true;
     if (remoteUrl.startsWith('http')) {
-      try {
-        final hash = _hashUrl(remoteUrl);
-        final ext = _extensionForUrl(remoteUrl);
-        // 同步取 dir 可能未初始化，降级为 false（不阻塞）
-        if (_networkLevelsDir != null) {
-          final targetPath = p.join(_networkLevelsDir!, 'net_$hash$ext');
-          if (File(targetPath).existsSync()) return true;
-        }
-      } catch (_) {}
+      return getUrlLocalPathIfAvailable(remoteUrl) != null;
     }
     return false;
   }

@@ -1,20 +1,20 @@
+import 'dart:async';
 import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
-import 'package:jigsawpuzzle/logic/cache/app_cached_image_provider.dart';
-import 'package:jigsawpuzzle/logic/cache/app_cached_network_image_provider.dart';
-import 'package:jigsawpuzzle/logic/cache/image_cache_manager.dart';
+import 'package:jigsawpuzzle/logic/cache/level_image_resolver.dart';
+import 'package:jigsawpuzzle/logic/cache/thumbnail_dimension.dart';
 import 'package:jigsawpuzzle/widgets/puzzle_card_placeholder.dart';
 import 'package:phosphoricons_flutter/phosphoricons_flutter.dart';
 
-/// Convenient, high-performance UI Widget for displaying images with built-in
-/// disk thumbnail caching, memory downsampling (`ResizeImage`), placeholder shimmer, and error fallbacks.
-///
-/// Supports:
-/// - Local file paths (`/path/to/image.jpg`)
-/// - Asset paths (`assets/images/sample.jpg`)
-/// - In-memory bytes (`Uint8List`)
+export 'package:jigsawpuzzle/logic/cache/thumbnail_dimension.dart';
+
+/// 高性能统一图片展示组件：
+/// - 本地文件 / 资产 / 内存字节：由 Flutter 原生 C++ 解码器硬件加速等比降采样（`ResizeImage`，3~5ms 秒出）
+/// - 解码后纹理直接进入 Flutter 引擎 `PaintingBinding.instance.imageCache`（默认 100MB / 1000 张 LRU）
+/// - 远程网络 URL：首次由 Single-Flight 单次下载落盘为本地文件后自动切换展示，离线永久可用
+/// - 双层 Stack 骨架屏淡入修复，消除白洞与透明跳变
 class AppCachedImage extends StatelessWidget {
   const AppCachedImage({
     super.key,
@@ -22,7 +22,7 @@ class AppCachedImage extends StatelessWidget {
     this.memoryBytes,
     this.width,
     this.height,
-    this.targetDimension = ThumbnailDimension.card,
+    this.targetDimension = kDefaultThumbnailDimension,
     this.fit = BoxFit.cover,
     this.alignment = Alignment.center,
     this.borderRadius,
@@ -30,20 +30,18 @@ class AppCachedImage extends StatelessWidget {
     this.errorWidget,
     this.colorFilter,
     this.fadeInDuration = const Duration(milliseconds: 200),
-    this.useThumbnailCache = true,
   });
 
-  /// Path to the image (local file path or asset key)
+  /// 图片路径（本地文件路径、assets 资源键或网络 URL）
   final String? imagePathOrUrl;
 
-  /// In-memory image bytes (optional alternative)
+  /// 内存图片字节数据（可选替代源）
   final Uint8List? memoryBytes;
 
   final double? width;
   final double? height;
 
-  /// 解码与缓存档位：所有图片统一从预定义档位中选择，
-  /// 避免各调用点传不同像素值造成同一源图生成多份缩略图。
+  /// 解码与缓存档位：所有图片统一从预定义档位中选择
   final ThumbnailDimension targetDimension;
 
   final BoxFit fit;
@@ -53,9 +51,6 @@ class AppCachedImage extends StatelessWidget {
   final Widget? errorWidget;
   final ColorFilter? colorFilter;
   final Duration fadeInDuration;
-
-  /// Whether to utilize disk thumbnail caching for local files
-  final bool useThumbnailCache;
 
   ImageProvider _wrapResize(ImageProvider provider) {
     // 仅按单边等比下采样解码，保证原图宽高比绝对不被破坏，由外层 Image(fit: BoxFit.cover) 执行等比居中裁剪
@@ -76,25 +71,25 @@ class AppCachedImage extends StatelessWidget {
       return const AssetImage('assets/images/sample_01.jpg');
     }
 
-    // 1. 网络图片（统一走三级缓存：L1 内存 → L2 磁盘 thumbnail_cache → L3 下载+后台缩略）
-    // 与本地文件共用同一缓存目录与 key 体系，解决此前 NetworkImage 无磁盘缓存、每次重联网的问题
-    if (path.startsWith('http://') || path.startsWith('https://')) {
-      return AppCachedNetworkImageProvider(path, dimension: targetDimension);
-    }
-
-    // 2. Assets 打包静态资源
+    // 1. Assets 打包静态资源
     if (path.startsWith('assets/')) {
       final assetProvider = AssetImage(path);
       return _wrapResize(assetProvider);
     }
 
-    // 3. Local file 本地文件路径
-    if (useThumbnailCache) {
-      return AppCachedImageProvider(path, dimension: targetDimension);
-    } else {
-      final fileProvider = FileImage(File(path));
-      return _wrapResize(fileProvider);
+    // 2. Remote URL（进入此处必已落盘为本地文件）
+    if (path.startsWith('http://') || path.startsWith('https://')) {
+      final localPath = LevelImageResolver.instance.getUrlLocalPathIfAvailable(
+        path,
+      );
+      if (localPath != null && File(localPath).existsSync()) {
+        return _wrapResize(FileImage(File(localPath)));
+      }
     }
+
+    // 3. Local file 本地文件路径
+    final fileProvider = FileImage(File(path));
+    return _wrapResize(fileProvider);
   }
 
   Widget _defaultPlaceholder() {
@@ -115,6 +110,31 @@ class AppCachedImage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final path = imagePathOrUrl ?? '';
+
+    // 网络图片未落盘场景：走单次异步落地与自动平滑淡入切换组件
+    if (memoryBytes == null &&
+        (path.startsWith('http://') || path.startsWith('https://'))) {
+      final localPath = LevelImageResolver.instance.getUrlLocalPathIfAvailable(
+        path,
+      );
+      if (localPath == null || !File(localPath).existsSync()) {
+        return _NetworkImageLoader(
+          url: path,
+          width: width,
+          height: height,
+          targetDimension: targetDimension,
+          fit: fit,
+          alignment: alignment,
+          borderRadius: borderRadius,
+          colorFilter: colorFilter,
+          placeholder: placeholder ?? _defaultPlaceholder(),
+          errorWidget: errorWidget ?? _defaultError(),
+          fadeInDuration: fadeInDuration,
+        );
+      }
+    }
+
     final imageProvider = _resolveImageProvider();
 
     Widget content = Image(
@@ -127,11 +147,20 @@ class AppCachedImage extends StatelessWidget {
         if (wasSynchronouslyLoaded || fadeInDuration == Duration.zero) {
           return child;
         }
-        return AnimatedOpacity(
-          opacity: frame == null ? 0 : 1,
-          duration: fadeInDuration,
-          curve: Curves.easeOut,
-          child: frame == null ? (placeholder ?? _defaultPlaceholder()) : child,
+        return Stack(
+          fit: StackFit.passthrough,
+          alignment: alignment,
+          children: [
+            // 1. 底层常规尺寸子节点：由占位图自然撑开 Stack 约束，避免零尺寸塌缩
+            if (frame == null) placeholder ?? _defaultPlaceholder(),
+            // 2. 顶层常驻平滑淡入：首帧就绪后由 0 淡入到 1.0 覆盖占位
+            AnimatedOpacity(
+              opacity: frame == null ? 0.0 : 1.0,
+              duration: fadeInDuration,
+              curve: Curves.easeOut,
+              child: child,
+            ),
+          ],
         );
       },
       errorBuilder: (context, error, stackTrace) {
@@ -148,5 +177,99 @@ class AppCachedImage extends StatelessWidget {
     }
 
     return content;
+  }
+}
+
+/// 内部私有组件：用于未落盘的远程网络图片（如 Event Banner / Collection 封面），
+/// 负责单次触发异步原子落盘，落盘成功后平滑淡入切为本地 FileImage 渲染，离线永久可用。
+class _NetworkImageLoader extends StatefulWidget {
+  const _NetworkImageLoader({
+    required this.url,
+    required this.targetDimension,
+    required this.placeholder,
+    required this.errorWidget,
+    required this.fadeInDuration,
+    this.width,
+    this.height,
+    this.fit = BoxFit.cover,
+    this.alignment = Alignment.center,
+    this.borderRadius,
+    this.colorFilter,
+  });
+
+  final String url;
+  final ThumbnailDimension targetDimension;
+  final Widget placeholder;
+  final Widget errorWidget;
+  final Duration fadeInDuration;
+  final double? width;
+  final double? height;
+  final BoxFit fit;
+  final Alignment alignment;
+  final BorderRadius? borderRadius;
+  final ColorFilter? colorFilter;
+
+  @override
+  State<_NetworkImageLoader> createState() => _NetworkImageLoaderState();
+}
+
+class _NetworkImageLoaderState extends State<_NetworkImageLoader> {
+  String? _localPath;
+  bool _failed = false;
+
+  @override
+  void initState() {
+    super.initState();
+    unawaited(_load());
+  }
+
+  @override
+  void didUpdateWidget(covariant _NetworkImageLoader oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.url != widget.url) {
+      _localPath = null;
+      _failed = false;
+      unawaited(_load());
+    }
+  }
+
+  Future<void> _load() async {
+    final url = widget.url;
+    final path = await LevelImageResolver.instance.resolveUrlLocalPath(
+      url,
+    );
+    if (!mounted || widget.url != url) return;
+    if (path.isNotEmpty && File(path).existsSync()) {
+      setState(() => _localPath = path);
+    } else {
+      setState(() => _failed = true);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_failed) return widget.errorWidget;
+    if (_localPath == null) {
+      var ph = widget.placeholder;
+      if (widget.borderRadius != null) {
+        ph = ClipRRect(borderRadius: widget.borderRadius!, child: ph);
+      }
+      return SizedBox(
+        width: widget.width,
+        height: widget.height,
+        child: ph,
+      );
+    }
+    return AppCachedImage(
+      imagePathOrUrl: _localPath,
+      width: widget.width,
+      height: widget.height,
+      targetDimension: widget.targetDimension,
+      fit: widget.fit,
+      alignment: widget.alignment,
+      borderRadius: widget.borderRadius,
+      colorFilter: widget.colorFilter,
+      fadeInDuration: widget.fadeInDuration,
+    );
   }
 }

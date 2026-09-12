@@ -14,12 +14,10 @@ void main() {
   ) async {
     final originalOnError = FlutterError.onError;
     FlutterError.onError = (details) {
-      if (details.exceptionAsString().contains(
-            'Failed to load network thumbnail',
-          ) ||
-          details.exceptionAsString().contains(
-            'AppCachedNetworkImageProvider',
-          )) {
+      final err = details.exceptionAsString();
+      if (err.contains('Failed to load network thumbnail') ||
+          err.contains('NetworkImageLoadException') ||
+          err.contains('HttpException')) {
         return;
       }
       originalOnError?.call(details);

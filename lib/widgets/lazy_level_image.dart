@@ -1,6 +1,9 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 
 import 'package:jigsawpuzzle/logic/cache/level_image_resolver.dart';
+import 'package:jigsawpuzzle/logic/cache/thumbnail_dimension.dart';
 import 'package:jigsawpuzzle/logic/content/models/puzzle_level_item.dart';
 import 'package:jigsawpuzzle/services/app_logger.dart';
 import 'package:jigsawpuzzle/widgets/app_cached_image.dart';
@@ -23,7 +26,7 @@ class LazyLevelImage extends StatefulWidget {
 
   final PuzzleLevelItem level;
   final BoxFit fit;
-  final dynamic targetDimension;
+  final ThumbnailDimension? targetDimension;
   final Widget? placeholder;
   final Widget? errorWidget;
 
@@ -38,6 +41,7 @@ class _LazyLevelImageState extends State<LazyLevelImage> {
   @override
   void initState() {
     super.initState();
+    _checkSyncHit();
     _resolve();
   }
 
@@ -48,7 +52,23 @@ class _LazyLevelImageState extends State<LazyLevelImage> {
         oldWidget.level.imagePathOrUrl != widget.level.imagePathOrUrl) {
       _resolvedPath = null;
       _failed = false;
+      _checkSyncHit();
       _resolve();
+    }
+  }
+
+  void _checkSyncHit() {
+    final path = widget.level.imagePathOrUrl;
+    if (path.isEmpty || path.startsWith('assets/')) return;
+    if (widget.level.isLocalFile && File(path).existsSync()) {
+      _resolvedPath = path;
+    } else if (path.startsWith('http')) {
+      final available = LevelImageResolver.instance.getUrlLocalPathIfAvailable(
+        path,
+      );
+      if (available != null) {
+        _resolvedPath = available;
+      }
     }
   }
 
@@ -100,6 +120,7 @@ class _LazyLevelImageState extends State<LazyLevelImage> {
         return AppCachedImage(
           imagePathOrUrl: widget.level.imagePathOrUrl,
           fit: widget.fit,
+          targetDimension: widget.targetDimension ?? kDefaultThumbnailDimension,
           placeholder: widget.placeholder,
           errorWidget: widget.errorWidget,
         );
@@ -127,6 +148,7 @@ class _LazyLevelImageState extends State<LazyLevelImage> {
     return AppCachedImage(
       imagePathOrUrl: _resolvedPath,
       fit: widget.fit,
+      targetDimension: widget.targetDimension ?? kDefaultThumbnailDimension,
       placeholder: widget.placeholder,
       errorWidget: widget.errorWidget,
     );

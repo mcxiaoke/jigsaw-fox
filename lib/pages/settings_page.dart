@@ -2,17 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:jigsawpuzzle/data/game_repository.dart';
 import 'package:jigsawpuzzle/data/progress_store.dart';
 import 'package:jigsawpuzzle/l10n/gen/strings.g.dart';
-import 'package:jigsawpuzzle/logic/cache/image_cache_manager.dart';
 import 'package:jigsawpuzzle/pages/how_to_play_page.dart';
 import 'package:jigsawpuzzle/pages/log_viewer_page.dart';
-import 'package:jigsawpuzzle/services/app_logger.dart';
 import 'package:jigsawpuzzle/services/economy_service.dart';
 import 'package:jigsawpuzzle/services/locale_service.dart';
 import 'package:jigsawpuzzle/services/sound_service.dart';
 import 'package:jigsawpuzzle/theme/app_palette.dart';
 import 'package:jigsawpuzzle/theme/app_text_styles.dart';
 import 'package:jigsawpuzzle/widgets/choose_background_sheet.dart';
-import 'package:jigsawpuzzle/widgets/game_toast.dart';
 import 'package:phosphoricons_flutter/phosphoricons_flutter.dart';
 
 /// Full-screen Game Settings page with grouped settings cards.
@@ -34,24 +31,11 @@ class _SettingsPageState extends State<SettingsPage> {
   int _totalSolved = 0;
   int _totalStars = 0;
   int _coins = 0;
-  String _cacheSize = '';
-  bool _clearingCache = false;
 
   @override
   void initState() {
     super.initState();
-    // 初始化缓存大小占位文案需 context，延后到 didChangeDependencies
     _loadStats();
-    _loadCacheSize();
-  }
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    if (_cacheSize.isEmpty) {
-      // 使用全局 t，避免测试环境缺少 TranslationProvider 时崩溃
-      _cacheSize = t.common.calculating;
-    }
   }
 
   Translations get t => LocaleSettings.instance.currentTranslations;
@@ -65,47 +49,6 @@ class _SettingsPageState extends State<SettingsPage> {
         _totalStars = stars;
         _coins = EconomyService.instance.coins;
       });
-    }
-  }
-
-  /// 异步统计缩略图磁盘缓存占用（列表目录累加字节数，可能耗时数百毫秒）
-  Future<void> _loadCacheSize() async {
-    final size = await ImageCacheManager.instance.getFormattedCacheSize();
-    if (mounted) {
-      setState(() => _cacheSize = size);
-    }
-  }
-
-  // 清空图片缓存入口暂时隐藏期间，此方法暂无调用方；保留代码待入口重新开放
-  // ignore: unused_element
-  Future<void> _clearThumbnailCache() async {
-    if (_clearingCache) return;
-    setState(() => _clearingCache = true);
-    try {
-      AppLogger.ui.info('Settings clear thumbnail cache start');
-      await ImageCacheManager.instance.clearCache();
-      await _loadCacheSize();
-      AppLogger.ui.info('Settings clear thumbnail cache done');
-      if (mounted) {
-        GameToast.show(
-          context,
-          icon: PhosphorIconsFill.broom,
-          message: t.settings.toastCacheCleared,
-          type: GameToastType.success,
-        );
-      }
-    } catch (e, st) {
-      AppLogger.ui.warning('Settings clear thumbnail cache failed', e, st);
-      if (mounted) {
-        GameToast.show(
-          context,
-          icon: PhosphorIconsRegular.warning,
-          message: t.settings.toastCacheClearFailed(error: '$e'),
-          type: GameToastType.error,
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _clearingCache = false);
     }
   }
 
@@ -345,33 +288,6 @@ class _SettingsPageState extends State<SettingsPage> {
               // Group 4: Data Management
               _buildSectionHeader(t.settings.sectionsData, palette, styles),
               _buildCardContainer([
-                // 清空图片缓存入口暂时隐藏（代码保留，待后续版本再开放入口）
-                // ListTile(
-                //   leading: Icon(
-                //     PhosphorIconsBold.database,
-                //     color: palette.info,
-                //   ),
-                //   title: Text(
-                //     t.settings.dataCacheTitle,
-                //     style: styles.bodyBold,
-                //   ),
-                //   subtitle: Text(
-                //     t.settings.dataCacheDesc(size: _cacheSize),
-                //     style: styles.caption,
-                //   ),
-                //   trailing: _clearingCache
-                //       ? const SizedBox(
-                //           width: 20,
-                //           height: 20,
-                //           child: CircularProgressIndicator(strokeWidth: 2),
-                //         )
-                //       : TextButton.icon(
-                //           onPressed: _clearThumbnailCache,
-                //           icon: const Icon(PhosphorIconsBold.broom, size: 16),
-                //           label: Text(t.settings.dataClear),
-                //         ),
-                // ),
-                // Divider(height: 1, indent: 56, color: palette.divider),
                 ListTile(
                   leading: Icon(
                     PhosphorIconsBold.fileText,

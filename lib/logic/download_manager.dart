@@ -7,7 +7,6 @@ import 'package:hive_ce/hive_ce.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:jigsawpuzzle/data/models/downloaded_image_item.dart';
 import 'package:jigsawpuzzle/data/storage_manager.dart';
-import 'package:jigsawpuzzle/logic/cache/image_cache_manager.dart';
 import 'package:jigsawpuzzle/services/app_logger.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
@@ -184,11 +183,6 @@ class DownloadManager {
       AppLogger.download.info(
         'Successfully imported ${newlyAdded.length} local images total=${itemsNotifier.value.length}',
       );
-
-      // Background pre-warm thumbnail caches for newly imported images
-      for (final item in newlyAdded) {
-        ImageCacheManager.instance.prewarmThumbnail(item.localPath);
-      }
     }
 
     return newlyAdded;
@@ -391,9 +385,6 @@ class DownloadManager {
       'Complete added item $id ${width}x$height ${rawBytes.length} bytes total=${itemsNotifier.value.length}',
     );
 
-    // Background pre-warm thumbnail for the downloaded image
-    ImageCacheManager.instance.prewarmThumbnail(filePath);
-
     return item;
   }
 
@@ -408,9 +399,6 @@ class DownloadManager {
         if (f.existsSync()) {
           f.deleteSync();
         }
-        await ImageCacheManager.instance.removeThumbnailForSource(
-          item.localPath,
-        );
       } catch (e, st) {
         AppLogger.download.warning('Delete error id=$id', e, st);
       }
@@ -436,9 +424,6 @@ class DownloadManager {
       try {
         final f = File(item.localPath);
         if (f.existsSync()) f.deleteSync();
-        await ImageCacheManager.instance.removeThumbnailForSource(
-          item.localPath,
-        );
       } catch (_) {}
     }
     // 先收集后批量删（§5.4）
@@ -476,15 +461,7 @@ class DownloadManager {
     } catch (e, st) {
       AppLogger.download.warning('reset download_cache failed', e, st);
     }
-    // ② 清理 ImageCacheManager 缩略图缓存
-    for (final item in itemsNotifier.value) {
-      try {
-        await ImageCacheManager.instance.removeThumbnailForSource(
-          item.localPath,
-        );
-      } catch (_) {}
-    }
-    // ③ 清 box keys + itemsNotifier + _initialized 标志
+    // ② 清 box keys + itemsNotifier + _initialized 标志
     try {
       final keys = _box.keys
           .whereType<String>()
