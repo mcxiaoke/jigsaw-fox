@@ -192,7 +192,7 @@ void main() {
       );
 
       test(
-        '3. Events Zip and Array modes, and Auto-GC for disabled events',
+        '3. Events Zip and Array modes, and no auto-delete for disabled events',
         () async {
           // 预设：在本地创建一个属于 disabled 活动的沙盒目录
           final disabledEventDir = Directory(
@@ -223,8 +223,8 @@ void main() {
             isTrue,
           );
 
-          // 验证 Auto-GC 磁盘清理：disabled 活动的目录必须被彻底物理删除
-          expect(disabledEventDir.existsSync(), isFalse);
+          // P0-2（红线 R1）：disabled 活动的本地目录不得被自动删除。
+          expect(disabledEventDir.existsSync(), isTrue);
 
           // 验证 Zip 模式活动下载与关卡映射
           final cyberpunkEvent = visibleEvents.firstWhere(

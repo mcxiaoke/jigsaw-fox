@@ -125,23 +125,6 @@ void main() {
         expect(syncHit, equals(localPath));
       },
     );
-
-    test(
-      'cleanLegacyThumbnailCache deletes legacy directory if present',
-      () async {
-        final legacyDir = Directory(
-          p.join(testSupportDir.path, 'thumbnail_cache'),
-        );
-        legacyDir.createSync(recursive: true);
-        final dummyFile = File(p.join(legacyDir.path, 'thumb_old.jpg'));
-        dummyFile.writeAsStringSync('old');
-        expect(legacyDir.existsSync(), isTrue);
-
-        await LevelImageResolver.instance.cleanLegacyThumbnailCache();
-
-        expect(legacyDir.existsSync(), isFalse);
-      },
-    );
   });
 
   group('LevelImageResolver Single-Flight Deduplication Tests', () {

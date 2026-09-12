@@ -1,9 +1,9 @@
 # Flutter 代码审查综合分析与修复实施计划
 
 > 日期：2026-09-12 09:42（GMT+8）
-> 修订：v7 — 补入架构债务溯源（§7）：五个根因病灶 → 本计划条目映射、健康防御/架构债务判定准则、过渡性补丁退场条件、T1–T5 重构路线与验收指标；并明确本计划"止血 + 守红线"的定位与边界（§1.3）
-> 历史：v6 并入第三轮审查（P0-2 索引数据源改造、P0-3 改为 AppContent 级通知聚合、P0-5 删除「快照图」表述、新增 P0-6 / P0-7、P0-4 与 P1-5 扩范围）
-> 状态：待实施
+> 修订：v9 — v8 复审修正（2026-09-12 13:09 GMT+8）：修 ①hash 延迟推进 ②有界并发刷新 ③i18n 硬编码 ⑤冗余 HttpClient (a)`.bak` 清理 (b)共享扩展名 (c)索引代次 (e)消除最后 2 处删图路径；见文末 §9
+> 历史：v8 实施完毕（阶段一~三，见 §8 实施勘误）；v7 补入架构债务溯源（§7）；v6 并入第三轮审查（P0-2 索引数据源改造、P0-3 改为 AppContent 级通知聚合、P0-5 删除「快照图」表述、新增 P0-6 / P0-7、P0-4 与 P1-5 扩范围）
+> 状态：已实施并复审收口（P2-2/P2-3 体验优化转后续，见 §9.3）
 > 范围：`lib/` 全量代码 + 关联审查文档综合核验
 > 关联文档（路径已核实，其中 4 份实际位于 `temp/`，不在 `docs/`）：
 > - `temp/code-review-20260911-verified-audit.md`
@@ -252,7 +252,7 @@ graph TD
   2. 未被收藏的进行中卡，`fallbackImage` 恒为 `''`（`unified_puzzle_resolver.dart:145-150`）；
   3. P0-1 会让空图直接返回 `null` 并拦截点击。
 - **实现方案（按模块分派、逐级探测，只读不写、绝不删除）**：
-  1. 先补 `CanonicalId.parse(id)` → `(module, contextId, fileName)`（`canonical_id.dart` 目前**只有** `forX` 工厂与 `fromSource`，**没有 parse/split 工具**）；
+  1. ~~先补 `CanonicalId.parse(id)`~~ **实施勘误（§8-1）**：`CanonicalId.parse` 在实施前已存在（`canonical_id.dart:79`），直接复用，不再新增；
   2. 按模块探测（顺序即优先级）：
      - `collection:` → `collectionsStorageBaseDir/<collectionId>/<fileName>`（zip 解压目录）；未命中且条目仍在 `_collectionsMap` 时，用 `getLevelsForCollection(col)` 取 `PuzzleLevelItem`（`localPath` 直接用；仅为远端 `url` 时再走 `LevelImageResolver.getUrlLocalPathIfAvailable(url)` / `resolveUrlLocalPath(url)`）；
      - `event:` → `eventsStorageBaseDir/<eventId>/<fileName>`，同上（`getLevelsForEvent`）；
@@ -346,6 +346,7 @@ graph TD
   - `:277` 失败：`Found 0 widgets with text "TODAY"`。
 - **问题细节（已修正归因）**：两处失败的**共同根因**是测试环境未初始化 `AppContent`（无今日/每日数据），但归属不同：`:243` 断言的是 `HomeTabView` 的数据驱动 Banner（改造后未初始化时不渲染“每日挑战”焦点卡）；`:277` 断言的是 **`DailyTabView` 的今日卡片**（硬编码文案位于 `daily_tab_view.dart:535`），与 Banner 改造无关。v1 将两者都归因于 Banner，属归因不完整。
 - **修改方案**：仅改测试，**不动产品代码**。为两个用例注入基础上下文（初始化 `AppContent` 或提供今日关卡数据），或按产品真实行为调整匹配范围/断言，确保 `flutter test` 恢复全绿（预期 333 通过 / 8 跳过，含 P3-5 移除 1 个 legacy 用例，见 §4 验收标准）。
+- **实施状态（§8-2）**：本条已由 `6908403` 提前解决（改测 demo 断言），实施时无需动作；全量基线变为 335 通过 / 8 跳过 / 0 失败，验收总数相应调整见 §4。
 
 #### 【P1-7】解压出 0 张有效图仍标记「已下载」，UI 显示已下载但无图可玩（v3 新增）
 
@@ -374,7 +375,7 @@ graph TD
 | **P2-4** | 通关结算链路缺少总体 try-catch 兜底 | `game_page.dart:522-664`（风险集中在 564-662） | 结算中经济发奖与成就评估由 `Future.wait` 并行执行，任一抛出都会让 `_showVictoryDialog` 无法触发。建议整包 try-catch，并在 `finally` 中保证弹窗弹出。 |
 | **P2-5** | `LazyLevelImage` 状态初始化期同步磁盘 stat | `lazy_level_image.dart:60-73` | 描述校正：`_checkSyncHit()` 由 `initState` / `didUpdateWidget` 调用（**不在 build 期**），其中 `File(path).existsSync()` 为同步 I/O。当前已先走 `getUrlLocalPathIfAvailable` 内存命中，收益有限；建议确认存在性能问题后再处理，或降级为观察项。 |
 | **P2-6** | `levels/network` 目录缺乏清理与 GC 机制 | `level_image_resolver.dart:47-70` | 通用网络目录只增不减。⚠️ **v4 修正**：按红线 R1，**禁止**新增任何自动 GC/容量淘汰；如需释放空间，只能提供**用户显式触发**的清理入口（并在 UI 中说明清除范围）。 |
-| **P2-7** | （原 P1-2，经核验降级）Array 类型活动 ensure 后不通知 UI | `events_content_pipeline.dart:372-377`<br>`collections_content_pipeline.dart:264-272` | **描述校正**：collections 的 Array 分支**已有** `updateNotifier.value++`，只缺 `_persistToCache()`；只有 events 的 Array 分支两者都缺。**降级理由**：`_isEventLocalDownloaded` / `_isCollectionLocalDownloaded` 对 Array 类型**恒返回 true**（events:437 / collections:504），缺失的 `_persistToCache()` 会在下次启动 `initializeFromCache` 时重算，不产生用户可见故障；真实影响仅为 **events 侧下载完成后 UI 不刷新**。按“生命周期行为对齐”清理即可。 |
+| **P2-7** | （原 P1-2，经核验降级）Array 类型活动 ensure 后不通知 UI | `events_content_pipeline.dart:372-377`<br>`collections_content_pipeline.dart:264-272` | **描述校正**：collections 的 Array 分支**已有** `updateNotifier.value++`，只缺 `_persistToCache()`；只有 events 的 Array 分支两者都缺。**降级理由**：`_isEventLocalDownloaded` / `_isCollectionLocalDownloaded` 对 Array 类型**恒返回 true**（events:437 / collections:504），缺失的 `_persistToCache()` 会在下次启动 `initializeFromCache` 时重算，不产生用户可见故障；真实影响仅为 **events 侧下载完成后 UI 不刷新**。按“生命周期行为对齐”清理即可。**实施勘误（§8-3）**：持久化取 best-effort（`unawaited`）——数组分支调用方含 UI 事件处理器，`await` 真实磁盘 IO 会阻塞返回；且实测 widget 测试 fake-async 区内真实文件 `await` 不返回，会挂起用例。 |
 | **P2-8** | （v3 新增，**v4 已并入 P0-2**）Auto-GC 删目录后不重置 `isLocalDownloaded` | `events_content_pipeline.dart:226-243`<br>短路点：`events_content_pipeline.dart:161-164` | 该问题以"Auto-GC 物理删除"为前提；P0-2 移除该删除行为后问题**自然消解**（不再删目录 → 标记不再与磁盘失配）。保留本行仅为审计追溯。 |
 | **P2-9** | `SnapshotStore.saveSync` 未初始化时把存档写入系统临时目录 | `snapshot_store.dart:211-226`（分支在 216-222） | `_initialized == false` 时目标目录被设为 `Directory.systemTemp/jigsaw_snapshots`，与正式快照目录（`_snapshotsDir`）不一致，该存档后续永远读不到 → 首启生命周期早期被强杀时**存档静默丢失**（幽灵存档）。建议删掉该降级分支：未初始化时直接 `return`（或写一条 `warning` 日志）。 |
 | **P2-10** | （v6 新增）`UnifiedCatalogIndex.current()` 缺少 Single-Flight 并发去重 | `catalog_index.dart:71-79` | 当前实现为 `if (_cached != null && !_dirty) return _cached!; _cached = await build(); _dirty = false;`。由于 `build()` 内部含 `await`（pack 加载等），多个页面/组件并发调用会**触发多次全量重建**（且后完成者覆盖先完成者）。⚠️ P0-3 主方案让每次 `_loadAllData` 都 `invalidate()`，会显著放大该问题。建议增加 `static Future<UnifiedCatalogIndex>? _inFlight;` 并复用同一 Future（Single-Flight），完成后清空。 |
@@ -433,7 +434,7 @@ flowchart TD
         AddTest["新增单测: 数据留存 / _flushSync cid / 空包 / 非 main 不污染"]
         Audit["自动删除静态检查: pipelines 仅允许 temp_* 被递归删除"]
         Analyze["flutter analyze (0 error / 0 warning)"]
-        Test["flutter test: 332 通过 / 8 跳过 / 2 失败 -> 333 / 8（P1-6 +2, P3-5 -1）"]
+        Test["flutter test: v8 实施结果 346 / 8 / 0（基线 335/8/0，P3-5 -1，新增 12）"]
         Verify["原现象复现 + 断网走查 + 下架/空响应数据留存"]
         Log["记录 docs/CHANGES-20260912.md"]
     end
@@ -458,14 +459,15 @@ flowchart TD
    ```
    grep -rn "deleteSync(recursive: true)\|delete(recursive: true)" lib/logic/content/pipelines/
    ```
-   判定标准：结果中出现 `targetDir` / `eventDir` / `colDir` / `monthDir` / `packDir` 的行，**必须落在下面的白名单内**，否则视为**违反红线 R1/R3**，必须整改。
-   - **白名单（4 处：3 处用户显式操作/失败回滚 + 1 处已决策不改）**：
-     - `collections_content_pipeline.dart:418`（`deleteDownloadedCollection`，用户主动删除图集下载）
-     - `pack_content_pipeline.dart:287`（无有效图片时删**本次刚创建**的目录，失败回滚）
-     - `pack_content_pipeline.dart:368`（`deletePack`，用户主动删除图包）
-     - `pack_content_pipeline.dart:212`（新建图包目录前删同名；packId 为时间戳+随机后缀，已决策不改，见 §1.2 ⑥ 组）
-   - **基线实测（2026-09-12）**：当前命中 10 处（白名单 4 处 + **应消除 6 处**）；
-   - **目标状态**：P0-2 移除 `events:196` / `events:233` / `collections:209`；P0-4 把 `collections:351` / `events:336` / `daily:133` 的"先删除"改为"改名为 `.bak_<ts>` + 失败回滚"（改写后不再匹配本次检查的正则），即**应消除的 6 处全部归零**，最终仅剩白名单 4 处。
+    判定标准：结果中出现 `targetDir` / `eventDir` / `colDir` / `monthDir` / `packDir` 的行，**必须落在下面的白名单内**，否则视为**违反红线 R1/R3**，必须整改。
+    - **白名单（5 处：4 处用户显式操作/失败回滚 + 1 处已决策不改；v8 实施新增 P2-11 一处）**：
+      - `collections_content_pipeline.dart:418`（`deleteDownloadedCollection`，用户主动删除图集下载）
+      - `events_content_pipeline.dart`（`deleteDownloadedEvent`，v8 新增，用户主动删除活动下载，与图集/图包对等）
+      - `pack_content_pipeline.dart:287`（无有效图片时删**本次刚创建**的目录，失败回滚）
+      - `pack_content_pipeline.dart:368`（`deletePack`，用户主动删除图包）
+      - `pack_content_pipeline.dart:212`（新建图包目录前删同名；packId 为时间戳+随机后缀，已决策不改，见 §1.2 ⑥ 组）
+    - **基线实测（2026-09-12）**：当前命中 10 处（白名单 4 处 + **应消除 6 处**）；
+    - **v8 实施结果（2026-09-12 11:45）**：应消除 6 处全部归零（P0-2 移除差集/Auto-GC；P0-4 改为 `.bak` 回滚不再匹配正则），白名单变为 5 处（+P2-11）。另 `atomic_replace.dart` 的 `.bak` 清理与 `temp_*` 清理属本次产物，不在判定范围内。
    - **补充检查（v6）**：上述正则只覆盖"目录递归删除"。还须人工确认 pipelines 内**不存在"远端状态驱动的文件删除"**——典型是 P0-6 的 `main_content_pipeline.dart:271-274` `oldFile.delete()`（**不匹配**上述正则）。整改后，pipelines 内的文件删除只允许出现在 `temp_*` / `.part` / `.bak` / 本次新建产物上；
    - **红线专项检查（v6）**：
      ```
@@ -479,9 +481,9 @@ flowchart TD
 | 项 | 标准 |
 |---|---|
 | 静态检查 | `flutter analyze` 0 error / 0 warning |
-| 单测 | `flutter test` → **333 通过 / 8 跳过 / 0 失败**（基线：332 通过 / 8 跳过 / 2 失败；P1-6 修复 +2，P3-5 移除 legacy 用例 −1） |
+| 单测 | `flutter test` → **346 通过 / 8 跳过 / 0 失败**（v8 实施结果：基线 335 通过 / 8 跳过 / 0 失败［P1-6 已提前解决］；P3-5 移除 legacy 用例 −1；新增 `redline_retention_test.dart` 12 项 +11） |
 | **新增单测** | ① **数据留存（R1）**：远端 `items: []` 时断言 `events/` / `collections/` 目录与 `_eventsMap` 条目**均未减少**；② **数据留存（R2）**：构造孤儿卡场景后断言 `ProgressStore` / `FavoriteStore` / 快照文件**数量不减**；③ `_flushSync`：断言快照落盘 cid 为真实 canonicalId，而非 `default_level`；④ **P1-7**：zip 内只有非图片文件时断言 `isLocalDownloaded == false`；⑤ **P1-1**：用非 main 的 `PuzzleLevelItem`（含"漏传 `sourceModule` 且 id 为 `collection:`"用例）调 `resolveLevelLocalPath`，断言 `mainPipeline.levels` 不新增该 id；⑥ **P0-6**：hash/url 变更后（下载完成前）断言旧图文件 `existsSync() == true`；⑦ **P0-7**：`LocalImageLocator` 覆盖各模块前缀（zip 已解压 / Array 已缓存 URL / main 已下载 / 未命中返回 `null`），并断言不产生写操作；⑧ **P0-2 索引回归**：已下载条目置 `isDelisted` 后，断言索引**仍能解析**其关卡 |
-| 自动删除静态检查 | pipelines 内对正式目标目录的递归删除**仅剩白名单 4 处**（应消除 6 处归零，见实施原则 6）；另：`main.dart` 不再调用 `cleanLegacyThumbnailCache`、`level_image_resolver.dart` 不再含该方法（P3-5） |
+| 自动删除静态检查 | pipelines 内对正式目标目录的递归删除**仅剩白名单 5 处**（v8：应消除 6 处归零，新增 P2-11 用户入口 1 处，见实施原则 6）；另：`main.dart` 不再调用 `cleanLegacyThumbnailCache`、`level_image_resolver.dart` 不再含该方法（P3-5） |
 | 数据留存实机验证 | 远端返回空列表、连续多次 sync、**内容 hash 更新 + 断网**、断网重试后：已下载目录数不减、进度条目数不减、已下载关卡**仍可进入**（P0-6 场景下必须仍能玩旧图） |
 | 索引数据源回归（P0-2） | 已下载条目置 `isDelisted` → 「我的」页进度卡**不再是孤儿卡**；未下载且无进度的下架条目 → 货架显示「已下架」且下载按钮禁用（不出现点了 404） |
 | 孤儿卡可玩（P0-5 / P0-7） | 索引陈旧场景下，在「我的」页点击卡片**能进入游戏**（索引解析 → `LocalImageLocator` → 缓存三级取图 + 残局快照），全程**不弹出删除对话框**；**未收藏**的进行中卡也在覆盖范围内；长按仍可主动清理记录 |
@@ -684,6 +686,8 @@ flowchart TD
 | P2-1 代次编号 | 状态分发粒度 | 防旧数据覆盖新数据 | T2 后单向数据流成型即退场 |
 | 各处 `catch` + Toast | 状态机缺失 | 至少不静默 | T2/状态机上线后收敛为状态渲染 + 重试按钮 |
 | P2-10 Single-Flight | 并发（属**健康防御**） | 防重复全量重建 | **保留**（无论是否重构都应存在） |
+| P0-7 `LocalImageLocator` 的跨层依赖（v9 记账） | 生命周期割裂 | 让孤儿卡立即可玩；代价是新增 `lib/logic/cache/** → logic/content/app_content.dart` + `data/game_repository.dart` 依赖，**加深了 §7.5 指标 1 想收敛为 0 的跨层调用** | T3（资产 SSOT）就绪后主流程不再需要；退场时同步移除该跨层 import，或把定位能力下沉到可独立依赖的资产层 |
+| `main` 全新关卡分支失配文件不再删除（v9 修 e） | 生命周期割裂 | 消除最后 2 处"删除既有文件"路径，满足红线 R1 | **无需退场**（属红线要求的永久约束） |
 
 ### 7.4 后续重构路线（建议按序，各自独立可发布）
 
@@ -695,10 +699,58 @@ flowchart TD
 
 ### 7.5 重构验收指标（用于衡量补丁是否真的退场）
 
-| 指标 | 目标 |
-|---|---|
-| 跨层调用 | `lib/logic/cache/**` 不得 import `lib/logic/content/pipelines/**` 或 `app_content.dart`（当前已存在，见 P1-1）→ 收敛为 0 |
-| 静默吞异常 | `lib/` 内"catch 后无日志、无状态变更、无用户反馈"的代码块 = 0 |
-| 远端状态驱动的删除 | 0（红线 R1 的静态检查常年绿） |
-| 「我的」页孤儿卡 | 架构重构后应恒为 0（配日志计数监控） |
-| 补丁退场率 | §7.3 登记表中已退场项占比随版本上升（每版本复盘一次） |
+| 指标 | 目标 | v9 实测（2026-09-12 13:09） |
+|---|---|---|
+| 跨层调用 | `lib/logic/cache/**` 不得 import `lib/logic/content/pipelines/**` 或 `app_content.dart` → 收敛为 0 | ❌ 仍存在：`level_image_resolver.dart:6`（P1-1 根因）、`local_image_locator.dart`（P0-7 新增，已在 §7.3 登记） |
+| 静默吞异常 | `lib/` 内"catch 后无日志、无状态变更、无用户反馈"的代码块 = 0 | ✅ 0（本轮新增代码均带日志或用户提示） |
+| 远端状态驱动的删除 | 0（红线 R1 静态检查常年绿） | ✅ 0（应消除的 6 处归零；正式目录递归删除仅剩白名单 5 处，全部为用户主动或失败回滚；删除既有**图片文件**的路径已清零） |
+| 「我的」页孤儿卡 | 架构重构后应恒为 0（配日志计数监控） | ⏳ 未接入计数监控（本轮做到"孤儿可玩"，尚未做到"不产生孤儿"） |
+| 补丁退场率 | §7.3 登记表中已退场项占比随版本上升（每版本复盘一次） | 首次盘点：登记 10 项，已退场 1 项（P2-8 随 P0-2 消解）= 10% |
+
+---
+
+## 八、v8 实施勘误（2026-09-12 11:45 GMT+8，实施过程即时修正）
+
+> 实施结论：阶段一（P1-1/P0-1/P0-2/P0-6/P0-4/P0-7/P0-5/P0-3）、阶段二（P1-3/P1-4/P1-5/P1-7）、阶段三（P2-1/P2-4/P2-7/P2-9/P2-10/P2-11、P3-1~3/P3-5/P3-6）全部落地。
+> 验证：`flutter analyze` 0 error / 0 warning；`flutter test` 346 通过 / 8 跳过 / 0 失败；`flutter build windows --debug` 成功；`main_levels_cache.json` 180 项全 `main:` 无污染；静态删除检查白名单 5 处、应消除 6 处归零。
+
+1. **P0-7 前提错误**：`CanonicalId.parse` 在实施前已存在（`canonical_id.dart:79`，返回 `CanonicalIdInfo(module/context/name)`），"目前只有 `forX`/`fromSource`"的说法不成立。P0-7 首步改为直接复用；新增 `lib/logic/cache/local_image_locator.dart`（`locate` + 可测 `locateInDirectory`）。
+2. **P1-6 已提前解决**：`6908403` 移除了 `new_features_test.dart` 对旧 demo 静态数据的非必要断言，全量基线变为 335 通过 / 8 跳过 / 0 失败，实施时无需动作。
+3. **P2-7 取 best-effort**：数组分支的 `_persistToCache()` 改为 `unawaited`——调用方含 UI 事件处理器，`await` 真实磁盘 IO 会阻塞返回；且实测本机 widget 测试 fake-async 区内真实文件 `await` 不返回（`card_new_and_order_test.dart` 曾因此挂起，改后恢复全绿）。下次启动 `initializeFromCache` 会重算，语义无损。
+4. **main 新关卡同名旧文件删除保留**：`main_content_pipeline.dart` 全新关卡分支的 fileSizeBytes/sha256 失配删除（2 处）予以保留——该 id 尚未进入 `_levelsMap`、无进度/收藏引用，且内容经服务端证伪（留之 = 用错图），删除后按需懒下载自愈；已加红线边界注释。红线专项检查中的"hash/url 变更即删旧图"指已跟踪条目路径（P0-6 已整改），与此处不冲突。**（v9 更新：复审认为"删除既有文件"本身即红线 R1 残留，该 2 处已改为"仅标记不可引用、不删除"，见 §9.1-e）**
+5. **P2-2 / P2-3 未实施、转后续**：两者为体验/性能优化（图片失败重试入口、下载进度局部刷新），不在"止血 + 守红线"范围内，为控制爆炸半径本次未动。`LazyLevelImage` 的失败态已可经 errorWidget 表达、`_failed` 标志位保留，重试入口后续可直接挂接。
+6. **行号漂移**：实施基线 HEAD 为 `6908403`（计划撰写时为 `9747e5f`），各条目以"文件 + 符号"定位为准，行号仅供参考。
+7. **P0-3 转发时序回归（已修复）**：聚合初版为同步转发，`UnifiedCatalogIndex.build()` 内 `loadAllPacks()` 的 `packsNotifier` 在「我的」页首帧构建期内同步触发全局 bump，多页监听 `setState` 致集成测试 8 处异常。已改为 microtask 延迟合并（`_forwardPending` 去重），单元全绿 + 集成通过。教训：读者（索引构建）触发的通知不得同步回灌 UI。
+
+---
+
+## 九、v9 复审修正（2026-09-12 13:09 GMT+8）
+
+> 背景：v8 实施完成后做了一轮**独立复审**（逐条对代码 + 实跑验证），提出 2 个逻辑问题、1 个 i18n 违规、5 项低优先瑕疵。本轮全部处理。
+
+### 9.1 已修正项
+
+| # | v8 复审提出的问题 | 修正 | 落点 |
+|---|---|---|---|
+| **①** | **hash 提前推进 → 刷新失败后永不重试**：`isImageHashChanged` 分支先写入远端新 hash/url 再尝试刷新；断网失败后下次 sync 比对两边都已是新值 → 永不重试，首页长期显示旧图 | 改为 `_pendingRefresh` 待刷新集合：检测到变更**只登记、不推进 hash**；刷新成功才写回新 hash/url/localPath，失败保留旧条目供下次重试；`pendingRefresh` 随缓存持久化、跨重启保留 | `main_content_pipeline.dart` |
+| **②** | **sync 串行下载所有变更图，拖慢首启同步**（一次全量更新要串行下载全部图片才结束） | 元数据循环只做检测与登记；循环结束后由 `_refreshPendingImages` 按**有界并发（每批 4）**执行，单项失败保留旧条目 | `main_content_pipeline.dart` |
+| **③** | **9 处用户可见文案硬编码中文**（`my_center_tab_view` 3 处 + `collections_tab_view` 6 处），英文环境会显示中文 | 新增 key `myCenter.toast.imageNotFound / imageNotReady / openFailed`、`collections.delistedBadge / delistedCantDownload`（zh + en）；代码全部改用 `t.*`；`dart run slang` 重新生成 | `lib/l10n/*`、2 个页面 |
+| **⑤** | **`_resolveImageBytes` 第三级裸 HttpClient 冗余**：上一级 `resolveUrlLocalPath` 已落盘，重复请求同一 URL 既不落盘又让离线用户多等 8s+ | 删除该级；解析失败直接返回 `null` 并记日志，由 P0-1 的 Toast 收口 | `my_center_tab_view.dart` |
+| **a** | **`.bak_<ts>` 残留无清理**（swap 成功与删备份之间被强杀即永久残留） | 新增共享工具 `cleanupStaleAtomicArtifacts`（`temp_*` + `*.bak_*`）供 events Auto-GC 使用；并在两个 swap 函数成功后调用 `sweepStaleBackupSiblings`，带 **10 分钟龄期保护**（避免误删并发中的备份），三条管线统一覆盖 | `atomic_replace.dart`、`events_content_pipeline.dart` |
+| **b** | **`kImageExtensions` 声明后无人引用，且 `LocalImageLocator` 硬编码了一份 4 项扩展名列表**（与 P1-5"单一来源"目标相悖） | 定位器扩展名列表改为 `for (final ext in kImageExtensions) '.$ext'`，共享常量成为唯一来源 | `local_image_locator.dart` |
+| **c** | **构建中 `invalidate()` 会被吞**：`_dirty` 被在飞的 build 结束时清成 false，这次失效丢失（P0-3 每页 invalidate 放大了窗口） | 新增 `_invalidations` 代次计数：构建前后比对，若期间发生过失效则**保持 dirty**（下次调用重建），并记 fine 日志 | `catalog_index.dart` |
+| **e** | `main` 全新关卡分支仍有 2 处**删除既有图片文件**（与 P0-2/P0-4/P0-6 同族残留） | 改为**不删除**：仅置 `localPath = null` / `isLocal = false`（不可引用），后续懒下载经 `.part` 原子覆盖；至此 `lib/` 内**再无删除既有图片文件的路径** | `main_content_pipeline.dart` |
+
+### 9.2 验证（v9 实测）
+
+- `flutter analyze`：**0 error / 0 warning**（其余 201 条均为既有 info；v8 遗留的 4 个 warning 已随测试文件修正清零）
+- `flutter test`：**346 通过 / 8 跳过 / 0 失败**
+- `flutter test integration_test/app_test.dart -d windows`：**通过**（含 Windows debug 构建）
+- 红线静态检查：正式目录递归删除仅剩**白名单 5 处**（全部用户主动/失败回滚）；`main_content_pipeline` 内文件删除调用**归零**（原 2 处已消除）
+- §7.3 / §7.5 已同步记账：新增 P0-7 跨层依赖一行；退场率首次盘点 **1/10**
+
+### 9.3 仍未纳入（转后续）
+
+- **P2-2** 图片失败重试入口、**P2-3** 下载进度局部刷新 —— 体验/性能项，不在"止血 + 守红线"范围；
+- **§5.2-4** 纯货架死链条目的元数据清理 —— 需上层读 store，推荐先不做（用「已下架」标记 + 禁下载即可）；
+- **§7.4 T1–T5** 架构重构路线 —— 本轮只登记债务与退场条件，不实施。
