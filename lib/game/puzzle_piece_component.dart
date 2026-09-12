@@ -341,11 +341,11 @@ class PuzzlePieceComponent extends PositionComponent
         return;
       }
 
-      // 阈值定义（经权衡：大部分手势应判定为左右滑动托盘）：
-      // - 向上拖出需同时满足：向上位移 >= 12px 且 垂直分量 > 水平 * 1.7（约 >59° 偏离水平，接近垂直）
+// 阈值定义（经权衡：大部分手势应判定为左右滑动托盘）：
+      // - 向上拖出需同时满足：向上位移 >= 12px 且 垂直分量 > 水平 * 1.2（约 >50° 偏离水平）
       // - 其余所有情况（横向为主、斜向、下移、微小上移）均判为托盘滚动
       const upThreshold = 12;
-      const angleFactor = 1.7; // tan(59.5°) ≈1.7，角度陡峭才视为拖出
+      const angleFactor = 1.2; // tan(50.2°) ≈1.2，角度较陡即视为拖出
 
       if (ady < -upThreshold && ady.abs() > adx * angleFactor) {
         // 确认为向上拖出：正式进入持有拖拽状态，集群整体跟随光标

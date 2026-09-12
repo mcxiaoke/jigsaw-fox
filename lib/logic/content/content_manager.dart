@@ -397,9 +397,7 @@ class ContentManager {
         () async {
           final currentMonth = overrideToday != null
               ? _formatCurrentMonth(overrideToday)
-              : (manifest.dailyModule.currentMonth.isNotEmpty
-                    ? manifest.dailyModule.currentMonth
-                    : _formatCurrentMonth(DateTime.now()));
+              : _formatCurrentMonth(DateTime.now());
 
           final targetZipUrl = await resolveDailyMonthZipUrl(currentMonth);
 

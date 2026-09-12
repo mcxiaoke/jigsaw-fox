@@ -75,5 +75,30 @@ void main() {
         expect(find.textContaining('加载失败'), findsNothing);
       },
     );
+
+    testWidgets(
+      'Does not display future months (e.g. 10, 11, 12) even if declared or requested',
+      (tester) async {
+        await tester.pumpWidget(
+          const MaterialApp(home: Scaffold(body: DailyTabView())),
+        );
+        await tester.pump(const Duration(milliseconds: 300));
+
+        final now = DateTime.now();
+        final curMonthTitle = '${now.year}年${now.month}月';
+        expect(find.text(curMonthTitle), findsOneWidget);
+
+        // 验证未来的月份（如 +1, +2, +3 个月）绝不会展示 Header
+        final nextMonth = DateTime(now.year, now.month + 1);
+        final nextMonthTitle = '${nextMonth.year}年${nextMonth.month}月';
+        expect(find.text(nextMonthTitle), findsNothing);
+
+        final endOfYear = DateTime(now.year, 12);
+        if (endOfYear.isAfter(now)) {
+          final endOfYearTitle = '${endOfYear.year}年${endOfYear.month}月';
+          expect(find.text(endOfYearTitle), findsNothing);
+        }
+      },
+    );
   });
 }

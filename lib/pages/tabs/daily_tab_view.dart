@@ -146,6 +146,14 @@ class _DailyTabViewState extends State<DailyTabView> {
       return;
     }
 
+    final now = DateTime.now();
+    if (_isFutureMonth(yyyyMm, now)) {
+      AppLogger.daily.fine(
+        'DailyTabView: Month $yyyyMm is in the future, skipping download',
+      );
+      return;
+    }
+
     if (AppContent.instance.isInitialized) {
       final manager = AppContent.instance.manager;
       final existing = manager
@@ -214,12 +222,23 @@ class _DailyTabViewState extends State<DailyTabView> {
     return yyyyMm;
   }
 
+  /// 判断某月份字符串（如 202610 或 2026-10）是否为未到来的未来月份
+  bool _isFutureMonth(String yyyyMm, DateTime now) {
+    final clean = yyyyMm.replaceAll('-', '');
+    if (clean.length < 6) return false;
+    final year = int.tryParse(clean.substring(0, 4)) ?? 0;
+    final month = int.tryParse(clean.substring(4, 6)) ?? 0;
+    if (year <= 0 || month < 1 || month > 12) return false;
+    return DateTime(year, month).isAfter(DateTime(now.year, now.month));
+  }
+
   /// 获取所有可用月份列表 (降序排列)
   ///
   /// 严格以权威数据源为准，杜绝盲目推断不存在的历史月份：
   /// 1. 远端 daily/index.json 中声明的有效月份 (availableDailyMonths)
   /// 2. 本地已存在且关卡文件非空的有效历史月份 (过滤空目录残留)
   /// 3. 若远端索引未拉取且本地无历史数据，仅以 manifest 的 currentMonth 或当月作为最小兜底展示
+  /// 4. 严格过滤：未到达的未来月份一律不展示 (即便远端提前发布，也绝不对用户展示)
   List<String> _getAvailableMonths() {
     final monthSet = <String>{};
 
@@ -242,13 +261,15 @@ class _DailyTabViewState extends State<DailyTabView> {
     }
 
     // 4. 极端保底（AppContent 未初始化或全为空时，仅保留当月单个月份，绝不臆造历史月份）
+    final now = DateTime.now();
     if (monthSet.isEmpty) {
-      final now = DateTime.now();
       final nowMm = '${now.year}${now.month.toString().padLeft(2, '0')}';
       monthSet.add(nowMm);
     }
 
-    final list = monthSet.toList()..sort((a, b) => b.compareTo(a));
+    // 5. 严格剔除未到来的未来月份
+    final list = monthSet.where((m) => !_isFutureMonth(m, now)).toList()
+      ..sort((a, b) => b.compareTo(a));
     return list;
   }
 
