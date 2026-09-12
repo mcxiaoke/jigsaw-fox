@@ -1,25 +1,29 @@
 flutter_launcher_icons:
   android: true
   #ios: true
+  #image_path_ios: "assets/images/icon.png"
+  #remove_alpha_ios: true
 
   # iOS / Windows / Web / Android legacy 共用直角母版
   image_path: "assets/images/icon.png"
-  #image_path_ios: "assets/images/icon.png"
 
-  # iOS 去掉 alpha（App Store 拒收透明）
-  #remove_alpha_ios: true
-
-  # Android adaptive icon：背景取主色，前景透明主体居中 66%
-  # adaptive_icon_background: "#FCDC80"
-  # adaptive_icon_foreground: "assets/images/icon-android-foreground.png"
-  # adaptive_icon_foreground_inset: 16
+  # Android adaptive icon：背景取主色，前景主体已预留 66% 安全区，inset 设为 0
+  adaptive_icon_background: "#FECC87"
+  adaptive_icon_foreground: "assets/images/icon-android-foreground.png"
+  adaptive_icon_foreground_inset: 0
 
   min_sdk_android: 25
 
-  web:
-    generate: true
-    image_path: "assets/images/icon-round.png"
-  windows:
-    generate: false
-    icon_size: 256
-    image_path: "assets/images/icon-round.png"
+  #web:
+  #  generate: true
+  #  image_path: "assets/images/icon-round.png"
+  #windows:
+  #  generate: true
+  #  icon_size: 256
+  #  image_path: "assets/images/icon-round.png"
+  #macos:
+  #  generate: true
+  #  image_path: "assets/images/icon-round.png"
+  #linux:
+  #  generate: true
+  #  image_path: "assets/images/icon-round.png"

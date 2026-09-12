@@ -1,0 +1,18 @@
+flutter_native_splash:
+  color: "#FFEED7"
+  image: assets/images/splash_500.png
+  color_dark: "#000000"
+  image_dark: assets/images/splash_500.png
+
+  android_12:
+    color: "#FFEED7"
+    icon_background_color: "#FFEED7"
+    image: assets/images/splash_12.png
+    color_dark: "#000000"
+    icon_background_color_dark: "#000000"
+    image_dark: assets/images/splash_12.png
+
+  # 若项目缺少 web 目录，设为 true 会导致 flutter_native_splash 报错
+  web: false
+
+  fullscreen: true

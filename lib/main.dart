@@ -3,6 +3,7 @@ import 'dart:ui';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:flutter_native_splash/flutter_native_splash.dart';
 import 'package:jigsawpuzzle/data/favorite_store.dart';
 import 'package:jigsawpuzzle/data/game_repository.dart';
 import 'package:jigsawpuzzle/data/storage_manager.dart';
@@ -90,6 +91,8 @@ void _handleBackgroundSync() {
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  WidgetsBinding widgetsBinding = WidgetsFlutterBinding.ensureInitialized();
+  FlutterNativeSplash.preserve(widgetsBinding: widgetsBinding);
 
   // 0. 日志系统最先初始化（后续所有模块日志均可落盘）
   await AppLogger.init();
@@ -180,6 +183,9 @@ void main() async {
   AppLogger.system.info(
     'App launch runApp isContentReady=$isContentReady',
   );
+
+  FlutterNativeSplash.remove();
+
   runApp(
     TranslationProvider(
       child: AnimatedBuilder(
