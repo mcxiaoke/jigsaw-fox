@@ -26,7 +26,7 @@ void main() {
 
     test('SnapshotStore atomic save, load, and explicit delete', () async {
       const cid = 'main:001';
-      const state1 = PuzzleBoardState(
+      final state1 = PuzzleBoardState(
         canonicalId: cid,
         difficultyKey: '2x2',
         rows: 2,
@@ -109,7 +109,7 @@ void main() {
         const fallbackDiff = PuzzleDifficulty(label: '2x2', rows: 2, cols: 2);
 
         // 1. Trivial: 0%, 0 hints, 0s elapsed, all pieces unmerged
-        const trivialState = PuzzleBoardState(
+        final trivialState = PuzzleBoardState(
           canonicalId: cid,
           difficultyKey: '2x2',
           rows: 2,
@@ -140,7 +140,7 @@ void main() {
         );
 
         // 2. Free placement: 0% solved, but elapsedSeconds >= 5 or has merged clusters
-        const freePlacementState = PuzzleBoardState(
+        final freePlacementState = PuzzleBoardState(
           canonicalId: cid,
           difficultyKey: '2x2',
           rows: 2,

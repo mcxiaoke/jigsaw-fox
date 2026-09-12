@@ -1671,7 +1671,7 @@ void main() {
   });
 
   test('PieceState pieceById 安全防御与 pieceByIdOrNull', () {
-    const state = PuzzleBoardState(
+    final state = PuzzleBoardState(
       rows: 2,
       cols: 2,
       seed: 42,
@@ -2101,15 +2101,17 @@ void main() {
         if (c < 3) neighbors.add(r * 4 + c + 1);
         for (final nid in neighbors) {
           if (nid <= id) continue; // 每对只校验一次
-          final a = game.children
-              .whereType<PuzzlePieceComponent>()
-              .firstWhere((p) => p.id == id);
-          final b = game.children
-              .whereType<PuzzlePieceComponent>()
-              .firstWhere((p) => p.id == nid);
-          final dx = (a.position.x + a.size.x * a.scale.x / 2) -
+          final a = game.children.whereType<PuzzlePieceComponent>().firstWhere(
+            (p) => p.id == id,
+          );
+          final b = game.children.whereType<PuzzlePieceComponent>().firstWhere(
+            (p) => p.id == nid,
+          );
+          final dx =
+              (a.position.x + a.size.x * a.scale.x / 2) -
               (b.position.x + b.size.x * b.scale.x / 2);
-          final dy = (a.position.y + a.size.y * a.scale.y / 2) -
+          final dy =
+              (a.position.y + a.size.y * a.scale.y / 2) -
               (b.position.y + b.size.y * b.scale.y / 2);
           final d = sqrt(dx * dx + dy * dy);
           expect(

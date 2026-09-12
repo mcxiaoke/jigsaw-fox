@@ -4,7 +4,7 @@ import 'package:jigsawpuzzle/logic/models/puzzle_state.dart';
 void main() {
   group('Snapshot v3 Tests', () {
     test('v3 JSON serialization round-trip with forward compat', () {
-      const original = PuzzleBoardState(
+      final original = PuzzleBoardState(
         rows: 1,
         cols: 2,
         seed: 8888,

@@ -1,6 +1,8 @@
 import 'package:jigsawpuzzle/services/app_logger.dart';
+import 'package:meta/meta.dart';
 
 /// Immutable state representing a single puzzle piece on the board.
+@immutable
 class PieceState {
   const PieceState({
     required this.id,
@@ -138,7 +140,11 @@ class PieceState {
 /// 且带默认值，旧版本读新快照时未知键进入 `extra` 并在下次 `toJson` 原样回写，
 /// 做到“旧读新不丢、新读旧兼容”。
 class PuzzleBoardState {
-  const PuzzleBoardState({
+  /// 注意：本类含惰性索引缓存字段 [_\u200bidIndex]，因此**不能**声明为 const
+  /// 构造函数——Dart 禁止「带生成式 const 构造函数的类声明 late final 字段」
+  /// （late_final_field_with_const_constructor）。测试中原有 8 处
+  /// `const PuzzleBoardState(...)` 已同步去掉 `const`，对运行期行为无影响。
+  PuzzleBoardState({
     required this.rows,
     required this.cols,
     required this.seed,
@@ -268,23 +274,35 @@ class PuzzleBoardState {
 
   int get totalPieces => rows * cols;
 
-  /// Piece lookup by ID with safety check.
+  /// 惰性构建的 id→PieceState 索引（P1-1 性能修复）。
+  ///
+  /// 收益：`PuzzleEngine.computePlantedPieceIds` 的 BFS 原先对每个出队碎片
+  /// 调用一次 O(n) 的 [pieceById]，整体 O(n²)；改索引后降为 O(n)。
+  /// 大尺寸（square1x1 最大 24×24 = 576 片）收益最明显。
+  ///
+  /// 安全性：[pieces] 为 final 且本对象经 [copyWith] 整体替换而非原地修改，
+  /// 故每实例缓存天然有效，无需手动失效。
+  Map<int, PieceState>? _idIndex;
+
+  /// 惰性构建 id→PieceState 索引；仅首次访问时执行一次 O(n) 建表。
+  ///
+  /// [pieces] 为空时返回空表，避免空表场景下的无谓分配。
+  Map<int, PieceState> get _index =>
+      pieces.isEmpty ? const <int, PieceState>{} : (_idIndex ??= _buildIndex());
+
+  Map<int, PieceState> _buildIndex() => {for (final p in pieces) p.id: p};
+
+  /// Piece lookup by ID with safety check（O(1)，经惰性索引）。
   PieceState pieceById(int id) {
-    for (final p in pieces) {
-      if (p.id == id) return p;
-    }
+    final hit = _index[id];
+    if (hit != null) return hit;
     throw StateError(
       'PieceState with id=$id not found in PuzzleBoardState (total=${pieces.length})',
     );
   }
 
-  /// Piece lookup by ID, returning null if not found.
-  PieceState? pieceByIdOrNull(int id) {
-    for (final p in pieces) {
-      if (p.id == id) return p;
-    }
-    return null;
-  }
+  /// Piece lookup by ID, returning null if not found（O(1)，经惰性索引）。
+  PieceState? pieceByIdOrNull(int id) => _index[id];
 
   /// Returns all pieces belonging to a cluster.
   List<PieceState> piecesInCluster(int clusterId) =>
