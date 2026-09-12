@@ -108,7 +108,13 @@ Future<void> swapDirectoryAtomically(
       if (bak.existsSync()) {
         try {
           await bak.rename(target.path);
-        } catch (_) {}
+        } catch (e, st) {
+          AppLogger.content.severe(
+            'swapDirectoryAtomically rollback failed $bakPath -> ${target.path}',
+            e,
+            st,
+          );
+        }
       }
     }
     rethrow;
@@ -145,7 +151,13 @@ Future<void> swapFileAtomically(String targetPath, String tempPath) async {
       if (bak.existsSync()) {
         try {
           await bak.rename(targetPath);
-        } catch (_) {}
+        } catch (e, st) {
+          AppLogger.content.severe(
+            'swapFileAtomically rollback failed $bakPath -> $targetPath',
+            e,
+            st,
+          );
+        }
       }
     }
     rethrow;

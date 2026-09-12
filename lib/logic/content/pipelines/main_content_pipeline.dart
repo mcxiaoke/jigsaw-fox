@@ -315,7 +315,7 @@ class MainContentPipeline {
               final localFile = File(_getLocalImagePath(level.id, level.url));
               var isLocal = false;
               String? localPath = localFile.path;
-              if (await localFile.exists()) {
+              if (localFile.existsSync()) {
                 final expectedSize = level.fileSizeBytes;
                 if (expectedSize != null && expectedSize > 0) {
                   try {
@@ -431,7 +431,7 @@ class MainContentPipeline {
 
     final localPath = _getLocalImagePath(level.id, level.url);
     final localFile = File(localPath);
-    if (await localFile.exists()) {
+    if (localFile.existsSync()) {
       // fileSizeBytes 快速筛查：大小不匹配时直接走下载逻辑覆盖。
       // P0-6（红线 R1）：此处不得预删旧图——downloadFile 经 .part 原子落盘，
       // 下载失败时旧图仍在；预删会制造“新旧两空”。

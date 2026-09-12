@@ -259,7 +259,7 @@ class AppLogger {
     try {
       final appSupportDir = await getApplicationSupportDirectory();
       _logDir = Directory(p.join(appSupportDir.path, 'logs'));
-      if (!await _logDir!.exists()) {
+      if (!_logDir!.existsSync()) {
         await _logDir!.create(recursive: true);
       }
       _fileEnabled = true;
@@ -350,7 +350,7 @@ class AppLogger {
         }
         // 若当天已有文件且未超限则续写，否则新建索引 0
         final candidate = File(p.join(_logDir!.path, 'app_$dayStr.log'));
-        if (await candidate.exists()) {
+        if (candidate.existsSync()) {
           final len = await candidate.length();
           if (len < _maxFileBytes) {
             _currentFile = candidate;
@@ -371,7 +371,7 @@ class AppLogger {
           var f = File(
             p.join(_logDir!.path, 'app_${dayStr}_$_currentFileIndex.log'),
           );
-          while (await f.exists() && await f.length() > _maxFileBytes) {
+          while (f.existsSync() && await f.length() > _maxFileBytes) {
             _currentFileIndex++;
             f = File(
               p.join(_logDir!.path, 'app_${dayStr}_$_currentFileIndex.log'),
@@ -385,7 +385,7 @@ class AppLogger {
       }
       await _sink?.close();
       _sink = null;
-      if (!await _currentFile!.exists()) {
+      if (!_currentFile!.existsSync()) {
         await _currentFile!.create(recursive: true);
       }
     }
@@ -402,7 +402,7 @@ class AppLogger {
       p.join(_logDir!.path, 'app_${_currentDay}_$_currentFileIndex.log'),
     );
     _currentFile = next;
-    if (!await next.exists()) {
+    if (!next.existsSync()) {
       await next.create(recursive: true);
     }
   }
@@ -422,7 +422,7 @@ class AppLogger {
       );
       // 1. 按天数清理
       for (final f in List<File>.from(files)) {
-        final stat = await f.stat();
+        final stat = f.statSync();
         final age = now.difference(stat.modified).inDays;
         if (age > _retainDays) {
           try {
@@ -480,7 +480,7 @@ class AppLogger {
 
   /// 列出所有日志文件（按时间升序）
   static Future<List<File>> listLogFiles() async {
-    if (_logDir == null || !await _logDir!.exists()) return [];
+    if (_logDir == null || !_logDir!.existsSync()) return [];
     final files = _logDir!
         .listSync()
         .whereType<File>()
@@ -518,7 +518,7 @@ class AppLogger {
       await _sink?.close();
     } catch (_) {}
     _sink = null;
-    if (_logDir != null && await _logDir!.exists()) {
+    if (_logDir != null && _logDir!.existsSync()) {
       final files = await listLogFiles();
       for (final f in files) {
         try {

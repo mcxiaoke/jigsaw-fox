@@ -388,7 +388,7 @@ class _CropPuzzlePageState extends State<CropPuzzlePage> {
 
       final dir = await getApplicationSupportDirectory();
       final customDir = Directory(p.join(dir.path, 'levels', 'custom'));
-      if (!await customDir.exists()) {
+      if (!customDir.existsSync()) {
         await customDir.create(recursive: true);
       }
 

@@ -34,7 +34,7 @@ void main() {
 
   tearDownAll(() async {
     try {
-      if (await testRoot.exists()) await testRoot.delete(recursive: true);
+      if (testRoot.existsSync()) await testRoot.delete(recursive: true);
     } catch (_) {}
   });
 
@@ -122,7 +122,7 @@ void main() {
 
     setUp(() async {
       cacheDir = await DownloadManager.downloadCacheDir();
-      if (!await cacheDir.exists()) await cacheDir.create(recursive: true);
+      if (!cacheDir.existsSync()) await cacheDir.create(recursive: true);
     });
 
     Map<String, dynamic> makeItemJson(String id, String localPath) =>

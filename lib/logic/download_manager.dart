@@ -123,7 +123,7 @@ class DownloadManager {
 
     final appSupportDir = await getApplicationSupportDirectory();
     final cacheDir = Directory('${appSupportDir.path}/download_cache');
-    if (!await cacheDir.exists()) {
+    if (!cacheDir.existsSync()) {
       await cacheDir.create(recursive: true);
     }
 
@@ -221,7 +221,7 @@ class DownloadManager {
 
     final appSupportDir = await getApplicationSupportDirectory();
     final cacheDir = Directory('${appSupportDir.path}/download_cache');
-    if (!await cacheDir.exists()) {
+    if (!cacheDir.existsSync()) {
       await cacheDir.create(recursive: true);
     }
 
@@ -248,7 +248,7 @@ class DownloadManager {
 
       // P14 流式下载：直接落盘避免 2× RAM
       final partFile = File('$filePath.part');
-      if (await partFile.exists()) {
+      if (partFile.existsSync()) {
         try {
           await partFile.delete();
         } catch (_) {}
@@ -296,7 +296,7 @@ class DownloadManager {
                 'Referer': refererUrl,
             };
             // 清理残损 part
-            if (await partFile.exists()) {
+            if (partFile.existsSync()) {
               try {
                 await partFile.delete();
               } catch (_) {}
@@ -307,7 +307,7 @@ class DownloadManager {
           }
         }
 
-        if (!await partFile.exists() || await partFile.length() == 0) {
+        if (!partFile.existsSync() || await partFile.length() == 0) {
           throw Exception('下载数据为空');
         }
         const maxImageBytes = 50 * 1024 * 1024;
@@ -315,7 +315,7 @@ class DownloadManager {
         if (partLen > maxImageBytes) {
           throw Exception('图片过大 $partLen > $maxImageBytes');
         }
-        if (await targetFile.exists()) {
+        if (targetFile.existsSync()) {
           try {
             await targetFile.delete();
           } catch (_) {}
@@ -328,7 +328,7 @@ class DownloadManager {
         );
       } finally {
         // rename 成功后 partFile 已不存在，此处兜底清理所有失败路径的 .part 残留
-        if (!partConsumed && await partFile.exists()) {
+        if (!partConsumed && partFile.existsSync()) {
           try {
             await partFile.delete();
           } catch (_) {}
@@ -451,7 +451,7 @@ class DownloadManager {
     try {
       final appSupportDir = await getApplicationSupportDirectory();
       final cacheDir = Directory('${appSupportDir.path}/download_cache');
-      if (await cacheDir.exists()) {
+      if (cacheDir.existsSync()) {
         await for (final entity in cacheDir.list()) {
           if (entity is File) {
             try {

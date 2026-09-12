@@ -606,7 +606,7 @@ void main() {
       await sm.flushPendingWrites();
       await sm.backupNow();
       final root = Directory(p.join(sm.homePathForTest!, 'hive_backups'));
-      expect(await root.exists(), isFalse);
+      expect(root.existsSync(), isFalse);
     });
   });
 

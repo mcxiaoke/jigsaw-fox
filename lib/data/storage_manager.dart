@@ -226,7 +226,7 @@ class StorageManager {
       final support = _appSupport ??= await getApplicationSupportDirectory();
       dir = Directory(p.join(support.path, 'hive_data'));
     }
-    if (!await dir.exists()) await dir.create(recursive: true);
+    if (!dir.existsSync()) await dir.create(recursive: true);
     _hiveDirCache = dir;
     return dir;
   }
@@ -323,7 +323,7 @@ class StorageManager {
   Future<void> _quarantineBox(String boxName) async {
     final hiveDir = await _hiveDirectory();
     final hiveFile = File(p.join(hiveDir.path, '$boxName.hive'));
-    if (await hiveFile.exists()) {
+    if (hiveFile.existsSync()) {
       final ts = DateTime.now().millisecondsSinceEpoch;
       final corruptFile = File('${hiveFile.path}.corrupt-$ts');
       for (var i = 0; i < 3; i++) {
@@ -347,7 +347,7 @@ class StorageManager {
       }
     }
     final lockFile = File(p.join(hiveDir.path, '$boxName.lock'));
-    if (await lockFile.exists()) {
+    if (lockFile.existsSync()) {
       try {
         await lockFile.delete();
       } catch (_) {}
@@ -359,7 +359,7 @@ class StorageManager {
   Future<bool> _restoreBoxFile(String boxName, {required int tryIndex}) async {
     try {
       final backupsRoot = await _backupsRoot();
-      if (!await backupsRoot.exists()) return false;
+      if (!backupsRoot.existsSync()) return false;
       final dirs =
           (await backupsRoot.list().toList())
               .whereType<Directory>()
@@ -369,7 +369,7 @@ class StorageManager {
             ..sort((a, b) => b.path.compareTo(a.path));
       if (tryIndex >= dirs.length) return false;
       final src = File(p.join(dirs[tryIndex].path, '$boxName.hive'));
-      if (!await src.exists()) return false;
+      if (!src.existsSync()) return false;
       final hiveDir = await _hiveDirectory();
       await src.copy(p.join(hiveDir.path, '$boxName.hive'));
       AppLogger.repo.warning(
@@ -506,24 +506,24 @@ class StorageManager {
     try {
       final hiveDir = await _hiveDirectory();
       final backupsRoot = await _backupsRoot();
-      if (!await backupsRoot.exists()) {
+      if (!backupsRoot.existsSync()) {
         await backupsRoot.create(recursive: true);
       }
       final ts = _millisStamp(DateTime.now());
       var tmpDir = Directory(p.join(backupsRoot.path, '.backup-$ts.tmp'));
-      if (await tmpDir.exists()) {
+      if (tmpDir.existsSync()) {
         tmpDir = Directory('${tmpDir.path}-${_randSuffix()}');
       }
       await tmpDir.create(recursive: true);
       for (final name in kAllBoxNames) {
         final src = File(p.join(hiveDir.path, '$name.hive'));
         // 仅复制 .hive 且跳过空文件（空 box 的 .hive 仅文件头数十字节）
-        if (await src.exists() && await src.length() > 0) {
+        if (src.existsSync() && await src.length() > 0) {
           await src.copy(p.join(tmpDir.path, '$name.hive'));
         }
       }
       var dst = Directory(p.join(backupsRoot.path, 'backup-$ts'));
-      if (await dst.exists()) {
+      if (dst.existsSync()) {
         dst = Directory('${dst.path}-${_randSuffix()}');
       }
       // 单次 rename 原子落位：复制中途被强杀只留 .tmp 残骸，不会被恢复扫描认领

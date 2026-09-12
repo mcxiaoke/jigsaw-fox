@@ -13,13 +13,17 @@ class CanonicalId {
 
   /// 生成首页关卡 ID (如 "main:101")
   static String forMain(dynamic seqOrName) {
-    final name = _cleanFilename(seqOrName.toString());
+    var name = _cleanFilename(seqOrName.toString());
+    final intVal = int.tryParse(name);
+    if (intVal != null && name.length < 3) {
+      name = intVal.toString().padLeft(3, '0');
+    }
     return '$prefixMain:$name';
   }
 
   /// 生成每日挑战关卡 ID (如 "daily:20260827")
   static String forDaily(String dateOrFilename) {
-    final clean = _cleanFilename(dateOrFilename);
+    final clean = _cleanFilename(dateOrFilename).replaceAll('-', '');
     return '$prefixDaily:$clean';
   }
 

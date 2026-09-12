@@ -29,16 +29,14 @@ class SnapshotStore {
     try {
       final support = await getApplicationSupportDirectory();
       _snapshotsDir = Directory(p.join(support.path, 'snapshots'));
-      if (!await _snapshotsDir!.exists()) {
+      if (!_snapshotsDir!.existsSync()) {
         await _snapshotsDir!.create(recursive: true);
       }
-      _initialized = true;
       AppLogger.repo.info(
         'SnapshotStore init dir=${AppLogger.sanitizePath(_snapshotsDir!.path)}',
       );
       // 启动时清理残留临时文件
       await _cleanupTempFiles();
-      _initialized = true;
     } catch (e, st) {
       AppLogger.repo.warning('SnapshotStore init failed', e, st);
       // 回退到临时目录（测试环境）
@@ -46,11 +44,12 @@ class SnapshotStore {
         p.join(Directory.systemTemp.path, 'jigsaw_snapshots'),
       );
       try {
-        if (!await _snapshotsDir!.exists()) {
+        if (!_snapshotsDir!.existsSync()) {
           await _snapshotsDir!.create(recursive: true);
         }
       } catch (_) {}
       await _cleanupTempFiles();
+    } finally {
       _initialized = true;
     }
   }
@@ -79,7 +78,7 @@ class SnapshotStore {
     final dir = _snapshotsDir;
     if (dir == null) return;
     try {
-      if (!await dir.exists()) return;
+      if (!dir.existsSync()) return;
       final files = <File>[];
       await for (final f in dir.list()) {
         if (f is File) files.add(f);
@@ -90,7 +89,7 @@ class SnapshotStore {
         if (name.endsWith('.tmp')) {
           final baseName = name.substring(0, name.length - 4); // 去掉 .tmp
           final snapshotFile = File(p.join(dir.path, baseName));
-          final snapshotExists = await snapshotFile.exists();
+          final snapshotExists = snapshotFile.existsSync();
           if (!snapshotExists) {
             // 尝试用 tmp 恢复为正式快照（新数据）
             try {
@@ -104,12 +103,12 @@ class SnapshotStore {
           }
           // snapshot 已存在或恢复失败，删除陈旧 tmp
           try {
-            if (await f.exists()) await f.delete();
+            if (f.existsSync()) await f.delete();
           } catch (_) {}
         } else if (name.endsWith('.bak')) {
           final baseName = name.substring(0, name.length - 4); // 去掉 .bak
           final snapshotFile = File(p.join(dir.path, baseName));
-          if (await snapshotFile.exists()) {
+          if (snapshotFile.existsSync()) {
             try {
               await f.delete();
             } catch (_) {}
@@ -187,22 +186,22 @@ class SnapshotStore {
     try {
       await tmp.writeAsString(jsonStr, flush: true);
       // 原子重命名：若目标文件已存在，使用 .bak 保护防止 Windows 覆盖失败及零文件窗口
-      if (await file.exists()) {
+      if (file.existsSync()) {
         try {
-          if (await bak.exists()) await bak.delete();
+          if (bak.existsSync()) await bak.delete();
           await file.rename(bak.path);
         } catch (_) {}
       }
       try {
         await tmp.rename(file.path);
-        if (await bak.exists()) {
+        if (bak.existsSync()) {
           try {
             await bak.delete();
           } catch (_) {}
         }
       } catch (e) {
         // 重命名失败，尝试恢复 .bak
-        if (await bak.exists()) {
+        if (bak.existsSync()) {
           try {
             await bak.rename(file.path);
           } catch (_) {}
@@ -221,7 +220,7 @@ class SnapshotStore {
         st,
       );
       try {
-        if (await tmp.exists()) await tmp.delete();
+        if (tmp.existsSync()) await tmp.delete();
       } catch (_) {}
       rethrow;
     }
@@ -312,7 +311,7 @@ class SnapshotStore {
   ) async {
     await _ensureInit();
     final file = _fileFor(canonicalId, difficultyKey);
-    if (!await file.exists()) return null;
+    if (!file.existsSync()) return null;
     try {
       final str = await file.readAsString();
       final map = jsonDecode(str) as Map<String, dynamic>;
@@ -356,7 +355,7 @@ class SnapshotStore {
   ) async {
     await _ensureInit();
     final file = _fileFor(canonicalId, difficultyKey);
-    if (!await file.exists()) return null;
+    if (!file.existsSync()) return null;
     try {
       final str = await file.readAsString();
       final map = jsonDecode(str) as Map<String, dynamic>;
@@ -386,14 +385,14 @@ class SnapshotStore {
 
   Future<bool> hasSnapshot(String canonicalId, String difficultyKey) async {
     await _ensureInit();
-    return _fileFor(canonicalId, difficultyKey).exists();
+    return _fileFor(canonicalId, difficultyKey).existsSync();
   }
 
   /// 异步非阻塞检查是否存在任意快照
   Future<bool> hasAnySnapshot(String canonicalId) async {
     await _ensureInit();
     final dir = _snapshotsDir;
-    if (dir == null || !await dir.exists()) return false;
+    if (dir == null || !dir.existsSync()) return false;
     final prefix = '${_safePrefix(canonicalId)}__';
     await for (final f in dir.list()) {
       if (f is File &&
@@ -409,7 +408,7 @@ class SnapshotStore {
   Future<List<String>> listDifficultyKeys(String canonicalId) async {
     await _ensureInit();
     final dir = _snapshotsDir;
-    if (dir == null || !await dir.exists()) return const [];
+    if (dir == null || !dir.existsSync()) return const [];
     final prefix = '${_safePrefix(canonicalId)}__';
     const suffix = '.snapshot';
     final keys = <String>[];
@@ -432,7 +431,7 @@ class SnapshotStore {
     await _ensureInit();
     final file = _fileFor(canonicalId, difficultyKey);
     try {
-      if (await file.exists()) {
+      if (file.existsSync()) {
         await file.delete();
         AppLogger.repo.info(
           'SnapshotStore.delete cid=$canonicalId dkey=$difficultyKey',
@@ -458,7 +457,7 @@ class SnapshotStore {
   Future<void> clearAll() async {
     await _ensureInit();
     final dir = _snapshotsDir;
-    if (dir == null || !await dir.exists()) return;
+    if (dir == null || !dir.existsSync()) return;
     try {
       await for (final f in dir.list()) {
         if (f is File) {

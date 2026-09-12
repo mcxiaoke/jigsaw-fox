@@ -54,7 +54,7 @@ class LevelImageResolver {
     if (_networkLevelsDir != null) return _networkLevelsDir!;
     final supportDir = await getApplicationSupportDirectory();
     final dir = Directory(p.join(supportDir.path, 'levels', 'network'));
-    if (!await dir.exists()) {
+    if (!dir.existsSync()) {
       await dir.create(recursive: true);
     }
     _networkLevelsDir = dir.path;

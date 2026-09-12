@@ -134,7 +134,7 @@ class SourceSelector {
 
   Future<String?> _readSticky(File f) async {
     try {
-      if (await f.exists()) return (await f.readAsString()).trim();
+      if (f.existsSync()) return (await f.readAsString()).trim();
     } catch (_) {}
     return null;
   }

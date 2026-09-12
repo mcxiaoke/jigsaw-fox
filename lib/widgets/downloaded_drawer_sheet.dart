@@ -30,7 +30,7 @@ class DownloadedDrawerSheet extends StatelessWidget {
     DownloadedImageItem item,
   ) async {
     final file = File(item.localPath);
-    if (!await file.exists()) {
+    if (!file.existsSync()) {
       if (context.mounted) {
         GameToast.show(
           context,

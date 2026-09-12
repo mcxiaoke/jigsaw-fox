@@ -8,7 +8,7 @@ import 'package:jigsawpuzzle/logic/image_upscaler.dart';
 void main() async {
   final inputDir = Directory('temp/testimages');
   final outDir = Directory('temp/comparisons');
-  if (!await outDir.exists()) {
+  if (!outDir.existsSync()) {
     await outDir.create(recursive: true);
   }
 
@@ -24,7 +24,7 @@ void main() async {
 
   for (final filename in selectedFiles) {
     final file = File('${inputDir.path}/$filename');
-    if (!await file.exists()) {
+    if (!file.existsSync()) {
       print('文件不存在，跳过: $filename');
       continue;
     }

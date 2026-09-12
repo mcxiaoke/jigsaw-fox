@@ -33,7 +33,7 @@ void main() {
 
   tearDownAll(() async {
     try {
-      if (await testRoot.exists()) await testRoot.delete(recursive: true);
+      if (testRoot.existsSync()) await testRoot.delete(recursive: true);
     } catch (_) {}
   });
 
@@ -231,7 +231,7 @@ void main() {
     test('重置后 download_cache 无残留文件 + 素材索引清空', () async {
       // 预置素材：物理文件 + material: key
       final cacheDir = await DownloadManager.downloadCacheDir();
-      if (!await cacheDir.exists()) await cacheDir.create(recursive: true);
+      if (!cacheDir.existsSync()) await cacheDir.create(recursive: true);
       final localFile = File('${cacheDir.path}/mat_local_1.jpg');
       final netFile = File('${cacheDir.path}/img_net_1.jpg');
       await localFile.writeAsBytes(List.generate(64, (i) => i));
@@ -251,8 +251,8 @@ void main() {
       await GameRepository.instance.resetAllData();
 
       // mat_* 与 img_* 全部清除（§7.6：不做脆弱前缀匹配，整目录归零）
-      expect(await localFile.exists(), isFalse);
-      expect(await netFile.exists(), isFalse);
+      expect(localFile.existsSync(), isFalse);
+      expect(netFile.existsSync(), isFalse);
       // 素材 box 索引已清
       expect(
         sm.collections.keys.where((k) => '$k'.startsWith('material:')),

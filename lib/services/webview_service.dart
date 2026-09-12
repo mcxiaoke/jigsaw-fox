@@ -47,7 +47,7 @@ class WebViewService {
         final dirFinder = appSupportDirFinder ?? getApplicationSupportDirectory;
         final appSupportDir = await dirFinder();
         final envDir = Directory('${appSupportDir.path}/inappwebview_env');
-        if (!await envDir.exists()) {
+        if (!envDir.existsSync()) {
           await envDir.create(recursive: true);
         }
         final creator =

@@ -341,7 +341,7 @@ class PuzzlePieceComponent extends PositionComponent
         return;
       }
 
-// 阈值定义（经权衡：大部分手势应判定为左右滑动托盘）：
+      // 阈值定义（经权衡：大部分手势应判定为左右滑动托盘）：
       // - 向上拖出需同时满足：向上位移 >= 12px 且 垂直分量 > 水平 * 1.2（约 >50° 偏离水平）
       // - 其余所有情况（横向为主、斜向、下移、微小上移）均判为托盘滚动
       const upThreshold = 12;
@@ -448,10 +448,10 @@ class PuzzlePieceComponent extends PositionComponent
   /// 碎片成功吸附就位时触发短暂的流光反馈特效
   void triggerSnapGlow() {
     isHighlight = true;
+    final layout = game.edgeLayout;
     Future.delayed(const Duration(milliseconds: 380), () {
-      if (isRemoved) return;
-      isHighlight =
-          game.isBorderFilterActive && game.edgeLayout.edgesFor(r, c).isBorder;
+      if (isRemoved || game.edgeLayout != layout) return;
+      isHighlight = game.isBorderFilterActive && layout.edgesFor(r, c).isBorder;
     });
   }
 }

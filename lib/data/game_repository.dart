@@ -11,6 +11,7 @@ import 'package:jigsawpuzzle/data/progress_store.dart';
 import 'package:jigsawpuzzle/data/snapshot_store.dart';
 import 'package:jigsawpuzzle/data/storage_manager.dart';
 import 'package:jigsawpuzzle/l10n/gen/strings.g.dart';
+import 'package:jigsawpuzzle/logic/content/models/canonical_id.dart';
 import 'package:jigsawpuzzle/logic/download_manager.dart';
 import 'package:jigsawpuzzle/logic/image_source.dart';
 import 'package:jigsawpuzzle/logic/models/puzzle_state.dart';
@@ -120,14 +121,13 @@ class GameRepository {
     );
   }
 
-  // --- CanonicalId helpers ---
-  static String canonicalForLevel(int index) =>
-      'main:${index.toString().padLeft(3, '0')}';
+  // --- CanonicalId helpers (收敛至 CanonicalId SSOT) ---
+  static String canonicalForLevel(int index) => CanonicalId.forMain(index);
   static String canonicalForDaily(String dateStr) =>
-      'daily:${dateStr.replaceAll('-', '')}';
-  static String canonicalForCustom(String id) => 'ugc:$id';
+      CanonicalId.forDaily(dateStr);
+  static String canonicalForCustom(String id) => CanonicalId.forUgc(id);
   static String canonicalForPack(String packId, String fileName) =>
-      'pack:$packId:$fileName';
+      CanonicalId.forPack(packId, fileName);
 
   /// 测试专用钩子：显式重新生成内置 demo 关卡。
   ///
@@ -362,7 +362,7 @@ class GameRepository {
       if (item.isLocalFile && !item.imagePathOrUrl.startsWith('assets/')) {
         try {
           final file = File(item.imagePathOrUrl);
-          if (await file.exists()) {
+          if (file.existsSync()) {
             await file.delete();
             AppLogger.repo.info(
               'Deleted local file ${AppLogger.sanitizePath(item.imagePathOrUrl)}',
@@ -451,79 +451,17 @@ class GameRepository {
       completedPieceCounts: updatedCompletedCounts.toList(),
     );
 
-    // 同步到新一代文件级快照与轻量索引
     final canonicalId = canonicalForLevel(levelIndex);
-    final shouldClear =
-        isCompleted || (snapshotJson == null && progressPercent == 0);
     try {
-      if (snapshotJson != null && !isCompleted) {
-        final map = jsonDecode(snapshotJson) as Map<String, dynamic>;
-        final state = PuzzleBoardState.fromJson(map);
-        final enriched = state.copyWith(
-          canonicalId: canonicalId,
-          difficultyKey: state.effectiveDifficultyKey,
-          updatedAt: DateTime.now(),
-          createdAt: state.createdAt ?? DateTime.now(),
-        );
-        await SnapshotStore.instance.save(enriched);
-        await ProgressStore.instance.updateProgress(
-          canonicalId: canonicalId,
-          progressPercent: progressPercent,
-          hasSnapshot: true,
-          activeDifficultyKey: enriched.effectiveDifficultyKey,
-          snapshotKeys: [enriched.effectiveDifficultyKey],
-        );
-      } else if (shouldClear) {
-        // P3-6（红线 R2/R5 边界）：残局快照清理仅允许在「关卡已通关完成」或
-        // 「用户显式重新开始 / 放弃残局」时执行；禁止由任何网络/内容状态变化
-        // （同步失败、下架、索引重建等）触发。行为不变，仅注释固化约束。
-        // 清档或通关：优先按显式 difficultyKey 精确删除，消除 pieceCount 横竖歧义
-        if (difficultyKey != null && difficultyKey.isNotEmpty) {
-          await SnapshotStore.instance.delete(canonicalId, difficultyKey);
-          await ProgressStore.instance.clearSnapshot(
-            canonicalId,
-            difficultyKey,
-          );
-        } else if (completedPieceCount != null) {
-          // 兜底：按 pieceCount 反查（存在横竖歧义，仅兼容旧调用）
-          final diff = PuzzleDifficulty.presets.firstWhere(
-            (d) => d.pieceCount == completedPieceCount,
-            orElse: () => current.difficulty,
-          );
-          await SnapshotStore.instance.delete(
-            canonicalId,
-            SnapshotStore.difficultyKeyFor(diff),
-          );
-          await ProgressStore.instance.clearSnapshot(
-            canonicalId,
-            SnapshotStore.difficultyKeyFor(diff),
-          );
-        } else if (snapshotJson == null && !isCompleted) {
-          // 放弃进度：若当前有 activeDifficultyKey 则删之
-          final prog = await ProgressStore.instance.load(canonicalId);
-          if (prog.activeDifficultyKey.isNotEmpty) {
-            await SnapshotStore.instance.delete(
-              canonicalId,
-              prog.activeDifficultyKey,
-            );
-            await ProgressStore.instance.clearSnapshot(
-              canonicalId,
-              prog.activeDifficultyKey,
-            );
-          } else {
-            await SnapshotStore.instance.deleteAllFor(canonicalId);
-            await ProgressStore.instance.clearAllSnapshots(canonicalId);
-          }
-        } else {
-          await SnapshotStore.instance.deleteAllFor(canonicalId);
-          await ProgressStore.instance.clearAllSnapshots(canonicalId);
-        }
-      } else if (!isCompleted && progressPercent > 0) {
-        await ProgressStore.instance.updateProgress(
-          canonicalId: canonicalId,
-          progressPercent: progressPercent,
-        );
-      }
+      await _commitProgress(
+        canonicalId: canonicalId,
+        isCompleted: isCompleted,
+        progressPercent: progressPercent,
+        snapshotJson: snapshotJson,
+        difficultyKey: difficultyKey,
+        completedPieceCount: completedPieceCount,
+        fallbackDifficulty: current.difficulty,
+      );
 
       if (isCompleted && completedPieceCount != null) {
         await ProgressStore.instance.updateProgress(
@@ -537,7 +475,7 @@ class GameRepository {
       }
     } catch (e, st) {
       AppLogger.repo.warning(
-        'updateLevelProgress snapshot sync failed level=$levelIndex',
+        'updateLevelProgress snapshot sync failed level=',
         e,
         st,
       );
@@ -555,7 +493,89 @@ class GameRepository {
     }
 
     if (isCompleted) {
-      AppLogger.repo.info('Level $levelIndex completed');
+      AppLogger.repo.info('Level  completed');
+    }
+  }
+
+  /// 统一收敛：更新进度/保存快照/清理快照核心逻辑（P2-3）
+  Future<void> _commitProgress({
+    required String canonicalId,
+    required bool isCompleted,
+    required int progressPercent,
+    String? snapshotJson,
+    String? difficultyKey,
+    int? completedPieceCount,
+    PuzzleDifficulty? fallbackDifficulty,
+  }) async {
+    final shouldClear =
+        isCompleted || (snapshotJson == null && progressPercent == 0);
+    if (snapshotJson != null && !isCompleted) {
+      final map = jsonDecode(snapshotJson) as Map<String, dynamic>;
+      final state = PuzzleBoardState.fromJson(map);
+      final enriched = state.copyWith(
+        canonicalId: canonicalId,
+        difficultyKey: state.effectiveDifficultyKey,
+        updatedAt: DateTime.now(),
+        createdAt: state.createdAt ?? DateTime.now(),
+      );
+      await SnapshotStore.instance.save(enriched);
+      await ProgressStore.instance.updateProgress(
+        canonicalId: canonicalId,
+        progressPercent: progressPercent,
+        hasSnapshot: true,
+        activeDifficultyKey: enriched.effectiveDifficultyKey,
+        snapshotKeys: [enriched.effectiveDifficultyKey],
+      );
+    } else if (shouldClear) {
+      // P3-6（红线 R2/R5 边界）：残局快照清理仅允许在「关卡已通关完成」或
+      // 「用户显式重新开始 / 放弃残局」时执行；禁止由任何网络/内容状态变化
+      // （同步失败、下架、索引重建等）触发。行为不变，仅注释固化约束。
+      // 清档或通关：优先按显式 difficultyKey 精确删除，消除 pieceCount 横竖歧义
+      if (difficultyKey != null && difficultyKey.isNotEmpty) {
+        await SnapshotStore.instance.delete(canonicalId, difficultyKey);
+        await ProgressStore.instance.clearSnapshot(
+          canonicalId,
+          difficultyKey,
+        );
+      } else if (completedPieceCount != null) {
+        // 兜底：按 pieceCount 反查（存在横竖歧义，仅兼容旧调用）
+        final diff = PuzzleDifficulty.presets.firstWhere(
+          (d) => d.pieceCount == completedPieceCount,
+          orElse: () => fallbackDifficulty ?? PuzzleDifficulty.presets.first,
+        );
+        await SnapshotStore.instance.delete(
+          canonicalId,
+          SnapshotStore.difficultyKeyFor(diff),
+        );
+        await ProgressStore.instance.clearSnapshot(
+          canonicalId,
+          SnapshotStore.difficultyKeyFor(diff),
+        );
+      } else if (snapshotJson == null && !isCompleted) {
+        // 放弃进度：若当前有 activeDifficultyKey 则删之
+        final prog = await ProgressStore.instance.load(canonicalId);
+        if (prog.activeDifficultyKey.isNotEmpty) {
+          await SnapshotStore.instance.delete(
+            canonicalId,
+            prog.activeDifficultyKey,
+          );
+          await ProgressStore.instance.clearSnapshot(
+            canonicalId,
+            prog.activeDifficultyKey,
+          );
+        } else {
+          await SnapshotStore.instance.deleteAllFor(canonicalId);
+          await ProgressStore.instance.clearAllSnapshots(canonicalId);
+        }
+      } else {
+        await SnapshotStore.instance.deleteAllFor(canonicalId);
+        await ProgressStore.instance.clearAllSnapshots(canonicalId);
+      }
+    } else if (!isCompleted && progressPercent > 0) {
+      await ProgressStore.instance.updateProgress(
+        canonicalId: canonicalId,
+        progressPercent: progressPercent,
+      );
     }
   }
 
@@ -641,8 +661,6 @@ class GameRepository {
       updatedCompletedCounts.add(completedPieceCount);
     }
 
-    final shouldClear =
-        isCompleted || (snapshotJson == null && progressPercent == 0);
     _customPuzzles[idx] = current.copyWith(
       progressPercent: progressPercent,
       isCompleted:
@@ -661,70 +679,15 @@ class GameRepository {
 
     final canonicalId = canonicalForCustom(id);
     try {
-      if (snapshotJson != null && !isCompleted) {
-        final state = PuzzleBoardState.fromJson(
-          jsonDecode(snapshotJson) as Map<String, dynamic>,
-        );
-        final enriched = state.copyWith(
-          canonicalId: canonicalId,
-          difficultyKey: state.effectiveDifficultyKey,
-          updatedAt: DateTime.now(),
-          createdAt: state.createdAt ?? DateTime.now(),
-        );
-        await SnapshotStore.instance.save(enriched);
-        await ProgressStore.instance.updateProgress(
-          canonicalId: canonicalId,
-          progressPercent: progressPercent,
-          hasSnapshot: true,
-          activeDifficultyKey: enriched.effectiveDifficultyKey,
-          snapshotKeys: [enriched.effectiveDifficultyKey],
-        );
-      } else if (shouldClear) {
-        // P3-6（红线 R2/R5 边界）：同上，仅通关/用户显式操作可触发清理。
-        if (difficultyKey != null && difficultyKey.isNotEmpty) {
-          await SnapshotStore.instance.delete(canonicalId, difficultyKey);
-          await ProgressStore.instance.clearSnapshot(
-            canonicalId,
-            difficultyKey,
-          );
-        } else if (completedPieceCount != null) {
-          final diff = PuzzleDifficulty.presets.firstWhere(
-            (d) => d.pieceCount == completedPieceCount,
-            orElse: () => current.difficulty,
-          );
-          await SnapshotStore.instance.delete(
-            canonicalId,
-            SnapshotStore.difficultyKeyFor(diff),
-          );
-          await ProgressStore.instance.clearSnapshot(
-            canonicalId,
-            SnapshotStore.difficultyKeyFor(diff),
-          );
-        } else if (snapshotJson == null && !isCompleted) {
-          final prog = await ProgressStore.instance.load(canonicalId);
-          if (prog.activeDifficultyKey.isNotEmpty) {
-            await SnapshotStore.instance.delete(
-              canonicalId,
-              prog.activeDifficultyKey,
-            );
-            await ProgressStore.instance.clearSnapshot(
-              canonicalId,
-              prog.activeDifficultyKey,
-            );
-          } else {
-            await SnapshotStore.instance.deleteAllFor(canonicalId);
-            await ProgressStore.instance.clearAllSnapshots(canonicalId);
-          }
-        } else {
-          await SnapshotStore.instance.deleteAllFor(canonicalId);
-          await ProgressStore.instance.clearAllSnapshots(canonicalId);
-        }
-      } else if (!isCompleted && progressPercent > 0) {
-        await ProgressStore.instance.updateProgress(
-          canonicalId: canonicalId,
-          progressPercent: progressPercent,
-        );
-      }
+      await _commitProgress(
+        canonicalId: canonicalId,
+        isCompleted: isCompleted,
+        progressPercent: progressPercent,
+        snapshotJson: snapshotJson,
+        difficultyKey: difficultyKey,
+        completedPieceCount: completedPieceCount,
+        fallbackDifficulty: current.difficulty,
+      );
 
       if (isCompleted && completedPieceCount != null) {
         await ProgressStore.instance.updateProgress(
@@ -781,67 +744,15 @@ class GameRepository {
     PuzzleDifficulty? difficultyHint,
   }) async {
     try {
-      if (snapshotJson != null && !isCompleted) {
-        final state = PuzzleBoardState.fromJson(
-          jsonDecode(snapshotJson) as Map<String, dynamic>,
-        );
-        final enriched = state.copyWith(
-          canonicalId: canonicalId,
-          difficultyKey: state.effectiveDifficultyKey,
-          updatedAt: DateTime.now(),
-          createdAt: state.createdAt ?? DateTime.now(),
-        );
-        await SnapshotStore.instance.save(enriched);
-        await ProgressStore.instance.updateProgress(
-          canonicalId: canonicalId,
-          progressPercent: progressPercent,
-          hasSnapshot: true,
-          activeDifficultyKey: enriched.effectiveDifficultyKey,
-          snapshotKeys: [enriched.effectiveDifficultyKey],
-        );
-      } else if (isCompleted ||
-          (snapshotJson == null && progressPercent == 0)) {
-        // P3-6（红线 R2/R5 边界）：同上，仅通关/用户显式操作可触发清理。
-        if (difficultyKey != null && difficultyKey.isNotEmpty) {
-          await SnapshotStore.instance.delete(canonicalId, difficultyKey);
-          await ProgressStore.instance.clearSnapshot(
-            canonicalId,
-            difficultyKey,
-          );
-        } else if (completedPieceCount != null && difficultyHint != null) {
-          await SnapshotStore.instance.delete(
-            canonicalId,
-            SnapshotStore.difficultyKeyFor(difficultyHint),
-          );
-          await ProgressStore.instance.clearSnapshot(
-            canonicalId,
-            SnapshotStore.difficultyKeyFor(difficultyHint),
-          );
-        } else if (snapshotJson == null && !isCompleted) {
-          final prog = await ProgressStore.instance.load(canonicalId);
-          if (prog.activeDifficultyKey.isNotEmpty) {
-            await SnapshotStore.instance.delete(
-              canonicalId,
-              prog.activeDifficultyKey,
-            );
-            await ProgressStore.instance.clearSnapshot(
-              canonicalId,
-              prog.activeDifficultyKey,
-            );
-          } else {
-            await SnapshotStore.instance.deleteAllFor(canonicalId);
-            await ProgressStore.instance.clearAllSnapshots(canonicalId);
-          }
-        } else {
-          await SnapshotStore.instance.deleteAllFor(canonicalId);
-          await ProgressStore.instance.clearAllSnapshots(canonicalId);
-        }
-      } else if (!isCompleted && progressPercent > 0) {
-        await ProgressStore.instance.updateProgress(
-          canonicalId: canonicalId,
-          progressPercent: progressPercent,
-        );
-      }
+      await _commitProgress(
+        canonicalId: canonicalId,
+        isCompleted: isCompleted,
+        progressPercent: progressPercent,
+        snapshotJson: snapshotJson,
+        difficultyKey: difficultyKey,
+        completedPieceCount: completedPieceCount,
+        fallbackDifficulty: difficultyHint,
+      );
 
       if (isCompleted) {
         await ProgressStore.instance.updateProgress(
@@ -878,37 +789,41 @@ class GameRepository {
     SnapshotStore.difficultyKeyFor(difficulty),
   );
 
+  Future<void> _snapStatsLock = Future<void>.value();
+
   /// Adds statistics for snapped piece and play duration.
   /// 原 stat 前缀 / stat 前缀
   /// prefs key 已迁至 app-state-v1 的 `stat:*`（§2.2 / §4.3）。
   Future<void> recordSnapStats({
     int pieceCount = 1,
     int durationSeconds = 0,
-  }) async {
-    try {
-      final stateBox = StorageManager.instance.state;
-      if (pieceCount > 0) {
-        await putRaw(
-          stateBox,
-          _keyStatPiecesSnapped,
-          totalPiecesSnapped + pieceCount,
-        );
+  }) {
+    return _snapStatsLock = _snapStatsLock.then((_) async {
+      try {
+        final stateBox = StorageManager.instance.state;
+        if (pieceCount > 0) {
+          await putRaw(
+            stateBox,
+            _keyStatPiecesSnapped,
+            totalPiecesSnapped + pieceCount,
+          );
+        }
+        if (durationSeconds > 0) {
+          await putRaw(
+            stateBox,
+            _keyStatPlayTime,
+            totalPlayTimeSeconds + durationSeconds,
+          );
+        }
+        if (pieceCount > 0 || durationSeconds > 0) {
+          AppLogger.repo.fine(
+            'recordSnapStats pieceCount=$pieceCount duration=${durationSeconds}s totalSnapped=$totalPiecesSnapped',
+          );
+        }
+      } catch (e, st) {
+        AppLogger.repo.warning('recordSnapStats failed', e, st);
       }
-      if (durationSeconds > 0) {
-        await putRaw(
-          stateBox,
-          _keyStatPlayTime,
-          totalPlayTimeSeconds + durationSeconds,
-        );
-      }
-      if (pieceCount > 0 || durationSeconds > 0) {
-        AppLogger.repo.fine(
-          'recordSnapStats pieceCount=$pieceCount duration=${durationSeconds}s totalSnapped=${totalPiecesSnapped + pieceCount}',
-        );
-      }
-    } catch (e, st) {
-      AppLogger.repo.warning('recordSnapStats failed', e, st);
-    }
+    });
   }
 
   /// 重置全部进度数据（§7.6）：仅清进度，**保留设置**（行为变更，有意为之——

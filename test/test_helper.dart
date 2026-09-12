@@ -72,7 +72,7 @@ Future<void> tearDownTestStorage(StorageManager sm) async {
   if (home != null) {
     final dir = Directory(home);
     try {
-      if (await dir.exists()) await dir.delete(recursive: true);
+      if (dir.existsSync()) await dir.delete(recursive: true);
     } catch (_) {} // best-effort
   }
   sm.resetForTest(); // 置空引用 + _hiveReady=false + 清 _homePathOverride
