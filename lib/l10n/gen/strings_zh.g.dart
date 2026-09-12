@@ -229,6 +229,12 @@ class _Translations$events$zh extends Translations$events$en {
 	@override String get subFallback => '限时活动挑战';
 	@override String get badgeLimited => '限时活动';
 	@override String get enter => '进入挑战';
+	@override String clearTitle({required Object title}) => '清理「${title}」';
+	@override String clearDesc({required Object size}) => '确定要清理已下载的本地资源吗？\n清理后可释放 ${size} 磁盘空间。您随时可以重新下载。';
+	@override String get confirmClear => '确认清理';
+	@override String get toastCleared => '已释放活动本地存储空间';
+	@override String get toastClearFailed => '清理失败，请重试';
+	@override String get deleteTooltip => '释放活动存储空间';
 }
 
 // Path: levels
@@ -268,6 +274,8 @@ class _Translations$collections$zh extends Translations$collections$en {
 	@override String levelCount({required Object count}) => '${count} 关';
 	@override String get badgeDownloaded => '已下载';
 	@override String get badgeDownload => '下载';
+	@override String get delistedBadge => '已下架';
+	@override String get delistedCantDownload => '该内容已下架，无法下载';
 	@override String get freeTooltip => '释放图集存储空间';
 	@override String clearTitle({required Object title}) => '清理「${title}」';
 	@override String clearDesc({required Object size}) => '确定要清理已下载的本地资源吗？\n清理后可释放 ${size} 磁盘空间。您随时可以重新下载。';
@@ -1184,7 +1192,7 @@ class _Translations$myCenter$orphanDialog$zh extends Translations$myCenter$orpha
 
 	// Translations
 	@override String get title => '拼图资源已失效';
-	@override String desc({required Object title}) => '该拼图资源已从本地或列表中移除，无法继续游玩。\n是否从记录与收藏中清理移除「${title}」？';
+	@override String desc({required Object title}) => '该记录的关卡图片暂不可用，但记录仍可保留。\n是否仅从记录与收藏中移除「${title}」？已下载的图片不受影响。';
 	@override String get keep => '暂保留';
 	@override String get remove => '清理移除';
 }
@@ -1199,6 +1207,9 @@ class _Translations$myCenter$toast$zh extends Translations$myCenter$toast$en {
 	@override String importSuccess({required Object count}) => '已成功导入 ${count} 张图片到素材库';
 	@override String importFailed({required Object error}) => '选择图片失败：${error}';
 	@override String get webviewMissing => '当前系统未安装 WebView2 运行时，无法使用在线搜图';
+	@override String get imageNotFound => '图片未找到，该记录暂无法游玩';
+	@override String get imageNotReady => '图片未就绪，请联网后重试';
+	@override String get openFailed => '打开关卡失败，请重试';
 }
 
 /// The flat map containing all translations for locale <zh>.
@@ -1305,6 +1316,12 @@ extension on TranslationsZh {
 			'events.subFallback' => '限时活动挑战',
 			'events.badgeLimited' => '限时活动',
 			'events.enter' => '进入挑战',
+			'events.clearTitle' => ({required Object title}) => '清理「${title}」',
+			'events.clearDesc' => ({required Object size}) => '确定要清理已下载的本地资源吗？\n清理后可释放 ${size} 磁盘空间。您随时可以重新下载。',
+			'events.confirmClear' => '确认清理',
+			'events.toastCleared' => '已释放活动本地存储空间',
+			'events.toastClearFailed' => '清理失败，请重试',
+			'events.deleteTooltip' => '释放活动存储空间',
 			'levels.empty' => '暂无可用关卡',
 			'levels.titleOf' => ({required Object title, required Object index}) => '${title} · 第 ${index} 关',
 			'levels.retryDownload' => '重试下载',
@@ -1326,6 +1343,8 @@ extension on TranslationsZh {
 			'collections.levelCount' => ({required Object count}) => '${count} 关',
 			'collections.badgeDownloaded' => '已下载',
 			'collections.badgeDownload' => '下载',
+			'collections.delistedBadge' => '已下架',
+			'collections.delistedCantDownload' => '该内容已下架，无法下载',
 			'collections.freeTooltip' => '释放图集存储空间',
 			'collections.clearTitle' => ({required Object title}) => '清理「${title}」',
 			'collections.clearDesc' => ({required Object size}) => '确定要清理已下载的本地资源吗？\n清理后可释放 ${size} 磁盘空间。您随时可以重新下载。',
@@ -1646,12 +1665,15 @@ extension on TranslationsZh {
 			'myCenter.card.progress' => ({required Object percent}) => '${percent}%',
 			'myCenter.card.retry' => '再挑战',
 			'myCenter.orphanDialog.title' => '拼图资源已失效',
-			'myCenter.orphanDialog.desc' => ({required Object title}) => '该拼图资源已从本地或列表中移除，无法继续游玩。\n是否从记录与收藏中清理移除「${title}」？',
+			'myCenter.orphanDialog.desc' => ({required Object title}) => '该记录的关卡图片暂不可用，但记录仍可保留。\n是否仅从记录与收藏中移除「${title}」？已下载的图片不受影响。',
 			'myCenter.orphanDialog.keep' => '暂保留',
 			'myCenter.orphanDialog.remove' => '清理移除',
 			'myCenter.toast.importSuccess' => ({required Object count}) => '已成功导入 ${count} 张图片到素材库',
 			'myCenter.toast.importFailed' => ({required Object error}) => '选择图片失败：${error}',
 			'myCenter.toast.webviewMissing' => '当前系统未安装 WebView2 运行时，无法使用在线搜图',
+			'myCenter.toast.imageNotFound' => '图片未找到，该记录暂无法游玩',
+			'myCenter.toast.imageNotReady' => '图片未就绪，请联网后重试',
+			'myCenter.toast.openFailed' => '打开关卡失败，请重试',
 			'boot.initTitle' => '正在初始化游戏内容…',
 			'boot.initSubtitle' => '首次启动需联网获取图库，请稍候。',
 			'boot.failedTitle' => '初始化失败',

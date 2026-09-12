@@ -107,7 +107,13 @@
     "descFallback": "Featured puzzle challenges",
     "subFallback": "Limited-time event",
     "badgeLimited": "Limited-time",
-    "enter": "Start"
+    "enter": "Start",
+    "clearTitle": "Clear \"{title}\"",
+    "clearDesc": "Remove downloaded resources for this event?\nIt will free {size} of disk space. You can re-download at any time.",
+    "confirmClear": "Clear",
+    "toastCleared": "Event storage freed",
+    "toastClearFailed": "Clear failed. Please retry.",
+    "deleteTooltip": "Free event storage"
   },
   "levels": {
     "empty": "No levels available",
@@ -133,6 +139,8 @@
     "levelCount": "{count} levels",
     "badgeDownloaded": "Downloaded",
     "badgeDownload": "Download",
+    "delistedBadge": "Delisted",
+    "delistedCantDownload": "This content is delisted and can't be downloaded",
     "freeTooltip": "Free collection storage",
     "clearTitle": "Clear \"{title}\"",
     "clearDesc": "Remove downloaded resources for this collection?\nIt will free {size} of disk space. You can re-download at any time.",
@@ -557,14 +565,17 @@
     },
     "orphanDialog": {
       "title": "Puzzle source unavailable",
-      "desc": "This puzzle source has been removed from local storage or the list and can no longer be played.\nRemove \"{title}\" from your records and favorites?",
+      "desc": "This record's puzzle image is currently unavailable, but the record can stay.\nRemove \"{title}\" from your records and favorites only? Downloaded images are not affected.",
       "keep": "Keep it",
       "remove": "Remove"
     },
     "toast": {
       "importSuccess": "Imported {count} images to your library",
       "importFailed": "Failed to pick images: {error}",
-      "webviewMissing": "WebView2 runtime is not installed; online image search is unavailable."
+      "webviewMissing": "WebView2 runtime is not installed; online image search is unavailable.",
+      "imageNotFound": "Image unavailable — this record can't be played yet",
+      "imageNotReady": "Image not ready. Reconnect and retry.",
+      "openFailed": "Failed to open. Please retry."
     }
   },
   "boot": {

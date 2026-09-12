@@ -423,6 +423,24 @@ class Translations$events$en {
 
 	/// en: 'Start'
 	String get enter => 'Start';
+
+	/// en: 'Clear "{title}"'
+	String clearTitle({required Object title}) => 'Clear "${title}"';
+
+	/// en: 'Remove downloaded resources for this event? It will free {size} of disk space. You can re-download at any time.'
+	String clearDesc({required Object size}) => 'Remove downloaded resources for this event?\nIt will free ${size} of disk space. You can re-download at any time.';
+
+	/// en: 'Clear'
+	String get confirmClear => 'Clear';
+
+	/// en: 'Event storage freed'
+	String get toastCleared => 'Event storage freed';
+
+	/// en: 'Clear failed. Please retry.'
+	String get toastClearFailed => 'Clear failed. Please retry.';
+
+	/// en: 'Free event storage'
+	String get deleteTooltip => 'Free event storage';
 }
 
 // Path: levels
@@ -504,6 +522,12 @@ class Translations$collections$en {
 
 	/// en: 'Download'
 	String get badgeDownload => 'Download';
+
+	/// en: 'Delisted'
+	String get delistedBadge => 'Delisted';
+
+	/// en: 'This content is delisted and can't be downloaded'
+	String get delistedCantDownload => 'This content is delisted and can\'t be downloaded';
 
 	/// en: 'Free collection storage'
 	String get freeTooltip => 'Free collection storage';
@@ -2073,8 +2097,8 @@ class Translations$myCenter$orphanDialog$en {
 	/// en: 'Puzzle source unavailable'
 	String get title => 'Puzzle source unavailable';
 
-	/// en: 'This puzzle source has been removed from local storage or the list and can no longer be played. Remove "{title}" from your records and favorites?'
-	String desc({required Object title}) => 'This puzzle source has been removed from local storage or the list and can no longer be played.\nRemove "${title}" from your records and favorites?';
+	/// en: 'This record's puzzle image is currently unavailable, but the record can stay. Remove "{title}" from your records and favorites only? Downloaded images are not affected.'
+	String desc({required Object title}) => 'This record\'s puzzle image is currently unavailable, but the record can stay.\nRemove "${title}" from your records and favorites only? Downloaded images are not affected.';
 
 	/// en: 'Keep it'
 	String get keep => 'Keep it';
@@ -2099,6 +2123,15 @@ class Translations$myCenter$toast$en {
 
 	/// en: 'WebView2 runtime is not installed; online image search is unavailable.'
 	String get webviewMissing => 'WebView2 runtime is not installed; online image search is unavailable.';
+
+	/// en: 'Image unavailable — this record can't be played yet'
+	String get imageNotFound => 'Image unavailable — this record can\'t be played yet';
+
+	/// en: 'Image not ready. Reconnect and retry.'
+	String get imageNotReady => 'Image not ready. Reconnect and retry.';
+
+	/// en: 'Failed to open. Please retry.'
+	String get openFailed => 'Failed to open. Please retry.';
 }
 
 /// The flat map containing all translations for locale <en>.
@@ -2205,6 +2238,12 @@ extension on Translations {
 			'events.subFallback' => 'Limited-time event',
 			'events.badgeLimited' => 'Limited-time',
 			'events.enter' => 'Start',
+			'events.clearTitle' => ({required Object title}) => 'Clear "${title}"',
+			'events.clearDesc' => ({required Object size}) => 'Remove downloaded resources for this event?\nIt will free ${size} of disk space. You can re-download at any time.',
+			'events.confirmClear' => 'Clear',
+			'events.toastCleared' => 'Event storage freed',
+			'events.toastClearFailed' => 'Clear failed. Please retry.',
+			'events.deleteTooltip' => 'Free event storage',
 			'levels.empty' => 'No levels available',
 			'levels.titleOf' => ({required Object title, required Object index}) => '${title} · Level ${index}',
 			'levels.retryDownload' => 'Retry Download',
@@ -2226,6 +2265,8 @@ extension on Translations {
 			'collections.levelCount' => ({required Object count}) => '${count} levels',
 			'collections.badgeDownloaded' => 'Downloaded',
 			'collections.badgeDownload' => 'Download',
+			'collections.delistedBadge' => 'Delisted',
+			'collections.delistedCantDownload' => 'This content is delisted and can\'t be downloaded',
 			'collections.freeTooltip' => 'Free collection storage',
 			'collections.clearTitle' => ({required Object title}) => 'Clear "${title}"',
 			'collections.clearDesc' => ({required Object size}) => 'Remove downloaded resources for this collection?\nIt will free ${size} of disk space. You can re-download at any time.',
@@ -2546,12 +2587,15 @@ extension on Translations {
 			'myCenter.card.progress' => ({required Object percent}) => '${percent}%',
 			'myCenter.card.retry' => 'Retry',
 			'myCenter.orphanDialog.title' => 'Puzzle source unavailable',
-			'myCenter.orphanDialog.desc' => ({required Object title}) => 'This puzzle source has been removed from local storage or the list and can no longer be played.\nRemove "${title}" from your records and favorites?',
+			'myCenter.orphanDialog.desc' => ({required Object title}) => 'This record\'s puzzle image is currently unavailable, but the record can stay.\nRemove "${title}" from your records and favorites only? Downloaded images are not affected.',
 			'myCenter.orphanDialog.keep' => 'Keep it',
 			'myCenter.orphanDialog.remove' => 'Remove',
 			'myCenter.toast.importSuccess' => ({required Object count}) => 'Imported ${count} images to your library',
 			'myCenter.toast.importFailed' => ({required Object error}) => 'Failed to pick images: ${error}',
 			'myCenter.toast.webviewMissing' => 'WebView2 runtime is not installed; online image search is unavailable.',
+			'myCenter.toast.imageNotFound' => 'Image unavailable — this record can\'t be played yet',
+			'myCenter.toast.imageNotReady' => 'Image not ready. Reconnect and retry.',
+			'myCenter.toast.openFailed' => 'Failed to open. Please retry.',
 			'boot.initTitle' => 'Initializing game content…',
 			'boot.initSubtitle' => 'First launch downloads the puzzle library over the network.',
 			'boot.failedTitle' => 'Initialization failed',

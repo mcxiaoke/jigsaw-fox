@@ -107,7 +107,13 @@
     "descFallback": "精彩专题拼图挑战",
     "subFallback": "限时活动挑战",
     "badgeLimited": "限时活动",
-    "enter": "进入挑战"
+    "enter": "进入挑战",
+    "clearTitle": "清理「{title}」",
+    "clearDesc": "确定要清理已下载的本地资源吗？\n清理后可释放 {size} 磁盘空间。您随时可以重新下载。",
+    "confirmClear": "确认清理",
+    "toastCleared": "已释放活动本地存储空间",
+    "toastClearFailed": "清理失败，请重试",
+    "deleteTooltip": "释放活动存储空间"
   },
   "levels": {
     "empty": "暂无可用关卡",
@@ -133,6 +139,8 @@
     "levelCount": "{count} 关",
     "badgeDownloaded": "已下载",
     "badgeDownload": "下载",
+    "delistedBadge": "已下架",
+    "delistedCantDownload": "该内容已下架，无法下载",
     "freeTooltip": "释放图集存储空间",
     "clearTitle": "清理「{title}」",
     "clearDesc": "确定要清理已下载的本地资源吗？\n清理后可释放 {size} 磁盘空间。您随时可以重新下载。",
@@ -556,14 +564,17 @@
     },
     "orphanDialog": {
       "title": "拼图资源已失效",
-      "desc": "该拼图资源已从本地或列表中移除，无法继续游玩。\n是否从记录与收藏中清理移除「{title}」？",
+      "desc": "该记录的关卡图片暂不可用，但记录仍可保留。\n是否仅从记录与收藏中移除「{title}」？已下载的图片不受影响。",
       "keep": "暂保留",
       "remove": "清理移除"
     },
     "toast": {
       "importSuccess": "已成功导入 {count} 张图片到素材库",
       "importFailed": "选择图片失败：{error}",
-      "webviewMissing": "当前系统未安装 WebView2 运行时，无法使用在线搜图"
+      "webviewMissing": "当前系统未安装 WebView2 运行时，无法使用在线搜图",
+      "imageNotFound": "图片未找到，该记录暂无法游玩",
+      "imageNotReady": "图片未就绪，请联网后重试",
+      "openFailed": "打开关卡失败，请重试"
     }
   },
   "boot": {
