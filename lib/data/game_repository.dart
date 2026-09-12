@@ -476,6 +476,9 @@ class GameRepository {
           snapshotKeys: [enriched.effectiveDifficultyKey],
         );
       } else if (shouldClear) {
+        // P3-6（红线 R2/R5 边界）：残局快照清理仅允许在「关卡已通关完成」或
+        // 「用户显式重新开始 / 放弃残局」时执行；禁止由任何网络/内容状态变化
+        // （同步失败、下架、索引重建等）触发。行为不变，仅注释固化约束。
         // 清档或通关：优先按显式 difficultyKey 精确删除，消除 pieceCount 横竖歧义
         if (difficultyKey != null && difficultyKey.isNotEmpty) {
           await SnapshotStore.instance.delete(canonicalId, difficultyKey);
@@ -679,6 +682,7 @@ class GameRepository {
           snapshotKeys: [enriched.effectiveDifficultyKey],
         );
       } else if (shouldClear) {
+        // P3-6（红线 R2/R5 边界）：同上，仅通关/用户显式操作可触发清理。
         if (difficultyKey != null && difficultyKey.isNotEmpty) {
           await SnapshotStore.instance.delete(canonicalId, difficultyKey);
           await ProgressStore.instance.clearSnapshot(
@@ -799,6 +803,7 @@ class GameRepository {
         );
       } else if (isCompleted ||
           (snapshotJson == null && progressPercent == 0)) {
+        // P3-6（红线 R2/R5 边界）：同上，仅通关/用户显式操作可触发清理。
         if (difficultyKey != null && difficultyKey.isNotEmpty) {
           await SnapshotStore.instance.delete(canonicalId, difficultyKey);
           await ProgressStore.instance.clearSnapshot(

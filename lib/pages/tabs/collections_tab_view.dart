@@ -58,6 +58,13 @@ class _CollectionsTabViewState extends State<CollectionsTabView> {
   }
 
   Future<void> _startDownloadEvent(PuzzleEventItem item) async {
+    // P0-2（红线 R1）：已下架且本地无数据者禁止下载；本地已有数据仍可玩，无需下载。
+    if (item.isDelisted && !_content.manager.isEventDownloaded(item)) {
+      if (mounted) {
+        GameToast.show(context, message: t.collections.delistedCantDownload);
+      }
+      return;
+    }
     SoundService.I.play(Sfx.tap);
     AppLogger.events.info(
       'Collections start download event id=${item.id} title=${item.displayTitle} isZip=${item.isZipType}',
@@ -103,6 +110,13 @@ class _CollectionsTabViewState extends State<CollectionsTabView> {
   }
 
   Future<void> _startDownload(PuzzleCollectionItem item) async {
+    // P0-2（红线 R1）：已下架且本地无数据者禁止下载。
+    if (item.isDelisted && !item.isLocalDownloaded) {
+      if (mounted) {
+        GameToast.show(context, message: t.collections.delistedCantDownload);
+      }
+      return;
+    }
     SoundService.I.play(Sfx.tap);
     AppLogger.content.info(
       'Collections start download id=${item.id} title=${item.title} isZip=${item.isZipType}',
@@ -174,7 +188,9 @@ class _CollectionsTabViewState extends State<CollectionsTabView> {
             : t.events.subFallback,
         imagePathOrUrl:
             ev.coverUrl ?? (ev.levels.isNotEmpty ? ev.levels.first : ''),
-        badgeText: isNew ? 'NEW' : t.events.badgeLimited,
+        badgeText: ev.isDelisted
+            ? t.collections.delistedBadge
+            : (isNew ? 'NEW' : t.events.badgeLimited),
         badgeEmoji: isNew ? '✨' : '🔥',
         badgeColor: isNew ? const Color(0xFFC97A2E) : const Color(0xFFD97706),
         topRightBadge: DownloadBadge(
@@ -186,6 +202,11 @@ class _CollectionsTabViewState extends State<CollectionsTabView> {
         ),
         onTap: () {
           SoundService.I.play(Sfx.tap);
+          // P0-2：已下架且本地无数据者禁用下载入口；已下载者仍可进入游玩。
+          if (ev.isDelisted && !isDownloaded) {
+            GameToast.show(context, message: t.collections.delistedCantDownload);
+            return;
+          }
           // 未下载的 Zip 活动禁止进入关卡页，点击就地触发下载
           if (ev.isZipType && !isDownloaded) {
             if (isDownloading) {
@@ -401,6 +422,14 @@ class _CollectionsTabViewState extends State<CollectionsTabView> {
         return InkWell(
           onTap: () {
             SoundService.I.play(Sfx.tap);
+            // P0-2：已下架且本地无数据者禁用下载入口；已下载者仍可进入游玩。
+            if (col.isDelisted && !col.isLocalDownloaded) {
+              GameToast.show(
+                context,
+                message: t.collections.delistedCantDownload,
+              );
+              return;
+            }
             // 如果是 zip 图集且未下载好，禁止进入，就地触发下载或提示
             if (isZipNotDownloaded) {
               if (isDownloading) {
@@ -463,7 +492,7 @@ class _CollectionsTabViewState extends State<CollectionsTabView> {
                 ),
 
                 // 3. 左上角：NEW 角标 (与首页 Home 保持一致)
-                if (col.isNew)
+                if (col.isNew && !col.isDelisted)
                   Positioned(
                     left: 0,
                     top: 8,
@@ -486,6 +515,34 @@ class _CollectionsTabViewState extends State<CollectionsTabView> {
                           fontSize: 11,
                           fontWeight: FontWeight.w800,
                           fontStyle: FontStyle.italic,
+                        ),
+                      ),
+                    ),
+                  ),
+
+                // P0-2：已下架角标
+                if (col.isDelisted)
+                  Positioned(
+                    left: 0,
+                    top: 8,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 3,
+                      ),
+                      decoration: const BoxDecoration(
+                        color: Color(0xFF6B7280),
+                        borderRadius: BorderRadius.only(
+                          topRight: Radius.circular(4),
+                          bottomRight: Radius.circular(4),
+                        ),
+                      ),
+                      child: Text(
+                        t.collections.delistedBadge,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w800,
                         ),
                       ),
                     ),

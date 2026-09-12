@@ -158,7 +158,8 @@ void main() async {
         'SoundService init done ${sw.elapsedMilliseconds}ms',
       );
     }),
-    LevelImageResolver.instance.cleanLegacyThumbnailCache(),
+    // P3-5：项目尚未发版，不存在旧版 thumbnail_cache 遗留目录，
+    // 启动即删逻辑已移除（违反 R1/R5 的无必要自动删除）。
   ];
   // 不阻塞首帧，后台并行；首帧先出壳由 contentUpdateNotifier 刷新
   Future.wait(bgFutures).then((_) {

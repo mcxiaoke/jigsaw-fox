@@ -396,9 +396,17 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
       if (isTrivial) return;
       final snapshot = _game!.exportSnapshotJson(elapsedSeconds: _seconds);
       final map = jsonDecode(snapshot) as Map<String, dynamic>;
-      final state = PuzzleBoardState.fromJson(map);
-      SnapshotStore.instance.saveSync(state);
+      // P1-4：引擎内部不持 canonicalId，导出快照缺归属；此处显式注入真实
+      // canonicalId（与进度路径 _canonicalIdForSave 保持一致），否则存档落盘
+      // 为 default_level 孤儿键（读不到 = 存档丢失）。历史遗留的
+      // default_level_* 快照按红线 R2 保留不删，仅做读取兼容。
       final canonicalId = _canonicalIdForSave();
+      var state = PuzzleBoardState.fromJson(map);
+      if (canonicalId.isNotEmpty) {
+        state = state.copyWith(canonicalId: canonicalId);
+      }
+      state = state.copyWith(difficultyKey: state.effectiveDifficultyKey);
+      SnapshotStore.instance.saveSync(state);
       if (canonicalId.isNotEmpty) {
         // Fire-and-forget: progress update is best-effort.
         // ignore: discarded_futures
@@ -560,112 +568,150 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
       'Settlement start cid=$cid dkey=$dkey stars=$stars pieces=$actualPieces hints=$hints sec=$_seconds',
     );
 
-    // 1. 原子更新 ProgressStore 档位记录并获得 deltaStars 与 minHintsUsed 状态
-    final updateResult = await ProgressStore.instance
-        .recordDifficultyCompletion(
-          canonicalId: cid,
+    // P2-4：结算链路整体兜底——进度/经济/成就任一环节抛错都不得吞掉通关弹窗。
+    // 降级值保证对话框可渲染，失败细节记日志。
+    var dialogDeltaStars = 0;
+    var dialogEarnedCoins = 0;
+    var dialogAchievements = const <AchievementDefinition>[];
+    try {
+      // 1. 原子更新 ProgressStore 档位记录并获得 deltaStars 与 minHintsUsed 状态
+      final updateResult = await ProgressStore.instance
+          .recordDifficultyCompletion(
+            canonicalId: cid,
+            difficultyKey: dkey,
+            stars: stars,
+            timeSeconds: _seconds,
+            hintsUsed: hints,
+            completedPieceCount: actualPieces,
+            moves: _solvedPieces,
+          );
+      dialogDeltaStars = updateResult.deltaStars;
+
+      // 2. 同步更新 GameRepository 关卡状态与内存列表
+      if (widget.canonicalId != null && widget.canonicalId!.isNotEmpty) {
+        await _repo.updateGenericProgress(
+          canonicalId: widget.canonicalId!,
+          progressPercent: 100,
+          isCompleted: true,
+          completedPieceCount: actualPieces,
+          difficultyKey: dkey,
+          timeSeconds: _seconds,
+          difficultyHint: _effectiveDifficulty ?? widget.difficulty,
+        );
+      } else if (widget.levelIndex != null) {
+        await _repo.updateLevelProgress(
+          levelIndex: widget.levelIndex!,
+          progressPercent: 100,
+          isCompleted: true,
+          completedPieceCount: actualPieces,
           difficultyKey: dkey,
           stars: stars,
           timeSeconds: _seconds,
-          hintsUsed: hints,
-          completedPieceCount: actualPieces,
-          moves: _solvedPieces,
         );
+      } else if (widget.dailyDateStr != null) {
+        await _repo.updateGenericProgress(
+          canonicalId: GameRepository.canonicalForDaily(widget.dailyDateStr!),
+          progressPercent: 100,
+          isCompleted: true,
+          completedPieceCount: actualPieces,
+          difficultyKey: dkey,
+          timeSeconds: _seconds,
+          difficultyHint: _effectiveDifficulty ?? widget.difficulty,
+        );
+      } else if (widget.customId != null) {
+        await _repo.updateCustomProgress(
+          id: widget.customId!,
+          progressPercent: 100,
+          isCompleted: true,
+          completedPieceCount: actualPieces,
+          difficultyKey: dkey,
+          timeSeconds: _seconds,
+        );
+      }
 
-    // 2. 同步更新 GameRepository 关卡状态与内存列表
-    if (widget.canonicalId != null && widget.canonicalId!.isNotEmpty) {
-      await _repo.updateGenericProgress(
-        canonicalId: widget.canonicalId!,
-        progressPercent: 100,
-        isCompleted: true,
-        completedPieceCount: actualPieces,
-        difficultyKey: dkey,
-        timeSeconds: _seconds,
-        difficultyHint: _effectiveDifficulty ?? widget.difficulty,
+      // 3. 经济发奖与成就评估并行执行，减少主 isolate 阻塞时长
+      final tier = (_effectiveDifficulty ?? widget.difficulty).tierIndex;
+      _reportPlaySeconds();
+      final ptype = widget.dailyDateStr != null
+          ? 'daily'
+          : (widget.customId != null
+                ? 'custom'
+                : (widget.packTitle != null ? 'pack' : 'main'));
+
+      SettlementRewardResult reward;
+      List<AchievementDefinition> newAchievements;
+      try {
+        final rewardFuture = EconomyService.instance
+            .calculateAndAwardCompletion(
+              tierIndex: tier,
+              stars: stars,
+              isFirstCompletion: updateResult.record.playCount <= 1,
+              deltaStars: updateResult.deltaStars,
+            );
+
+        final newAchievementsFuture = AchievementService.instance
+            .onPuzzleSolved(
+              actualPieces: actualPieces,
+              elapsedSeconds: _seconds,
+              hintsUsed: hints,
+              stars: stars,
+              puzzleType: ptype,
+              tierIndex: tier,
+              canonicalId: cid,
+              isFirstNoHintWin: updateResult.isFirstNoHintWin,
+            );
+
+        final results = await Future.wait([
+          rewardFuture,
+          newAchievementsFuture,
+        ]);
+        reward = results[0] as SettlementRewardResult;
+        newAchievements = results[1] as List<AchievementDefinition>;
+      } catch (e, st) {
+        // 经济/成就失败不阻断结算：记日志并用空奖励继续。
+        AppLogger.game.warning(
+          'Settlement reward/achievement failed cid=$cid',
+          e,
+          st,
+        );
+        reward = const SettlementRewardResult(
+          earnedCoins: 0,
+          baseCoins: 0,
+          starCoins: 0,
+          isCapped: false,
+          dailyEarnedTotal: 0,
+        );
+        newAchievements = const [];
+      }
+      dialogEarnedCoins = reward.earnedCoins;
+      dialogAchievements = newAchievements;
+      AppLogger.game.info(
+        'Settlement done cid=$cid stars=$stars rewardCoins=${reward.earnedCoins} newAchievements=${newAchievements.length}',
       );
-    } else if (widget.levelIndex != null) {
-      await _repo.updateLevelProgress(
-        levelIndex: widget.levelIndex!,
-        progressPercent: 100,
-        isCompleted: true,
-        completedPieceCount: actualPieces,
-        difficultyKey: dkey,
-        stars: stars,
-        timeSeconds: _seconds,
+
+      // 4. 后台异步删除快照，附加 catchError 避免 unobserved exception
+      // P3-6（红线 R2/R5 边界）：此处清理仅因「关卡已通关完成」；禁止由网络/
+      // 内容状态变化触发。行为不变。
+      unawaited(
+        SnapshotStore.instance.delete(cid, dkey).catchError((
+          Object e,
+          StackTrace st,
+        ) {
+          AppLogger.game.warning('delete snapshot failed after win', e, st);
+        }),
       );
-    } else if (widget.dailyDateStr != null) {
-      await _repo.updateGenericProgress(
-        canonicalId: GameRepository.canonicalForDaily(widget.dailyDateStr!),
-        progressPercent: 100,
-        isCompleted: true,
-        completedPieceCount: actualPieces,
-        difficultyKey: dkey,
-        timeSeconds: _seconds,
-        difficultyHint: _effectiveDifficulty ?? widget.difficulty,
-      );
-    } else if (widget.customId != null) {
-      await _repo.updateCustomProgress(
-        id: widget.customId!,
-        progressPercent: 100,
-        isCompleted: true,
-        completedPieceCount: actualPieces,
-        difficultyKey: dkey,
-        timeSeconds: _seconds,
-      );
-    }
-
-    // 3. 经济发奖与成就评估并行执行，减少主 isolate 阻塞时长
-    final tier = (_effectiveDifficulty ?? widget.difficulty).tierIndex;
-    _reportPlaySeconds();
-    final ptype = widget.dailyDateStr != null
-        ? 'daily'
-        : (widget.customId != null
-              ? 'custom'
-              : (widget.packTitle != null ? 'pack' : 'main'));
-
-    final rewardFuture = EconomyService.instance.calculateAndAwardCompletion(
-      tierIndex: tier,
-      stars: stars,
-      isFirstCompletion: updateResult.record.playCount <= 1,
-      deltaStars: updateResult.deltaStars,
-    );
-
-    final newAchievementsFuture = AchievementService.instance.onPuzzleSolved(
-      actualPieces: actualPieces,
-      elapsedSeconds: _seconds,
-      hintsUsed: hints,
-      stars: stars,
-      puzzleType: ptype,
-      tierIndex: tier,
-      canonicalId: cid,
-      isFirstNoHintWin: updateResult.isFirstNoHintWin,
-    );
-
-    final results = await Future.wait([rewardFuture, newAchievementsFuture]);
-    final reward = results[0] as SettlementRewardResult;
-    final newAchievements = results[1] as List<AchievementDefinition>;
-    AppLogger.game.info(
-      'Settlement done cid=$cid stars=$stars rewardCoins=${reward.earnedCoins} newAchievements=${newAchievements.length}',
-    );
-
-    // 4. 后台异步删除快照，附加 catchError 避免 unobserved exception
-    unawaited(
-      SnapshotStore.instance.delete(cid, dkey).catchError((
-        Object e,
-        StackTrace st,
-      ) {
-        AppLogger.game.warning('delete snapshot failed after win', e, st);
-      }),
-    );
-
-    // 5. 显示通关弹窗
-    if (mounted) {
-      _showVictoryDialog(
-        stars: stars,
-        deltaStars: updateResult.deltaStars,
-        earnedCoins: reward.earnedCoins,
-        newAchievements: newAchievements,
-      );
+    } catch (e, st) {
+      AppLogger.game.warning('Settlement chain failed cid=$cid', e, st);
+    } finally {
+      // 5. 显示通关弹窗（finally 保证必达）
+      if (mounted) {
+        _showVictoryDialog(
+          stars: stars,
+          deltaStars: dialogDeltaStars,
+          earnedCoins: dialogEarnedCoins,
+          newAchievements: dialogAchievements,
+        );
+      }
     }
   }
 

@@ -209,18 +209,16 @@ class SnapshotStore {
 
   /// 同步保存（用于 dispose / lifecycle 同步兜底，避免 fire-and-forget 丢失）
   void saveSync(PuzzleBoardState state) {
-    Directory targetDir;
-    if (_initialized && _snapshotsDir != null) {
-      targetDir = _snapshotsDir!;
-    } else {
-      try {
-        final support = Directory.systemTemp;
-        targetDir = Directory(p.join(support.path, 'jigsaw_snapshots'));
-        if (!targetDir.existsSync()) targetDir.createSync(recursive: true);
-      } catch (_) {
-        return;
-      }
+    // P2-9：未初始化时直接返回。旧逻辑降级写入系统临时目录，与正式快照目录
+    // 不一致，存档后续永远读不到（幽灵存档/首启强杀静默丢失）。丢弃比写错位置好。
+    if (!_initialized || _snapshotsDir == null) {
+      AppLogger.repo.warning(
+        'SnapshotStore saveSync skipped: not initialized '
+        'cid=${state.effectiveCanonicalId}',
+      );
+      return;
     }
+    final targetDir = _snapshotsDir!;
     final cid = state.effectiveCanonicalId;
     final dkey = state.effectiveDifficultyKey;
     if (cid.isEmpty || dkey.isEmpty) return;

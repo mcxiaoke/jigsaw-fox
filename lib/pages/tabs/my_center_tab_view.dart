@@ -12,6 +12,8 @@ import 'package:jigsawpuzzle/data/progress_store.dart';
 import 'package:jigsawpuzzle/data/resume_helper.dart';
 import 'package:jigsawpuzzle/data/snapshot_store.dart';
 import 'package:jigsawpuzzle/l10n/gen/strings.g.dart';
+import 'package:jigsawpuzzle/logic/cache/level_image_resolver.dart';
+import 'package:jigsawpuzzle/logic/cache/local_image_locator.dart';
 import 'package:jigsawpuzzle/logic/catalog_index.dart';
 import 'package:jigsawpuzzle/logic/content/app_content.dart';
 import 'package:jigsawpuzzle/logic/download_manager.dart';
@@ -56,6 +58,8 @@ class _MyCenterTabViewState extends State<MyCenterTabView> {
   List<UnifiedPuzzleCardData> _completedList = [];
   List<UnifiedPuzzleCardData> _customList = [];
   Timer? _debounceTimer;
+  // P2-1：重载代次标记，防止并发多次异步查询交错时旧数据覆盖新数据。
+  int _reloadSeq = 0;
 
   @override
   void initState() {
@@ -113,10 +117,19 @@ class _MyCenterTabViewState extends State<MyCenterTabView> {
   }
 
   Future<void> _loadAllData() async {
+    // P0-3 主方案：入口显式失效统一索引，重建覆盖本会话新下载的关卡元数据。
+    // Tab 切换 / 下拉刷新 / 外部通知三条路径统一自愈，不依赖新增通知链路。
+    // （P1-1 已先行落地，污染条目不会经重建扩散到「我的」页。）
+    // P2-1：代次保护——异步间隙中若有更新的调用进入，本次结果直接丢弃。
+    final seq = ++_reloadSeq;
+    UnifiedCatalogIndex.invalidate();
     final catalogIndex = await UnifiedCatalogIndex.current();
+    if (seq != _reloadSeq) return;
     final progressMap = await ProgressStore.instance.loadAllProgress();
+    if (seq != _reloadSeq) return;
     final favoriteEntries = await FavoriteStore.instance
         .favoritesSortedByTime();
+    if (seq != _reloadSeq) return;
     final resolver = UnifiedPuzzleResolver(catalogIndex);
 
     // 1. 进行中列表（规则乙：hasSnapshot || progressPercent > 0）
@@ -191,6 +204,8 @@ class _MyCenterTabViewState extends State<MyCenterTabView> {
     AppLogger.ui.info(
       'MyCenter loadAllData done inProgress=${inProgress.length} completed=${completed.length} favorites=${favorites.length} custom=${custom.length}',
     );
+    // P2-1：setState 前再确认代次，旧查询结果不得覆盖新数据。
+    if (seq != _reloadSeq) return;
     if (mounted) {
       setState(() {
         _inProgressList = inProgress;
@@ -202,7 +217,9 @@ class _MyCenterTabViewState extends State<MyCenterTabView> {
     }
   }
 
-  Future<Uint8List> _resolveImageBytes(UnifiedPuzzleCardData card) async {
+  /// P0-1：失败一律返回 null，由调用方显式提示。禁止以示例图/占位图
+  /// 替代进入关卡（开发期遗留兜底已删除）。
+  Future<Uint8List?> _resolveImageBytes(UnifiedPuzzleCardData card) async {
     const maxBytes = 20 * 1024 * 1024;
     try {
       if (card.isLocalFile) {
@@ -218,35 +235,49 @@ class _MyCenterTabViewState extends State<MyCenterTabView> {
       }
       if (card.imagePathOrUrl.startsWith('http://') ||
           card.imagePathOrUrl.startsWith('https://')) {
-        final uri = Uri.tryParse(card.imagePathOrUrl);
-        if (uri != null) {
-          final client = HttpClient()
-            ..connectionTimeout = const Duration(seconds: 8)
-            ..idleTimeout = const Duration(seconds: 8);
-          try {
-            final req = await client.getUrl(uri);
-            final res = await req.close().timeout(const Duration(seconds: 15));
-            if (res.statusCode == 200) {
-              // chunked 场景 contentLength == -1，需流式限长
-              if (res.contentLength > maxBytes) {
-                throw Exception('image too large ${res.contentLength}');
+        // P1-3：先查 LevelImageResolver 本地缓存，命中直接读盘（离线可玩，
+        // 并复用 Single-Flight 去重）；未命中再单飞下载落盘后读。
+        final url = card.imagePathOrUrl;
+        try {
+          final cached = LevelImageResolver.instance.getUrlLocalPathIfAvailable(
+            url,
+          );
+          if (cached != null) {
+            final file = File(cached);
+            if (file.existsSync()) {
+              final len = await file.length();
+              if (len > 0 && len <= maxBytes) {
+                return await file.readAsBytes();
               }
-              final bytes = await consolidateHttpClientResponseBytes(
-                res,
-              ).timeout(const Duration(seconds: 20));
-              if (bytes.length > maxBytes) {
-                throw Exception('image too large ${bytes.length}');
-              }
-              // contentLength == -1 且超长已被上一行拦截
-              if (res.contentLength == -1 && bytes.length > maxBytes) {
-                throw Exception('image chunked too large');
-              }
-              return bytes;
             }
-          } finally {
-            client.close(force: true);
           }
+          final landed = await LevelImageResolver.instance.resolveUrlLocalPath(
+            url,
+          );
+          if (landed.isNotEmpty) {
+            final file = File(landed);
+            if (file.existsSync()) {
+              final len = await file.length();
+              if (len > 0 && len <= maxBytes) {
+                return await file.readAsBytes();
+              }
+            }
+          }
+        } catch (e, st) {
+          AppLogger.ui.warning(
+            'MyCenter resolver cache lookup failed cid=${card.canonicalId}',
+            e,
+            st,
+          );
         }
+        // P1-3 修正（⑤）：不再回落到裸 HttpClient。上一级
+        // `resolveUrlLocalPath` 已按 Single-Flight 落盘并校验落盘结果；
+        // 重复请求同一 URL 既不会落盘（下次仍需重下），又会让离线用户
+        // 额外多等 8s（连接超时）+15s+20s 才看到提示，纯负收益。
+        AppLogger.ui.warning(
+          'MyCenter resolve bytes failed (no local cache) '
+          'cid=${card.canonicalId} url=${AppLogger.sanitizeUrl(url)}',
+        );
       }
     } catch (e, st) {
       AppLogger.ui.warning(
@@ -254,26 +285,108 @@ class _MyCenterTabViewState extends State<MyCenterTabView> {
         e,
         st,
       );
+      return null;
     }
-    // 兜底图
-    final data = await rootBundle.load('assets/samples/animal_01.webp');
-    return data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes);
+    // P0-1：所有失败分支返回 null，不再加载任何兜底示例图。
+    return null;
+  }
+
+  /// P0-5：孤儿卡多级取图（只读，不删数据）。
+  /// ① `LocalImageLocator` 按 canonicalId 直查本地已下载图片；
+  /// ② 回落通用解析（含 Resolver 本地缓存 + 网络）。
+  /// 全部落空返回 null（调用方 Toast 提示，不进游戏、不弹删除框）。
+  Future<Uint8List?> _resolveOrphanImageBytes(
+    UnifiedPuzzleCardData card,
+  ) async {
+    const maxBytes = 20 * 1024 * 1024;
+    try {
+      final located = LocalImageLocator.locate(card.canonicalId);
+      if (located != null && located.isNotEmpty) {
+        if (located.startsWith('assets/')) {
+          try {
+            final data = await rootBundle.load(located);
+            return data.buffer.asUint8List(
+              data.offsetInBytes,
+              data.lengthInBytes,
+            );
+          } catch (_) {}
+        } else {
+          final file = File(located);
+          if (file.existsSync()) {
+            final len = await file.length();
+            if (len > 0 && len <= maxBytes) {
+              return await file.readAsBytes();
+            }
+          }
+        }
+      }
+    } catch (e, st) {
+      AppLogger.ui.warning(
+        'MyCenter orphan locate failed cid=${card.canonicalId}',
+        e,
+        st,
+      );
+    }
+    return _resolveImageBytes(card);
   }
 
   Future<void> _handleCardClick(UnifiedPuzzleCardData card) async {
-    AppLogger.debug(
-      AppLogger.ui,
-      'MyCenter card click cid=${card.canonicalId} isOrphan=${card.isOrphan}',
-    );
-    if (card.isOrphan) {
-      await _cleanOrphan(card);
-      return;
+    try {
+      AppLogger.debug(
+        AppLogger.ui,
+        'MyCenter card click cid=${card.canonicalId} isOrphan=${card.isOrphan}',
+      );
+      // P0-5（红线 R2）：主点击永不弹删除对话框。孤儿卡先可玩——多级取图后
+      // 走正常入局流程；确实无图才 Toast 提示。删除记录仅允许长按主动触发。
+      final Uint8List? imgBytes;
+      if (card.isOrphan) {
+        imgBytes = await _resolveOrphanImageBytes(card);
+        if (!mounted) return;
+        if (imgBytes == null) {
+          GameToast.show(
+            context,
+            message: t.myCenter.toast.imageNotFound,
+            type: GameToastType.warning,
+          );
+          return;
+        }
+      } else {
+        imgBytes = await _resolveImageBytes(card);
+        if (!mounted) return;
+        // P0-1：图片不可用时显式提示且不进入游戏，禁止静默无响应。
+        if (imgBytes == null) {
+          GameToast.show(
+            context,
+            message: t.myCenter.toast.imageNotReady,
+            type: GameToastType.warning,
+          );
+          return;
+        }
+      }
+
+      await _enterGameWithBytes(card, imgBytes);
+    } catch (e, st) {
+      // P0-1：点击链路整体兜底，严禁静默中断。
+      AppLogger.ui.warning(
+        'MyCenter handleCardClick failed cid=${card.canonicalId}',
+        e,
+        st,
+      );
+      if (mounted) {
+        GameToast.show(
+          context,
+          message: t.myCenter.toast.openFailed,
+          type: GameToastType.warning,
+        );
+      }
     }
+  }
 
-    final imgBytes = await _resolveImageBytes(card);
-    if (!mounted) return;
-
-    // 1. 若有残局快照，优先走续玩流
+  /// 入局共用流程（正常卡与孤儿卡取图成功后均走此）：残局续玩 → 难度选择。
+  Future<void> _enterGameWithBytes(
+    UnifiedPuzzleCardData card,
+    Uint8List imgBytes,
+  ) async {
     if (card.hasActiveSnapshot) {
       final fallbackDiff = PuzzleDifficulty.presets.firstWhere(
         (d) => SnapshotStore.difficultyKeyFor(d) == card.activeDifficultyKey,
@@ -343,6 +456,9 @@ class _MyCenterTabViewState extends State<MyCenterTabView> {
     _loadAllData();
   }
 
+  /// P0-5（红线 R2）：仅用户长按主动清理单条记录时调用。禁止在任何自动路径
+  /// （初始化、同步、索引重建、点击）中调用。只删进度/快照/收藏记录，
+  /// 不动已下载图片数据。
   Future<void> _cleanOrphan(UnifiedPuzzleCardData card) async {
     final tr = LocaleSettings.instance.currentTranslations;
     final ok = await showDialog<bool>(

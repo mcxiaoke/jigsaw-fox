@@ -91,45 +91,42 @@ class DownloadBadge extends StatelessWidget {
     }
 
     // 3. Zip 未下载：显示醒目的下载按钮
-    if (isZipType) {
-      return Container(
-        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-        decoration: BoxDecoration(
-          color: palette.brand.withValues(alpha: 0.92),
-          borderRadius: BorderRadius.circular(10),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.25),
-              blurRadius: 4,
-              offset: const Offset(0, 1),
-            ),
-          ],
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Icon(
-              PhosphorIconsBold.downloadSimple,
+    // （P3-1：入口已过滤非 zip，此处 isZipType 恒真，去掉冗余分支；
+    // Array 在线态的 SizedBox.shrink 不可达，已删除。）
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+      decoration: BoxDecoration(
+        color: palette.brand.withValues(alpha: 0.92),
+        borderRadius: BorderRadius.circular(10),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.25),
+            blurRadius: 4,
+            offset: const Offset(0, 1),
+          ),
+        ],
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(
+            PhosphorIconsBold.downloadSimple,
+            color: Colors.white,
+            size: 11,
+          ),
+          const SizedBox(width: 3),
+          Text(
+            displayFileSize.isNotEmpty
+                ? displayFileSize
+                : t.collections.badgeDownload,
+            style: const TextStyle(
               color: Colors.white,
-              size: 11,
+              fontSize: 10,
+              fontWeight: FontWeight.bold,
             ),
-            const SizedBox(width: 3),
-            Text(
-              displayFileSize.isNotEmpty
-                  ? displayFileSize
-                  : t.collections.badgeDownload,
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 10,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-          ],
-        ),
-      );
-    }
-
-    // 4. Array 在线类型（不需要下载）
-    return const SizedBox.shrink();
+          ),
+        ],
+      ),
+    );
   }
 }

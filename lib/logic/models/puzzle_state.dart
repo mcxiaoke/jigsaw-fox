@@ -138,17 +138,20 @@ class PieceState {
 /// 且带默认值，旧版本读新快照时未知键进入 `extra` 并在下次 `toJson` 原样回写，
 /// 做到“旧读新不丢、新读旧兼容”。
 class PuzzleBoardState {
-
   const PuzzleBoardState({
     required this.rows,
     required this.cols,
     required this.seed,
-    required this.pieces, this.rotationEnabled = false,
+    required this.pieces,
+    this.rotationEnabled = false,
     this.elapsedSeconds = 0,
     this.hintsUsed = 0,
     this.levelId = 'default_level',
     this.version = currentVersion,
-    this.canonicalId = 'default_level',
+    // P1-4 根因加固：默认空串，使 effectiveCanonicalId 自然回落到 levelId，
+    // 避免未注入归属的快照写成 default_level 孤儿键。fromJson 的
+    // `canonicalId ?? levelId ?? 'default_level'` 兼容链保持不变（历史快照仍可读）。
+    this.canonicalId = '',
     this.difficultyKey = '',
     this.aspectLabel,
     this.createdAt,

@@ -90,6 +90,54 @@ class _EventLevelsPageState extends State<EventLevelsPage> {
     }
   }
 
+  /// P2-11：用户显式清理已下载活动（二次确认）。仅删本地图片目录，
+  /// 不动进度/收藏/快照记录。
+  Future<void> _confirmDelete() async {
+    final palette = AppPalette.of(context);
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(t.events.clearTitle(title: _currentEvent.displayTitle)),
+        content: Text(
+          t.events.clearDesc(size: _currentEvent.displayFileSize),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: Text(t.common.cancel),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: palette.error),
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: Text(t.events.confirmClear),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true && mounted) {
+      final ok = await _content.deleteDownloadedEvent(_currentEvent.id);
+      if (mounted) {
+        if (ok) {
+          GameToast.show(
+            context,
+            icon: PhosphorIconsRegular.trash,
+            message: t.events.toastCleared,
+            type: GameToastType.success,
+          );
+          Navigator.of(context).pop();
+        } else {
+          GameToast.show(
+            context,
+            icon: PhosphorIconsRegular.warning,
+            message: t.events.toastClearFailed,
+            type: GameToastType.error,
+          );
+        }
+      }
+    }
+  }
+
   Future<void> _openLevel(PuzzleLevelItem level, int index) async {
     Uint8List? imgBytes;
     var localPath = '';
@@ -178,6 +226,15 @@ class _EventLevelsPageState extends State<EventLevelsPage> {
           _currentEvent.displayTitle,
           style: styles.h3.copyWith(fontSize: 17),
         ),
+        actions: [
+          // P2-11：已下载才提供清理入口（用户显式操作，二次确认）。
+          if (_content.isEventDownloaded(_currentEvent))
+            IconButton(
+              tooltip: t.events.deleteTooltip,
+              icon: const Icon(PhosphorIconsRegular.trash),
+              onPressed: _confirmDelete,
+            ),
+        ],
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())

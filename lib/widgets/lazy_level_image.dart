@@ -73,18 +73,8 @@ class _LazyLevelImageState extends State<LazyLevelImage> {
   }
 
   Future<void> _resolve() async {
-    final path = widget.level.imagePathOrUrl;
-
-    // 资产/已落地本地：同步直接显示，无需异步
-    if (path.startsWith('assets/') ||
-        (widget.level.isLocalFile && path.isNotEmpty)) {
-      // 仍走异步校验是否存在，避免曾标记本地但文件被误删
-      if (widget.level.isLocalFile) {
-        // 快路径：文件存在则直接用
-        // 实际校验在 LevelImageResolver 内
-      }
-    }
-
+    // P3-2：删除仅含注释、无任何行为的空 if 块。存在性校验统一由
+    // LevelImageResolver.resolveLevelLocalPath 完成。
     try {
       final localPath = await LevelImageResolver.instance.resolveLevelLocalPath(
         widget.level,
