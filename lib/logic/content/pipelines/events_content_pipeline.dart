@@ -5,9 +5,11 @@ import 'dart:io';
 import 'package:archive/archive.dart';
 import 'package:flutter/foundation.dart';
 import 'package:jigsawpuzzle/logic/content/models/canonical_id.dart';
+import 'package:jigsawpuzzle/logic/content/models/image_formats.dart';
 import 'package:jigsawpuzzle/logic/content/models/puzzle_event_item.dart';
 import 'package:jigsawpuzzle/logic/content/models/puzzle_level_item.dart';
 import 'package:jigsawpuzzle/logic/content/network/content_http_client.dart';
+import 'package:jigsawpuzzle/logic/content/pipelines/atomic_replace.dart';
 import 'package:jigsawpuzzle/logic/single_flight.dart';
 import 'package:jigsawpuzzle/services/app_logger.dart';
 import 'package:path/path.dart' as p;
@@ -49,10 +51,8 @@ class EventsContentPipeline {
   bool isEventDownloaded(PuzzleEventItem event) =>
       _isEventLocalDownloaded(event);
 
-  static final RegExp _imageFileRegex = RegExp(
-    r'\.(webp|jpg|jpeg|png)$',
-    caseSensitive: false,
-  );
+  // P1-5：图片白名单收敛为共享常量（大小写不敏感已是现状，勿重复改）。
+  static final RegExp _imageFileRegex = kImageFileRegex;
 
   /// 获取面向玩家的所有非禁用活动列表 (按 displayOrder 升序排列)
   List<PuzzleEventItem> get visibleEvents {
@@ -176,36 +176,27 @@ class EventsContentPipeline {
         }
       }
 
-      // 触发 Auto-GC 垃圾回收：自动清理 disabled 活动的本地沙盒目录
+      // P0-2（红线 R1）：Auto-GC 只统计、不删正式数据。确需清理仅限 temp_* 残留。
       final gcCount = await performAutoGc();
       if (gcCount > 0) {
-        AppLogger.events.info('Auto-GC deleted $gcCount disabled events');
+        AppLogger.events.info('Auto-GC cleaned $gcCount temp dirs');
       }
 
-      // P1-10 差集清理：以远端 id 全集为基准，回收从 index.json 下架的活动
-      // （内存条目 + 本地解压目录），避免下架内容永久残留
-      final removedIds = _eventsMap.keys
+      // P0-2（红线 R1）：远端缺失仅标记下架，不删条目、不删磁盘。
+      // 重新上架时上循环会以远端新条目覆盖并自动清除标记。
+      final delistedIds = _eventsMap.keys
           .where((id) => !remoteIds.contains(id))
           .toList();
-      if (removedIds.isNotEmpty) {
-        for (final id in removedIds) {
-          _eventsMap.remove(id);
-          final eventDir = Directory(p.join(eventsStorageBaseDir, id));
-          if (eventDir.existsSync()) {
-            try {
-              eventDir.deleteSync(recursive: true);
-            } catch (e, st) {
-              AppLogger.events.warning(
-                'syncWithRemote 移除下架活动目录失败 $id',
-                e,
-                st,
-              );
-            }
+      if (delistedIds.isNotEmpty) {
+        for (final id in delistedIds) {
+          final existing = _eventsMap[id];
+          if (existing != null && !existing.isDelisted) {
+            _eventsMap[id] = existing.copyWith(isDelisted: true);
           }
-          AppLogger.events.info('syncWithRemote 移除下架活动 $id');
+          AppLogger.events.info('syncWithRemote 标记下架活动 $id（仅标记，不删数据）');
         }
         AppLogger.events.info(
-          'syncWithRemote 差集清理完成 removed=${removedIds.length}',
+          'syncWithRemote 下架标记完成 delisted=${delistedIds.length}',
         );
       }
 
@@ -213,7 +204,7 @@ class EventsContentPipeline {
       await _persistToCache();
       updateNotifier.value++;
       AppLogger.events.info(
-        'syncWithRemote done events=${_eventsMap.length} updated=${updatedEvents.length} skipped=$skipped gc=$gcCount removed=${removedIds.length}',
+        'syncWithRemote done events=${_eventsMap.length} updated=${updatedEvents.length} skipped=$skipped gc=$gcCount delisted=${delistedIds.length}',
       );
       return true;
     } catch (e, st) {
@@ -222,25 +213,11 @@ class EventsContentPipeline {
     }
   }
 
-  /// 执行 Auto-GC 自动垃圾回收：删除已标记为 disabled 的活动的本地解压目录
-  Future<int> performAutoGc() async {
-    var deletedCount = 0;
-    for (final event in _eventsMap.values) {
-      if (event.isDisabled) {
-        final eventDir = Directory(p.join(eventsStorageBaseDir, event.id));
-        if (eventDir.existsSync()) {
-          try {
-            eventDir.deleteSync(recursive: true);
-            deletedCount++;
-            AppLogger.events.info('Auto-GC deleted ${event.id}');
-          } catch (e, st) {
-            AppLogger.events.warning('Auto-GC failed ${event.id}', e, st);
-          }
-        }
-      }
-    }
-    return deletedCount;
-  }
+  /// P0-2（红线 R1）：Auto-GC 只清理**本次运行产物残留**，不删除任何正式数据。
+  /// v8 修 a：统一改用 [cleanupStaleAtomicArtifacts]，在原有 `temp_*` 之外
+  /// 一并回收原子替换崩溃残留的 `*.bak_<ts>`。
+  Future<int> performAutoGc() =>
+      cleanupStaleAtomicArtifacts(eventsStorageBaseDir, logTag: 'events');
 
   /// 确保活动的关卡资源已就绪 (若为 Zip 模式则自动下载并解压)。
   ///
@@ -323,19 +300,48 @@ class EventsContentPipeline {
         }
         tempExtractDir.createSync(recursive: true);
 
+        var imageCount = 0;
         for (final file in archive) {
           final filename = p.basename(file.name);
           if (file.isFile && _imageFileRegex.hasMatch(filename)) {
             final outFile = File(p.join(tempExtractDir.path, filename));
             await outFile.writeAsBytes(file.content as List<int>, flush: true);
+            imageCount++;
           }
         }
 
-        // 3. 原子重命名到最终活动目录
-        if (targetDir.existsSync()) {
-          targetDir.deleteSync(recursive: true);
+        // P1-7：解压出 0 张有效图视为失败，不标记已下载（红线 R3-②允许清理
+        // 本次新建的空产物），避免「已下载 → 无图 → 反复整包重下」循环。
+        if (imageCount == 0) {
+          final sample = archive
+              .take(5)
+              .map((f) => p.basename(f.name))
+              .toList();
+          AppLogger.events.warning(
+            'ensureEventDownloaded empty pack ${event.id} '
+            'zipEntries=${archive.length} sample=$sample',
+          );
+          if (tempExtractDir.existsSync()) {
+            try {
+              tempExtractDir.deleteSync(recursive: true);
+            } catch (_) {}
+          }
+          final zf = File(tempZipPath);
+          if (zf.existsSync()) {
+            try {
+              zf.deleteSync();
+            } catch (_) {}
+          }
+          _updateDownloadProgress(event.id, 0.0);
+          return false;
         }
-        await tempExtractDir.rename(targetDir.path);
+
+        // 3. 原子落位到最终活动目录（P0-4：备份旧目录，失败回滚）
+        await swapDirectoryAtomically(
+          targetDir,
+          tempExtractDir,
+          logTag: event.id,
+        );
 
         // 4. 清理临时 Zip
         if (zipFile.existsSync()) {
@@ -347,7 +353,9 @@ class EventsContentPipeline {
         _updateDownloadProgress(event.id, 1.0);
         onProgress?.call(1.0);
         updateNotifier.value++;
-        AppLogger.events.info('ensureEventDownloaded success ${event.id}');
+        AppLogger.events.info(
+          'ensureEventDownloaded success ${event.id} images=$imageCount',
+        );
         return true;
       } catch (e, st) {
         _updateDownloadProgress(event.id, 0.0);
@@ -370,10 +378,43 @@ class EventsContentPipeline {
         return false;
       }
     } else {
-      // Array 模式无需整包下载，即刻标记就绪
+      // Array 模式无需整包下载，即刻标记就绪（P2-7：与 zip 分支对齐持久化 + 通知，
+      // 否则下载完成后 UI 不刷新）。持久化 best-effort 不阻塞返回，见 collections 侧注释。
       _eventsMap[event.id] = event.copyWith(isLocalDownloaded: true);
+      unawaited(_persistToCache());
       _updateDownloadProgress(event.id, 1.0);
+      updateNotifier.value++;
       return true;
+    }
+  }
+
+  /// P2-11：删除已下载的活动本地文件以释放存储空间（与图集/图包对等）。
+  /// P0-2 移除差集清理与 Auto-GC 后，这是活动包唯一的合法磁盘释放出口
+  /// （红线 R3-③：用户显式操作）。仅重置条目状态，不删进度/收藏/快照。
+  Future<bool> deleteDownloadedEvent(String eventId) async {
+    final item = _eventsMap[eventId];
+    if (item == null) return false;
+
+    final targetDir = Directory(p.join(eventsStorageBaseDir, eventId));
+    try {
+      if (targetDir.existsSync()) {
+        targetDir.deleteSync(recursive: true);
+      }
+      _eventsMap[eventId] = item.copyWith(isLocalDownloaded: false);
+      final currentMap = Map<String, double>.from(progressNotifier.value);
+      currentMap.remove(eventId);
+      progressNotifier.value = currentMap;
+      await _persistToCache();
+      updateNotifier.value++;
+      AppLogger.events.info('deleteDownloadedEvent success $eventId');
+      return true;
+    } catch (e, st) {
+      AppLogger.events.warning(
+        'deleteDownloadedEvent failed $eventId',
+        e,
+        st,
+      );
+      return false;
     }
   }
 

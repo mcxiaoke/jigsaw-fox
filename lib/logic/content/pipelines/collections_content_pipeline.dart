@@ -1,12 +1,15 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
 import 'package:archive/archive.dart';
 import 'package:flutter/foundation.dart';
 import 'package:jigsawpuzzle/logic/content/models/canonical_id.dart';
+import 'package:jigsawpuzzle/logic/content/models/image_formats.dart';
 import 'package:jigsawpuzzle/logic/content/models/puzzle_collection_item.dart';
 import 'package:jigsawpuzzle/logic/content/models/puzzle_level_item.dart';
 import 'package:jigsawpuzzle/logic/content/network/content_http_client.dart';
+import 'package:jigsawpuzzle/logic/content/pipelines/atomic_replace.dart';
 import 'package:jigsawpuzzle/logic/single_flight.dart';
 import 'package:jigsawpuzzle/services/app_logger.dart';
 import 'package:path/path.dart' as p;
@@ -40,10 +43,12 @@ class CollectionsContentPipeline {
   /// 进行中的下载单飞表 (同 id 并发 ensure 复用同一 Future，防互删临时目录)
   final Map<String, Future<bool>> _inFlightDownloads = {};
 
-  static final RegExp _imageFileRegex = RegExp(
-    r'\.(webp|jpg|jpeg|png)$',
-    caseSensitive: false,
-  );
+  // P1-5：图片白名单收敛为共享常量（大小写不敏感已是现状，勿重复改）。
+  static final RegExp _imageFileRegex = kImageFileRegex;
+
+  /// 检查图集关卡是否已在本地就绪（P0-2 索引用：含已下架但本地仍有数据者）
+  bool isCollectionDownloaded(PuzzleCollectionItem collection) =>
+      _isCollectionLocalDownloaded(collection);
 
   /// 获取面向玩家的所有非禁用图集列表 (按 displayOrder 升序排列)
   List<PuzzleCollectionItem> get visibleCollections {
@@ -195,37 +200,30 @@ class CollectionsContentPipeline {
         }
       }
 
-      // P1-10 差集清理：以远端 id 全集为基准，回收从 index.json 下架的图集
-      // （内存条目 + 本地解压目录），避免下架内容永久残留
-      final removedIds = _collectionsMap.keys
+      // P0-2（红线 R1）：远端缺失仅标记下架，不删条目、不删磁盘。
+      // 重新上架时上循环会以远端新条目覆盖并自动清除标记。
+      final delistedIds = _collectionsMap.keys
           .where((id) => !remoteIds.contains(id))
           .toList();
-      if (removedIds.isNotEmpty) {
-        for (final id in removedIds) {
-          _collectionsMap.remove(id);
-          final colDir = Directory(p.join(collectionsStorageBaseDir, id));
-          if (colDir.existsSync()) {
-            try {
-              colDir.deleteSync(recursive: true);
-            } catch (e, st) {
-              AppLogger.content.warning(
-                'Collections syncWithRemote 移除下架图集目录失败 $id',
-                e,
-                st,
-              );
-            }
+      if (delistedIds.isNotEmpty) {
+        for (final id in delistedIds) {
+          final existing = _collectionsMap[id];
+          if (existing != null && !existing.isDelisted) {
+            _collectionsMap[id] = existing.copyWith(isDelisted: true);
           }
-          AppLogger.content.info('Collections syncWithRemote 移除下架图集 $id');
+          AppLogger.content.info(
+            'Collections syncWithRemote 标记下架图集 $id（仅标记，不删数据）',
+          );
         }
         AppLogger.content.info(
-          'Collections syncWithRemote 差集清理完成 removed=${removedIds.length}',
+          'Collections syncWithRemote 下架标记完成 delisted=${delistedIds.length}',
         );
       }
 
       await _persistToCache();
       updateNotifier.value++;
       AppLogger.content.info(
-        'Collections syncWithRemote done total=${_collectionsMap.length} updated=${updatedCollections.length} skipped=$skipped removed=${removedIds.length}',
+        'Collections syncWithRemote done total=${_collectionsMap.length} updated=${updatedCollections.length} skipped=$skipped delisted=${delistedIds.length}',
       );
       return true;
     } catch (e, st) {
@@ -262,11 +260,14 @@ class CollectionsContentPipeline {
     }
 
     if (collection.isArrayType) {
-      // Array 模式无需整包下载，即刻标记就绪
+      // Array 模式无需整包下载，即刻标记就绪（P2-7：与 zip 分支对齐持久化）。
+      // 注意：持久化必须为 best-effort（unawaited）——调用方含 UI 事件处理器，
+      // 此处 await 真实磁盘 IO 会阻塞返回；下次启动 initializeFromCache 会重算。
       _collectionsMap[collection.id] = collection.copyWith(
         isLocalDownloaded: true,
         downloadStatus: CollectionDownloadStatus.downloaded,
       );
+      unawaited(_persistToCache());
       updateNotifier.value++;
       return true;
     }
@@ -346,11 +347,42 @@ class CollectionsContentPipeline {
           }
         }
 
-        // 3. 原子重命名到最终目录
-        if (targetDir.existsSync()) {
-          targetDir.deleteSync(recursive: true);
+        // P1-7：解压出 0 张有效图视为失败，不标记已下载（红线 R3-②允许清理
+        // 本次新建的空产物）；totalCount 不再用远端值掩盖空包。
+        if (imageCount == 0) {
+          final sample = archive
+              .take(5)
+              .map((f) => p.basename(f.name))
+              .toList();
+          AppLogger.content.warning(
+            'ensureCollectionDownloaded empty pack ${collection.id} '
+            'zipEntries=${archive.length} sample=$sample',
+          );
+          if (tempExtractDir.existsSync()) {
+            try {
+              tempExtractDir.deleteSync(recursive: true);
+            } catch (_) {}
+          }
+          final zf = File(tempZipPath);
+          if (zf.existsSync()) {
+            try {
+              zf.deleteSync();
+            } catch (_) {}
+          }
+          _updateDownloadState(
+            collection.id,
+            0,
+            CollectionDownloadStatus.error,
+          );
+          return false;
         }
-        await tempExtractDir.rename(targetDir.path);
+
+        // 3. 原子落位到最终目录（P0-4：备份旧目录，失败回滚）
+        await swapDirectoryAtomically(
+          targetDir,
+          tempExtractDir,
+          logTag: collection.id,
+        );
 
         // 4. 清理临时 Zip
         if (zipFile.existsSync()) {
@@ -360,7 +392,7 @@ class CollectionsContentPipeline {
         // 5. 更新图集项数据与状态
         final updated = collection.copyWith(
           isLocalDownloaded: true,
-          totalCount: imageCount > 0 ? imageCount : collection.totalCount,
+          totalCount: imageCount,
           downloadProgress: 1,
           downloadStatus: CollectionDownloadStatus.downloaded,
         );

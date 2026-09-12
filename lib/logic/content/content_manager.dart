@@ -530,6 +530,10 @@ class ContentManager {
   List<PuzzleLevelItem> getEventLevels(PuzzleEventItem event) =>
       eventsPipeline.getLevelsForEvent(event);
 
+  /// 删除已下载的本地活动解压目录（P2-11：与图集/图包对等，用户显式操作入口）
+  Future<bool> deleteDownloadedEvent(String eventId) =>
+      eventsPipeline.deleteDownloadedEvent(eventId);
+
   // --- 图集中心 Collections 模块便捷代理 ---
 
   /// 获取所有可见图集 (过滤掉 disabled，按 displayOrder 排序)

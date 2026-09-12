@@ -4,6 +4,7 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:jigsawpuzzle/logic/content/app_content.dart';
+import 'package:jigsawpuzzle/logic/content/models/canonical_id.dart';
 import 'package:jigsawpuzzle/logic/content/models/puzzle_level_item.dart';
 import 'package:jigsawpuzzle/logic/content/network/content_http_client.dart';
 import 'package:jigsawpuzzle/services/app_logger.dart';
@@ -44,19 +45,8 @@ class LevelImageResolver {
     await _getNetworkLevelsDir();
   }
 
-  /// 一次性清理旧版遗留的 thumbnail_cache 目录（若存在）
-  Future<void> cleanLegacyThumbnailCache() async {
-    try {
-      final supportDir = await getApplicationSupportDirectory();
-      final legacyDir = Directory(p.join(supportDir.path, 'thumbnail_cache'));
-      if (await legacyDir.exists()) {
-        await legacyDir.delete(recursive: true);
-        AppLogger.system.info('Cleaned legacy thumbnail_cache directory');
-      }
-    } catch (e, st) {
-      AppLogger.imageCache.warning('cleanLegacyThumbnailCache failed', e, st);
-    }
-  }
+  // P3-5：cleanLegacyThumbnailCache 已删除。项目尚未发版，不存在旧版遗留的
+  // thumbnail_cache 目录，该“启动即删目录”属无必要的自动删除既有数据（R1/R5）。
 
   Future<String> _getNetworkLevelsDir() async {
     if (_networkLevelsDir != null) return _networkLevelsDir!;
@@ -210,8 +200,13 @@ class LevelImageResolver {
 
       // 3. 通用网络关卡落地（懒下载，幂等）
       try {
+        // P1-1 双重守卫：仅主线关卡可走 main 管线。sourceModule 默认值即
+        // prefixMain，单条件会被漏传字段的非主线关卡击穿，故必须同时校验 id 前缀。
+        final isMainLevel =
+            level.sourceModule == CanonicalId.prefixMain &&
+            level.id.startsWith('${CanonicalId.prefixMain}:');
         // 若管线侧 ensure 已支持，直接复用（保持 _levelsMap 同步）
-        if (AppContent.instance.isInitialized) {
+        if (isMainLevel && AppContent.instance.isInitialized) {
           try {
             final ensured = await AppContent.instance.manager
                 .ensureMainLevelDownloaded(level);

@@ -4,6 +4,7 @@ import 'package:crypto/crypto.dart';
 import 'package:jigsawpuzzle/logic/content/models/canonical_id.dart';
 import 'package:jigsawpuzzle/logic/content/models/puzzle_level_item.dart';
 import 'package:jigsawpuzzle/logic/content/network/content_http_client.dart';
+import 'package:jigsawpuzzle/logic/content/pipelines/atomic_replace.dart';
 import 'package:jigsawpuzzle/logic/single_flight.dart';
 import 'package:jigsawpuzzle/services/app_logger.dart';
 
@@ -74,6 +75,11 @@ class MainContentPipeline {
   /// 进行中的图片下载 (单飞防重：同关卡并发 ensure 复用同一 Future，防同路径并发写)
   final Map<String, Future<PuzzleLevelItem>> _inFlightDownloads = {};
 
+  /// 图片刷新待重试的远端条目（id → 远端新元数据；外部评审①）。
+  /// 刷新失败保留旧条目，有待重试时不得走版本短路，下次 sync 重试。
+  /// 与批次完整性（首启门禁依赖）正交：批次 id 照常标记已处理。
+  final Map<String, PuzzleLevelItem> _pendingRefresh = {};
+
   /// 获取当前已加载的所有首页关卡 (按 order 自然升序排序)
   List<PuzzleLevelItem> get levels {
     final list = _levelsMap.values.toList();
@@ -121,6 +127,19 @@ class MainContentPipeline {
           _lastRemoteBatchIds.addAll(
             cachedRemoteBatchIds.map((e) => e.toString()),
           );
+          // 恢复图片刷新待重试条目（重启后同版本 sync 仍能重试，见短路条件）
+          final cachedPending = json['pendingRefresh'];
+          _pendingRefresh.clear();
+          if (cachedPending is List) {
+            for (final raw in cachedPending) {
+              if (raw is Map<String, dynamic>) {
+                final item = _parseLevelItem(raw);
+                if (item != null && item.url.isNotEmpty) {
+                  _pendingRefresh[item.id] = item;
+                }
+              }
+            }
+          }
 
           final rawLevels = json['items'] as List<dynamic>? ?? [];
           var loaded = 0;
@@ -172,8 +191,10 @@ class MainContentPipeline {
     // 版本未变且已有数据，无需重复拉取 —— **仅当本地批次完整时短路**
     // （防止"某轮批次部分失败已把 localVersion 推高，后续重试/重启永久短路
     //   而本地缺角"的死局：批次不完整时必须继续拉 index 重灌 missingBatches）
+    // 外部评审①：有图片刷新待重试时同样不得短路（旧 hash 仍在，下次必重试）。
     if (remoteVersion <= _localVersion &&
         _levelsMap.isNotEmpty &&
+        _pendingRefresh.isEmpty &&
         _localBatchIds.containsAll(_lastRemoteBatchIds)) {
       AppLogger.mainPipe.fine('syncWithRemote skip version not newer');
       return false;
@@ -191,6 +212,8 @@ class MainContentPipeline {
 
       final newVersion = (json['version'] as num?)?.toInt() ?? remoteVersion;
       var hasNewItems = false;
+      // 待刷新图片：元数据循环内只收集，循环后有界并发刷新（见 ①②）。
+      final pendingRefreshes = <PuzzleLevelItem>[];
 
       // 1. 统一分卷架构 (items / batches)
       // 统一分卷架构 (items)
@@ -261,29 +284,16 @@ class MainContentPipeline {
                       existing.url.isNotEmpty &&
                       level.url != existing.url);
               if (isImageHashChanged) {
-                final oldPath =
-                    existing.localPath != null && existing.localPath!.isNotEmpty
-                    ? existing.localPath!
-                    : _getLocalImagePath(level.id, existing.url);
-                final oldFile = File(oldPath);
-                if (await oldFile.exists()) {
-                  try {
-                    await oldFile.delete();
-                    AppLogger.mainPipe.info(
-                      'Deleted stale cached image for ${level.id} due to hash/url change: ${existing.hash} -> ${level.hash}',
-                    );
-                  } catch (e) {
-                    AppLogger.mainPipe.warning(
-                      'Failed to delete stale cache: $e',
-                    );
-                  }
-                }
-                // 更新为远端新信息，重置本地缓存，标记有新内容
-                _levelsMap[level.id] = level.copyWith(
-                  clearLocalPath: true,
-                  isLocalFile: false,
+                // P0-6（红线 R1）+ 外部评审①：远端内容更新时只推进与图片无关的
+                // 元数据（tags/order），图片三元组（url/hash/fileSizeBytes）等
+                // 刷新成功后再推进。失败则保留旧条目整体 → 下次 sync 因 hash
+                // 仍不一致而重试，旧图持续可玩，绝不出现"新旧两空"与"永久旧图"。
+                _levelsMap[level.id] = existing.copyWith(
+                  tags: level.tags,
+                  order: level.order != 0 ? level.order : existing.order,
                 );
                 hasNewItems = true;
+                pendingRefreshes.add(level);
               } else {
                 // 内容未变，平滑更新 tags / order / url (保留已有 localPath)
                 _levelsMap[level.id] = existing.copyWith(
@@ -296,6 +306,10 @@ class MainContentPipeline {
             } else {
               // 全新关卡：若本地存在同名旧图，优先用 fileSizeBytes 快速筛查；
               // 无 fileSizeBytes 或大小匹配时再走 sha256 严格校验。
+              // 红线 R1/R3（v8 修 e）：校验失配时**不删除**该文件——只把它标记为
+              // “不可引用”（isLocal=false / localPath=null），后续懒下载会经
+              // `.part` 原子落盘覆盖它；期间该文件不被任何条目/进度引用，
+              // 因此不会出现“用错图”，也不再有任何删除既有文件的路径。
               final localFile = File(_getLocalImagePath(level.id, level.url));
               var isLocal = false;
               String? localPath = localFile.path;
@@ -305,10 +319,10 @@ class MainContentPipeline {
                   try {
                     final actualSize = await localFile.length();
                     if (actualSize != expectedSize) {
-                      await localFile.delete();
                       AppLogger.mainPipe.info(
-                        'Removed stale local image for new level ${level.id} '
-                        'size mismatch expected=$expectedSize actual=$actualSize',
+                        'Stale local image for new level ${level.id} '
+                        'size mismatch expected=$expectedSize actual=$actualSize '
+                        '(keep file, not referenced)',
                       );
                       localPath = null;
                     }
@@ -324,18 +338,13 @@ class MainContentPipeline {
                     final expectedHash = level.hash!;
                     final actualHash = await _sha256File(localFile);
                     if (actualHash != null && actualHash != expectedHash) {
-                      try {
-                        await localFile.delete();
-                        AppLogger.mainPipe.info(
-                          'Removed stale local image for new level ${level.id} '
-                          'expected=${expectedHash.substring(0, 12)} actual=${actualHash.substring(0, 12)}',
-                        );
-                        localPath = null;
-                      } catch (_) {
-                        AppLogger.mainPipe.warning(
-                          'Failed to delete stale local image for new level ${level.id}',
-                        );
-                      }
+                      // v8 修 e：同 size 分支——不删除，仅标记不可引用。
+                      AppLogger.mainPipe.info(
+                        'Stale local image for new level ${level.id} '
+                        'expected=${expectedHash.substring(0, 12)} actual=${actualHash.substring(0, 12)} '
+                        '(keep file, not referenced)',
+                      );
+                      localPath = null;
                     } else {
                       isLocal = true;
                     }
@@ -355,6 +364,16 @@ class MainContentPipeline {
           _localBatchIds.add(batch.batchId);
         }
       }
+
+      // 外部评审②：待刷新图片在元数据循环后有界并发执行（每批 4 个），避免
+      // 串行下载拖慢同步（首启同步有 12s 预算）。单项失败保留旧条目，下次重试。
+      // 批次已处理但图片仍未成功的历史待重试同样并入（循环内同 id 以远端最新为准）。
+      for (final entry in _pendingRefresh.entries) {
+        if (!pendingRefreshes.any((l) => l.id == entry.key)) {
+          pendingRefreshes.add(entry.value);
+        }
+      }
+      await _refreshPendingImages(pendingRefreshes);
 
       _localVersion = newVersion;
       await _persistToCache();
@@ -392,6 +411,15 @@ class MainContentPipeline {
     PuzzleLevelItem level, {
     Duration? timeout,
   }) async {
+    // P1-1 管线内侧防呆：非 main: 前缀直接拒收，避免外部误调污染 _levelsMap
+    // 与 main_levels_cache.json（见 LevelImageResolver 双重守卫）。
+    if (!level.id.startsWith('${CanonicalId.prefixMain}:')) {
+      throw ArgumentError.value(
+        level.id,
+        'level.id',
+        'MainContentPipeline only accepts main: prefixed levels',
+      );
+    }
     if (level.isLocalFile &&
         level.localPath != null &&
         File(level.localPath!).existsSync()) {
@@ -402,18 +430,20 @@ class MainContentPipeline {
     final localPath = _getLocalImagePath(level.id, level.url);
     final localFile = File(localPath);
     if (await localFile.exists()) {
-      // fileSizeBytes 快速筛查：服务端已有下发时优先比对，不匹配直接删旧图重下
+      // fileSizeBytes 快速筛查：大小不匹配时直接走下载逻辑覆盖。
+      // P0-6（红线 R1）：此处不得预删旧图——downloadFile 经 .part 原子落盘，
+      // 下载失败时旧图仍在；预删会制造“新旧两空”。
       final expectedSize = level.fileSizeBytes;
       if (expectedSize != null && expectedSize > 0) {
         try {
           final actualSize = await localFile.length();
           if (actualSize != expectedSize) {
-            await localFile.delete();
             AppLogger.mainPipe.info(
-              'Removed stale local image for ${level.id} '
-              'size mismatch expected=$expectedSize actual=$actualSize',
+              'Stale local image for ${level.id} '
+              'size mismatch expected=$expectedSize actual=$actualSize, '
+              'will refresh without pre-delete',
             );
-            // 继续执行下面的下载逻辑
+            // 继续执行下面的下载逻辑（.part 落盘，失败保留旧图）
           } else {
             final updated = level.copyWith(
               localPath: localPath,
@@ -541,6 +571,98 @@ class MainContentPipeline {
     return '$imagesStorageDir/$sanitized$ext';
   }
 
+  /// P0-6：远端 hash/url 变更后的图片刷新。新图先下到临时路径并校验，
+  /// 通过后再经 [_swapFileAtomically] 落位；任何失败都保留旧图与旧条目。
+  ///
+  /// 成功时将图片三元组（url/hash/fileSizeBytes）与新本地路径合并写入当前条目
+  /// （远端 hash 缺失时显式清空以收敛，避免下次误判为变更而反复下载）；
+  /// 失败时旧条目原样保留并记入 [_pendingRefreshIds] 供下次重试。
+  Future<void> _refreshLevelImage(PuzzleLevelItem remote) async {
+    if (remote.url.isEmpty) return;
+    final targetPath = _getLocalImagePath(remote.id, remote.url);
+    final tempPath = '$targetPath.new_${DateTime.now().millisecondsSinceEpoch}';
+    final downloaded = await _httpClient.downloadFile(remote.url, tempPath);
+    try {
+      if (!downloaded.existsSync() || downloaded.lengthSync() == 0) {
+        throw StateError('Downloaded empty image for ${remote.id}');
+      }
+      final expectedSize = remote.fileSizeBytes;
+      if (expectedSize != null && expectedSize > 0) {
+        final actualSize = downloaded.lengthSync();
+        if (actualSize != expectedSize) {
+          throw StateError(
+            'Size mismatch for ${remote.id} expected=$expectedSize actual=$actualSize',
+          );
+        }
+      }
+      if (remote.hash != null && remote.hash!.isNotEmpty) {
+        final actualHash = await _sha256File(downloaded);
+        if (actualHash != null && actualHash != remote.hash) {
+          throw StateError('Hash mismatch for ${remote.id}');
+        }
+      }
+      await _swapFileAtomically(targetPath, tempPath);
+      final base = _levelsMap[remote.id] ?? remote;
+      var updated = base.copyWith(
+        url: remote.url,
+        tags: remote.tags,
+        order: remote.order != 0 ? remote.order : base.order,
+        localPath: targetPath,
+        isLocalFile: true,
+      );
+      if (remote.hash != null) {
+        updated = updated.copyWith(hash: remote.hash);
+      } else {
+        updated = updated.copyWith(clearHash: true);
+      }
+      if (remote.fileSizeBytes != null) {
+        updated = updated.copyWith(fileSizeBytes: remote.fileSizeBytes);
+      } else {
+        updated = updated.copyWith(clearFileSizeBytes: true);
+      }
+      _levelsMap[remote.id] = updated;
+      _pendingRefresh.remove(remote.id);
+      AppLogger.mainPipe.info('Refreshed image ${remote.id} after hash change');
+    } catch (_) {
+      final tmp = File(tempPath);
+      if (tmp.existsSync()) {
+        try {
+          tmp.deleteSync();
+        } catch (_) {}
+      }
+      rethrow;
+    }
+  }
+
+  /// 有界并发执行待刷新图片（外部评审②：每批 4 个，避免整批重编码时串行
+  /// 下载拖慢同步乃至首启；单项失败保留旧条目并记入待重试，下次 sync 重试）。
+  Future<void> _refreshPendingImages(List<PuzzleLevelItem> pending) async {
+    if (pending.isEmpty) return;
+    const limit = 4;
+    for (var i = 0; i < pending.length; i += limit) {
+      var end = i + limit;
+      if (end > pending.length) end = pending.length;
+      await Future.wait(
+        pending.sublist(i, end).map((remote) async {
+          try {
+            await _refreshLevelImage(remote);
+          } catch (e, st) {
+            _pendingRefresh[remote.id] = remote;
+            AppLogger.mainPipe.warning(
+              'Refresh image failed, keep old file ${remote.id} (retry next sync)',
+              e,
+              st,
+            );
+          }
+        }),
+      );
+    }
+  }
+
+  /// 原子文件替换：委托共享工具（P0-4），保持单一方实现。
+  Future<void> _swapFileAtomically(String targetPath, String tempPath) =>
+      swapFileAtomically(targetPath, tempPath);
+
   /// 持久化写入本地缓存 JSON (原子安全落盘，显式保存 id 与 hash)
   Future<void> _persistToCache() async {
     try {
@@ -560,6 +682,8 @@ class MainContentPipeline {
               if (l.addedAt != null) 'addedAt': l.addedAt!.toIso8601String(),
               if (l.unlockCoins != null) 'unlockCoins': l.unlockCoins,
               if (l.unlockCode != null) 'unlockCode': l.unlockCode,
+              // 待重试与 ensure 体积筛查依赖（重启后仍有效）
+              if (l.fileSizeBytes != null) 'fileSizeBytes': l.fileSizeBytes,
             },
           )
           .toList();
@@ -568,14 +692,16 @@ class MainContentPipeline {
         'batchIds': _localBatchIds.toList(),
         if (_lastRemoteBatchIds.isNotEmpty)
           'remoteBatchIds': _lastRemoteBatchIds.toList(),
+        if (_pendingRefresh.isNotEmpty)
+          'pendingRefresh': _pendingRefresh.values
+              .map((l) => l.toJson())
+              .toList(),
         'items': items,
       };
       final tmpFile = File('$cacheFilePath.tmp');
       await tmpFile.writeAsString(jsonEncode(payload), flush: true);
-      if (await file.exists()) {
-        await file.delete();
-      }
-      await tmpFile.rename(file.path);
+      // P0-4：带回滚的原子替换（备份旧缓存，失败回滚），避免先删后改名丢派生缓存。
+      await swapFileAtomically(file.path, tmpFile.path);
       AppLogger.mainPipe.fine(
         'Persisted cache version=$_localVersion batches=${_localBatchIds.length} count=${_levelsMap.length}',
       );

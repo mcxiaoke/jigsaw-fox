@@ -21,6 +21,7 @@ class PuzzleEventItem {
     this.totalCount = 0,
     this.fileSizeBytes = 0,
     this.isLocalDownloaded = false,
+    this.isDelisted = false,
     this.updatedAt,
   });
 
@@ -64,6 +65,7 @@ class PuzzleEventItem {
           0,
       fileSizeBytes: (json['fileSizeBytes'] as num?)?.toInt() ?? 0,
       isLocalDownloaded: json['isLocalDownloaded'] as bool? ?? false,
+      isDelisted: json['isDelisted'] as bool? ?? false,
       updatedAt: parseDate(json['updatedAt']) ?? parseDate(json['startTime']),
     );
   }
@@ -124,6 +126,10 @@ class PuzzleEventItem {
 
   /// 本地是否已下载就绪
   final bool isLocalDownloaded;
+
+  /// P0-2：远端下架标记。仅影响列表可见性与下载入口，不删除条目与磁盘数据。
+  /// 重新上架时由 syncWithRemote 自动清除。
+  final bool isDelisted;
 
   bool get isActive => status == 'active';
   bool get isDisabled => status == 'disabled';
@@ -194,6 +200,7 @@ class PuzzleEventItem {
     int? totalCount,
     int? fileSizeBytes,
     bool? isLocalDownloaded,
+    bool? isDelisted,
   }) {
     return PuzzleEventItem(
       id: id ?? this.id,
@@ -215,6 +222,7 @@ class PuzzleEventItem {
       totalCount: totalCount ?? this.totalCount,
       fileSizeBytes: fileSizeBytes ?? this.fileSizeBytes,
       isLocalDownloaded: isLocalDownloaded ?? this.isLocalDownloaded,
+      isDelisted: isDelisted ?? this.isDelisted,
     );
   }
 
@@ -239,6 +247,7 @@ class PuzzleEventItem {
       'totalCount': totalCount,
       'fileSizeBytes': fileSizeBytes,
       'isLocalDownloaded': isLocalDownloaded,
+      'isDelisted': isDelisted,
     };
   }
 

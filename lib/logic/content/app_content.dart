@@ -130,10 +130,39 @@ class AppContent {
 
     // 纯本地：offlineOnly=true 时 manifest 磁盘未命中不请求网络
     await _manager!.initialize(offlineOnly: true);
+    // P0-3 补充：外层单向监听内层各管线通知，统一聚合为 contentUpdateNotifier。
+    // 方向“外层监听内层”无依赖环，且覆盖直连 pipeline 的下载入口
+    // （代理层自增会漏掉 collections_tab/home_tab 的直连调用）。
+    _attachPipelineForwarding();
     AppLogger.content.info(
       'AppContent disk init done ${sw.elapsedMilliseconds}ms supportDir=${supportDir.path}',
     );
     _isInitialized = true;
+  }
+
+  /// P0-3：将各管线自身的更新通知聚合为全局 [contentUpdateNotifier]。
+  /// 仅在初始化时挂载一次；管线只管自身状态，外层负责转发，不反向依赖。
+  ///
+  /// 转发必须经 microtask 延迟合并：管线通知可能在首帧构建期内同步到达
+  /// （如索引构建触发 `loadAllPacks`），直接同步 bump 会导致监听页在
+  /// build 期间 setState 而崩溃；microtask 将其推迟到当前同步段之后。
+  bool _forwardPending = false;
+
+  void _attachPipelineForwarding() {
+    final m = _manager;
+    if (m == null) return;
+    m.eventsPipeline.updateNotifier.addListener(_bumpContentUpdate);
+    m.collectionsPipeline.updateNotifier.addListener(_bumpContentUpdate);
+    m.packPipeline.packsNotifier.addListener(_bumpContentUpdate);
+  }
+
+  void _bumpContentUpdate() {
+    if (_forwardPending) return;
+    _forwardPending = true;
+    scheduleMicrotask(() {
+      _forwardPending = false;
+      contentUpdateNotifier.value++;
+    });
   }
 
   /// 兼容入口：本地初始化 + 单次后台增量（后台 sync 不在此自动派发，见类注释；

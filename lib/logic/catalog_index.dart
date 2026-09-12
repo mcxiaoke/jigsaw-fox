@@ -53,6 +53,14 @@ class UnifiedCatalogIndex {
   static UnifiedCatalogIndex? _cached;
   static bool _dirty = true;
 
+  // P2-10：构建中的 Future 单飞复用。build() 内部含 await，多页面并发调用
+  // current() 时复用同一 Future，避免多次全量重建与后完成者覆盖。
+  static Future<UnifiedCatalogIndex>? _inFlight;
+
+  // v8 修 c：失效代次。invalidate() 自增，current() 构建前后比对，
+  // 用于检出“构建进行中发生失效”的竞态（见 current() 注释）。
+  static int _invalidations = 0;
+
   static bool _localeListenerRegistered = false;
 
   static void _ensureLocaleListener() {
@@ -65,6 +73,9 @@ class UnifiedCatalogIndex {
   /// 标记目录脏状态（在自制拼图变动或包/活动内容更新时调用）
   static void invalidate() {
     _dirty = true;
+    // v8 修 c：代次计数——用于识别“构建进行中发生失效”的竞态，
+    // 避免 build 结束时把 _dirty 清成 false 而吞掉这次失效。
+    _invalidations++;
   }
 
   /// 获取当前统一目录索引（优先读取内存缓存，避免重复全量扫描）
@@ -73,9 +84,28 @@ class UnifiedCatalogIndex {
     if (_cached != null && !_dirty) {
       return _cached!;
     }
-    _cached = await build();
-    _dirty = false;
-    return _cached!;
+    final inFlight = _inFlight;
+    if (inFlight != null) return inFlight;
+    final genAtStart = _invalidations;
+    final future = build();
+    _inFlight = future;
+    try {
+      _cached = await future;
+      // v8 修 c：构建期间若又发生过 invalidate（例如本次构建的
+      // `loadAllPacks` 触发了内容更新），保持 dirty，让下一次调用重建，
+      // 而不是用“构建前的快照”覆盖新状态。
+      if (_invalidations == genAtStart) {
+        _dirty = false;
+      } else {
+        AppLogger.content.fine(
+          'UnifiedCatalogIndex kept dirty: invalidated during build '
+          '($genAtStart -> $_invalidations)',
+        );
+      }
+      return _cached!;
+    } finally {
+      if (identical(_inFlight, future)) _inFlight = null;
+    }
   }
 
   /// 扫描五大模块并一次性构建只读索引 Map（6000条关卡构建耗时 ~5ms）
@@ -225,9 +255,15 @@ class UnifiedCatalogIndex {
     }
 
     // 5. 活动关卡 (event:eventId:file)
+    // P0-2：数据源为「可见 ∪ 本地已下载」（含已下架/已禁用但本地仍有数据者），
+    // 否则已下载关卡的进度卡会被误判为孤儿卡。
     try {
       if (AppContent.instance.isInitialized) {
-        final events = AppContent.instance.manager.eventsPipeline.visibleEvents;
+        final pipeline = AppContent.instance.manager.eventsPipeline;
+        final events = pipeline.allEvents.where(
+          (e) =>
+              (!e.isDisabled && !e.isDelisted) || pipeline.isEventDownloaded(e),
+        );
         for (final event in events) {
           final levels = AppContent.instance.manager.getEventLevels(event);
           for (final lvl in levels) {
@@ -254,10 +290,15 @@ class UnifiedCatalogIndex {
     }
 
     // 6. 图集关卡 (collection:collectionId:file)
+    // P0-2：数据源为「可见 ∪ 本地已下载」（含已下架/已禁用但本地仍有数据者）。
     try {
       if (AppContent.instance.isInitialized) {
-        final collections =
-            AppContent.instance.manager.collectionsPipeline.visibleCollections;
+        final pipeline = AppContent.instance.manager.collectionsPipeline;
+        final collections = pipeline.allCollections.where(
+          (c) =>
+              (!c.isDisabled && !c.isDelisted) ||
+              pipeline.isCollectionDownloaded(c),
+        );
         for (final col in collections) {
           final levels = AppContent.instance.manager.getCollectionLevels(col);
           for (final lvl in levels) {

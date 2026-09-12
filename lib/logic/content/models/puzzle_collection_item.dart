@@ -28,6 +28,7 @@ class PuzzleCollectionItem {
     this.displayOrder = 0,
     this.status = 'active',
     this.isLocalDownloaded = false,
+    this.isDelisted = false,
     this.downloadProgress = 0.0,
     this.downloadStatus = CollectionDownloadStatus.notDownloaded,
     this.startTime,
@@ -79,6 +80,7 @@ class PuzzleCollectionItem {
       displayOrder: (json['displayOrder'] as num?)?.toInt() ?? 0,
       status: json['status']?.toString().toLowerCase() ?? 'active',
       isLocalDownloaded: isDownloaded,
+      isDelisted: json['isDelisted'] as bool? ?? false,
       downloadStatus: isDownloaded
           ? CollectionDownloadStatus.downloaded
           : CollectionDownloadStatus.notDownloaded,
@@ -141,6 +143,10 @@ class PuzzleCollectionItem {
 
   /// 本地是否已下载并解压就绪
   final bool isLocalDownloaded;
+
+  /// P0-2：远端下架标记。仅影响列表可见性与下载入口，不删除条目与磁盘数据。
+  /// 重新上架时由 syncWithRemote 自动清除。
+  final bool isDelisted;
 
   /// 下载进度 (0.0 ~ 1.0)
   final double downloadProgress;
@@ -238,6 +244,7 @@ class PuzzleCollectionItem {
     int? displayOrder,
     String? status,
     bool? isLocalDownloaded,
+    bool? isDelisted,
     double? downloadProgress,
     CollectionDownloadStatus? downloadStatus,
     DateTime? startTime,
@@ -263,6 +270,7 @@ class PuzzleCollectionItem {
       displayOrder: displayOrder ?? this.displayOrder,
       status: status ?? this.status,
       isLocalDownloaded: isLocalDownloaded ?? this.isLocalDownloaded,
+      isDelisted: isDelisted ?? this.isDelisted,
       downloadProgress: downloadProgress ?? this.downloadProgress,
       downloadStatus: downloadStatus ?? this.downloadStatus,
       startTime: startTime ?? this.startTime,
@@ -291,6 +299,7 @@ class PuzzleCollectionItem {
       'displayOrder': displayOrder,
       'status': status,
       'isLocalDownloaded': isLocalDownloaded,
+      'isDelisted': isDelisted,
       'startTime': startTime?.toIso8601String(),
       'endTime': endTime?.toIso8601String(),
       if (updatedAt != null) 'updatedAt': updatedAt?.toIso8601String(),

@@ -3,8 +3,10 @@ import 'dart:io';
 import 'package:archive/archive.dart';
 import 'package:flutter/foundation.dart';
 import 'package:jigsawpuzzle/logic/content/models/canonical_id.dart';
+import 'package:jigsawpuzzle/logic/content/models/image_formats.dart';
 import 'package:jigsawpuzzle/logic/content/models/puzzle_level_item.dart';
 import 'package:jigsawpuzzle/logic/content/network/content_http_client.dart';
+import 'package:jigsawpuzzle/logic/content/pipelines/atomic_replace.dart';
 import 'package:jigsawpuzzle/logic/single_flight.dart';
 import 'package:jigsawpuzzle/services/app_logger.dart';
 import 'package:path/path.dart' as p;
@@ -22,10 +24,8 @@ class DailyContentPipeline {
   /// 进行中的下载单飞表 (同月并发 ensure 复用同一 Future，防互删临时目录)
   final Map<String, Future<bool>> _inFlightDownloads = {};
 
-  static final RegExp _dailyFileRegex = RegExp(
-    r'^(\d{4})(\d{2})(\d{2})\.(webp|jpg|jpeg|png)$',
-    caseSensitive: false,
-  );
+  // P1-5：图片白名单收敛为共享常量（大小写不敏感已是现状，勿重复改）。
+  static final RegExp _dailyFileRegex = kDailyFileRegex;
 
   /// 确保某月份的每日关卡已就绪 (若本地不存在则尝试从远端 Zip 下载解压)。
   ///
@@ -128,11 +128,8 @@ class DailyContentPipeline {
         'Extracted $extracted files for $yyyyMm to ${AppLogger.sanitizePath(tempExtractDir.path)}',
       );
 
-      // 3. 移动/重命名到正式目录
-      if (monthDir.existsSync()) {
-        monthDir.deleteSync(recursive: true);
-      }
-      await tempExtractDir.rename(monthDir.path);
+      // 3. 原子落位到正式目录（P0-4：备份旧目录，失败回滚）
+      await swapDirectoryAtomically(monthDir, tempExtractDir, logTag: yyyyMm);
 
       // 4. 清理临时 Zip
       if (zipFile.existsSync()) {

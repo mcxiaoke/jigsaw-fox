@@ -6,6 +6,7 @@ import 'package:archive/archive.dart';
 import 'package:flutter/foundation.dart';
 import 'package:jigsawpuzzle/logic/cache/thumbnail_generator.dart';
 import 'package:jigsawpuzzle/logic/content/models/canonical_id.dart';
+import 'package:jigsawpuzzle/logic/content/models/image_formats.dart';
 import 'package:jigsawpuzzle/logic/content/models/puzzle_level_item.dart';
 import 'package:jigsawpuzzle/logic/content/models/puzzle_pack_item.dart';
 import 'package:jigsawpuzzle/logic/content/network/content_http_client.dart';
@@ -25,10 +26,9 @@ class PackContentPipeline {
   final ValueNotifier<List<PuzzlePackItem>> packsNotifier =
       ValueNotifier<List<PuzzlePackItem>>([]);
 
-  static final RegExp _imageRegex = RegExp(
-    r'\.(webp|jpg|jpeg|png)$',
-    caseSensitive: false,
-  );
+  // P1-5：图片白名单收敛为共享常量（大小写不敏感已是现状，勿重复改）。
+  // 该正则兼作用户导入图包的格式校验依据，报错文案同步见下。
+  static final RegExp _imageRegex = kImageFileRegex;
 
   /// 初始化并加载本地所有已导入的图包
   Future<List<PuzzlePackItem>> loadAllPacks() async {
@@ -288,7 +288,7 @@ class PackContentPipeline {
       AppLogger.pack.warning(
         '_processZipBytes no valid images title=$defaultTitle totalFiles=${archive.length}',
       );
-      throw Exception('压缩包内未找到支持的图片文件 (支持 jpg, png, webp)');
+      throw Exception('压缩包内未找到支持的图片文件 (支持 $kImageFormatsLabel)');
     }
     AppLogger.pack.info(
       '_processZipBytes extracted ${validImageFiles.length} images bytes=$totalBytes packId=$packId',
