@@ -9,6 +9,7 @@ import 'package:jigsawpuzzle/logic/content/models/image_formats.dart';
 import 'package:jigsawpuzzle/logic/content/models/puzzle_level_item.dart';
 import 'package:jigsawpuzzle/logic/content/network/content_http_client.dart';
 import 'package:jigsawpuzzle/logic/content/pipelines/atomic_replace.dart';
+import 'package:jigsawpuzzle/logic/content/staging/temp_storage_manager.dart';
 import 'package:jigsawpuzzle/logic/single_flight.dart';
 import 'package:jigsawpuzzle/services/app_logger.dart';
 import 'package:path/path.dart' as p;
@@ -17,10 +18,13 @@ import 'package:path/path.dart' as p;
 class DailyContentPipeline {
   DailyContentPipeline({
     required this.dailyStorageBaseDir,
+    TempStorageManager? tempStorageManager,
     ContentHttpClient? httpClient,
-  }) : _httpClient = httpClient ?? ContentHttpClient();
+  }) : _tempStorage = tempStorageManager,
+       _httpClient = httpClient ?? ContentHttpClient();
 
   final String dailyStorageBaseDir;
+  final TempStorageManager? _tempStorage;
   final ContentHttpClient _httpClient;
 
   /// 进行中的下载单飞表 (同月并发 ensure 复用同一 Future，防互删临时目录)
@@ -83,13 +87,17 @@ class DailyContentPipeline {
       'ensureMonthReady $yyyyMm url=${AppLogger.sanitizeUrl(zipUrl)}',
     );
 
-    final tempZipPath = p.join(
-      dailyStorageBaseDir,
-      'temp_${yyyyMm}_${DateTime.now().millisecondsSinceEpoch}.zip',
-    );
-    final tempExtractDir = Directory(
-      p.join(dailyStorageBaseDir, 'temp_extract_$yyyyMm'),
-    );
+    final tempZipPath = _tempStorage != null
+        ? _tempStorage.createTempDownloadPath('daily', yyyyMm)
+        : p.join(
+            dailyStorageBaseDir,
+            'temp_${yyyyMm}_${DateTime.now().millisecondsSinceEpoch}.zip',
+          );
+    final tempExtractDir = _tempStorage != null
+        ? _tempStorage.createTempExtractDir('daily', yyyyMm)
+        : Directory(
+            p.join(dailyStorageBaseDir, 'temp_extract_$yyyyMm'),
+          );
 
     try {
       // 1. 下载月度 Zip (D10：explicit zip + mirrorUrls 备用镜像按序轮询)
@@ -130,8 +138,12 @@ class DailyContentPipeline {
         'Extracted $extracted files for $yyyyMm to ${AppLogger.sanitizePath(tempExtractDir.path)}',
       );
 
-      // 3. 原子落位到正式目录（P0-4：备份旧目录，失败回滚）
-      await swapDirectoryAtomically(monthDir, tempExtractDir, logTag: yyyyMm);
+      // 3. 原子落位到正式目录（若配置了 TempStorage 则经由原子提升，否则采用本地双向交换）
+      if (_tempStorage != null) {
+        await _tempStorage.promoteExtractDir(tempExtractDir, monthDir);
+      } else {
+        await swapDirectoryAtomically(monthDir, tempExtractDir, logTag: yyyyMm);
+      }
 
       // 4. 清理临时 Zip
       if (zipFile.existsSync()) {

@@ -12,6 +12,7 @@ import 'package:jigsawpuzzle/logic/content/models/puzzle_event_item.dart';
 import 'package:jigsawpuzzle/logic/content/models/puzzle_level_item.dart';
 import 'package:jigsawpuzzle/logic/content/network/content_http_client.dart';
 import 'package:jigsawpuzzle/logic/content/pipelines/atomic_replace.dart';
+import 'package:jigsawpuzzle/logic/content/staging/temp_storage_manager.dart';
 import 'package:jigsawpuzzle/logic/single_flight.dart';
 import 'package:jigsawpuzzle/services/app_logger.dart';
 import 'package:path/path.dart' as p;
@@ -21,11 +22,14 @@ class EventsContentPipeline {
   EventsContentPipeline({
     required this.cacheFilePath,
     required this.eventsStorageBaseDir,
+    TempStorageManager? tempStorageManager,
     ContentHttpClient? httpClient,
-  }) : _httpClient = httpClient ?? ContentHttpClient();
+  }) : _tempStorage = tempStorageManager,
+       _httpClient = httpClient ?? ContentHttpClient();
 
   final String cacheFilePath;
   final String eventsStorageBaseDir;
+  final TempStorageManager? _tempStorage;
   final ContentHttpClient _httpClient;
 
   final Map<String, PuzzleEventItem> _eventsMap = {};
@@ -233,8 +237,13 @@ class EventsContentPipeline {
   /// P0-2（红线 R1）：Auto-GC 只清理**本次运行产物残留**，不删除任何正式数据。
   /// v8 修 a：统一改用 [cleanupStaleAtomicArtifacts]，在原有 `temp_*` 之外
   /// 一并回收原子替换崩溃残留的 `*.bak_<ts>`。
-  Future<int> performAutoGc() =>
-      cleanupStaleAtomicArtifacts(eventsStorageBaseDir, logTag: 'events');
+  Future<int> performAutoGc() {
+    if (_tempStorage != null) {
+      // 启用 TempStorageManager 时，临时文件全部分流至 temp/，业务目录不再产生垃圾
+      return Future.value(0);
+    }
+    return cleanupStaleAtomicArtifacts(eventsStorageBaseDir, logTag: 'events');
+  }
 
   /// 确保活动的关卡资源已就绪 (若为 Zip 模式则自动下载并解压)。
   ///
@@ -277,14 +286,18 @@ class EventsContentPipeline {
       AppLogger.events.info(
         'ensureEventDownloaded zip ${event.id} url=${AppLogger.sanitizeUrl(event.zipUrl!)}',
       );
-      final tempZipPath = p.join(
-        eventsStorageBaseDir,
-        'temp_${event.id}_${DateTime.now().millisecondsSinceEpoch}.zip',
-      );
+      final tempZipPath = _tempStorage != null
+          ? _tempStorage.createTempDownloadPath('ev', event.id)
+          : p.join(
+              eventsStorageBaseDir,
+              'temp_${event.id}_${DateTime.now().millisecondsSinceEpoch}.zip',
+            );
       final targetDir = Directory(p.join(eventsStorageBaseDir, event.id));
-      final tempExtractDir = Directory(
-        p.join(eventsStorageBaseDir, 'temp_extract_${event.id}'),
-      );
+      final tempExtractDir = _tempStorage != null
+          ? _tempStorage.createTempExtractDir('ev', event.id)
+          : Directory(
+              p.join(eventsStorageBaseDir, 'temp_extract_${event.id}'),
+            );
 
       _updateDownloadProgress(event.id, 0.0);
 
@@ -353,12 +366,16 @@ class EventsContentPipeline {
           return false;
         }
 
-        // 3. 原子落位到最终活动目录（P0-4：备份旧目录，失败回滚）
-        await swapDirectoryAtomically(
-          targetDir,
-          tempExtractDir,
-          logTag: event.id,
-        );
+        // 3. 原子落位到最终活动目录
+        if (_tempStorage != null) {
+          await _tempStorage.promoteExtractDir(tempExtractDir, targetDir);
+        } else {
+          await swapDirectoryAtomically(
+            targetDir,
+            tempExtractDir,
+            logTag: event.id,
+          );
+        }
 
         // 4. 清理临时 Zip
         if (zipFile.existsSync()) {

@@ -17,14 +17,32 @@ import 'package:jigsawpuzzle/logic/content/pipelines/events_content_pipeline.dar
 import 'package:jigsawpuzzle/logic/content/pipelines/main_content_pipeline.dart';
 import 'package:jigsawpuzzle/logic/content/pipelines/manifest_router.dart';
 import 'package:jigsawpuzzle/logic/content/pipelines/pack_content_pipeline.dart';
+import 'package:jigsawpuzzle/logic/content/staging/temp_storage_manager.dart';
 import 'package:jigsawpuzzle/services/app_logger.dart';
 import 'package:path/path.dart' as p;
 
 /// 内容与扩展系统统一门面管理器 (Facade)
 class ContentManager {
-  ContentManager({
+  factory ContentManager({
     required List<String> bootstrapUrls,
     required String appSupportDir,
+    TempStorageManager? tempStorageManager,
+    ContentHttpClient? httpClient,
+  }) {
+    final storage =
+        tempStorageManager ?? TempStorageManager(appSupportDir: appSupportDir);
+    return ContentManager._(
+      bootstrapUrls: bootstrapUrls,
+      appSupportDir: appSupportDir,
+      tempStorageManager: storage,
+      httpClient: httpClient,
+    );
+  }
+
+  ContentManager._({
+    required List<String> bootstrapUrls,
+    required String appSupportDir,
+    required this.tempStorageManager,
     ContentHttpClient? httpClient,
   }) : manifestRouter = ManifestRouter(
          bootstrapUrls: bootstrapUrls,
@@ -38,11 +56,13 @@ class ContentManager {
        ),
        dailyPipeline = DailyContentPipeline(
          dailyStorageBaseDir: p.join(appSupportDir, 'levels', 'daily'),
+         tempStorageManager: tempStorageManager,
          httpClient: httpClient,
        ),
        eventsPipeline = EventsContentPipeline(
          cacheFilePath: p.join(appSupportDir, 'events_cache.json'),
          eventsStorageBaseDir: p.join(appSupportDir, 'levels', 'events'),
+         tempStorageManager: tempStorageManager,
          httpClient: httpClient,
        ),
        collectionsPipeline = CollectionsContentPipeline(
@@ -52,10 +72,12 @@ class ContentManager {
            'levels',
            'collections',
          ),
+         tempStorageManager: tempStorageManager,
          httpClient: httpClient,
        ),
        packPipeline = PackContentPipeline(
          packsBaseDir: p.join(appSupportDir, 'levels', 'packs'),
+         tempStorageManager: tempStorageManager,
          httpClient: httpClient,
        ),
        _httpClient = httpClient ?? ContentHttpClient(),
@@ -64,6 +86,7 @@ class ContentManager {
          'daily_index_cache.json',
        );
 
+  final TempStorageManager tempStorageManager;
   final ContentHttpClient _httpClient;
   final ManifestRouter manifestRouter;
   final MainContentPipeline mainPipeline;
@@ -240,6 +263,9 @@ class ContentManager {
     );
     final sw = Stopwatch()..start();
     try {
+      // 0. 冷启动暂存区清扫（在途活跃下载数为 0，零并发网络竞态）
+      await tempStorageManager.cleanStaleTempDirectory();
+
       // manifest 先尝试磁盘缓存，网络留后台 syncAll
       final manifestFuture = manifestRouter.resolveManifestCacheFirst(
         offlineOnly: offlineOnly,

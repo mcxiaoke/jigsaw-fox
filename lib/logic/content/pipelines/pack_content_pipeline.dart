@@ -12,6 +12,7 @@ import 'package:jigsawpuzzle/logic/content/models/image_formats.dart';
 import 'package:jigsawpuzzle/logic/content/models/puzzle_level_item.dart';
 import 'package:jigsawpuzzle/logic/content/models/puzzle_pack_item.dart';
 import 'package:jigsawpuzzle/logic/content/network/content_http_client.dart';
+import 'package:jigsawpuzzle/logic/content/staging/temp_storage_manager.dart';
 import 'package:jigsawpuzzle/services/app_logger.dart';
 import 'package:path/path.dart' as p;
 
@@ -19,10 +20,13 @@ import 'package:path/path.dart' as p;
 class PackContentPipeline {
   PackContentPipeline({
     required this.packsBaseDir,
+    TempStorageManager? tempStorageManager,
     ContentHttpClient? httpClient,
-  }) : _httpClient = httpClient ?? ContentHttpClient();
+  }) : _tempStorage = tempStorageManager,
+       _httpClient = httpClient ?? ContentHttpClient();
 
   final String packsBaseDir;
+  final TempStorageManager? _tempStorage;
   final ContentHttpClient _httpClient;
 
   final ValueNotifier<List<PuzzlePackItem>> packsNotifier =
@@ -114,10 +118,12 @@ class PackContentPipeline {
       throw Exception('无效的网络下载 URL: $zipUrl');
     }
 
-    final tempZipPath = p.join(
-      packsBaseDir,
-      'temp_download_${DateTime.now().millisecondsSinceEpoch}.zip',
-    );
+    final tempZipPath = _tempStorage != null
+        ? _tempStorage.createTempDownloadPath('pack', 'download')
+        : p.join(
+            packsBaseDir,
+            'temp_download_${DateTime.now().millisecondsSinceEpoch}.zip',
+          );
     try {
       final downloadedZip = await _httpClient.downloadFile(zipUrl, tempZipPath);
       final uriName = p.basenameWithoutExtension(Uri.parse(zipUrl).path);

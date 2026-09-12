@@ -12,6 +12,7 @@ import 'package:jigsawpuzzle/logic/content/models/puzzle_collection_item.dart';
 import 'package:jigsawpuzzle/logic/content/models/puzzle_level_item.dart';
 import 'package:jigsawpuzzle/logic/content/network/content_http_client.dart';
 import 'package:jigsawpuzzle/logic/content/pipelines/atomic_replace.dart';
+import 'package:jigsawpuzzle/logic/content/staging/temp_storage_manager.dart';
 import 'package:jigsawpuzzle/logic/single_flight.dart';
 import 'package:jigsawpuzzle/services/app_logger.dart';
 import 'package:path/path.dart' as p;
@@ -26,11 +27,14 @@ class CollectionsContentPipeline {
   CollectionsContentPipeline({
     required this.cacheFilePath,
     required this.collectionsStorageBaseDir,
+    TempStorageManager? tempStorageManager,
     ContentHttpClient? httpClient,
-  }) : _httpClient = httpClient ?? ContentHttpClient();
+  }) : _tempStorage = tempStorageManager,
+       _httpClient = httpClient ?? ContentHttpClient();
 
   final String cacheFilePath;
   final String collectionsStorageBaseDir;
+  final TempStorageManager? _tempStorage;
   final ContentHttpClient _httpClient;
 
   final Map<String, PuzzleCollectionItem> _collectionsMap = {};
@@ -295,16 +299,23 @@ class CollectionsContentPipeline {
         CollectionDownloadStatus.downloading,
       );
 
-      final tempZipPath = p.join(
-        collectionsStorageBaseDir,
-        'temp_${collection.id}_${DateTime.now().millisecondsSinceEpoch}.zip',
-      );
+      final tempZipPath = _tempStorage != null
+          ? _tempStorage.createTempDownloadPath('col', collection.id)
+          : p.join(
+              collectionsStorageBaseDir,
+              'temp_${collection.id}_${DateTime.now().millisecondsSinceEpoch}.zip',
+            );
       final targetDir = Directory(
         p.join(collectionsStorageBaseDir, collection.id),
       );
-      final tempExtractDir = Directory(
-        p.join(collectionsStorageBaseDir, 'temp_extract_${collection.id}'),
-      );
+      final tempExtractDir = _tempStorage != null
+          ? _tempStorage.createTempExtractDir('col', collection.id)
+          : Directory(
+              p.join(
+                collectionsStorageBaseDir,
+                'temp_extract_${collection.id}',
+              ),
+            );
 
       try {
         // 1. 下载 Zip 包 (D10：zipUrl 主地址 + zipUrls 备用镜像按序轮询，带进度反馈)
@@ -385,12 +396,16 @@ class CollectionsContentPipeline {
           return false;
         }
 
-        // 3. 原子落位到最终目录（P0-4：备份旧目录，失败回滚）
-        await swapDirectoryAtomically(
-          targetDir,
-          tempExtractDir,
-          logTag: collection.id,
-        );
+        // 3. 原子落位到最终目录
+        if (_tempStorage != null) {
+          await _tempStorage.promoteExtractDir(tempExtractDir, targetDir);
+        } else {
+          await swapDirectoryAtomically(
+            targetDir,
+            tempExtractDir,
+            logTag: collection.id,
+          );
+        }
 
         // 4. 清理临时 Zip
         if (zipFile.existsSync()) {
