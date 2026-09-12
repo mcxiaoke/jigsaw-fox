@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import 'package:jigsawpuzzle/l10n/gen/strings.g.dart';
@@ -61,11 +63,14 @@ class _BootGatePageState extends State<BootGatePage> {
   void _enterMain() {
     // 成功后后台增量同步（daily/events/collections/当月 zip）
     AppContent.instance.backgroundSyncOnce();
-    Navigator.of(context).pushReplacement(
-      PageRouteBuilder<void>(
-        pageBuilder: (_, __, ___) => const MainScreen(),
-        transitionDuration: Duration.zero,
-        reverseTransitionDuration: Duration.zero,
+    // 页面即将销毁，跳转 Future 无需等待
+    unawaited(
+      Navigator.of(context).pushReplacement(
+        PageRouteBuilder<void>(
+          pageBuilder: (_, _, _) => const MainScreen(),
+          transitionDuration: Duration.zero,
+          reverseTransitionDuration: Duration.zero,
+        ),
       ),
     );
   }

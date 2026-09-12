@@ -379,7 +379,8 @@ class SoundService {
       }
     });
 
-    slot.completeSub?.cancel();
+    // 释放旧订阅返回的 Future 无需等待
+    unawaited(slot.completeSub?.cancel());
     slot.completeSub = slot.player.onPlayerComplete.listen(
       (_) {
         if (_generation == requestGen && slot.playToken == token) {
@@ -600,7 +601,7 @@ class SoundSlot {
   void resetSync() {
     releaseTimer?.cancel();
     releaseTimer = null;
-    completeSub?.cancel();
+    unawaited(completeSub?.cancel());
     completeSub = null;
     isBusy = false;
     currentFile = null;

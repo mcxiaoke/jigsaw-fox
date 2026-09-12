@@ -117,10 +117,7 @@ class AppContent {
   Future<void> initFromDiskCache({List<String>? bootstrapUrls}) {
     final existing = _initFuture;
     if (existing != null) return existing;
-    final future = _initFromDiskCache(bootstrapUrls).onError((
-      Object e,
-      StackTrace st,
-    ) {
+    final future = _initFromDiskCache(bootstrapUrls).onError((e, st) {
       // 失败清除缓存：允许上层修复后重试（重试入口可再次调用本方法）
       _initFuture = null;
       AppLogger.content.warning(
@@ -128,7 +125,8 @@ class AppContent {
         e,
         st,
       );
-      return Future<void>.error(e, st);
+      // onError 回调推断的 e 为 Object?，此处非空（onError 不会传 null）
+      return Future<void>.error(e!, st);
     });
     _initFuture = future;
     return future;
@@ -242,9 +240,12 @@ class AppContent {
       onTimeout: () => throw TimeoutException('first boot init timed out'),
     );
     _bootInitFuture = future;
-    future.whenComplete(() {
-      if (identical(_bootInitFuture, future)) _bootInitFuture = null;
-    });
+    // 清理回调无需等待，失败已在 init 主流程中处理
+    unawaited(
+      future.whenComplete(() {
+        if (identical(_bootInitFuture, future)) _bootInitFuture = null;
+      }),
+    );
     return future;
   }
 
@@ -313,18 +314,21 @@ class AppContent {
     if (!_isInitialized || _bgSyncStarted) return;
     _bgSyncStarted = true;
     AppLogger.content.info('backgroundSyncOnce scheduled');
-    Future.microtask(() async {
-      final sw = Stopwatch()..start();
-      try {
-        await _manager?.syncAll();
-        contentUpdateNotifier.value++;
-        AppLogger.content.info(
-          'Background sync success ${sw.elapsedMilliseconds}ms',
-        );
-      } catch (e, st) {
-        AppLogger.content.severe('Background sync failed', e, st);
-      }
-    });
+    // 后台同步失败已在内部捕获处理，无需等待
+    unawaited(
+      Future.microtask(() async {
+        final sw = Stopwatch()..start();
+        try {
+          await _manager?.syncAll();
+          contentUpdateNotifier.value++;
+          AppLogger.content.info(
+            'Background sync success ${sw.elapsedMilliseconds}ms',
+          );
+        } catch (e, st) {
+          AppLogger.content.severe('Background sync failed', e, st);
+        }
+      }),
+    );
   }
 
   /// 前台全量/轻量同步（下拉刷新等）。[includeDailyZip]=false 时跳过 daily 月度 zip。

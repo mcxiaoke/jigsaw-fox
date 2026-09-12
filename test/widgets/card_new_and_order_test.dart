@@ -91,7 +91,7 @@ void main() {
         title: 'Test Col',
         type: 'array',
         updatedAt: recentDate,
-        levels: [
+        levels: const [
           'https://example.com/img1.webp',
           'https://example.com/img2.webp',
         ],
@@ -136,7 +136,7 @@ void main() {
           title: 'Art Gallery',
           type: 'array',
           updatedAt: recentDate,
-          levels: ['assets/images/sample1.webp'],
+          levels: const ['assets/images/sample1.webp'],
         );
 
         await tester.pumpWidget(

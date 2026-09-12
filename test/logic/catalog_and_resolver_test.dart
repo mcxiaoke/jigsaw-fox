@@ -12,7 +12,7 @@ import '../test_helper.dart';
 
 /// 网络主线关卡测试桩（catalog_index 已切网络 main 源，AppContent 单测环境不初始化，
 /// 通过 build(mainLevels:) 注入）
-final List<PuzzleLevelItem> _fakeMainLevels = const [
+const List<PuzzleLevelItem> _fakeMainLevels = [
   PuzzleLevelItem(
     id: 'main:001',
     order: 1,
@@ -84,14 +84,14 @@ void main() {
 
         // 2. 模拟通关并收藏
         await FavoriteStore.instance.toggleFavorite(cid);
-        final progress = LevelProgress(
+        const progress = LevelProgress(
           canonicalId: cid,
           isCompleted: true,
           progressPercent: 100,
           stars: 3,
           bestTimeSeconds: 45,
           records: {
-            '5x5': const DifficultyRecord(
+            '5x5': DifficultyRecord(
               bestStars: 3,
               bestTimeSeconds: 45,
               isCompleted: true,

@@ -45,7 +45,6 @@ void main() {
           status: 'active',
           type: 'zip',
           zipUrl: 'https://example.com/cyberpunk.zip',
-          isLocalDownloaded: false,
         );
 
         // 1. 目录不存在 -> 未下载
@@ -87,7 +86,6 @@ void main() {
           status: 'active',
           type: 'zip',
           zipUrl: 'https://example.com/summer.zip',
-          isLocalDownloaded: false,
         );
 
         // 模拟磁盘上已存在解压后的关卡图片
@@ -111,8 +109,8 @@ void main() {
   });
 
   group('DownloadBadge Widget Tests', () {
-    setUpAll(() {
-      LocaleSettings.setLocale(AppLocale.zh);
+    setUpAll(() async {
+      await LocaleSettings.setLocale(AppLocale.zh);
     });
 
     testWidgets('Renders download button when Zip not downloaded', (
@@ -156,7 +154,7 @@ void main() {
 
     testWidgets('Renders downloaded badge when ready', (tester) async {
       await tester.pumpWidget(
-        MaterialApp(
+        const MaterialApp(
           home: Scaffold(
             body: DownloadBadge(
               isDownloaded: true,

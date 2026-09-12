@@ -24,8 +24,10 @@ void main() {
     await tearDownTestStorage(sm);
   });
 
-  testWidgets('SettingsPage renders compactly in English without overflow', (tester) async {
-    LocaleSettings.setLocale(AppLocale.en);
+  testWidgets('SettingsPage renders compactly in English without overflow', (
+    tester,
+  ) async {
+    await LocaleSettings.setLocale(AppLocale.en);
     await LocaleService.instance.setLanguage(AppLanguage.en);
 
     await tester.pumpWidget(
@@ -69,8 +71,10 @@ void main() {
     expect(find.byType(BottomSheet), findsOneWidget);
   });
 
-  testWidgets('SettingsPage renders compactly in Chinese without overflow', (tester) async {
-    LocaleSettings.setLocale(AppLocale.zh);
+  testWidgets('SettingsPage renders compactly in Chinese without overflow', (
+    tester,
+  ) async {
+    await LocaleSettings.setLocale(AppLocale.zh);
     await LocaleService.instance.setLanguage(AppLanguage.zh);
 
     await tester.pumpWidget(

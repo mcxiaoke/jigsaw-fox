@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:io';
 
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
@@ -64,8 +63,8 @@ class _MyCenterTabViewState extends State<MyCenterTabView> {
   @override
   void initState() {
     super.initState();
-    DownloadManager.instance.init();
-    _loadAllData();
+    unawaited(DownloadManager.instance.init());
+    unawaited(_loadAllData());
     ProgressStore.instance.progressNotifier.addListener(_onExternalChanged);
     FavoriteStore.instance.idsNotifier.addListener(_onExternalChanged);
     GameRepository.instance.customPuzzlesNotifier.addListener(
@@ -77,7 +76,7 @@ class _MyCenterTabViewState extends State<MyCenterTabView> {
 
   void _onLocaleChanged() {
     UnifiedCatalogIndex.invalidate();
-    _loadAllData();
+    unawaited(_loadAllData());
     if (mounted) setState(() {});
   }
 
@@ -90,7 +89,7 @@ class _MyCenterTabViewState extends State<MyCenterTabView> {
   void didUpdateWidget(covariant MyCenterTabView oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (widget.isActive && !oldWidget.isActive) {
-      _loadAllData();
+      unawaited(_loadAllData());
     }
   }
 
@@ -111,7 +110,7 @@ class _MyCenterTabViewState extends State<MyCenterTabView> {
     _debounceTimer?.cancel();
     _debounceTimer = Timer(const Duration(milliseconds: 300), () {
       if (mounted) {
-        _loadAllData();
+        unawaited(_loadAllData());
       }
     });
   }
@@ -410,7 +409,7 @@ class _MyCenterTabViewState extends State<MyCenterTabView> {
         onClearRepo: (dkey) async {
           await ProgressStore.instance.clearSnapshot(card.canonicalId, dkey);
           await SnapshotStore.instance.delete(card.canonicalId, dkey);
-          _loadAllData();
+          unawaited(_loadAllData());
         },
         onPushGame: (diff, jsonStr) async {
           if (!mounted) return;
@@ -424,10 +423,10 @@ class _MyCenterTabViewState extends State<MyCenterTabView> {
               ),
             ),
           );
-          _loadAllData();
+          unawaited(_loadAllData());
         },
         onCancelled: () {
-          if (mounted) _loadAllData();
+          if (mounted) unawaited(_loadAllData());
         },
       );
       if (handled) return;
@@ -459,10 +458,10 @@ class _MyCenterTabViewState extends State<MyCenterTabView> {
             ),
           ),
         );
-        _loadAllData();
+        unawaited(_loadAllData());
       },
     );
-    _loadAllData();
+    unawaited(_loadAllData());
   }
 
   /// P0-5（红线 R2）：仅用户长按主动清理单条记录时调用。禁止在任何自动路径
@@ -492,7 +491,7 @@ class _MyCenterTabViewState extends State<MyCenterTabView> {
       await ProgressStore.instance.delete(card.canonicalId);
       await SnapshotStore.instance.deleteAllFor(card.canonicalId);
       await FavoriteStore.instance.remove(card.canonicalId);
-      _loadAllData();
+      unawaited(_loadAllData());
     }
   }
 
@@ -517,7 +516,7 @@ class _MyCenterTabViewState extends State<MyCenterTabView> {
           sourceUrl: item.sourceUrl,
         );
         if (result != null && mounted) {
-          _loadAllData();
+          unawaited(_loadAllData());
         }
       } else {
         if (mounted) {
@@ -527,7 +526,7 @@ class _MyCenterTabViewState extends State<MyCenterTabView> {
             message: t.myCenter.toast.importSuccess(count: imported.length),
             type: GameToastType.success,
           );
-          _loadAllData();
+          unawaited(_loadAllData());
         }
       }
       // best-effort：失败降级，不阻断主流程
@@ -699,7 +698,7 @@ class _MyCenterTabViewState extends State<MyCenterTabView> {
                   return;
                 }
                 await OnlineImagePickerPage.push(context);
-                _loadAllData();
+                unawaited(_loadAllData());
               },
             ),
           ),
@@ -721,7 +720,7 @@ class _MyCenterTabViewState extends State<MyCenterTabView> {
                   styles: styles,
                   onTap: () async {
                     await DownloadedDrawerSheet.show(context);
-                    _loadAllData();
+                    unawaited(_loadAllData());
                   },
                 );
               },
@@ -745,7 +744,7 @@ class _MyCenterTabViewState extends State<MyCenterTabView> {
                     builder: (_) => const ImportPackPage(),
                   ),
                 );
-                _loadAllData();
+                unawaited(_loadAllData());
               },
             ),
           ),
@@ -1198,7 +1197,7 @@ class _MyCenterTabViewState extends State<MyCenterTabView> {
                   ? card.activeDifficultyKey
                   : card.highestDifficultyKey,
             );
-            _loadAllData();
+            unawaited(_loadAllData());
           },
           child: Container(
             padding: const EdgeInsets.all(4),

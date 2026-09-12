@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'dart:math';
 import 'dart:typed_data';
@@ -146,7 +147,7 @@ class _CropPuzzlePageState extends State<CropPuzzlePage> {
     _selectedDifficulty = RecommendService.instance.difficultyForAspect(
       _selectedRatio.aspectRatio,
     );
-    _decodeImage();
+    unawaited(_decodeImage());
   }
 
   Future<void> _decodeImage() async {

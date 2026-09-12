@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:typed_data';
 import 'dart:ui' as ui;
 
@@ -232,7 +233,7 @@ class _ChooseDifficultySheetState extends State<ChooseDifficultySheet> {
           orElse: () => _preferredTier(defaultTiers),
         )
         .difficulty;
-    _decodeImageSize();
+    unawaited(_decodeImageSize());
   }
 
   Future<void> _decodeImageSize() async {
@@ -315,7 +316,7 @@ class _ChooseDifficultySheetState extends State<ChooseDifficultySheet> {
 
     if (ok == true && mounted) {
       Navigator.of(context).pop();
-      widget.onDelete?.call();
+      unawaited(widget.onDelete?.call());
     }
   }
 

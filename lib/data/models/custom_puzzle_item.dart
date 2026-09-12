@@ -5,10 +5,10 @@ import 'package:jigsawpuzzle/logic/puzzle_model.dart';
 class CustomPuzzleItem {
   const CustomPuzzleItem({
     required this.id,
-    this.title = '',
     required this.imagePathOrUrl,
     required this.isLocalFile,
     required this.difficulty,
+    this.title = '',
     this.createdAt,
     this.isCompleted = false,
     this.progressPercent = 0,

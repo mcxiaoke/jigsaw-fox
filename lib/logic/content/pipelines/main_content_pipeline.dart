@@ -578,7 +578,7 @@ class MainContentPipeline {
   ///
   /// 成功时将图片三元组（url/hash/fileSizeBytes）与新本地路径合并写入当前条目
   /// （远端 hash 缺失时显式清空以收敛，避免下次误判为变更而反复下载）；
-  /// 失败时旧条目原样保留并记入 [_pendingRefreshIds] 供下次重试。
+  /// 失败时旧条目原样保留并记入 `_pendingRefreshIds` 供下次重试。
   Future<void> _refreshLevelImage(PuzzleLevelItem remote) async {
     if (remote.url.isEmpty) return;
     final targetPath = _getLocalImagePath(remote.id, remote.url);

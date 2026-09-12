@@ -425,7 +425,8 @@ class StorageManager {
 
   void _trackWrite(Future<void> f) {
     _pendingWrites.add(f);
-    f.whenComplete(() => _pendingWrites.remove(f));
+    // 仅登记挂起写入，完成回调本身无需等待
+    unawaited(f.whenComplete(() => _pendingWrites.remove(f)));
   }
 
   /// 等待所有挂起写入完成（关窗前调用）

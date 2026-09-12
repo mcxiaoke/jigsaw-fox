@@ -106,9 +106,9 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _selectedBackground = _repo.selectedBackground;
-    _loadHeaderColor();
+    unawaited(_loadHeaderColor());
     _startTimer();
-    _loadImage();
+    unawaited(_loadImage());
   }
 
   @override
@@ -351,9 +351,9 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
   void _onPieceSnapped() {
     // snap 音效已前置到 JigsawPuzzleGame 吸附分支开头，避免同步逻辑阻塞导致超时丢音
     if (_repo.hapticEnabled) {
-      HapticFeedback.lightImpact();
+      unawaited(HapticFeedback.lightImpact());
     }
-    _repo.recordSnapStats();
+    unawaited(_repo.recordSnapStats());
   }
 
   /// 将 onProgressChanged / onStateUpdated 的 UI 刷新合并为一次 postFrameCallback，
@@ -373,7 +373,7 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
     if (_game == null || _isSolved) return;
     if (immediate) {
       _saveDebounce?.cancel();
-      _doSave();
+      unawaited(_doSave());
       return;
     }
     _saveDebounce?.cancel();
@@ -545,7 +545,7 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
     _saveDebounce?.cancel();
 
     if (_repo.hapticEnabled) {
-      HapticFeedback.heavyImpact();
+      unawaited(HapticFeedback.heavyImpact());
     }
 
     final hints = _game?.boardState.hintsUsed ?? 0;
@@ -571,7 +571,7 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
       _solvedPieces = _totalPieces;
     });
 
-    _repo.recordSnapStats(durationSeconds: _seconds);
+    unawaited(_repo.recordSnapStats(durationSeconds: _seconds));
     final dkey = SnapshotStore.difficultyKeyFor(
       _effectiveDifficulty ?? widget.difficulty,
     );
@@ -776,14 +776,16 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
 
   void _openBackgroundSelector() {
     SoundService.I.play(Sfx.moveIn);
-    ChooseBackgroundSheet.show(
-      context: context,
-      selectedBackground: _selectedBackground,
-      onBackgroundSelected: (newBg) {
-        setState(() => _selectedBackground = newBg);
-        _repo.selectedBackground = newBg;
-        _loadHeaderColor();
-      },
+    unawaited(
+      ChooseBackgroundSheet.show(
+        context: context,
+        selectedBackground: _selectedBackground,
+        onBackgroundSelected: (newBg) {
+          setState(() => _selectedBackground = newBg);
+          _repo.selectedBackground = newBg;
+          unawaited(_loadHeaderColor());
+        },
+      ),
     );
   }
 
@@ -811,13 +813,16 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
       // best-effort：清理/降级失败可静默
     } catch (_) {} // ignore: avoid_catches_without_on_clauses
     if (!mounted) return;
-    Navigator.of(context).pushReplacement(
-      MaterialPageRoute<void>(
-        builder: (_) => GamePage(
-          imageBytes: imgBytes,
-          difficulty: nextLevel.difficulty,
-          levelIndex: nextLevel.index,
-          initialSnapshotJson: snapJson,
+    // 页面即将跳转替换，导航 Future 无需等待
+    unawaited(
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute<void>(
+          builder: (_) => GamePage(
+            imageBytes: imgBytes,
+            difficulty: nextLevel.difficulty,
+            levelIndex: nextLevel.index,
+            initialSnapshotJson: snapJson,
+          ),
         ),
       ),
     );
@@ -834,32 +839,36 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
     final hasNext =
         widget.levelIndex != null && widget.levelIndex! < _repo.levels.length;
 
-    VictoryDialog.show(
-      context: context,
-      imageBytes: widget.imageBytes,
-      stars: earnedStars,
-      elapsedSeconds: _seconds,
-      pieceCount: _totalPieces,
-      rewardCoins: earnedCoins,
-      newAchievements: newAchievements,
-      onNextLevel: hasNext ? _playNextLevel : null,
-      onShare: () {
-        ShareCardGenerator.open(
-          context,
-          imageBytes: widget.imageBytes,
-          elapsedSeconds: _seconds,
-          pieceCount: _totalPieces,
-          starCount: earnedStars,
-          stepCount: _solvedPieces,
-          levelTitle: _pageTitle,
-        );
-      },
-      onViewPuzzle: () {
-        setState(() {}); // 停留在游戏内自由缩放欣赏完整拼图
-      },
-      onExit: () {
-        Navigator.of(context).pop();
-      },
+    unawaited(
+      VictoryDialog.show(
+        context: context,
+        imageBytes: widget.imageBytes,
+        stars: earnedStars,
+        elapsedSeconds: _seconds,
+        pieceCount: _totalPieces,
+        rewardCoins: earnedCoins,
+        newAchievements: newAchievements,
+        onNextLevel: hasNext ? _playNextLevel : null,
+        onShare: () {
+          unawaited(
+            ShareCardGenerator.open(
+              context,
+              imageBytes: widget.imageBytes,
+              elapsedSeconds: _seconds,
+              pieceCount: _totalPieces,
+              starCount: earnedStars,
+              stepCount: _solvedPieces,
+              levelTitle: _pageTitle,
+            ),
+          );
+        },
+        onViewPuzzle: () {
+          setState(() {}); // 停留在游戏内自由缩放欣赏完整拼图
+        },
+        onExit: () {
+          Navigator.of(context).pop();
+        },
+      ),
     );
   }
 

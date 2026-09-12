@@ -42,15 +42,16 @@ class _AchievementsPageState extends State<AchievementsPage> {
   @override
   void initState() {
     super.initState();
-    _loadAsyncStats();
+    unawaited(_loadAsyncStats());
     _unlockSub = _achService.onAchievementUnlocked.listen((_) {
-      if (mounted) _loadAsyncStats();
+      if (mounted) unawaited(_loadAsyncStats());
     });
   }
 
   @override
   void dispose() {
-    _unlockSub?.cancel();
+    // 取消订阅返回的 Future 无需等待
+    unawaited(_unlockSub?.cancel());
     super.dispose();
   }
 
@@ -100,7 +101,7 @@ class _AchievementsPageState extends State<AchievementsPage> {
             '${t.achievementsPage.claimed}: ${t.achievementsPage.coins(count: def.coinReward)}',
         type: GameToastType.success,
       );
-      _loadAsyncStats();
+      unawaited(_loadAsyncStats());
     }
   }
 

@@ -79,7 +79,7 @@ class _OnlineImagePickerPageState extends State<OnlineImagePickerPage> {
   void initState() {
     super.initState();
     _currentSite = widget.initialSite;
-    DownloadManager.instance.init();
+    unawaited(DownloadManager.instance.init());
     AppLogger.webview.info(
       '[WebView:Init] Platform: ${defaultTargetPlatform.name}, InitialSite: ${_currentSite.label} (${_currentSite.url})',
     );
@@ -115,7 +115,11 @@ class _OnlineImagePickerPageState extends State<OnlineImagePickerPage> {
       _currentSite = site;
       _loadingProgress = 0.1;
     });
-    _webViewController?.loadUrl(urlRequest: URLRequest(url: WebUri(site.url)));
+    unawaited(
+      _webViewController?.loadUrl(
+        urlRequest: URLRequest(url: WebUri(site.url)),
+      ),
+    );
   }
 
   /// Trigger the 5-second auto-dismissing download banner
@@ -454,7 +458,7 @@ class _OnlineImagePickerPageState extends State<OnlineImagePickerPage> {
             '[WebView:PopScope] User pressed system back -> Navigating back inside webview',
           );
           await _webViewController!.goBack();
-          _updateHistoryState();
+          unawaited(_updateHistoryState());
         }
       },
       child: Scaffold(
@@ -492,7 +496,7 @@ class _OnlineImagePickerPageState extends State<OnlineImagePickerPage> {
                         '[WebView:Action] User clicked In-Page Back',
                       );
                       await _webViewController?.goBack();
-                      _updateHistoryState();
+                      unawaited(_updateHistoryState());
                     }
                   : null,
               tooltip: t.online.backTooltip,
@@ -505,7 +509,7 @@ class _OnlineImagePickerPageState extends State<OnlineImagePickerPage> {
               icon: const Icon(PhosphorIconsRegular.arrowClockwise, size: 17),
               onPressed: () {
                 AppLogger.webview.info('[WebView:Action] User clicked reload.');
-                _webViewController?.reload();
+                unawaited(_webViewController?.reload());
               },
               tooltip: t.online.refreshTooltip,
             ),
@@ -598,7 +602,7 @@ class _OnlineImagePickerPageState extends State<OnlineImagePickerPage> {
                 if (mounted) {
                   setState(() => _loadingProgress = 0.1);
                 }
-                _updateHistoryState();
+                unawaited(_updateHistoryState());
               },
               onProgressChanged: (controller, progress) {
                 if (progress % 25 == 0 || progress == 100) {
@@ -607,7 +611,7 @@ class _OnlineImagePickerPageState extends State<OnlineImagePickerPage> {
                 if (mounted) {
                   setState(() => _loadingProgress = progress / 100.0);
                 }
-                _updateHistoryState();
+                unawaited(_updateHistoryState());
               },
               onLoadStop: (controller, url) async {
                 AppLogger.webview.info(
@@ -616,7 +620,7 @@ class _OnlineImagePickerPageState extends State<OnlineImagePickerPage> {
                 if (mounted) {
                   setState(() => _loadingProgress = 1.0);
                 }
-                _updateHistoryState();
+                unawaited(_updateHistoryState());
 
                 // Inject CSS to clean mobile ads
                 await controller.evaluateJavascript(
@@ -682,7 +686,9 @@ class _OnlineImagePickerPageState extends State<OnlineImagePickerPage> {
                   AppLogger.webview.fine(
                     '[WebView:Navigation:Intercept] Direct download intercepted: $urlStr',
                   );
-                  _handleDownload(rawUrl: urlStr, isFromInterception: true);
+                  unawaited(
+                    _handleDownload(rawUrl: urlStr, isFromInterception: true),
+                  );
                   return NavigationActionPolicy.CANCEL;
                 }
 
@@ -695,7 +701,9 @@ class _OnlineImagePickerPageState extends State<OnlineImagePickerPage> {
                   '[WebView:CreateWindow] Target URL: $targetUrl',
                 );
                 if (targetUrl != null) {
-                  controller.loadUrl(urlRequest: URLRequest(url: targetUrl));
+                  unawaited(
+                    controller.loadUrl(urlRequest: URLRequest(url: targetUrl)),
+                  );
                 }
                 return true;
               },
@@ -777,7 +785,7 @@ class _OnlineImagePickerPageState extends State<OnlineImagePickerPage> {
                         TextButton(
                           onPressed: () {
                             setState(() => _showDownloadBanner = false);
-                            DownloadedDrawerSheet.show(context);
+                            unawaited(DownloadedDrawerSheet.show(context));
                           },
                           style: TextButton.styleFrom(
                             backgroundColor: Colors.white24,

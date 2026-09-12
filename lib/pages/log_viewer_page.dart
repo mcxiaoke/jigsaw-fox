@@ -156,7 +156,7 @@ class _LogViewerPageState extends State<LogViewerPage> {
 
   @override
   void dispose() {
-    _sub?.cancel();
+    unawaited(_sub?.cancel());
     _scrollController.dispose();
     super.dispose();
   }
@@ -164,10 +164,12 @@ class _LogViewerPageState extends State<LogViewerPage> {
   /// 一键回到顶部（最新日志，列表时间线式布局的顶部锚点）
   void _jumpToTop() {
     if (!mounted || !_scrollController.hasClients) return;
-    _scrollController.animateTo(
-      0,
-      duration: const Duration(milliseconds: 260),
-      curve: Curves.easeOutCubic,
+    unawaited(
+      _scrollController.animateTo(
+        0,
+        duration: const Duration(milliseconds: 260),
+        curve: Curves.easeOutCubic,
+      ),
     );
   }
 
@@ -443,9 +445,9 @@ class _LogViewerPageState extends State<LogViewerPage> {
             tooltip: t.logs.copyTooltip,
             onSelected: (v) {
               if (v == 'filtered') {
-                _copyLogs(filteredOnly: true);
+                unawaited(_copyLogs(filteredOnly: true));
               } else {
-                _copyLogs(filteredOnly: false);
+                unawaited(_copyLogs(filteredOnly: false));
               }
             },
             itemBuilder: (_) => [
@@ -649,45 +651,50 @@ class _LogViewerPageState extends State<LogViewerPage> {
   /// 点击行查看完整消息（多行 stack 展开）
   void _showDetail(_LogEntry e, AppPalette palette) {
     final styles = AppTextStyles.of(context);
-    showDialog<void>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Row(
-          children: [
-            Icon(
-              PhosphorIconsFill.fileText,
-              size: 18,
-              color: _levelColor(e.levelShort, palette),
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Text(
-                '${_levelLetterOf(e.levelShort)} · ${e.logger}',
-                style: styles.body.copyWith(
-                  color: _levelColor(e.levelShort, palette),
-                ),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
+    // 弹窗 Future 在用户关闭时完成，无需等待
+    unawaited(
+      showDialog<void>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          title: Row(
+            children: [
+              Icon(
+                PhosphorIconsFill.fileText,
+                size: 18,
+                color: _levelColor(e.levelShort, palette),
               ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  '${_levelLetterOf(e.levelShort)} · ${e.logger}',
+                  style: styles.body.copyWith(
+                    color: _levelColor(e.levelShort, palette),
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ),
+          content: SizedBox(
+            width: double.maxFinite,
+            child: SingleChildScrollView(
+              child: SelectableText(
+                _formatForCopy(e),
+                style: _monoBody.copyWith(fontSize: 13),
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: Text(t.logs.close),
             ),
           ],
         ),
-        content: SizedBox(
-          width: double.maxFinite,
-          child: SingleChildScrollView(
-            child: SelectableText(
-              _formatForCopy(e),
-              style: _monoBody.copyWith(fontSize: 13),
-            ),
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: Text(t.logs.close),
-          ),
-        ],
       ),
     );
   }

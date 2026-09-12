@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:flame/game.dart';
@@ -283,14 +284,16 @@ void main() {
             body: Builder(
               builder: (context) => ElevatedButton(
                 onPressed: () {
-                  VictoryDialog.show(
-                    context: context,
-                    imageBytes: kTransparentImage,
-                    elapsedSeconds: 83,
-                    pieceCount: 64,
-                    rewardCoins: 25,
-                    onNextLevel: () {},
-                    onShare: () {},
+                  unawaited(
+                    VictoryDialog.show(
+                      context: context,
+                      imageBytes: kTransparentImage,
+                      elapsedSeconds: 83,
+                      pieceCount: 64,
+                      rewardCoins: 25,
+                      onNextLevel: () {},
+                      onShare: () {},
+                    ),
                   );
                 },
                 child: const Text('Open Dialog'),
@@ -437,19 +440,21 @@ void main() {
             body: Builder(
               builder: (context) => ElevatedButton(
                 onPressed: () {
-                  showModalBottomSheet<void>(
-                    context: context,
-                    isScrollControlled: true,
-                    builder: (_) => ChooseDifficultySheet(
-                      imageBytes: kTransparentImage,
-                      initialDifficulty: const PuzzleDifficulty(
-                        label: '6 × 6 (36 块)',
-                        rows: 6,
-                        cols: 6,
+                  unawaited(
+                    showModalBottomSheet<void>(
+                      context: context,
+                      isScrollControlled: true,
+                      builder: (_) => ChooseDifficultySheet(
+                        imageBytes: kTransparentImage,
+                        initialDifficulty: const PuzzleDifficulty(
+                          label: '6 × 6 (36 块)',
+                          rows: 6,
+                          cols: 6,
+                        ),
+                        completedPieceCounts: const {36, 64},
+                        title: '第 1 关 · 难度选择',
+                        onStart: (_) {},
                       ),
-                      completedPieceCounts: const {36, 64},
-                      title: '第 1 关 · 难度选择',
-                      onStart: (_) {},
                     ),
                   );
                 },
@@ -497,12 +502,14 @@ void main() {
             body: Builder(
               builder: (context) => ElevatedButton(
                 onPressed: () {
-                  ChooseBackgroundSheet.show(
-                    context: context,
-                    selectedBackground: selectedBg,
-                    onBackgroundSelected: (bg) {
-                      selectedBg = bg;
-                    },
+                  unawaited(
+                    ChooseBackgroundSheet.show(
+                      context: context,
+                      selectedBackground: selectedBg,
+                      onBackgroundSelected: (bg) {
+                        selectedBg = bg;
+                      },
+                    ),
                   );
                 },
                 child: const Text('Open Wallpaper Sheet'),

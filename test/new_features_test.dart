@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 import 'dart:ui' as ui;
@@ -294,18 +295,20 @@ void main() {
               body: Builder(
                 builder: (context) => ElevatedButton(
                   onPressed: () {
-                    ChooseDifficultySheet.show(
-                      context: context,
-                      imageBytes: kTestTransparentImage,
-                      initialDifficulty: const PuzzleDifficulty(
-                        label: '3 × 3 (9 块)',
-                        rows: 3,
-                        cols: 3,
+                    unawaited(
+                      ChooseDifficultySheet.show(
+                        context: context,
+                        imageBytes: kTestTransparentImage,
+                        initialDifficulty: const PuzzleDifficulty(
+                          label: '3 × 3 (9 块)',
+                          rows: 3,
+                          cols: 3,
+                        ),
+                        title: '第 5 关 · 关卡预览(未解锁)',
+                        isUnlocked: false,
+                        lockedMessage: '请先通关第 4 关解锁此关卡',
+                        onStart: (_) {},
                       ),
-                      title: '第 5 关 · 关卡预览(未解锁)',
-                      isUnlocked: false,
-                      lockedMessage: '请先通关第 4 关解锁此关卡',
-                      onStart: (_) {},
                     );
                   },
                   child: const Text('Open Locked Sheet'),
@@ -341,16 +344,18 @@ void main() {
               body: Builder(
                 builder: (context) => ElevatedButton(
                   onPressed: () {
-                    ChooseDifficultySheet.show(
-                      context: context,
-                      imageBytes: imgBytes,
-                      initialDifficulty: const PuzzleDifficulty(
-                        label: '4 × 6 (24 块)',
-                        rows: 6,
-                        cols: 4,
+                    unawaited(
+                      ChooseDifficultySheet.show(
+                        context: context,
+                        imageBytes: imgBytes,
+                        initialDifficulty: const PuzzleDifficulty(
+                          label: '4 × 6 (24 块)',
+                          rows: 6,
+                          cols: 4,
+                        ),
+                        title: '竖屏关卡预览',
+                        onStart: (_) {},
                       ),
-                      title: '竖屏关卡预览',
-                      onStart: (_) {},
                     );
                   },
                   child: const Text('Open 2:3 Sheet'),
@@ -395,19 +400,21 @@ void main() {
             body: Builder(
               builder: (context) => ElevatedButton(
                 onPressed: () {
-                  ChooseDifficultySheet.show(
-                    context: context,
-                    imageBytes: kTestTransparentImage,
-                    initialDifficulty: const PuzzleDifficulty(
-                      label: '6 × 6 (36 块)',
-                      rows: 6,
-                      cols: 6,
+                  unawaited(
+                    ChooseDifficultySheet.show(
+                      context: context,
+                      imageBytes: kTestTransparentImage,
+                      initialDifficulty: const PuzzleDifficulty(
+                        label: '6 × 6 (36 块)',
+                        rows: 6,
+                        cols: 6,
+                      ),
+                      title: '我的爱犬照片',
+                      onDelete: () async {
+                        deleteCalled = true;
+                      },
+                      onStart: (_) {},
                     ),
-                    title: '我的爱犬照片',
-                    onDelete: () async {
-                      deleteCalled = true;
-                    },
-                    onStart: (_) {},
                   );
                 },
                 child: const Text('Open UGC Sheet'),
@@ -452,20 +459,22 @@ void main() {
               body: Builder(
                 builder: (context) => ElevatedButton(
                   onPressed: () {
-                    ChooseDifficultySheet.show(
-                      context: context,
-                      imageBytes: kTestTransparentImage,
-                      initialDifficulty: const PuzzleDifficulty(
-                        label: '6 × 6 (36 块)',
-                        rows: 6,
-                        cols: 6,
+                    unawaited(
+                      ChooseDifficultySheet.show(
+                        context: context,
+                        imageBytes: kTestTransparentImage,
+                        initialDifficulty: const PuzzleDifficulty(
+                          label: '6 × 6 (36 块)',
+                          rows: 6,
+                          cols: 6,
+                        ),
+                        title: '第 5 关 · 难度选择',
+                        savedProgressPercent: 85,
+                        onResetProgress: () {
+                          resetCalled = true;
+                        },
+                        onStart: (_) {},
                       ),
-                      title: '第 5 关 · 难度选择',
-                      savedProgressPercent: 85,
-                      onResetProgress: () {
-                        resetCalled = true;
-                      },
-                      onStart: (_) {},
                     );
                   },
                   child: const Text('Open Sheet'),

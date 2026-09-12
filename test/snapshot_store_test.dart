@@ -33,10 +33,10 @@ void main() {
         cols: 2,
         seed: 100,
         pieces: [
-          PieceState(id: 0, r: 0, c: 0, nx: 0, ny: 0, clusterId: 0),
-          PieceState(id: 1, r: 0, c: 1, nx: 0.5, ny: 0, clusterId: 1),
-          PieceState(id: 2, r: 1, c: 0, nx: 0, ny: 0.5, clusterId: 2),
-          PieceState(id: 3, r: 1, c: 1, nx: 0.5, ny: 0.5, clusterId: 3),
+          const PieceState(id: 0, r: 0, c: 0, nx: 0, ny: 0, clusterId: 0),
+          const PieceState(id: 1, r: 0, c: 1, nx: 0.5, ny: 0, clusterId: 1),
+          const PieceState(id: 2, r: 1, c: 0, nx: 0, ny: 0.5, clusterId: 2),
+          const PieceState(id: 3, r: 1, c: 1, nx: 0.5, ny: 0.5, clusterId: 3),
         ],
       );
 
@@ -117,10 +117,10 @@ void main() {
           seed: 111,
           elapsedSeconds: 2,
           pieces: [
-            PieceState(id: 0, r: 0, c: 0, nx: 0, ny: 0, clusterId: 0),
-            PieceState(id: 1, r: 0, c: 1, nx: 0.5, ny: 0, clusterId: 1),
-            PieceState(id: 2, r: 1, c: 0, nx: 0, ny: 0.5, clusterId: 2),
-            PieceState(id: 3, r: 1, c: 1, nx: 0.5, ny: 0.5, clusterId: 3),
+            const PieceState(id: 0, r: 0, c: 0, nx: 0, ny: 0, clusterId: 0),
+            const PieceState(id: 1, r: 0, c: 1, nx: 0.5, ny: 0, clusterId: 1),
+            const PieceState(id: 2, r: 1, c: 0, nx: 0, ny: 0.5, clusterId: 2),
+            const PieceState(id: 3, r: 1, c: 1, nx: 0.5, ny: 0.5, clusterId: 3),
           ],
         );
         await SnapshotStore.instance.save(trivialState);
@@ -148,10 +148,10 @@ void main() {
           seed: 111,
           elapsedSeconds: 15,
           pieces: [
-            PieceState(id: 0, r: 0, c: 0, nx: 0.1, ny: 0.1, clusterId: 0),
-            PieceState(id: 1, r: 0, c: 1, nx: 0.6, ny: 0.1, clusterId: 1),
-            PieceState(id: 2, r: 1, c: 0, nx: 0.1, ny: 0.6, clusterId: 2),
-            PieceState(id: 3, r: 1, c: 1, nx: 0.6, ny: 0.6, clusterId: 3),
+            const PieceState(id: 0, r: 0, c: 0, nx: 0.1, ny: 0.1, clusterId: 0),
+            const PieceState(id: 1, r: 0, c: 1, nx: 0.6, ny: 0.1, clusterId: 1),
+            const PieceState(id: 2, r: 1, c: 0, nx: 0.1, ny: 0.6, clusterId: 2),
+            const PieceState(id: 3, r: 1, c: 1, nx: 0.6, ny: 0.6, clusterId: 3),
           ],
         );
         await SnapshotStore.instance.save(freePlacementState);

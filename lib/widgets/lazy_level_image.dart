@@ -4,7 +4,6 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 
 import 'package:jigsawpuzzle/logic/cache/level_image_resolver.dart';
-import 'package:jigsawpuzzle/logic/cache/thumbnail_dimension.dart';
 import 'package:jigsawpuzzle/logic/content/models/puzzle_level_item.dart';
 import 'package:jigsawpuzzle/services/app_logger.dart';
 import 'package:jigsawpuzzle/widgets/app_cached_image.dart';

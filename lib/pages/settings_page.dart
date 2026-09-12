@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:jigsawpuzzle/data/game_repository.dart';
 import 'package:jigsawpuzzle/data/progress_store.dart';
@@ -35,7 +37,7 @@ class _SettingsPageState extends State<SettingsPage> {
   @override
   void initState() {
     super.initState();
-    _loadStats();
+    unawaited(_loadStats());
   }
 
   Translations get t => LocaleSettings.instance.currentTranslations;
@@ -203,12 +205,14 @@ class _SettingsPageState extends State<SettingsPage> {
                     color: palette.secondaryText,
                   ),
                   onTap: () {
-                    ChooseBackgroundSheet.show(
-                      context: context,
-                      selectedBackground: _repo.selectedBackground,
-                      onBackgroundSelected: (bg) {
-                        setState(() => _repo.selectedBackground = bg);
-                      },
+                    unawaited(
+                      ChooseBackgroundSheet.show(
+                        context: context,
+                        selectedBackground: _repo.selectedBackground,
+                        onBackgroundSelected: (bg) {
+                          setState(() => _repo.selectedBackground = bg);
+                        },
+                      ),
                     );
                   },
                 ),
@@ -483,104 +487,107 @@ class _SettingsPageState extends State<SettingsPage> {
     AppPalette palette,
     AppTextStyles styles,
   ) {
-    showModalBottomSheet<void>(
-      context: context,
-      backgroundColor: palette.surfaceContainer,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      builder: (sheetContext) {
-        return SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 16),
-            child: AnimatedBuilder(
-              animation: LocaleService.instance,
-              builder: (ctx, _) {
-                final current = LocaleService.instance.language;
-                return Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Container(
-                      width: 36,
-                      height: 4,
-                      margin: const EdgeInsets.only(bottom: 16),
-                      decoration: BoxDecoration(
-                        color: palette.divider,
-                        borderRadius: BorderRadius.circular(2),
+    // 弹窗 Future 在用户关闭时完成，无需等待
+    unawaited(
+      showModalBottomSheet<void>(
+        context: context,
+        backgroundColor: palette.surfaceContainer,
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        builder: (sheetContext) {
+          return SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 16),
+              child: AnimatedBuilder(
+                animation: LocaleService.instance,
+                builder: (ctx, _) {
+                  final current = LocaleService.instance.language;
+                  return Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(
+                        width: 36,
+                        height: 4,
+                        margin: const EdgeInsets.only(bottom: 16),
+                        decoration: BoxDecoration(
+                          color: palette.divider,
+                          borderRadius: BorderRadius.circular(2),
+                        ),
                       ),
-                    ),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 20,
-                        vertical: 4,
-                      ),
-                      child: Row(
-                        children: [
-                          Icon(
-                            PhosphorIconsBold.translate,
-                            color: palette.brand,
-                            size: 20,
-                          ),
-                          const SizedBox(width: 8),
-                          Text(
-                            t.settings.languageTitle,
-                            style: styles.h3.copyWith(
-                              color: palette.primaryText,
+                      Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 20,
+                          vertical: 4,
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(
+                              PhosphorIconsBold.translate,
+                              color: palette.brand,
+                              size: 20,
                             ),
-                          ),
-                        ],
+                            const SizedBox(width: 8),
+                            Text(
+                              t.settings.languageTitle,
+                              style: styles.h3.copyWith(
+                                color: palette.primaryText,
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: 8),
-                    _buildLanguageOption(
-                      title: t.settings.languageSystem,
-                      icon: PhosphorIconsRegular.globe,
-                      selected: current == AppLanguage.system,
-                      palette: palette,
-                      styles: styles,
-                      onTap: () async {
-                        await LocaleService.instance.setLanguage(
-                          AppLanguage.system,
-                        );
-                        if (sheetContext.mounted) Navigator.pop(sheetContext);
-                        if (mounted) setState(() {});
-                      },
-                    ),
-                    _buildLanguageOption(
-                      title: t.settings.languageZh,
-                      icon: PhosphorIconsRegular.textT,
-                      selected: current == AppLanguage.zh,
-                      palette: palette,
-                      styles: styles,
-                      onTap: () async {
-                        await LocaleService.instance.setLanguage(
-                          AppLanguage.zh,
-                        );
-                        if (sheetContext.mounted) Navigator.pop(sheetContext);
-                        if (mounted) setState(() {});
-                      },
-                    ),
-                    _buildLanguageOption(
-                      title: t.settings.languageEn,
-                      icon: PhosphorIconsRegular.textT,
-                      selected: current == AppLanguage.en,
-                      palette: palette,
-                      styles: styles,
-                      onTap: () async {
-                        await LocaleService.instance.setLanguage(
-                          AppLanguage.en,
-                        );
-                        if (sheetContext.mounted) Navigator.pop(sheetContext);
-                        if (mounted) setState(() {});
-                      },
-                    ),
-                  ],
-                );
-              },
+                      const SizedBox(height: 8),
+                      _buildLanguageOption(
+                        title: t.settings.languageSystem,
+                        icon: PhosphorIconsRegular.globe,
+                        selected: current == AppLanguage.system,
+                        palette: palette,
+                        styles: styles,
+                        onTap: () async {
+                          await LocaleService.instance.setLanguage(
+                            AppLanguage.system,
+                          );
+                          if (sheetContext.mounted) Navigator.pop(sheetContext);
+                          if (mounted) setState(() {});
+                        },
+                      ),
+                      _buildLanguageOption(
+                        title: t.settings.languageZh,
+                        icon: PhosphorIconsRegular.textT,
+                        selected: current == AppLanguage.zh,
+                        palette: palette,
+                        styles: styles,
+                        onTap: () async {
+                          await LocaleService.instance.setLanguage(
+                            AppLanguage.zh,
+                          );
+                          if (sheetContext.mounted) Navigator.pop(sheetContext);
+                          if (mounted) setState(() {});
+                        },
+                      ),
+                      _buildLanguageOption(
+                        title: t.settings.languageEn,
+                        icon: PhosphorIconsRegular.textT,
+                        selected: current == AppLanguage.en,
+                        palette: palette,
+                        styles: styles,
+                        onTap: () async {
+                          await LocaleService.instance.setLanguage(
+                            AppLanguage.en,
+                          );
+                          if (sheetContext.mounted) Navigator.pop(sheetContext);
+                          if (mounted) setState(() {});
+                        },
+                      ),
+                    ],
+                  );
+                },
+              ),
             ),
-          ),
-        );
-      },
+          );
+        },
+      ),
     );
   }
 

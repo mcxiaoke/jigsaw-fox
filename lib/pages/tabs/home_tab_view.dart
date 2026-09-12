@@ -92,21 +92,25 @@ class _HomeTabViewState extends State<HomeTabView> {
     setState(() => _selectedTag = tag);
     // 过滤后回顶
     if (_scrollController.hasClients) {
-      _scrollController.animateTo(
-        0,
-        duration: const Duration(milliseconds: 200),
-        curve: Curves.easeOut,
+      unawaited(
+        _scrollController.animateTo(
+          0,
+          duration: const Duration(milliseconds: 200),
+          curve: Curves.easeOut,
+        ),
       );
     }
     // 横滑 Tag 栏滚动到选中项可见
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final key = _tagKeys[tag];
       if (key?.currentContext != null) {
-        Scrollable.ensureVisible(
-          key!.currentContext!,
-          duration: const Duration(milliseconds: 250),
-          curve: Curves.easeOut,
-          alignment: 0.5,
+        unawaited(
+          Scrollable.ensureVisible(
+            key!.currentContext!,
+            duration: const Duration(milliseconds: 250),
+            curve: Curves.easeOut,
+            alignment: 0.5,
+          ),
         );
       }
     });

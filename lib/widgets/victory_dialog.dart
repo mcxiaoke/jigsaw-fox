@@ -160,7 +160,7 @@ class _VictoryDialogState extends State<VictoryDialog>
       curve: Curves.easeOutCubic,
     )..addListener(_onStatProgressChanged);
 
-    _startAnimation();
+    unawaited(_startAnimation());
   }
 
   void _onStatProgressChanged() {
@@ -176,13 +176,13 @@ class _VictoryDialogState extends State<VictoryDialog>
   Future<void> _startAnimation() async {
     // 1. Fade in overlay
     if (!mounted) return;
-    _fadeController.forward();
+    unawaited(_fadeController.forward());
 
     await Future<void>.delayed(const Duration(milliseconds: 200));
     if (!mounted) return;
 
     // 2. Scale in image
-    _imageController.forward();
+    unawaited(_imageController.forward());
 
     await Future<void>.delayed(const Duration(milliseconds: 600));
 
@@ -197,7 +197,7 @@ class _VictoryDialogState extends State<VictoryDialog>
     if (!mounted) return;
 
     // 4. Roll up stats
-    _statController.forward();
+    unawaited(_statController.forward());
   }
 
   @override

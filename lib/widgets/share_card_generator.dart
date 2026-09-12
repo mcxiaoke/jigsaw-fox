@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'dart:typed_data';
 import 'dart:ui' as ui;
@@ -74,7 +75,7 @@ class _ShareCardGeneratorState extends State<ShareCardGenerator>
       vsync: this,
       duration: const Duration(milliseconds: 500),
     );
-    _fadeController.forward();
+    unawaited(_fadeController.forward());
   }
 
   @override

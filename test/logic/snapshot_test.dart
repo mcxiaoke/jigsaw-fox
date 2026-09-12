@@ -15,7 +15,7 @@ void main() {
         canonicalId: 'main:005',
         difficultyKey: '1x2',
         pieces: [
-          PieceState(
+          const PieceState(
             id: 0,
             r: 0,
             c: 0,
@@ -24,7 +24,7 @@ void main() {
             clusterId: 3,
             rot: 2,
           ),
-          PieceState(
+          const PieceState(
             id: 1,
             r: 0,
             c: 1,

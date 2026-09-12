@@ -430,6 +430,8 @@ class JigsawPuzzleGame extends FlameGame
           position: trayPosition.clone(),
           size: traySize.clone(),
         );
+        // Flame add() 返回 FutureOr<void>（未加载时同步完成），帧循环内无需等待
+        // ignore: discarded_futures
         add(_trayBgComp!);
       } else {
         _trayBgComp!.position.setFrom(trayPosition);

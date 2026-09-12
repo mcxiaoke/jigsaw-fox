@@ -11,21 +11,27 @@ void main() {
         rows: 2,
         cols: 2,
         seed: 1,
-        pieces: [PieceState(id: 0, r: 0, c: 0, nx: 0.1, ny: 0.1, clusterId: 0)],
+        pieces: [
+          const PieceState(id: 0, r: 0, c: 0, nx: 0.1, ny: 0.1, clusterId: 0),
+        ],
       );
 
       final state2 = PuzzleBoardState(
         rows: 2,
         cols: 2,
         seed: 1,
-        pieces: [PieceState(id: 0, r: 0, c: 0, nx: 0.2, ny: 0.2, clusterId: 0)],
+        pieces: [
+          const PieceState(id: 0, r: 0, c: 0, nx: 0.2, ny: 0.2, clusterId: 0),
+        ],
       );
 
       final state3 = PuzzleBoardState(
         rows: 2,
         cols: 2,
         seed: 1,
-        pieces: [PieceState(id: 0, r: 0, c: 0, nx: 0.3, ny: 0.3, clusterId: 0)],
+        pieces: [
+          const PieceState(id: 0, r: 0, c: 0, nx: 0.3, ny: 0.3, clusterId: 0),
+        ],
       );
 
       manager.record(state1);

@@ -20,7 +20,8 @@ class LocaleService extends ChangeNotifier {
   LocaleService._() {
     // 注册 zh 的 plural resolver，避免切换到中文时 slang 反复走 fallback 并打印警告。
     // 中文无复数形态，一律归为 'other'。
-    LocaleSettings.setPluralResolver(
+    // 使用同步版本：构造函数内无法 await，且 resolver 注册是纯内存操作。
+    LocaleSettings.setPluralResolverSync(
       language: 'zh',
       cardinalResolver: (n, {zero, one, two, few, many, other}) => other ?? '',
     );

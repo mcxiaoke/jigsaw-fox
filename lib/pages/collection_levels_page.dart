@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -52,7 +53,7 @@ class _CollectionLevelsPageState extends State<CollectionLevelsPage> {
   void initState() {
     super.initState();
     _currentCollection = widget.collection;
-    _loadLevels();
+    unawaited(_loadLevels());
   }
 
   Future<void> _loadLevels() async {

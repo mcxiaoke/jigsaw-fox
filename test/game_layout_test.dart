@@ -1676,8 +1676,8 @@ void main() {
       cols: 2,
       seed: 42,
       pieces: [
-        PieceState(id: 0, r: 0, c: 0, nx: 0, ny: 0, clusterId: 0),
-        PieceState(
+        const PieceState(id: 0, r: 0, c: 0, nx: 0, ny: 0, clusterId: 0),
+        const PieceState(
           id: 1,
           r: 0,
           c: 1,

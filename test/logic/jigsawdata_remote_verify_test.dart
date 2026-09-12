@@ -78,7 +78,7 @@ void main() {
   test(
     'jigsaw-data 远端全链路: manifest → main/daily/events/collections 解析',
     () async {
-      final manifestUrl = _manifestEnv;
+      const manifestUrl = _manifestEnv;
       if (manifestUrl.isEmpty) {
         debugPrint(
           'SKIP: 未提供 --dart-define=JIGSAWDATA_MANIFEST，跳过远端验证',
@@ -126,7 +126,7 @@ void main() {
           await _fetchWithRetry(client, mainIndexBase) as Map<String, dynamic>;
       expect(mainIndex['module'], 'main');
       expect(mainIndex['totalCount'], greaterThanOrEqualTo(30));
-      int levelCount = 0;
+      var levelCount = 0;
       for (final b in (mainIndex['items'] as List)) {
         final batch = b as Map<String, dynamic>;
         final batchUrl = ContentHttpClient.resolveUrl(
@@ -221,9 +221,7 @@ void main() {
         reason: '下载内容应为合法 zip (PK magic)',
       );
       final archive = ZipDecoder().decodeBytes(bytes);
-      final entries = archive.files
-          .where((f) => !f.isFile == false && f.isFile)
-          .toList();
+      final entries = archive.files.where((f) => f.isFile).toList();
       final totalCount = latest['totalCount'] as int;
       expect(entries.length, totalCount, reason: 'zip 条目数应与 totalCount 一致');
       final names = entries.map((f) => f.name).toList()..sort();
@@ -294,6 +292,7 @@ void main() {
 }
 
 void debugPrint(String message) {
+  // 测试桩 debugPrint：远端验证时直接输出到控制台，便于排查（项目内未引入 flutter_test 的 debugPrint）
   // ignore: avoid_print
   print(message);
 }

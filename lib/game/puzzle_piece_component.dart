@@ -422,6 +422,8 @@ class PuzzlePieceComponent extends PositionComponent
       position.setFrom(targetPos);
       return;
     }
+    // Flame add() 返回 FutureOr<void>（未加载时同步完成），帧循环内无需等待
+    // ignore: discarded_futures
     add(
       MoveToEffect(
         targetPos,
@@ -437,6 +439,8 @@ class PuzzlePieceComponent extends PositionComponent
       scale.setFrom(targetScale);
       return;
     }
+    // Flame add() 返回 FutureOr<void>（未加载时同步完成），帧循环内无需等待
+    // ignore: discarded_futures
     add(
       ScaleEffect.to(
         targetScale,

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -60,35 +61,38 @@ class DownloadedDrawerSheet extends StatelessWidget {
     final palette = AppPalette.of(context);
     final styles = AppTextStyles.of(context);
 
-    showDialog<void>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: palette.surfaceContainer,
-        title: Text(
-          t.drawer.clearAllTitle,
-          style: styles.h3.copyWith(color: palette.primaryText),
-        ),
-        content: Text(
-          t.drawer.clearAllDesc,
-          style: styles.body.copyWith(color: palette.secondaryText),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(),
-            child: Text(
-              t.common.cancel,
-              style: TextStyle(color: palette.secondaryText),
+    // 弹窗 Future 在用户关闭时完成，无需等待
+    unawaited(
+      showDialog<void>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          backgroundColor: palette.surfaceContainer,
+          title: Text(
+            t.drawer.clearAllTitle,
+            style: styles.h3.copyWith(color: palette.primaryText),
+          ),
+          content: Text(
+            t.drawer.clearAllDesc,
+            style: styles.body.copyWith(color: palette.secondaryText),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: Text(
+                t.common.cancel,
+                style: TextStyle(color: palette.secondaryText),
+              ),
             ),
-          ),
-          FilledButton(
-            style: FilledButton.styleFrom(backgroundColor: palette.error),
-            onPressed: () async {
-              Navigator.of(ctx).pop();
-              await DownloadManager.instance.clearAll();
-            },
-            child: Text(t.drawer.clearAll),
-          ),
-        ],
+            FilledButton(
+              style: FilledButton.styleFrom(backgroundColor: palette.error),
+              onPressed: () async {
+                Navigator.of(ctx).pop();
+                await DownloadManager.instance.clearAll();
+              },
+              child: Text(t.drawer.clearAll),
+            ),
+          ],
+        ),
       ),
     );
   }

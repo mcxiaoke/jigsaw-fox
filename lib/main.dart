@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
@@ -166,9 +167,11 @@ void main() async {
     // 启动即删逻辑已移除（违反 R1/R5 的无必要自动删除）。
   ];
   // 不阻塞首帧，后台并行；首帧先出壳由 contentUpdateNotifier 刷新
-  Future.wait(bgFutures).then((_) {
-    AppLogger.system.info('Background init group done');
-  });
+  unawaited(
+    Future.wait(bgFutures).then((_) {
+      AppLogger.system.info('Background init group done');
+    }),
+  );
   AppLogger.system.info(
     'App launch Locale=${LocaleService.instance.effectiveLocale.name} lang=${LocaleService.instance.language.name}',
   );

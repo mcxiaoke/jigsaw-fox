@@ -118,13 +118,15 @@ class _GameToastWidgetState extends State<_GameToastWidget>
       begin: const Offset(0, -1.2),
       end: Offset.zero,
     ).animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeOutBack));
-    _ctrl.forward();
+    unawaited(_ctrl.forward());
 
-    Future.delayed(widget.duration - const Duration(milliseconds: 300), () {
-      if (mounted) {
-        _ctrl.reverse().whenComplete(widget.onDismiss);
-      }
-    });
+    unawaited(
+      Future.delayed(widget.duration - const Duration(milliseconds: 300), () {
+        if (mounted) {
+          unawaited(_ctrl.reverse().whenComplete(widget.onDismiss));
+        }
+      }),
+    );
   }
 
   @override
