@@ -42,6 +42,12 @@ class LevelImageResolver {
   @visibleForTesting
   Map<String, Future<String>> get inFlightForTest => _inFlight;
 
+  /// 当前是否有前台网络图片（封面/关卡原图）正在下载落地中
+  bool get hasInFlightRequests => _inFlight.isNotEmpty;
+
+  /// 当前进行中的前台网络图片请求数
+  int get inFlightCount => _inFlight.length;
+
   /// 预热网络关卡落地根目录，确保冷启动首帧同步探测可用
   Future<void> warmup() async {
     await _getNetworkLevelsDir();

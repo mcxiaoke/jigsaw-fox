@@ -45,7 +45,7 @@ class CollectionsContentPipeline {
   /// 进行中的下载单飞表 (同 id 并发 ensure 复用同一 Future，防互删临时目录)
   final Map<String, Future<bool>> _inFlightDownloads = {};
 
-  /// 节流：上次通知进度的时间戳 (collectionId -> timestamp ms)，至多 2 秒派发一次
+  /// 节流：上次通知进度的时间戳 (collectionId -> timestamp ms)，至多 1 秒派发一次
   final Map<String, int> _lastProgressReportMs = {};
 
   bool isDownloading(String id) => _inFlightDownloads.containsKey(id);
@@ -575,8 +575,8 @@ class CollectionsContentPipeline {
     final now = DateTime.now().millisecondsSinceEpoch;
     final last = _lastProgressReportMs[id] ?? 0;
     final isTerminal = progress <= 0.0 || progress >= 1.0;
-    // 节流：终态（0% 或 100%）必须立即放行；中间进度至多 2 秒派发一次
-    if (!isTerminal && (now - last < 2000)) {
+    // 节流：终态（0% 或 100%）必须立即放行；中间进度至多 1 秒派发一次
+    if (!isTerminal && (now - last < 1000)) {
       return;
     }
     _lastProgressReportMs[id] = now;

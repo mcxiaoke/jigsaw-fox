@@ -77,6 +77,12 @@ class MainContentPipeline {
   /// 进行中的图片下载 (单飞防重：同关卡并发 ensure 复用同一 Future，防同路径并发写)
   final Map<String, Future<PuzzleLevelItem>> _inFlightDownloads = {};
 
+  /// 当前是否有首页关卡图片正在下载中
+  bool get hasInFlightDownloads => _inFlightDownloads.isNotEmpty;
+
+  /// 当前进行中的首页关卡下载数
+  int get inFlightDownloadsCount => _inFlightDownloads.length;
+
   /// 图片刷新待重试的远端条目（id → 远端新元数据；外部评审①）。
   /// 刷新失败保留旧条目，有待重试时不得走版本短路，下次 sync 重试。
   /// 与批次完整性（首启门禁依赖）正交：批次 id 照常标记已处理。

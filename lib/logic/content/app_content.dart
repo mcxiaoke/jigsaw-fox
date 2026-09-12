@@ -348,4 +348,12 @@ class AppContent {
 
   /// 是否正有网络同步在跑（后台全量轮/首启）。供 UI 短路互斥等待。
   bool get isSyncing => _manager?.isSyncing ?? false;
+
+  /// 是否正在执行活动/图集小包后台自动下载
+  bool get isAutoDownloading => _manager?.isAutoDownloading ?? false;
+
+  /// 触发活动与图集小包 (<20MB) 后台静默自动下载
+  void triggerAutoDownloadSmallPacks() {
+    _manager?.triggerAutoDownloadSmallPacks();
+  }
 }

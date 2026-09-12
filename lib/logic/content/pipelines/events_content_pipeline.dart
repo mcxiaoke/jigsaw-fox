@@ -50,8 +50,8 @@ class EventsContentPipeline {
     final now = DateTime.now().millisecondsSinceEpoch;
     final last = _lastProgressReportMs[id] ?? 0;
     final isTerminal = progress <= 0.0 || progress >= 1.0;
-    // 节流：终态（0% 或 100%）必须立即放行；中间进度至多 2 秒派发一次
-    if (!isTerminal && (now - last < 2000)) {
+    // 节流：终态（0% 或 100%）必须立即放行；中间进度至多 1 秒派发一次
+    if (!isTerminal && (now - last < 1000)) {
       return;
     }
     _lastProgressReportMs[id] = now;

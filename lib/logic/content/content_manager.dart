@@ -1,8 +1,11 @@
 // P1-4：外部内容（manifest/JSON/网络）解析防御：脏数据跳过降级，不中断启动
 // ignore_for_file: avoid_catches_without_on_clauses
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
+import 'package:jigsawpuzzle/logic/cache/level_image_resolver.dart';
 import 'package:jigsawpuzzle/logic/content/models/puzzle_collection_item.dart';
 import 'package:jigsawpuzzle/logic/content/models/puzzle_event_item.dart';
 import 'package:jigsawpuzzle/logic/content/models/puzzle_level_item.dart';
@@ -430,6 +433,7 @@ class ContentManager {
         }(),
       ]);
       AppLogger.content.info('syncAll done ${sw.elapsedMilliseconds}ms');
+      triggerAutoDownloadSmallPacks();
     } catch (e, st) {
       AppLogger.content.severe(
         'syncAll failed ${sw.elapsedMilliseconds}ms',
@@ -558,6 +562,187 @@ class ContentManager {
   /// 删除已下载的本地图集解压目录
   Future<bool> deleteDownloadedCollection(String collectionId) =>
       collectionsPipeline.deleteDownloadedCollection(collectionId);
+
+  // --- 活动与图集小包 (<20MB) 自动下载模块 ---
+
+  /// 活动与图集小包自动下载的最大体积阈值（20MB = 20 * 1024 * 1024 字节）
+  static const int kAutoDownloadMaxSizeBytes = 20 * 1024 * 1024;
+
+  bool _isAutoDownloading = false;
+
+  /// 是否正在执行小包自动下载任务
+  bool get isAutoDownloading => _isAutoDownloading;
+
+  /// 当前是否有前台图片（首页关卡原图或封面图）正在下载落地中
+  bool get hasForegroundInFlight =>
+      LevelImageResolver.instance.hasInFlightRequests ||
+      mainPipeline.hasInFlightDownloads;
+
+  /// 触发活动与图集小包 (<20MB) 的后台静默自动下载。
+  ///
+  /// 遵循低优先级与避让原则：
+  /// 1. 进入首页启动后，先等待前台无任何 in-flight 下载（首页关卡图、封面图全部下载完成）；
+  /// 2. 串行 FIFO 逐个下载，不并发挤占带宽；
+  /// 3. 单包下载前后礼让前台请求，包间设有冷却间隔；
+  /// 4. 仅限明确已知体积且 <= 20MB 的未下架、未下载 Zip 包；
+  /// 5. 与 UI 手动点击天然复用同一 Future（SingleFlight）。
+  void triggerAutoDownloadSmallPacks({
+    Duration initialCheckDelay = const Duration(seconds: 5),
+    Duration maxWaitInFlight = const Duration(seconds: 45),
+  }) {
+    if (_isAutoDownloading) {
+      AppLogger.content.fine('AutoDownload already running, skip trigger');
+      return;
+    }
+    unawaited(
+      _runAutoDownloadSmallPacks(
+        initialCheckDelay: initialCheckDelay,
+        maxWaitInFlight: maxWaitInFlight,
+      ),
+    );
+  }
+
+  /// 供测试显式调用的执行入口
+  @visibleForTesting
+  Future<void> runAutoDownloadSmallPacksForTest({
+    Duration initialCheckDelay = Duration.zero,
+    Duration maxWaitInFlight = const Duration(seconds: 5),
+    Duration coolDown = Duration.zero,
+  }) => _runAutoDownloadSmallPacks(
+    initialCheckDelay: initialCheckDelay,
+    maxWaitInFlight: maxWaitInFlight,
+    coolDown: coolDown,
+  );
+
+  Future<void> _runAutoDownloadSmallPacks({
+    required Duration initialCheckDelay,
+    required Duration maxWaitInFlight,
+    Duration coolDown = const Duration(milliseconds: 1500),
+  }) async {
+    if (_isAutoDownloading) return;
+    _isAutoDownloading = true;
+
+    try {
+      AppLogger.content.info(
+        'AutoDownload queued: waiting for in-flight requests to clear',
+      );
+
+      // 1. 启动轻量延时，确保首屏 UI 挂载并派发出必要的首页原图/封面请求
+      if (initialCheckDelay > Duration.zero) {
+        await Future<void>.delayed(initialCheckDelay);
+      }
+
+      // 2. 等待直到没有 in-flight 请求（首页关卡图与封面图全部落地完成）
+      final swWait = Stopwatch()..start();
+      while (hasForegroundInFlight) {
+        if (swWait.elapsed > maxWaitInFlight) {
+          AppLogger.content.warning(
+            'AutoDownload wait in-flight timeout (${maxWaitInFlight.inSeconds}s), proceeding carefully',
+          );
+          break;
+        }
+        await Future<void>.delayed(const Duration(milliseconds: 300));
+      }
+
+      AppLogger.content.info(
+        'AutoDownload in-flight cleared (waited ${swWait.elapsedMilliseconds}ms), evaluating eligible packs',
+      );
+
+      // 3. 筛选符合条件的活动与图集 (体积明确 >0 且 <= 20MB，未下架，未禁用，未下载，未在下载中)
+      final pendingEvents = eventsPipeline.visibleEvents.where((e) {
+        return e.isZipType &&
+            (e.zipUrl != null && e.zipUrl!.isNotEmpty) &&
+            !e.isDelisted &&
+            !e.isDisabled &&
+            e.fileSizeBytes > 0 &&
+            e.fileSizeBytes <= kAutoDownloadMaxSizeBytes &&
+            !eventsPipeline.isEventDownloaded(e) &&
+            !eventsPipeline.isDownloading(e.id);
+      }).toList();
+
+      final pendingCollections = collectionsPipeline.visibleCollections.where((
+        c,
+      ) {
+        return c.isZipType &&
+            (c.zipUrl != null && c.zipUrl!.isNotEmpty) &&
+            !c.isDelisted &&
+            !c.isDisabled &&
+            c.fileSizeBytes > 0 &&
+            c.fileSizeBytes <= kAutoDownloadMaxSizeBytes &&
+            !collectionsPipeline.isCollectionDownloaded(c) &&
+            !collectionsPipeline.isDownloading(c.id);
+      }).toList();
+
+      if (pendingEvents.isEmpty && pendingCollections.isEmpty) {
+        AppLogger.content.fine(
+          'AutoDownload: no eligible small packs to download',
+        );
+        return;
+      }
+
+      AppLogger.content.info(
+        'AutoDownload start: ${pendingEvents.length} events, ${pendingCollections.length} collections (<=20MB)',
+      );
+
+      // 4. 串行下载活动小包
+      for (final event in pendingEvents) {
+        await _yieldForForegroundDownloads();
+        if (eventsPipeline.isEventDownloaded(event)) continue;
+        AppLogger.content.info(
+          'AutoDownload start event ${event.id} size=${event.fileSizeBytes}bytes',
+        );
+        try {
+          await eventsPipeline.ensureEventDownloaded(event);
+        } catch (e, st) {
+          AppLogger.content.warning(
+            'AutoDownload event ${event.id} failed',
+            e,
+            st,
+          );
+        }
+        if (coolDown > Duration.zero) {
+          await Future<void>.delayed(coolDown);
+        }
+      }
+
+      // 5. 串行下载图集小包
+      for (final col in pendingCollections) {
+        await _yieldForForegroundDownloads();
+        if (collectionsPipeline.isCollectionDownloaded(col)) continue;
+        AppLogger.content.info(
+          'AutoDownload start collection ${col.id} size=${col.fileSizeBytes}bytes',
+        );
+        try {
+          await collectionsPipeline.ensureCollectionDownloaded(col);
+        } catch (e, st) {
+          AppLogger.content.warning(
+            'AutoDownload collection ${col.id} failed',
+            e,
+            st,
+          );
+        }
+        if (coolDown > Duration.zero) {
+          await Future<void>.delayed(coolDown);
+        }
+      }
+
+      AppLogger.content.info('AutoDownload small packs complete');
+    } catch (e, st) {
+      AppLogger.content.warning('AutoDownload unexpected error', e, st);
+    } finally {
+      _isAutoDownloading = false;
+    }
+  }
+
+  /// 单包下载前主动让行前台请求
+  Future<void> _yieldForForegroundDownloads({
+    Duration maxWait = const Duration(seconds: 15),
+  }) async {
+    final sw = Stopwatch()..start();
+    while (hasForegroundInFlight && sw.elapsed < maxWait) {
+      await Future<void>.delayed(const Duration(milliseconds: 300));
+    }
+  }
 
   static String _formatCurrentMonth(DateTime dt) {
     return '${dt.year.toString().padLeft(4, '0')}${dt.month.toString().padLeft(2, '0')}';
