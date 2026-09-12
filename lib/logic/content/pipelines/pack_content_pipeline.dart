@@ -41,7 +41,9 @@ class PackContentPipeline {
     final baseDir = Directory(packsBaseDir);
     if (!baseDir.existsSync()) {
       baseDir.createSync(recursive: true);
-      packsNotifier.value = const [];
+      if (packsNotifier.value.isNotEmpty) {
+        packsNotifier.value = const [];
+      }
       AppLogger.pack.info(
         'loadAllPacks base dir created empty ${AppLogger.sanitizePath(packsBaseDir)}',
       );
@@ -79,7 +81,9 @@ class PackContentPipeline {
 
     // 按导入时间倒序排列 (最新导入在最前)
     packs.sort((a, b) => b.importedAt.compareTo(a.importedAt));
-    packsNotifier.value = List.unmodifiable(packs);
+    if (!listEquals(packsNotifier.value, packs)) {
+      packsNotifier.value = List.unmodifiable(packs);
+    }
     AppLogger.pack.info('loadAllPacks done count=${packs.length}');
     return packs;
   }

@@ -160,9 +160,9 @@ class AppContent {
   /// P0-3：将各管线自身的更新通知聚合为全局 [contentUpdateNotifier]。
   /// 仅在初始化时挂载一次；管线只管自身状态，外层负责转发，不反向依赖。
   ///
-  /// 转发必须经 microtask 延迟合并：管线通知可能在首帧构建期内同步到达
-  /// （如索引构建触发 `loadAllPacks`），直接同步 bump 会导致监听页在
-  /// build 期间 setState 而崩溃；microtask 将其推迟到当前同步段之后。
+  /// 转发必须经 microtask 延迟合并：管线通知可能在首帧构建期内同步到达，
+  /// 直接同步 bump 会导致监听页在 build 期间 setState 而崩溃；
+  /// microtask 将其推迟到当前同步段之后。
   bool _forwardPending = false;
 
   void _attachPipelineForwarding() {

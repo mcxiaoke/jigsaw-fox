@@ -217,5 +217,37 @@ void main() {
       expect(levels.first.localPath, isNotNull);
       expect(p.basename(levels.first.localPath!), equals('valid_image.png'));
     });
+
+    test(
+      '6. loadAllPacks does not notify packsNotifier if content is unchanged',
+      () async {
+        var notifyCount = 0;
+        pipeline.packsNotifier.addListener(() {
+          notifyCount++;
+        });
+
+        // 首次加载（空目录）：初始就是空列表，扫完依然为空，不应触发通知
+        await pipeline.loadAllPacks();
+        expect(notifyCount, equals(0));
+
+        // 重复调用 loadAllPacks（仍为空）：不应触发通知
+        await pipeline.loadAllPacks();
+        expect(notifyCount, equals(0));
+
+        // 导入一个包后：必须通知 1 次（由 importFromLocalZip 内部的 loadAllPacks 触发）
+        final zipPath = p.join(tempDir.path, 'notify_test.zip');
+        final archive = Archive()
+          ..addFile(
+            ArchiveFile('valid.png', testPngBytes.length, testPngBytes),
+          );
+        File(zipPath).writeAsBytesSync(ZipEncoder().encode(archive));
+        await pipeline.importFromLocalZip(zipPath);
+        expect(notifyCount, equals(1));
+
+        // 此时再调用 loadAllPacks（内容完全一致）：不应再次触发通知
+        await pipeline.loadAllPacks();
+        expect(notifyCount, equals(1));
+      },
+    );
   });
 }

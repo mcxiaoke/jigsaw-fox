@@ -131,4 +131,36 @@ class PuzzlePackItem {
       tags: tags ?? this.tags,
     );
   }
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is PuzzlePackItem &&
+          runtimeType == other.runtimeType &&
+          id == other.id &&
+          title == other.title &&
+          description == other.description &&
+          author == other.author &&
+          coverPath == other.coverPath &&
+          levelCount == other.levelCount &&
+          fileSizeBytes == other.fileSizeBytes &&
+          importedAt == other.importedAt &&
+          sourceType == other.sourceType &&
+          sourceOrigin == other.sourceOrigin &&
+          listEquals(tags, other.tags);
+
+  @override
+  int get hashCode => Object.hash(
+    id,
+    title,
+    description,
+    author,
+    coverPath,
+    levelCount,
+    fileSizeBytes,
+    importedAt,
+    sourceType,
+    sourceOrigin,
+    Object.hashAll(tags),
+  );
 }

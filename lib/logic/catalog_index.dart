@@ -93,8 +93,7 @@ class UnifiedCatalogIndex {
     _inFlight = future;
     try {
       _cached = await future;
-      // v8 修 c：构建期间若又发生过 invalidate（例如本次构建的
-      // `loadAllPacks` 触发了内容更新），保持 dirty，让下一次调用重建，
+      // 构建期间若外部并发触发了 invalidate，保持 dirty，让下一次调用重建，
       // 而不是用“构建前的快照”覆盖新状态。
       if (_invalidations == genAtStart) {
         _dirty = false;
@@ -228,9 +227,7 @@ class UnifiedCatalogIndex {
     // 4. 扩展包 (pack:packId:file)
     try {
       if (AppContent.instance.isInitialized) {
-        final packs = AppContent.instance.packs.packsNotifier.value.isNotEmpty
-            ? AppContent.instance.packs.packsNotifier.value
-            : await AppContent.instance.packs.loadAllPacks();
+        final packs = AppContent.instance.packs.packsNotifier.value;
         for (final pack in packs) {
           final levels = AppContent.instance.packs.getPackLevels(pack);
           for (final lvl in levels) {
