@@ -118,13 +118,32 @@ class PuzzlePieceComponent extends PositionComponent
     ..color = const Color(0x30000000)
     ..isAntiAlias = true;
 
-  /// 拖拽拾起悬浮扩散软阴影画笔：
-  /// - 模糊半径 7.0px，偏移 (2.0, 6.0px)，透明度 0x40 (约 25%)
+  /// 拖拽拾起悬浮扩散软阴影画笔（3 档模糊位池）：
+  /// - 透明度 0x40 (约 25%)，偏移随缩放逆缩放（见 [render]）
   /// - 模拟碎片被玩家手指拾起并悬浮在棋盘上方时的真实光学向右下方扩散的深层软投影。
-  static final Paint _dragShadowPaint = Paint()
-    ..color = const Color(0x40000000)
-    ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 7)
-    ..isAntiAlias = true;
+  ///
+  /// 【为何用位池而非单支画笔】：`MaskFilter` 是不可变对象，无法原地修改模糊半径；
+  /// 若每帧重建会产生 Dart 堆分配，违背零 GC 约束。故预置 3 档静态画笔，
+  /// 按缩放系数取档，全程只做下标读取，零分配。
+  ///
+  /// 【屏幕半径表现】：局部半径 × 缩放系数 = 屏幕半径。档位在端点处存在阶跃，
+  /// 屏幕半径实际落在 3.5 ~ 7.0px 区间（非严格恒定），视觉上属于可接受的轻微差异，
+  /// 且拖拽时全局同时仅 1 个碎片/集群在渲染此阴影，阶跃不被感知。
+  static final List<Paint> _dragShadowBlurTiers = <double>[7.0, 3.5, 2.5]
+      .map(
+        (r) => Paint()
+          ..color = const Color(0x40000000)
+          ..maskFilter = MaskFilter.blur(BlurStyle.normal, r)
+          ..isAntiAlias = true,
+      )
+      .toList(growable: false);
+
+  /// 按当前缩放系数 [s] 选取拖拽阴影模糊档位（s 已截顶至 >= 1.0）
+  static Paint _dragShadowBlurPaintFor(double s) {
+    if (s <= 1.0) return _dragShadowBlurTiers[0];
+    if (s <= 2.0) return _dragShadowBlurTiers[1];
+    return _dragShadowBlurTiers[2];
+  }
 
   /// 纸板物理厚度截面填充画笔（方案 2）：
   /// - 填充荷兰天然白卡/灰卡纸的夹芯浅米灰截面色（Color(0xFFD6D0C4)）
@@ -205,13 +224,44 @@ class PuzzlePieceComponent extends PositionComponent
 
     final isElevated = isDragging && !isInTray;
 
+    // ---------------------------------------------------------------------
+    // 屏幕恒定（视口逻辑像素）逆缩放：线条与位移在放大后不再被成倍放大。
+    //
+    // 【公式】localValue = baseline / max(s, 1.0)，其中 s = 组件自身 scale.x。
+    //   - s > 1（棋盘放大）：屏幕值恒等于基线，线条不随放大变粗；
+    //   - s <= 1（托盘 / 1x / 过渡带下探）：局部值 = 基线，与改动前逐像素一致。
+    //
+    // 【为何取组件 scale.x 而非 game.zoom】
+    //   托盘态 scale = _trayPieceScale（= 64 / 碎片最大边，可远小于 1 或大于 2），
+    //   拖拽过程 scale = 托盘与棋盘之间逐帧插值，二者均不等于 _zoom。
+    //   误用 game.zoom 会导致托盘与过渡带线宽/位移全部算错。
+    //
+    // 【为何 max(s, 1.0) 而非直接用 s】
+    //   托盘态 s 可低至 0.2 左右，此时 1/s 会让局部线宽暴增（0.8 → 4.0px）侵蚀图案。
+    //   截顶至 1.0 后低倍场景完全退化为原有行为，改动面收敛到"放大"这一个维度。
+    //
+    // 【注意】上方视锥剔除刻意使用原始 scale.x / scale.y（即真实缩放），
+    //   与此处的截顶口径不同，二者不可合并。
+    // ---------------------------------------------------------------------
+    final s = scale.x > 1.0 ? scale.x : 1.0;
+
+    // 线宽赋值统一置于渲染开头且无条件执行：这些 static Paint 跨碎片复用，
+    // 若分散在 isHighlight 分支内，会遗留上一碎片的线宽值。
+    _shadowOutlinePaint.strokeWidth = screenInvariantValue(1.2, scale.x);
+    _highlightOutlinePaint.strokeWidth = screenInvariantValue(0.8, scale.x);
+    _cardboardBottomEdgePaint.strokeWidth = screenInvariantValue(0.8, scale.x);
+    _snapHighlightPaint.strokeWidth = screenInvariantValue(2.5, scale.x);
+
     // 1. 第一层：根据当前物理状态绘制 3D 软阴影（在剪裁外部）
     canvas.save();
     if (isElevated) {
-      canvas.translate(2, 6);
-      canvas.drawPath(shape.path, _dragShadowPaint);
+      canvas.translate(
+        screenInvariantValue(2.0, scale.x),
+        screenInvariantValue(6.0, scale.x),
+      );
+      canvas.drawPath(shape.path, _dragShadowBlurPaintFor(s));
     } else {
-      canvas.translate(0, 0.8);
+      canvas.translate(0, screenInvariantValue(0.8, scale.x));
       canvas.drawPath(shape.path, _contactShadowPaint);
     }
     canvas.restore();
@@ -220,7 +270,10 @@ class PuzzlePieceComponent extends PositionComponent
     if (isElevated) {
       canvas.save();
       canvas
-        ..translate(0.8, 1.6)
+        ..translate(
+          screenInvariantValue(0.8, scale.x),
+          screenInvariantValue(1.6, scale.x),
+        )
         ..drawPath(shape.path, _cardboardSidePaint)
         ..drawPath(shape.shadowPath, _cardboardBottomEdgePaint)
         ..restore();
@@ -449,13 +502,31 @@ class PuzzlePieceComponent extends PositionComponent
     );
   }
 
-  /// 碎片成功吸附就位时触发短暂的流光反馈特效
+  /// 吸附流光反馈代数令牌：每次触发自增，延迟回调仅在令牌未被刷新时生效。
+  /// 消除"连续两次吸附时，前一次的回调提前熄灭后一次流光"的竞态。
+  int _snapGlowToken = 0;
+
+  /// 碎片成功吸附就位时触发短暂的流光反馈特效（约 380ms 后自动熄灭）
+  ///
+  /// 【为何移除边缘筛选复辟】原实现在倒计时结束后会把 [isHighlight] 重新置为
+  /// "筛选开启且本片属边缘"，导致边缘碎片在筛选期间常驻绿框，400 片下极度嘈杂。
+  /// 边缘筛选的区分职责由 `JigsawPuzzleGame.updatePieceVisibility`（通过
+  /// `isFilteredOut` 直接隐藏非边缘碎片）承担，不依赖此绿框，故移除后无功能空洞。
   void triggerSnapGlow() {
     isHighlight = true;
-    final layout = game.edgeLayout;
+    final token = ++_snapGlowToken;
     Future.delayed(const Duration(milliseconds: 380), () {
-      if (isRemoved || game.edgeLayout != layout) return;
-      isHighlight = game.isBorderFilterActive && layout.edgesFor(r, c).isBorder;
+      if (isRemoved || token != _snapGlowToken) return;
+      isHighlight = false;
     });
+  }
+
+  /// 屏幕恒定（视口逻辑像素）逆缩放：把目标屏幕值换算为组件局部坐标系下的值。
+  ///
+  /// `localValue = screenValue / max(scale, 1.0)`，仅放大方向生效（详见 [render]）。
+  /// 提取为 static 便于单元测试断言"屏幕恒定"契约。
+  static double screenInvariantValue(double screenValue, double scale) {
+    final s = scale > 1.0 ? scale : 1.0;
+    return screenValue / s;
   }
 }
