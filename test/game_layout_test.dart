@@ -1400,7 +1400,7 @@ void main() {
     expect(game.zoom, closeTo(1.0, 0.001));
   });
 
-  test('桌面与棋盘碎片拖拽与松手全周期受安全视口保护，严禁脱离屏幕或进入操作盲区丢失', () async {
+  test('碎片拖拽与松手全周期：主片中心恒在交互安全区内、碎片永不整体消失、松手绝不被拽回中央', () async {
     final img = await _decodePng();
     final game = JigsawPuzzleGame(
       image: img,
@@ -1414,42 +1414,155 @@ void main() {
 
     final piece = game.children.whereType<PuzzlePieceComponent>().first;
 
-    // 1. 尝试将碎片疯狂向左上方甩出屏幕（x = -500, y = -500）
+    // 主片中心的屏幕坐标（限位约束的对象就是它）
+    Vector2 center() => Vector2(
+      piece.position.x + piece.size.x * piece.scale.x / 2,
+      piece.position.y + piece.size.y * piece.scale.y / 2,
+    );
+
+    // 1. 向左上极端甩出：中心必须贴止于安全区左上角 (8, 8)
     game.startHoldingPiece(piece, 0.5, 0.5);
     game.updateHoldingPiecePosition(Vector2(-500, -500));
-    // 验证左边缘绝不超过 _sideMargin (8.0)，顶边缘绝不超过 _topToolbarHeight (8.0)
-    expect(piece.position.x, greaterThanOrEqualTo(8.0));
-    expect(piece.position.y, greaterThanOrEqualTo(8.0));
+    expect(center().x, closeTo(8.0, 0.01), reason: '主片中心必须被限制在安全区左边界');
+    expect(center().y, closeTo(8.0, 0.01), reason: '主片中心必须被限制在安全区上边界');
+    // 关键：碎片本身允许部分伸出视口，但绝不允许"整体消失"（否则玩家再也抓不到）
+    expect(
+      piece.position.x + piece.size.x * piece.scale.x,
+      greaterThan(8.0),
+      reason: '碎片必须与视口保持可见交集，严禁整体移出而丢失',
+    );
+    expect(
+      piece.position.y + piece.size.y * piece.scale.y,
+      greaterThan(8.0),
+      reason: '碎片必须与视口保持可见交集，严禁整体移出而丢失',
+    );
 
-    // 松手释放，验证依然稳妥停在安全可视区内
+    // 松手释放后必须停留在原处，绝不能被"拽回屏幕中央"
     game.dropHoldingPiece();
-    expect(piece.position.x, greaterThanOrEqualTo(8.0));
-    expect(piece.position.y, greaterThanOrEqualTo(8.0));
+    expect(
+      center().x,
+      lessThan(60.0),
+      reason: '松手后仍应停留在视野左上边缘，绝不被拽回中央',
+    );
+    expect(
+      center().y,
+      lessThan(60.0),
+      reason: '松手后仍应停留在视野左上边缘，绝不被拽回中央',
+    );
 
-    // 2. 尝试将碎片疯狂向右下方甩出屏幕（x = 1000, y = 1500）
+    // 2. 向右下极端甩出：中心贴止于安全区右下角，同样保持与视口可见交集
     game.startHoldingPiece(piece, 0.5, 0.5);
     game.updateHoldingPiecePosition(Vector2(1000, 1500));
-    final pieceVisualW = piece.size.x * piece.scale.x;
-    final pieceVisualH = piece.size.y * piece.scale.y;
+    expect(center().x, closeTo(400.0 - 8.0, 0.01));
+    expect(center().y, closeTo(800.0 - 8.0, 0.01));
+    expect(piece.position.x, lessThan(400.0 - 8.0));
+    expect(piece.position.y, lessThan(800.0 - 8.0));
+
+    game.dropHoldingPiece();
+    expect(center().x, greaterThan(400.0 - 60.0));
+    expect(center().y, greaterThan(800.0 - 60.0));
+  });
+
+  test('放大 2.0x 后多块集群可自由拖拽：行程不再退化为 0，且可推出视口暂存（修复"碎片组锁死/弹回"）', () async {
+    final img = await _decodePng();
+    final game = JigsawPuzzleGame(
+      image: img,
+      rows: 3,
+      cols: 3,
+      onSolved: () {},
+    );
+    game.onGameResize(Vector2(1200, 800));
+    await game.onLoad();
+
+    // 放大到 maxZoom（各难度恒为 2.0）
+    game.zoomAt(Vector2(600, 400), game.maxZoom - game.zoom);
+    expect(game.zoom, closeTo(2.0, 0.01));
+
+    final pieces = game.children.whereType<PuzzlePieceComponent>().toList();
+    PuzzlePieceComponent byId(int id) => pieces.firstWhere((p) => p.id == id);
+    final ids = [0, 1, 3, 4]; // 2x2 已吸附集群
+    void resetCluster() {
+      for (final id in ids) {
+        byId(id)
+          ..isLocked = false
+          ..clusterId = 999
+          ..isInTray = false;
+      }
+    }
+
+    final primary = byId(0);
+
+    // 1. 光标横扫：收集主片落点，验证行程不再退化（修复前 4x4 盘 2x2 集群 travelY 为 0，
+    //    且不同光标位置会被钉死到同一个点）
+    final xs = <double>[];
+    final ys = <double>[];
+    for (var cx = 0.0; cx <= 1200; cx += 150) {
+      for (var cy = 0.0; cy <= 800; cy += 100) {
+        resetCluster();
+        game.startHoldingPiece(primary, 0.5, 0.5);
+        game.updateHoldingPiecePosition(Vector2(cx, cy));
+        xs.add(primary.position.x);
+        ys.add(primary.position.y);
+        game.cancelHoldingPiece();
+      }
+    }
+    double span(List<double> v) =>
+        v.reduce((a, b) => a > b ? a : b) - v.reduce((a, b) => a < b ? a : b);
+
     expect(
-      piece.position.x + pieceVisualW,
-      lessThanOrEqualTo(400.0 - 8.0 + 0.01),
+      span(xs),
+      greaterThan(600.0),
+      reason: '放大后集群的水平可移动行程必须接近整屏宽度，绝不允许退化为 0',
     );
     expect(
-      piece.position.y + pieceVisualH,
-      lessThanOrEqualTo(800.0 - 8.0 + 0.01),
+      span(ys),
+      greaterThan(400.0),
+      reason: '放大后集群的垂直可移动行程必须显著大于 0（旧实现此处为 0，表现为完全拖不动）',
+    );
+    expect(
+      xs.map((v) => v.toStringAsFixed(0)).toSet().length,
+      greaterThanOrEqualTo(5),
+      reason: '不同光标位置必须产生互不相同的落点，严禁被钉死在极少数离散点',
     );
 
-    // 松手释放
+    // 2. 推出视口暂存：把集群推到右下极端，主片中心贴安全区右下角，
+    //    集群其余成员允许整体越过视口边界（这正是"腾挪"能力）
+    resetCluster();
+    game.startHoldingPiece(primary, 0.5, 0.5);
+    game.updateHoldingPiecePosition(Vector2(1500, 1200));
+    final centerX = primary.position.x + primary.size.x * primary.scale.x / 2;
+    final centerY = primary.position.y + primary.size.y * primary.scale.y / 2;
+    expect(centerX, closeTo(1200.0 - 8.0, 0.01), reason: '主片中心贴止于安全区右下角');
+    expect(centerY, closeTo(800.0 - 8.0, 0.01));
+
+    var offViewportMembers = 0;
+    for (final id in ids) {
+      final p = byId(id);
+      final visualW = p.size.x * p.scale.x;
+      final visualH = p.size.y * p.scale.y;
+      final visible =
+          p.position.x + visualW > 0 &&
+          p.position.x < 1200.0 &&
+          p.position.y + visualH > 0 &&
+          p.position.y < 800.0;
+      if (!visible) offViewportMembers++;
+    }
+    expect(
+      offViewportMembers,
+      greaterThan(0),
+      reason: '放大后集群必须允许被推出可视区暂存（至少一个成员完全越出视口）',
+    );
+
+    // 3. 松手后位置保持，绝不被拽回中央
+    final beforeX = primary.position.x;
+    final beforeY = primary.position.y;
     game.dropHoldingPiece();
     expect(
-      piece.position.x + pieceVisualW,
-      lessThanOrEqualTo(400.0 - 8.0 + 0.01),
+      primary.position.x,
+      closeTo(beforeX, 0.01),
+      reason: '松手后集群必须停留在原处，绝不被拽回屏幕中央',
     );
-    expect(
-      piece.position.y + pieceVisualH,
-      lessThanOrEqualTo(800.0 - 8.0 + 0.01),
-    );
+    expect(primary.position.y, closeTo(beforeY, 0.01));
   });
 
   test('桌面散落模式（Tabletop）放大 2.0x 后可自由全景漫游至四周最外围散落槽位，无 Y 轴死锁', () async {

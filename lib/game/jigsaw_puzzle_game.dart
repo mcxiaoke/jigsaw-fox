@@ -467,17 +467,22 @@ class JigsawPuzzleGame extends FlameGame
       }
     }
 
-    // 4. 视口边界安全自适应与游离碎片/拼合集群防出界收拢 (Viewport Clamp & Cluster Pullback)
-    // 当窗口缩小导致游离碎片或自由集群超出可视范围时，自动安全收拢在视野内，集群按包围盒整体平移
-    const safeMinX = 8.0;
-    final safeMaxX = max(safeMinX, size.x - pieceSize.x - 8.0);
-    const safeMinY = 44.0;
-    final safeMaxY = max(
-      safeMinY,
-      (isTabletop ? size.y : trayPosition.y) - pieceSize.y - 8.0,
-    );
+    // 4. 合法域边界安全自适应与游离碎片/拼合集群防越界收拢 (Domain Clamp & Cluster Pullback)
+    //
+    // 判据从旧的"屏幕视口"升级为"合法摆放域"（[_legalDomainScreenRect]）：
+    // 放大后碎片允许合法地停在当前视口之外（本次修复新增的能力），若仍以屏幕为界，
+    // 每次改窗口都会把玩家摆到视野外的碎片组再次拽回，问题复发。集群仍按外接包围盒
+    // 整体原子平移，绝不拆散。
+    final domainRect = _legalDomainScreenRect();
+    final boundLeft = max(domainRect.left, _sideMargin);
+    final boundRight = max(boundLeft, domainRect.right - _sideMargin);
+    final boundTop = max(domainRect.top, 44.0);
+    final boundBottom = max(boundTop, domainRect.bottom - _sideMargin);
+    // 单块游离碎片需整体落在域内，故再减去自身尺寸
+    final singleMaxX = max(boundLeft, boundRight - pieceSize.x);
+    final singleMaxY = max(boundTop, boundBottom - pieceSize.y);
 
-    // 仅针对在棋盘外部/散落区域的游离碎片进行视口安全收拢，处于合法棋盘范围内的碎片随棋盘整体自适应，严禁误 Clamp
+    // 仅针对越过合法域的游离碎片进行收拢，处于域内的碎片随棋盘/大桌面整体自适应，严禁误 Clamp
     final freeComponents = _pieces.values.where((p) {
       if (p.isInTray || p.isLocked || p == _holdingPiece || p.isDragging) {
         return false;
@@ -504,8 +509,8 @@ class JigsawPuzzleGame extends FlameGame
         final comp = cluster.first;
         final curX = comp.position.x;
         final curY = comp.position.y;
-        final clampedX = curX.clamp(safeMinX, safeMaxX);
-        final clampedY = curY.clamp(safeMinY, safeMaxY);
+        final clampedX = curX.clamp(boundLeft, singleMaxX);
+        final clampedY = curY.clamp(boundTop, singleMaxY);
 
         if (clampedX != curX || clampedY != curY) {
           comp.position.setValues(clampedX, clampedY);
@@ -533,17 +538,16 @@ class JigsawPuzzleGame extends FlameGame
         var shiftX = 0.0;
         var shiftY = 0.0;
 
-        if (minCX < safeMinX) {
-          shiftX = safeMinX - minCX;
-        } else if (maxCX > size.x - 8.0) {
-          shiftX = (size.x - 8.0) - maxCX;
+        if (minCX < boundLeft) {
+          shiftX = boundLeft - minCX;
+        } else if (maxCX > boundRight) {
+          shiftX = boundRight - maxCX;
         }
 
-        final topLimit = isTabletop ? size.y - 8.0 : trayPosition.y - 8.0;
-        if (minCY < safeMinY) {
-          shiftY = safeMinY - minCY;
-        } else if (maxCY > topLimit) {
-          shiftY = topLimit - maxCY;
+        if (minCY < boundTop) {
+          shiftY = boundTop - minCY;
+        } else if (maxCY > boundBottom) {
+          shiftY = boundBottom - maxCY;
         }
 
         if (shiftX != 0.0 || shiftY != 0.0) {
@@ -1149,12 +1153,56 @@ class JigsawPuzzleGame extends FlameGame
     onStateUpdated?.call();
   }
 
+  /// 拖拽交互安全矩形的上下左右（屏幕坐标）——**主片中心**允许停留的范围。
+  ///
+  /// 【为什么是"中心"而不是"整簇包围盒"】
+  /// 旧实现（提交 `a5deb7b` 引入）要求整个集群的外接包围盒都塞进屏幕，
+  /// 边界形如 `size - margin - clusterOffset`，其中 `clusterOffset` 含 `× _zoom`。
+  /// 当 `_zoom >= 2`（本项目各难度 `maxZoom` 恒为 2.0）且集群投影尺寸超过可用空间时，
+  /// 会出现 `safeMin > safeMax`，被 `min/max` 兜底退化成**一个点**：
+  /// 碎片组完全拖不动、松手即被钉死（实测 4×4 盘 2×2 集群在 1200×800 下 Y 轴行程为 0）。
+  ///
+  /// 改为约束**单点（主片中心）**后：区间恒为正，数学上不可能退化；
+  /// 集群其余部分（乃至主片的大半）允许伸出视口，从而支持放大状态下把已拼合的
+  /// 碎片组推出可视区暂存——这正是本次修复的核心诉求。
+  /// 同时"主片中心恒在视口内"仍保证碎片**永不完全消失**、随时可再次抓取。
+  ({double left, double top, double right, double bottom})
+  get _dragCenterSafeBounds => (
+    left: _sideMargin,
+    top: _topToolbarHeight,
+    right: max(_sideMargin, size.x - _sideMargin),
+    bottom: max(_topToolbarHeight, size.y - _bottomTrayMargin),
+  );
+
+  /// 拖拽限位的**唯一入口**：先按光标与归一化锚点算出主片左上角，
+  /// 再把主片中心夹入 [_dragCenterSafeBounds]。拖拽期与松手期共用，杜绝两处公式漂移。
+  ///
+  /// - [cursorCanvasPos]：当前光标（= 抓取点）的画布坐标；
+  /// - [pieceSizeRef]：主片基础尺寸；[scale]：当前拖拽缩放；
+  /// - [anchorX]/[anchorY]：归一化抓取锚点（0~1）。
+  Vector2 _clampDragTarget({
+    required Vector2 cursorCanvasPos,
+    required Vector2 pieceSizeRef,
+    required double scale,
+    required double anchorX,
+    required double anchorY,
+  }) {
+    final safe = _dragCenterSafeBounds;
+    final visualW = pieceSizeRef.x * scale;
+    final visualH = pieceSizeRef.y * scale;
+    final rawLeft = cursorCanvasPos.x - anchorX * visualW;
+    final rawTop = cursorCanvasPos.y - anchorY * visualH;
+    final centerX = (rawLeft + visualW / 2).clamp(safe.left, safe.right);
+    final centerY = (rawTop + visualH / 2).clamp(safe.top, safe.bottom);
+    return Vector2(centerX - visualW / 2, centerY - visualH / 2);
+  }
+
   /// 根据鼠标光标位置 [cursorCanvasPos]，精确更新被吸附碎片（及其集群）的位置与平滑缩放
   void updateHoldingPiecePosition(Vector2 cursorCanvasPos) {
     final primary = _holdingPiece;
     if (primary == null || _isSolved) return;
 
-    // 0. 计算同集群内其他碎片（后续缩放、包围盒限位与托盘脱离判定共用）
+    // 0. 计算同集群内其他碎片（后续缩放、位置联动与托盘脱离判定共用）
     final clusterPieces = _pieces.values.where(
       (p) => p.clusterId == primary.clusterId && p != primary,
     );
@@ -1183,53 +1231,18 @@ class JigsawPuzzleGame extends FlameGame
       }
     }
 
-    // 2. 根据归一化锚点精确计算主碎片的新左上角坐标（无论缩放多少，光标永远对准抓取点）
-    final rawTargetX =
-        cursorCanvasPos.x - _holdingAnchorX * primary.size.x * currentScale;
-    final rawTargetY =
-        cursorCanvasPos.y - _holdingAnchorY * primary.size.y * currentScale;
-
-    // 3. 计算同集群内其他碎片的相对偏移范围（包围盒约束）
-    var minCol = 0;
-    var maxCol = 0;
-    var minRow = 0;
-    var maxRow = 0;
-    for (final p in clusterPieces) {
-      final relC = p.c - primary.c;
-      final relR = p.r - primary.r;
-      if (relC < minCol) minCol = relC;
-      if (relC > maxCol) maxCol = relC;
-      if (relR < minRow) minRow = relR;
-      if (relR > maxRow) maxRow = relR;
-    }
-
-    final clusterLeftOffset = minCol * primary.size.x * currentScale;
-    final clusterRightOffset = (maxCol + 1) * primary.size.x * currentScale;
-    final clusterTopOffset = minRow * primary.size.y * currentScale;
-    final clusterBottomOffset = (maxRow + 1) * primary.size.y * currentScale;
-
-    // 安全边界限位：
-    // - 水平方向：四周预留 _sideMargin (8px)
-    // - 垂直方向：顶部预留 _topToolbarHeight (8px) 贴边避让进度条/AppBar 底沿
-    // - 下界限制：
-    //   * 桌面模式：限制在屏幕底部 size.y - 8.0
-    //   * 托盘模式单片（可放回托盘）：限制在屏幕底部 size.y - 8.0
-    //   * 托盘模式集群（不可放回托盘）：严格以托盘顶部 trayPosition.y - 8.0 为界，绝不遮挡托盘
-    final safeMinX = _sideMargin - clusterLeftOffset;
-    final safeMaxX = size.x - _sideMargin - clusterRightOffset;
-    final safeMinY = _topToolbarHeight - clusterTopOffset;
-    final safeMaxY =
-        (isTabletop || clusterPieces.isEmpty
-            ? size.y - 8.0
-            : trayPosition.y - 8.0) -
-        clusterBottomOffset;
-
-    final targetX = rawTargetX
-        .clamp(min(safeMinX, safeMaxX), max(safeMinX, safeMaxX))
-        .toDouble();
-    final targetY = rawTargetY
-        .clamp(min(safeMinY, safeMaxY), max(safeMinY, safeMaxY))
-        .toDouble();
+    // 2. 根据归一化锚点精确计算主碎片的新左上角坐标（无论缩放多少，光标永远对准抓取点），
+    //    并把主片中心夹入交互安全区。限位只作用于"单点（中心）"，区间恒为正、
+    //    永不退化为单点锁死；集群其余部分允许伸出视口（详见 [_clampDragTarget]）。
+    final target = _clampDragTarget(
+      cursorCanvasPos: cursorCanvasPos,
+      pieceSizeRef: primary.size,
+      scale: currentScale,
+      anchorX: _holdingAnchorX,
+      anchorY: _holdingAnchorY,
+    );
+    final targetX = target.x;
+    final targetY = target.y;
 
     primary.clearActiveEffects();
     primary.scale.setAll(currentScale);
@@ -1245,7 +1258,7 @@ class JigsawPuzzleGame extends FlameGame
       p.position.setValues(px, py);
     }
 
-    // 4. 托盘碎片脱离判定：若碎片原先在托盘中，当且仅当玩家将其真正向上拖出托盘区域时，才正式脱离托盘并平滑闭合托盘空隙
+    // 3. 托盘碎片脱离判定：若碎片原先在托盘中，当且仅当玩家将其真正向上拖出托盘区域时，才正式脱离托盘并平滑闭合托盘空隙
     if (!isTabletop &&
         primary.isInTray &&
         cursorCanvasPos.y < trayPosition.y - 20.0) {
@@ -1481,6 +1494,42 @@ class JigsawPuzzleGame extends FlameGame
     _panOffset.y = _panOffset.y.clamp(
       min(minPanY, maxPanY),
       max(minPanY, maxPanY),
+    );
+  }
+
+  /// 合法摆放域的**屏幕投影**矩形（与 [_clampPanOffset] 的归一化域同源，杜绝两处定义漂移）。
+  ///
+  /// - 托盘模式：棋盘域 `nx, ny ∈ [0, 1]` ⇒ 当前 pan/zoom 下的棋盘矩形；
+  /// - 桌面模式：由视口反算的大桌面域 ⇒ 与视口贴合的矩形（放大后随 zoom 扩展）。
+  ///
+  /// 【用途】窗口尺寸变化时，只收拢"真正越过合法域"的游离碎片；
+  /// 因为放大后碎片可以合法地停在**当前视口之外**的域内（这正是本次修复新增的能力），
+  /// 若沿用旧的"屏幕视口"判据会在每次改窗口时把玩家摆好的碎片再次拽回，问题复发。
+  ({double left, double top, double right, double bottom})
+  _legalDomainScreenRect() {
+    final topLeft = boardTopLeft + _panOffset;
+    final eff = boardSize * _zoom;
+    if (!isTabletop) {
+      return (
+        left: topLeft.x,
+        top: topLeft.y,
+        right: topLeft.x + eff.x,
+        bottom: topLeft.y + eff.y,
+      );
+    }
+    const viewLeft = _sideMargin;
+    final viewRight = size.x - _sideMargin;
+    const viewTop = _topToolbarHeight;
+    final viewBottom = size.y - _bottomTrayMargin;
+    final minX = (viewLeft - boardTopLeft.x) / boardSize.x;
+    final maxX = (viewRight - boardTopLeft.x) / boardSize.x;
+    final minY = (viewTop - boardTopLeft.y) / boardSize.y;
+    final maxY = (viewBottom - boardTopLeft.y) / boardSize.y;
+    return (
+      left: topLeft.x + minX * eff.x,
+      top: topLeft.y + minY * eff.y,
+      right: topLeft.x + maxX * eff.x,
+      bottom: topLeft.y + maxY * eff.y,
     );
   }
 
@@ -1914,42 +1963,26 @@ class JigsawPuzzleGame extends FlameGame
       p.isInTray = false;
     }
 
-    // 防御性二次限位：确保松手留在棋盘或桌面上的碎片绝对在可视安全区内（防御手势中断等边缘情况）
-    var minCol = 0;
-    var maxCol = 0;
-    var minRow = 0;
-    var maxRow = 0;
-    for (final p in clusterPieces) {
-      final relC = p.c - piece.c;
-      final relR = p.r - piece.r;
-      if (relC < minCol) minCol = relC;
-      if (relC > maxCol) maxCol = relC;
-      if (relR < minRow) minRow = relR;
-      if (relR > maxRow) maxRow = relR;
-    }
-    final clusterLeftOffset = minCol * piece.size.x * piece.scale.x;
-    final clusterRightOffset = (maxCol + 1) * piece.size.x * piece.scale.x;
-    final clusterTopOffset = minRow * piece.size.y * piece.scale.y;
-    final clusterBottomOffset = (maxRow + 1) * piece.size.y * piece.scale.y;
+    // 防御性二次限位：与拖拽期共用同一入口 [_clampDragTarget]（保证"主片中心在安全区内"），
+    // 仅用于防御手势被系统中断等边缘路径；正常拖拽时此处已是空操作。
+    // 旧实现此处重复了一遍"整簇包围盒 clamp"公式，在放大后会把碎片组强行拽回/钉死。
+    final anchorCursor = Vector2(
+      piece.position.x + _holdingAnchorX * piece.size.x * piece.scale.x,
+      piece.position.y + _holdingAnchorY * piece.size.y * piece.scale.y,
+    );
+    final clampedTarget = _clampDragTarget(
+      cursorCanvasPos: anchorCursor,
+      pieceSizeRef: piece.size,
+      scale: piece.scale.x,
+      anchorX: _holdingAnchorX,
+      anchorY: _holdingAnchorY,
+    );
 
-    final safeMinX = _sideMargin - clusterLeftOffset;
-    final safeMaxX = size.x - _sideMargin - clusterRightOffset;
-    final safeMinY = _topToolbarHeight - clusterTopOffset;
-    final safeMaxY =
-        (isTabletop ? size.y - 8.0 : trayPosition.y - 8.0) -
-        clusterBottomOffset;
+    final dx = clampedTarget.x - piece.position.x;
+    final dy = clampedTarget.y - piece.position.y;
 
-    final clampedX = piece.position.x
-        .clamp(min(safeMinX, safeMaxX), max(safeMinX, safeMaxX))
-        .toDouble();
-    final clampedY = piece.position.y
-        .clamp(min(safeMinY, safeMaxY), max(safeMinY, safeMaxY))
-        .toDouble();
-
-    if (clampedX != piece.position.x || clampedY != piece.position.y) {
-      final dx = clampedX - piece.position.x;
-      final dy = clampedY - piece.position.y;
-      piece.position.setValues(clampedX, clampedY);
+    if (dx.abs() > 1e-6 || dy.abs() > 1e-6) {
+      piece.position.setValues(clampedTarget.x, clampedTarget.y);
       for (final p in clusterPieces) {
         if (p != piece) {
           p.position.add(Vector2(dx, dy));
@@ -2512,10 +2545,20 @@ class JigsawPuzzleGame extends FlameGame
           comp.position.y > size.y - visualH * 0.5;
 
       if (isOutOfBounds) {
-        final safeTargetY = isTabletop
-            ? (size.y - visualH) / 2
-            : (trayPosition.y - visualH - 20.0).clamp(20.0, size.y - visualH);
-        final safeTarget = Vector2((size.x - visualW) / 2, safeTargetY);
+        // 就近落在视口内的"完整可见"位置（保留 44px 顶部操作栏避让），
+        // 而不是无条件搬到屏幕正中——避免玩家刚刚推到视野边的碎片被瞬移回中央。
+        final horizontalLimit = max(
+          _sideMargin,
+          size.x - _sideMargin - visualW,
+        );
+        final verticalLimit = max(
+          44.0,
+          (isTabletop ? size.y : trayPosition.y) - _sideMargin - visualH,
+        );
+        final safeTarget = Vector2(
+          comp.position.x.clamp(_sideMargin, horizontalLimit),
+          comp.position.y.clamp(44.0, verticalLimit),
+        );
         comp.position.setFrom(safeTarget);
         comp.triggerSnapGlow();
         final normOut = [0.0, 0.0];
