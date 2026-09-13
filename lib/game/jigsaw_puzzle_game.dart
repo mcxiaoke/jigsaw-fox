@@ -393,6 +393,9 @@ class JigsawPuzzleGame extends FlameGame
       }
     }
 
+    // 记录本次布局所依据的画布尺寸：使后续 onGameResize 能以"旧几何 + 旧视口"正确推导
+    // 视图中心（详见 [_normalizedViewCenter]），并让同尺寸的重复回调直接早退
+    _lastGameSize = size.clone();
     _isInitialized = true;
     updatePiecesStateAndPriorities();
     AppLogger.game.info(
@@ -407,6 +410,13 @@ class JigsawPuzzleGame extends FlameGame
     super.onGameResize(size);
     if (!_isInitialized) return;
     if (_lastGameSize != null && (_lastGameSize! - size).length < 0.5) return;
+
+    // 尺寸变化前先按"旧几何 + 旧视口"记录视图中心（归一化），
+    // 供 _syncResizeTransform 在新几何下把同一世界点重新对准视口中心，
+    // 避免窗口拉伸/最大化后视野跳变（详见 _syncResizeTransform 注释）。
+    final prevViewport = _lastGameSize ?? size;
+    final prevViewCenter = _normalizedViewCenter(prevViewport);
+
     AppLogger.game.info(
       'onGameResize ${size.x.toStringAsFixed(1)}x${size.y.toStringAsFixed(1)} zoom=$_zoom',
     );
@@ -414,16 +424,55 @@ class JigsawPuzzleGame extends FlameGame
     _computeLayout();
     _tabletopScatterSlots = null;
     _scatterAssignmentCache = null;
-    _syncResizeTransform();
+    _syncResizeTransform(
+      viewCenterNx: prevViewCenter.x,
+      viewCenterNy: prevViewCenter.y,
+    );
   }
 
-  /// 当游戏视口大小变化（如 Windows 窗口拉伸/缩放）时，全量同步更新底板、托盘及所有碎片的物理尺寸与坐标
-  void _syncResizeTransform() {
-    // 窗口物理尺寸改变时，缩放与平移复位为基准尺寸
-    _setZoom(1);
-    _panOffset.setZero();
+  /// 视口中心点对应的**归一化**世界坐标。
+  ///
+  /// [viewportSize] 需传入目标视口尺寸：在 `onGameResize` 中于 `_computeLayout()`
+  /// 之前调用时传入旧尺寸，即可得到"旧几何 + 旧视口"下的视图中心。
+  Vector2 _normalizedViewCenter(Vector2 viewportSize) {
+    final eff = boardSize * _zoom;
+    if (eff.x <= 0 || eff.y <= 0) return Vector2(0.5, 0.5);
+    final topLeft = boardTopLeft + _panOffset;
+    return Vector2(
+      (viewportSize.x / 2 - topLeft.x) / eff.x,
+      (viewportSize.y / 2 - topLeft.y) / eff.y,
+    );
+  }
 
-    // 1. 同步托盘背景组件
+  /// 当游戏视口大小变化（如 Windows 窗口拉伸/缩放）时，全量同步更新底板、托盘及所有碎片的物理尺寸与坐标。
+  ///
+  /// **缩放与视野保持**：窗口尺寸变化不再清零缩放与平移，而是
+  /// 1. 把 `_zoom` 收敛到新几何推导出的 `_maxZoom` 之内（窗口变大时 `maxZoom` 会下降，
+  ///    若不收敛会出现 `_zoom > _maxZoom` 的越界状态）；
+  /// 2. 把 [viewCenterNx]/[viewCenterNy] 这个世界点重新对准新视口中心，再按新几何
+  ///    收敛平移范围（[`_clampPanOffset`]），避免画面跳变或棋盘被拖出视口。
+  void _syncResizeTransform({
+    required double viewCenterNx,
+    required double viewCenterNy,
+  }) {
+    // 1. 缩放：保留用户当前倍率，仅收敛到合法上限
+    if (_zoom > _maxZoom) {
+      _setZoom(_maxZoom);
+    }
+
+    // 2. 平移：1.0x 天然锁死居中（与旧行为一致）；放大态按视图中心重新定位并 clamp
+    if (_zoom <= 1.0) {
+      _panOffset.setZero();
+    } else {
+      final eff = boardSize * _zoom;
+      _panOffset.setValues(
+        size.x / 2 - viewCenterNx * eff.x - boardTopLeft.x,
+        size.y / 2 - viewCenterNy * eff.y - boardTopLeft.y,
+      );
+      _clampPanOffset();
+    }
+
+    // 3. 同步托盘背景组件
     if (!isTabletop) {
       if (_trayBgComp == null || _trayBgComp!.parent == null) {
         _trayBgComp = TrayBackgroundComponent(
@@ -442,10 +491,10 @@ class JigsawPuzzleGame extends FlameGame
       _trayBgComp = null;
     }
 
-    // 2. 同步棋盘底板、底图水印及外框
+    // 4. 同步棋盘底板、底图水印及外框
     _updateBoardTransform();
 
-    // 3. 动态刷新所有碎片的几何贝塞尔轮廓与基础尺寸
+    // 5. 动态刷新所有碎片的几何贝塞尔轮廓与基础尺寸
     for (final comp in _pieces.values) {
       final edges = edgeLayout.edgesFor(comp.r, comp.c);
       comp.updateShapeAndSize(
@@ -467,7 +516,7 @@ class JigsawPuzzleGame extends FlameGame
       }
     }
 
-    // 4. 合法域边界安全自适应与游离碎片/拼合集群防越界收拢 (Domain Clamp & Cluster Pullback)
+    // 6. 合法域边界安全自适应与游离碎片/拼合集群防越界收拢 (Domain Clamp & Cluster Pullback)
     //
     // 判据从旧的"屏幕视口"升级为"合法摆放域"（[_legalDomainScreenRect]）：
     // 放大后碎片允许合法地停在当前视口之外（本次修复新增的能力），若仍以屏幕为界，
@@ -488,9 +537,9 @@ class JigsawPuzzleGame extends FlameGame
         return false;
       }
       final pState = _boardState.pieceById(p.id);
-      // 若处于合法棋盘归一化空间内，受棋盘矩阵直接保护
-      final isOnBoardDomain = _isNormalizedOnBoard(pState.nx, pState.ny);
-      return !isOnBoardDomain;
+      // 若仍处于合法摆放域内（托盘模式 = 棋盘；桌面模式 = 大桌面），
+      // 受棋盘/大桌面矩阵直接保护，绝不因窗口尺寸变化被搬动
+      return !_isNormalizedInDomain(pState.nx, pState.ny);
     }).toList();
 
     final clusterGroups = <int, List<PuzzlePieceComponent>>{};
@@ -571,13 +620,13 @@ class JigsawPuzzleGame extends FlameGame
       _boardState = _boardState.copyWith(pieces: newPieces);
     }
 
-    // 5. 刷新桌面散落槽位缓存（若是散落模式）
+    // 7. 刷新桌面散落槽位缓存（若是散落模式）
     if (isTabletop) {
       _tabletopScatterSlots = null;
       _scatterAssignmentCache = null;
     }
 
-    // 6. 重排托盘碎片
+    // 8. 重排托盘碎片
     if (!isTabletop) {
       final trayPieces = _pieces.values
           .where((p) => p.isInTray && !p.isFilteredOut)
@@ -1428,21 +1477,17 @@ class JigsawPuzzleGame extends FlameGame
     const viewLeft = _sideMargin;
     final viewRight = size.x - _sideMargin;
     const viewTop = _topToolbarHeight;
-    final viewBottom = isTabletop ? size.y - 8.0 : trayPosition.y - 8.0;
+    final viewBottom = isTabletop
+        ? size.y - _bottomTrayMargin
+        : trayPosition.y - _bottomTrayMargin;
 
-    // 关键优化：桌面模式下归一化边界基于大桌面全景动态自适应推导，彻底废除硬编码 [-0.35, 1.35]
-    final normMinX = isTabletop
-        ? (viewLeft - boardTopLeft.x) / boardSize.x
-        : 0.0;
-    final normMaxX = isTabletop
-        ? (viewRight - boardTopLeft.x) / boardSize.x
-        : 1.0;
-    final normMinY = isTabletop
-        ? (viewTop - boardTopLeft.y) / boardSize.y
-        : 0.0;
-    final normMaxY = isTabletop
-        ? (viewBottom - boardTopLeft.y) / boardSize.y
-        : 1.0;
+    // 归一化合法域：与 [_legalDomain] 单一权威定义同源（桌面模式基于大桌面全景动态推导，
+    // 彻底废除硬编码 [-0.35, 1.35]）
+    final domain = _legalDomain();
+    final normMinX = domain.minX;
+    final normMaxX = domain.maxX;
+    final normMinY = domain.minY;
+    final normMaxY = domain.maxY;
 
     final viewW = max(0, viewRight - viewLeft);
     final viewH = max(0, viewBottom - viewTop);
@@ -1497,39 +1542,57 @@ class JigsawPuzzleGame extends FlameGame
     );
   }
 
-  /// 合法摆放域的**屏幕投影**矩形（与 [_clampPanOffset] 的归一化域同源，杜绝两处定义漂移）。
+  /// 合法摆放域（归一化世界坐标）——[_clampPanOffset]、[_legalDomainScreenRect] 与
+  /// [_isNormalizedInDomain] 共用的**唯一权威定义**，杜绝多处定义漂移。
   ///
-  /// - 托盘模式：棋盘域 `nx, ny ∈ [0, 1]` ⇒ 当前 pan/zoom 下的棋盘矩形；
-  /// - 桌面模式：由视口反算的大桌面域 ⇒ 与视口贴合的矩形（放大后随 zoom 扩展）。
+  /// - 托盘模式：棋盘域 `nx, ny ∈ [0, 1]`；
+  /// - 桌面模式：由视口反算的大桌面域（1.0x 时恰好等于视口，放大后随 zoom 扩展）。
+  ({double minX, double maxX, double minY, double maxY}) _legalDomain() {
+    if (!isTabletop) {
+      return (minX: 0.0, maxX: 1.0, minY: 0.0, maxY: 1.0);
+    }
+    const viewLeft = _sideMargin;
+    final viewRight = size.x - _sideMargin;
+    const viewTop = _topToolbarHeight;
+    final viewBottom = size.y - _bottomTrayMargin;
+    return (
+      minX: (viewLeft - boardTopLeft.x) / boardSize.x,
+      maxX: (viewRight - boardTopLeft.x) / boardSize.x,
+      minY: (viewTop - boardTopLeft.y) / boardSize.y,
+      maxY: (viewBottom - boardTopLeft.y) / boardSize.y,
+    );
+  }
+
+  /// 归一化坐标是否仍落在合法摆放域内（含 [_boardBoundsTolerance] 微容差）。
+  ///
+  /// 与 [_isNormalizedOnBoard] 的区别：后者**恒以棋盘 `[0,1]` 为界**，服务于
+  /// "碎片是否在棋盘上"这类业务判定；本方法以**当前模式的合法域**为界
+  /// （桌面模式下大于 `[0,1]`），服务于窗口尺寸变化时的越界收拢判据——
+  /// 避免把桌面散落的碎片、以及放大后合法停在视口外的碎片误判为"越界"而反复搬动。
+  bool _isNormalizedInDomain(double nx, double ny) {
+    final d = _legalDomain();
+    const tol = _boardBoundsTolerance;
+    return nx >= d.minX - tol &&
+        nx <= d.maxX + tol &&
+        ny >= d.minY - tol &&
+        ny <= d.maxY + tol;
+  }
+
+  /// 合法摆放域的**屏幕投影**矩形（与 [_clampPanOffset] 的归一化域同源，杜绝两处定义漂移）。
   ///
   /// 【用途】窗口尺寸变化时，只收拢"真正越过合法域"的游离碎片；
   /// 因为放大后碎片可以合法地停在**当前视口之外**的域内（这正是本次修复新增的能力），
   /// 若沿用旧的"屏幕视口"判据会在每次改窗口时把玩家摆好的碎片再次拽回，问题复发。
   ({double left, double top, double right, double bottom})
   _legalDomainScreenRect() {
+    final d = _legalDomain();
     final topLeft = boardTopLeft + _panOffset;
     final eff = boardSize * _zoom;
-    if (!isTabletop) {
-      return (
-        left: topLeft.x,
-        top: topLeft.y,
-        right: topLeft.x + eff.x,
-        bottom: topLeft.y + eff.y,
-      );
-    }
-    const viewLeft = _sideMargin;
-    final viewRight = size.x - _sideMargin;
-    const viewTop = _topToolbarHeight;
-    final viewBottom = size.y - _bottomTrayMargin;
-    final minX = (viewLeft - boardTopLeft.x) / boardSize.x;
-    final maxX = (viewRight - boardTopLeft.x) / boardSize.x;
-    final minY = (viewTop - boardTopLeft.y) / boardSize.y;
-    final maxY = (viewBottom - boardTopLeft.y) / boardSize.y;
     return (
-      left: topLeft.x + minX * eff.x,
-      top: topLeft.y + minY * eff.y,
-      right: topLeft.x + maxX * eff.x,
-      bottom: topLeft.y + maxY * eff.y,
+      left: topLeft.x + d.minX * eff.x,
+      top: topLeft.y + d.minY * eff.y,
+      right: topLeft.x + d.maxX * eff.x,
+      bottom: topLeft.y + d.maxY * eff.y,
     );
   }
 

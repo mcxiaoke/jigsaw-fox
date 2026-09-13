@@ -451,18 +451,43 @@ PAN_CHECK boardTopLeft=[496.0,8.0] trayY=944.0 board=928x928
 - 修复后：落点随光标连续变化，水平行程 1184px、垂直行程 784px（≈整屏）；
 - 9 块满盘集群同样从"完全锁死"恢复为可自由移动。
 
-### 11.4 遗留项（未纳入本次范围）
+### 11.4 B 档补充实施（同日 14:05）：窗口尺寸变化保留缩放与视图中心
 
-1. `_syncResizeTransform` 仍在窗口尺寸变化时 `_setZoom(1)` 复位缩放并清空平移（丢失用户缩放状态）——独立问题，建议单独提交。
-2. 托盘模式下放大后的集群允许覆盖底部托盘区域：原"集群绝不遮挡托盘"与"允许移出视口"在数学上不可兼得，本次按后者（用户核心诉求）优先取舍。
-3. `_getTabletopScatterSlots`（L862）的散落槽位仍按屏幕空间生成，因此桌面散落的归一化域随窗口尺寸波动（3.3 节）；若后续要统一域定义，可在此收敛。
+A 档落地后，`_syncResizeTransform` 仍在每次真实尺寸变化时 `_setZoom(1)` + `_panOffset.setZero()`，
+导致 Windows 拖拽/最大化窗口、移动端旋转屏幕都会把用户放大好的视图清成 1.0x。B 档将其补齐：
 
-### 11.5 验证结果
+| # | 位置 | 内容 |
+|---|---|---|
+| 1 | `onGameResize` | 在 `_computeLayout()` **之前**捕获"旧几何 + 旧视口"下的归一化视图中心（新增 `_normalizedViewCenter`）；`onLoad` 结束时记录 `_lastGameSize` 作为基准尺寸 |
+| 2 | `_syncResizeTransform` | 保留 `_zoom`，仅收敛到新几何推导出的 `_maxZoom` 之内（**P2**：窗口变大 → 碎片变大 → `maxZoom` 下降，不收敛会出现 `_zoom > _maxZoom` 越界）；把同一归一化视图中心重新对准新视口中心后调用 `_clampPanOffset()`（**P1+P3**） |
+| 3 | 新增 `_legalDomain()` | 归一化合法摆放域的**唯一权威定义**；`_clampPanOffset`、`_legalDomainScreenRect`、新增的 `_isNormalizedInDomain` 全部复用它，杜绝多处域定义漂移 |
+| 4 | 收拢判据 | 由"是否在棋盘 `[0,1]` 内"升级为"是否在**当前模式合法域**内"——这是保留缩放的**必要前置**：否则保留缩放后，桌面散落碎片与"放大后合法停在视口外"的碎片会被误判为越界，导致改窗口仍把碎片拽回（该问题在实施 B 档时被既有用例 `test/game_layout_test.dart:1243`「归一化世界坐标绝不被破坏或压扁」当场暴露，已随本条修复闭环） |
+
+新增用例 2 条：①尺寸变化保留缩放 / 保持视图中心 / 平移已收敛；②窗口变大导致 `maxZoom` 下降时缩放被收敛在 `maxZoom` 之内。
+
+### 11.5 遗留项（未纳入本次范围）
+
+1. 托盘模式下放大后的集群允许覆盖底部托盘区域：原"集群绝不遮挡托盘"与"允许移出视口"在数学上不可兼得，本次按后者（用户核心诉求）优先取舍。
+2. `_getTabletopScatterSlots`（L862）的散落槽位仍按屏幕空间生成，因此桌面散落的归一化域随窗口尺寸波动（3.3 节）；若后续要统一域定义，可在此收敛。
+
+### 11.6 验证结果
+
+A 档（13:45）：
 
 | 步骤 | 结果 |
 |---|---|
 | `dart format`（改动文件） | 通过 |
 | `flutter analyze` | 改动文件 0 issue（仓库内另有 2 条 `lib/main.dart:94` 的既有 info，与本改动无关，未越界修改） |
 | `flutter test` | **360 passed / 8 skipped**（`test/game_layout_test.dart` 52 条全绿） |
+| `flutter build windows --debug` | 构建成功 |
+| `flutter test integration_test/app_test.dart -d windows` | 通过 |
+
+B 档（14:05，含 A 档全部改动）：
+
+| 步骤 | 结果 |
+|---|---|
+| `dart format` | 通过 |
+| `flutter analyze`（改动文件） | 0 issue |
+| `flutter test` | **362 passed / 8 skipped**（`test/game_layout_test.dart` 54 条全绿） |
 | `flutter build windows --debug` | 构建成功 |
 | `flutter test integration_test/app_test.dart -d windows` | 通过 |

@@ -969,6 +969,93 @@ void main() {
     );
   });
 
+  test('窗口尺寸变化保留缩放与视图中心，平移收敛到合法范围（不再清零）', () async {
+    final img = await _decodePng();
+    final game = JigsawPuzzleGame(
+      image: img,
+      rows: 3,
+      cols: 3,
+      onSolved: () {},
+    );
+    game.onGameResize(Vector2(1200, 800));
+    await game.onLoad();
+
+    // 放大并平移到可漫游范围的中部
+    game.setZoomAndPan(2.0, Vector2(-324, -324));
+    expect(game.zoom, closeTo(2.0, 1e-6));
+
+    // 旧视口中心 (600, 400) 对应的归一化世界坐标
+    final centerBefore = [0.0, 0.0];
+    game.screenToNormalized(Vector2(600, 400), centerBefore);
+
+    // 模拟把窗口拉大至 1500 x 1000
+    game.onGameResize(Vector2(1500, 1000));
+
+    // 1. 缩放必须被保留（旧实现此处会把 zoom 复位为 1.0）
+    expect(
+      game.zoom,
+      closeTo(2.0, 1e-6),
+      reason: '窗口尺寸变化不得再复位用户缩放状态',
+    );
+
+    // 2. 同一个世界点仍应落在新视口中心附近（视野不跳变）
+    final centerAfter = [0.0, 0.0];
+    game.screenToNormalized(Vector2(750, 500), centerAfter);
+    expect(
+      centerAfter[0],
+      closeTo(centerBefore[0], 0.05),
+      reason: '视图中心必须被保持，避免拉伸窗口后视野跳到别处',
+    );
+    expect(centerAfter[1], closeTo(centerBefore[1], 0.05));
+
+    // 3. 平移必须已收敛在合法范围内：再夹取一次不应发生变化
+    final panX = game.panOffset.x;
+    final panY = game.panOffset.y;
+    game.panBy(Vector2.zero());
+    expect(
+      game.panOffset.x,
+      closeTo(panX, 1e-6),
+      reason: '尺寸变化后平移必须已收敛到合法范围，不能被后续 clamp 再次推动',
+    );
+    expect(game.panOffset.y, closeTo(panY, 1e-6));
+  });
+
+  test('窗口变大导致 maxZoom 下降时，当前缩放被收敛在 maxZoom 之内（绝不越界）', () async {
+    final img = await _decodePng();
+    final game = JigsawPuzzleGame(
+      image: img,
+      rows: 11,
+      cols: 11,
+      onSolved: () {},
+    );
+    // 小窗口 + 密集盘：碎片较小，maxZoom 会高于下限 2.0
+    game.onGameResize(Vector2(400, 800));
+    await game.onLoad();
+
+    game.zoomAt(Vector2(200, 400), 10);
+    final zoomBefore = game.zoom;
+    expect(
+      zoomBefore,
+      closeTo(game.maxZoom, 1e-6),
+      reason: '放大必须被 clamp 在 maxZoom',
+    );
+    expect(zoomBefore, greaterThan(2.0), reason: '本场景 maxZoom 必须高于下限 2.0');
+
+    // 拉到大窗口：碎片变大 → maxZoom 下降
+    game.onGameResize(Vector2(1920, 1080));
+
+    expect(
+      game.maxZoom,
+      lessThan(zoomBefore),
+      reason: '窗口变大后碎片变大，maxZoom 必须随之下降',
+    );
+    expect(
+      game.zoom,
+      lessThanOrEqualTo(game.maxZoom + 1e-6),
+      reason: '保留缩放的同时必须收敛到新的 maxZoom 之内，绝不越界',
+    );
+  });
+
   test('多块已吸附集群拖拽靠近边缘移动时，同集群碎片不发生冲突或被意外拆散', () async {
     final img = await _decodePng();
     final game = JigsawPuzzleGame(
