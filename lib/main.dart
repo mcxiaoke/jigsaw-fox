@@ -91,7 +91,7 @@ void _handleBackgroundSync() {
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  WidgetsBinding widgetsBinding = WidgetsFlutterBinding.ensureInitialized();
+  final widgetsBinding = WidgetsFlutterBinding.ensureInitialized();
   FlutterNativeSplash.preserve(widgetsBinding: widgetsBinding);
 
   // 0. 日志系统最先初始化（后续所有模块日志均可落盘）
