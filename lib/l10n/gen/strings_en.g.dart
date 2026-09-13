@@ -879,6 +879,15 @@ class Translations$background$en {
 
 	/// en: 'Table {index}'
 	String tableLabel({required Object index}) => 'Table ${index}';
+
+	List<String> get colorLabels => [
+		'Warm Oatmeal',
+		'Misty Gray',
+		'Sage Green',
+		'Misty Blue',
+		'Dusty Mauve',
+		'Dark Slate',
+	];
 }
 
 // Path: howTo
@@ -2357,6 +2366,12 @@ extension on Translations {
 			'importPack.startImport' => 'Start Import',
 			'background.title' => 'Change Puzzle Background',
 			'background.tableLabel' => ({required Object index}) => 'Table ${index}',
+			'background.colorLabels.0' => 'Warm Oatmeal',
+			'background.colorLabels.1' => 'Misty Gray',
+			'background.colorLabels.2' => 'Sage Green',
+			'background.colorLabels.3' => 'Misty Blue',
+			'background.colorLabels.4' => 'Dusty Mauve',
+			'background.colorLabels.5' => 'Dark Slate',
 			'howTo.title' => 'How to Play',
 			'howTo.welcomeTitle' => 'Get Started with Jigsaw Puzzles',
 			'howTo.welcomeSub' => 'Master these core gestures and helper tools, and you will breeze through even the hardest puzzles!',

@@ -8,7 +8,9 @@ import 'package:phosphoricons_flutter/phosphoricons_flutter.dart';
 /// A bottom sheet modal for choosing full-screen background wallpaper in puzzle gameplay.
 class ChooseBackgroundSheet extends StatelessWidget {
   const ChooseBackgroundSheet({
-    required this.selectedBackground, required this.onBackgroundSelected, super.key,
+    required this.selectedBackground,
+    required this.onBackgroundSelected,
+    super.key,
   });
 
   final String selectedBackground;
@@ -35,7 +37,7 @@ class ChooseBackgroundSheet extends StatelessWidget {
     final palette = AppPalette.of(context);
     final styles = AppTextStyles.of(context);
     final size = MediaQuery.sizeOf(context);
-    const bgList = GameRepository.kBackgroundAssets;
+    const bgList = GameRepository.kAllBackgrounds;
 
     return Container(
       height: size.height * 0.65,
@@ -86,12 +88,22 @@ class ChooseBackgroundSheet extends StatelessWidget {
               ),
               itemCount: bgList.length,
               itemBuilder: (context, index) {
-                final bgPath = bgList[index];
-                final isSelected = bgPath == selectedBackground;
+                final bg = bgList[index];
+                final isSelected = bg == selectedBackground;
+                final isColor = GameBackground.isColor(bg);
+                final color = isColor ? GameBackground.parseColor(bg) : null;
+                final labelText = isColor
+                    ? (index < t.background.colorLabels.length
+                          ? t.background.colorLabels[index]
+                          : 'Color ${index + 1}')
+                    : t.background.tableLabel(
+                        index:
+                            index - GameRepository.kBackgroundColors.length + 1,
+                      );
 
                 return InkWell(
                   onTap: () {
-                    onBackgroundSelected(bgPath);
+                    onBackgroundSelected(bg);
                     Navigator.of(context).pop();
                   },
                   borderRadius: BorderRadius.circular(14),
@@ -99,10 +111,6 @@ class ChooseBackgroundSheet extends StatelessWidget {
                     duration: const Duration(milliseconds: 200),
                     decoration: BoxDecoration(
                       borderRadius: BorderRadius.circular(14),
-                      border: Border.all(
-                        color: isSelected ? palette.brand : palette.divider,
-                        width: isSelected ? 3.0 : 1.0,
-                      ),
                       boxShadow: [
                         BoxShadow(
                           color: isSelected
@@ -113,23 +121,35 @@ class ChooseBackgroundSheet extends StatelessWidget {
                         ),
                       ],
                     ),
+                    foregroundDecoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(
+                        color: isSelected ? palette.brand : palette.divider,
+                        width: isSelected ? 3.0 : 1.0,
+                      ),
+                    ),
                     clipBehavior: Clip.antiAlias,
                     child: Stack(
                       fit: StackFit.expand,
                       children: [
-                        Image.asset(
-                          bgPath,
-                          repeat: ImageRepeat.repeat,
-                          errorBuilder: (ctx, err, stack) => ColoredBox(
-                            color: palette.surfaceContainerLow,
-                            child: Center(
-                              child: Icon(
-                                PhosphorIconsBold.imageBroken,
-                                color: palette.disabledText,
+                        if (isColor)
+                          ColoredBox(
+                            color: color ?? palette.surfaceContainerLow,
+                          )
+                        else
+                          Image.asset(
+                            bg,
+                            repeat: ImageRepeat.repeat,
+                            errorBuilder: (ctx, err, stack) => ColoredBox(
+                              color: palette.surfaceContainerLow,
+                              child: Center(
+                                child: Icon(
+                                  PhosphorIconsBold.imageBroken,
+                                  color: palette.disabledText,
+                                ),
                               ),
                             ),
                           ),
-                        ),
 
                         // Selected indicator badge
                         if (isSelected)
@@ -159,7 +179,7 @@ class ChooseBackgroundSheet extends StatelessWidget {
                             padding: const EdgeInsets.symmetric(vertical: 4),
                             color: Colors.black.withValues(alpha: 0.45),
                             child: Text(
-                              t.background.tableLabel(index: index + 1),
+                              labelText,
                               textAlign: TextAlign.center,
                               style: TextStyle(
                                 color: palette.primaryText,

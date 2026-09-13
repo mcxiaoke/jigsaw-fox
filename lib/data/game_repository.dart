@@ -2,6 +2,7 @@
 // ignore_for_file: avoid_catches_without_on_clauses
 import 'dart:convert';
 import 'dart:io';
+import 'dart:ui';
 
 import 'package:flutter/foundation.dart';
 import 'package:jigsawpuzzle/data/favorite_store.dart';
@@ -26,6 +27,16 @@ class GameRepository {
   GameRepository._();
   static final GameRepository instance = GameRepository._();
 
+  /// 6 款专为拼图游戏甄选的柔和护眼纯色背景（置于最前，默认首选用燕麦暖米）
+  static const List<String> kBackgroundColors = [
+    'color:#EBE5DC', // 燕麦暖米 (Warm Oatmeal) - 默认首选
+    'color:#E2E6EA', // 晨雾冷灰 (Misty Gray)
+    'color:#D5DFD7', // 鼠尾草绿 (Sage Green)
+    'color:#D2DCE6', // 静谧灰蓝 (Misty Blue)
+    'color:#E2D9DC', // 暮云烟粉 (Dusty Mauve)
+    'color:#2B3338', // 远山青黛 (Dark Slate)
+  ];
+
   static const List<String> kBackgroundAssets = [
     'assets/bg/tile_000.webp',
     'assets/bg/tile_001.webp',
@@ -39,6 +50,12 @@ class GameRepository {
     'assets/bg/tile_009.webp',
     'assets/bg/tile_010.webp',
     'assets/bg/tile_011.webp',
+  ];
+
+  /// 全量背景列表：纯色背景位于最前（0~5），纹理底板图片紧随其后（6~17）
+  static const List<String> kAllBackgrounds = [
+    ...kBackgroundColors,
+    ...kBackgroundAssets,
   ];
 
   // 主线进度已收敛至 game-progress-v1（§2.3）：`jigsaw level {i}` 整条
@@ -85,7 +102,7 @@ class GameRepository {
   set pieceScatterMode(String v) => _prefs?.setString(_keyPieceScatterMode, v);
 
   String get selectedBackground =>
-      _prefs?.getString(_keySelectedBackground) ?? kBackgroundAssets[0];
+      _prefs?.getString(_keySelectedBackground) ?? kAllBackgrounds[0];
   set selectedBackground(String v) =>
       _prefs?.setString(_keySelectedBackground, v);
 
@@ -887,5 +904,38 @@ class GameRepository {
       AppLogger.repo.warning('resetAllData reconcile failed', e, st);
     }
     AppLogger.repo.info('resetAllData done');
+  }
+}
+
+/// Helper utility for inspecting and parsing game backgrounds (colors vs asset textures).
+class GameBackground {
+  const GameBackground._();
+
+  /// Checks whether [bg] represents a solid color (starts with 'color:' or '#').
+  static bool isColor(String bg) =>
+      bg.startsWith('color:') || bg.startsWith('#');
+
+  /// Parses [bg] to a [Color] if it is a valid color background representation, otherwise returns null.
+  static Color? parseColor(String bg) {
+    if (!isColor(bg)) return null;
+    try {
+      var raw = bg;
+      if (raw.startsWith('color:')) {
+        raw = raw.substring(6);
+      }
+      if (raw.startsWith('#')) {
+        raw = raw.substring(1);
+      }
+      if (raw.startsWith('0x') || raw.startsWith('0X')) {
+        raw = raw.substring(2);
+      }
+      if (raw.length == 6) {
+        raw = 'FF$raw';
+      }
+      final value = int.parse(raw, radix: 16);
+      return Color(value);
+    } catch (_) {
+      return null;
+    }
   }
 }

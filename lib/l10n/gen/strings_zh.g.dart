@@ -447,6 +447,14 @@ class _Translations$background$zh extends Translations$background$en {
 	// Translations
 	@override String get title => '更换拼图背景';
 	@override String tableLabel({required Object index}) => '桌板 ${index}';
+	@override List<String> get colorLabels => [
+		'燕麦暖米',
+		'晨雾冷灰',
+		'鼠尾草绿',
+		'静谧灰蓝',
+		'暮云烟粉',
+		'远山青黛',
+	];
 }
 
 // Path: howTo
@@ -1435,6 +1443,12 @@ extension on TranslationsZh {
 			'importPack.startImport' => '开始导入并解析',
 			'background.title' => '更换拼图背景',
 			'background.tableLabel' => ({required Object index}) => '桌板 ${index}',
+			'background.colorLabels.0' => '燕麦暖米',
+			'background.colorLabels.1' => '晨雾冷灰',
+			'background.colorLabels.2' => '鼠尾草绿',
+			'background.colorLabels.3' => '静谧灰蓝',
+			'background.colorLabels.4' => '暮云烟粉',
+			'background.colorLabels.5' => '远山青黛',
 			'howTo.title' => '玩法与操作技巧',
 			'howTo.welcomeTitle' => '轻松上手异形拼图',
 			'howTo.welcomeSub' => '熟悉以下核心操作手势与辅助工具，能让你在挑战高难度拼图时事半功倍！',

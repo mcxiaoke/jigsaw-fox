@@ -489,12 +489,22 @@ void main() {
 
   test('GameRepository background assets configuration and defaults', () {
     expect(GameRepository.kBackgroundAssets.first, 'assets/bg/tile_000.webp');
+    expect(GameRepository.kBackgroundColors.length, 6);
+    expect(GameRepository.kAllBackgrounds.length, 18);
+    expect(GameRepository.kAllBackgrounds.first, 'color:#EBE5DC');
+    expect(
+      GameBackground.isColor(GameRepository.kBackgroundColors.first),
+      isTrue,
+    );
+    expect(GameBackground.parseColor('color:#EBE5DC'), const Color(0xFFEBE5DC));
+    expect(GameBackground.isColor('assets/bg/tile_000.webp'), isFalse);
+    expect(GameBackground.parseColor('assets/bg/tile_000.webp'), isNull);
   });
 
   testWidgets(
-    'ChooseBackgroundSheet displays 10 wallpaper options and invokes callback',
+    'ChooseBackgroundSheet displays 6 colors and 12 wallpaper options and invokes callback',
     (tester) async {
-      var selectedBg = 'assets/bg/tile_000.webp';
+      var selectedBg = GameRepository.kAllBackgrounds.first;
 
       await tester.pumpWidget(
         MaterialApp(
@@ -523,14 +533,37 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('更换拼图背景'), findsOneWidget);
+      // 验证前 6 款柔和护眼纯色背景（燕麦暖米置于首位作为默认）
+      expect(find.text('燕麦暖米'), findsOneWidget);
+      expect(find.text('晨雾冷灰'), findsOneWidget);
+      expect(find.text('鼠尾草绿'), findsOneWidget);
+      expect(find.text('静谧灰蓝'), findsOneWidget);
+      expect(find.text('暮云烟粉'), findsOneWidget);
+      expect(find.text('远山青黛'), findsOneWidget);
+
+      // Tap on color: 鼠尾草绿
+      await tester.tap(find.text('鼠尾草绿'));
+      await tester.pumpAndSettle();
+      expect(selectedBg, 'color:#D5DFD7');
+
+      // Re-open and scroll to reveal Table 1~3
+      await tester.tap(find.text('Open Wallpaper Sheet'));
+      await tester.pumpAndSettle();
+
+      await tester.scrollUntilVisible(
+        find.text('桌板 3'),
+        200,
+        scrollable: find.byType(Scrollable).last,
+      );
+      await tester.pumpAndSettle();
+
+      // 验证原有桌板纹理底图
       expect(find.text('桌板 1'), findsOneWidget);
       expect(find.text('桌板 2'), findsOneWidget);
       expect(find.text('桌板 3'), findsOneWidget);
 
-      // Tap on Table 3
       await tester.tap(find.text('桌板 3'));
       await tester.pumpAndSettle();
-
       expect(selectedBg, 'assets/bg/tile_002.webp');
     },
   );

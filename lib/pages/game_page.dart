@@ -133,80 +133,91 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
     unawaited(AchievementService.instance.onPlaySecondsElapsed(delta));
   }
 
-  /// 解析背景贴图资产取其近似平均色，与主题 primaryContainer 混合作为顶部导航条背景色，
+  /// 解析背景色或贴图资产平均色，与主题 primaryContainer 混合作为顶部导航条背景色，
   /// 并按合成色亮度自动选择前景（深/浅），保证标题与图标可读。
   Future<void> _loadHeaderColor() async {
-    final assetPath = _selectedBackground;
-    ui.Codec? codec;
-    try {
-      final data = await rootBundle.load(assetPath);
-      final buffer = data.buffer.asUint8List(
-        data.offsetInBytes,
-        data.lengthInBytes,
-      );
-      codec = await ui.instantiateImageCodec(
-        buffer,
-        targetWidth: 48,
-        targetHeight: 48,
-      );
-      final frame = await codec.getNextFrame();
-      final image = frame.image;
-      final w = image.width;
-      final h = image.height;
-      final pixelData = await image.toByteData();
-      image.dispose();
-      if (pixelData == null) return;
-      final bytes = pixelData.buffer.asUint8List(
-        pixelData.offsetInBytes,
-        pixelData.lengthInBytes,
-      );
-      final pixelCount = w * h;
-      if (pixelCount <= 0) return;
-      var r = 0;
-      var g = 0;
-      var b = 0;
-      for (var i = 0; i < bytes.length; i += 4) {
-        r += bytes[i];
-        g += bytes[i + 1];
-        b += bytes[i + 2];
+    // 确保在 initState 挂载生命周期完成后再访问 Theme.of(context)
+    await Future<void>.value();
+    if (!mounted) return;
+
+    Color? avg;
+    if (GameBackground.isColor(_selectedBackground)) {
+      avg = GameBackground.parseColor(_selectedBackground);
+    } else {
+      final assetPath = _selectedBackground;
+      ui.Codec? codec;
+      try {
+        final data = await rootBundle.load(assetPath);
+        final buffer = data.buffer.asUint8List(
+          data.offsetInBytes,
+          data.lengthInBytes,
+        );
+        codec = await ui.instantiateImageCodec(
+          buffer,
+          targetWidth: 48,
+          targetHeight: 48,
+        );
+        final frame = await codec.getNextFrame();
+        final image = frame.image;
+        final w = image.width;
+        final h = image.height;
+        final pixelData = await image.toByteData();
+        image.dispose();
+        if (pixelData != null) {
+          final bytes = pixelData.buffer.asUint8List(
+            pixelData.offsetInBytes,
+            pixelData.lengthInBytes,
+          );
+          final pixelCount = w * h;
+          if (pixelCount > 0) {
+            var r = 0;
+            var g = 0;
+            var b = 0;
+            for (var i = 0; i < bytes.length; i += 4) {
+              r += bytes[i];
+              g += bytes[i + 1];
+              b += bytes[i + 2];
+            }
+            avg = Color.fromARGB(
+              255,
+              r ~/ pixelCount,
+              g ~/ pixelCount,
+              b ~/ pixelCount,
+            );
+          }
+        }
+        // best-effort：清理/降级失败可静默
+        // ignore: avoid_catches_without_on_clauses
+      } catch (_) {
+        // 解析失败时保持默认底色
+      } finally {
+        codec?.dispose();
       }
-      final avg = Color.fromARGB(
-        255,
-        r ~/ pixelCount,
-        g ~/ pixelCount,
-        b ~/ pixelCount,
-      );
-      if (!mounted) return;
-      final scheme = Theme.of(context).colorScheme;
-      final blended = Color.lerp(scheme.primaryContainer, avg, 0.45)!;
-      final luminance =
-          (0.299 * blended.r + 0.587 * blended.g + 0.114 * blended.b) * 255;
-      final isDarkBar = luminance <= 150;
-      // 网格页无 AppBar，需主动让系统状态栏/导航栏跟随顶部导航条颜色与图标亮度
-      SystemChrome.setSystemUIOverlayStyle(
-        SystemUiOverlayStyle(
-          statusBarColor: blended,
-          statusBarIconBrightness: isDarkBar
-              ? Brightness.light
-              : Brightness.dark,
-          statusBarBrightness: isDarkBar ? Brightness.dark : Brightness.light,
-          systemNavigationBarColor: blended,
-          systemNavigationBarIconBrightness: isDarkBar
-              ? Brightness.light
-              : Brightness.dark,
-        ),
-      );
-      setState(() {
-        _headerBarColor = blended;
-        _headerIconColor = isDarkBar ? Colors.white : scheme.onPrimaryContainer;
-      });
-      // best-effort：清理/降级失败可静默
-      // ignore: avoid_catches_without_on_clauses
-    } catch (_) {
-      // 解析失败时保持默认白底/深色前景
-    } finally {
-      codec?.dispose();
     }
+
+    if (!mounted) return;
+    final scheme = Theme.of(context).colorScheme;
+    final effectiveAvg = avg ?? const Color(0xFFEBE5DC);
+    final blended = Color.lerp(scheme.primaryContainer, effectiveAvg, 0.45)!;
+    final luminance =
+        (0.299 * blended.r + 0.587 * blended.g + 0.114 * blended.b) * 255;
+    final isDarkBar = luminance <= 150;
+    // 网格页无 AppBar，需主动让系统状态栏/导航栏跟随顶部导航条颜色与图标亮度
+    SystemChrome.setSystemUIOverlayStyle(
+      SystemUiOverlayStyle(
+        statusBarColor: blended,
+        statusBarIconBrightness: isDarkBar ? Brightness.light : Brightness.dark,
+        statusBarBrightness: isDarkBar ? Brightness.dark : Brightness.light,
+        systemNavigationBarColor: blended,
+        systemNavigationBarIconBrightness: isDarkBar
+            ? Brightness.light
+            : Brightness.dark,
+      ),
+    );
+    setState(() {
+      _headerBarColor = blended;
+      _headerIconColor = isDarkBar ? Colors.white : scheme.onPrimaryContainer;
+    });
   }
 
   void _startTimer() {
@@ -1215,18 +1226,24 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
         }
       },
       child: Scaffold(
-        backgroundColor: const Color(0xFFE2E6EA),
+        backgroundColor: const Color(0xFFEBE5DC),
         appBar: _buildAppBar(),
         body: Stack(
           children: [
-            // 1. Full-Screen Seamless Tiled Background
+            // 1. Full-Screen Background (Solid Color or Seamless Tiled Texture)
             Positioned.fill(
-              child: Image.asset(
-                _selectedBackground,
-                repeat: ImageRepeat.repeat,
-                errorBuilder: (ctx, err, stack) =>
-                    Container(color: const Color(0xFFE2E6EA)),
-              ),
+              child: GameBackground.isColor(_selectedBackground)
+                  ? ColoredBox(
+                      color:
+                          GameBackground.parseColor(_selectedBackground) ??
+                          const Color(0xFFEBE5DC),
+                    )
+                  : Image.asset(
+                      _selectedBackground,
+                      repeat: ImageRepeat.repeat,
+                      errorBuilder: (ctx, err, stack) =>
+                          const ColoredBox(color: Color(0xFFEBE5DC)),
+                    ),
             ),
 
             // 2. Progress Line + Flame Game Canvas
@@ -1283,8 +1300,12 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
                                               });
                                             }
                                           },
-                                          child: const ColoredBox(
-                                            color: Color(0xFFE2E6EA),
+                                          child: ColoredBox(
+                                            color:
+                                                GameBackground.parseColor(
+                                                  _selectedBackground,
+                                                ) ??
+                                                const Color(0xFFEBE5DC),
                                           ),
                                         ),
                                       ),
