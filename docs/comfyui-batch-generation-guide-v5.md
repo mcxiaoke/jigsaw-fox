@@ -32,11 +32,9 @@ scripts/
 ├── my_prompt_library_v5.json          # [题库] 实景摄影专属词库（20 Tag / 1165 主体）
 ├── my_prompt_library_illust_v5.json   # [题库] 复古手绘插画专属词库（20 Tag / 1213 主体）
 ├── zimage_api_workflow_v5.json        # [工作流] 快手 Z-Image Turbo 官方 API 工作流
+├── build_v5_library.py                # [构建] 摄影版提示词库构建脚本
+├── build_illust_library.py            # [构建] 插画版提示词库构建脚本
 └── puzzle_quality_analyzer.py         # [质检] 拼图适玩度与物理指标打分工具
-
-temp/
-├── build_v5_library.py                # 摄影版提示词库构建脚本
-└── build_illust_library.py            # 插画版提示词库构建脚本
 ```
 
 ---
@@ -63,11 +61,13 @@ python main.py --listen 127.0.0.1 --port 8188 --fast fp8_matrix_mult --fp8_e4m3f
 
 ---
 
-## 4. 命令行参数完整参考手册
+## 4. 命令行参数常用参考手册
 
 ```powershell
 python scripts/my_comfyui_batch_gen_v5.py [OPTIONS]
 ```
+
+> 完整清单以 `--help` 输出为准；除下表外还有采样覆盖类参数 `--steps`（Z-Image Turbo 建议 4-12，官方 8）、`--cfg`（官方 1.0）、`--shift`、`--poll`（轮询间隔，默认 1.0s）、`--stuck-timeout`（卡死探测阈值，默认 90.0s）、`--max-stuck`（连续卡死中止数，默认 3）、`--rounds`、`--sec-per-image`（ETA 估算，默认 16.0s）以及工作流节点覆盖 `--prompt-node/--seed-node/--size-node/--output-node`。
 
 ### 4.1 路径与服务配置
 
@@ -103,7 +103,7 @@ python scripts/my_comfyui_batch_gen_v5.py [OPTIONS]
 | `--no-resume` | - | 忽略已有进度，强制重新生成全量任务 |
 | `--prune-missing` | - | 磁盘与进度联动同步：自动检测磁盘上已被删除的残次图片，重置其进度状态以便自动补生成 |
 | `--dry-run` | - | 仅在控制台打印提示词组装计划与参数，不向 ComfyUI 发送真实请求 |
-| `--dry-run-count N` | `5` | Dry-run 时打印的样例条数（**只要显式传入此参数，即自动激活 `--dry-run` 预览模式**） |
+| `--dry-run-count N` | 未指定 | Dry-run 时打印的样例条数（**只要显式传入此参数，即自动激活 `--dry-run` 预览模式**；不传则打印全部计划） |
 
 ---
 

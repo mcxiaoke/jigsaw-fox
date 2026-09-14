@@ -5,7 +5,6 @@
 [![Flutter](https://img.shields.io/badge/Flutter-3.x-02569B?logo=flutter)](https://flutter.dev)
 [![Dart](https://img.shields.io/badge/Dart-3.x-0175C2?logo=dart)](https://dart.dev)
 [![Flame](https://img.shields.io/badge/Flame-1.38-orange)](https://flame-engine.org)
-[![License](https://img.shields.io/badge/License-BSD--3--Clause-green)](LICENSE)
 
 ---
 
@@ -39,8 +38,8 @@
 | 分层 | 选型 | 说明 |
 |---|---|---|
 | UI 框架 | Flutter 3.x / Material 3 | 跨端一致渲染 |
-| 游戏引擎 | Flame 1.38 + flame_riverpod | 单画布 + 组件生命周期 |
-| 状态管理 | flutter_riverpod 3.x | 响应式状态 |
+| 游戏引擎 | Flame 1.38 | 单画布 + 组件生命周期 |
+| 状态管理 | Flutter 原生（setState / ValueNotifier） | 轻量响应式，未引入 Riverpod |
 | 本地存储 | hive_ce + shared_preferences + path_provider | 结构化持久化 |
 | 图片 | image_picker / image / dart:ui | 选取、裁剪、解码 |
 | 网络 | dio | 内容分发预留 |
@@ -60,13 +59,12 @@ jigsawpuzzle/
 │  ├─ data/             # 仓储与持久化（storage_manager / progress_store / snapshot_store）
 │  ├─ logic/            # 纯领域逻辑（geometry / engine / content / cache）
 │  ├─ game/             # Flame 引擎层（JigsawPuzzleGame / PieceComponent）
-│  ├─ pages/ & tabs/    # 页面与 4-Tab 导航（Home / Daily / Events / My）
+│  ├─ pages/ & tabs/    # 页面与 4-Tab 导航（Home / Daily / Collections / My）
 │  ├─ services/         # 成就 / 音效 / 经济 / 解锁等服务
 │  ├─ widgets/          # 通用组件
 │  ├─ theme/ & utils/ & l10n/ # 主题、工具、国际化
 ├─ studio/              # 素材处理工作室（图片处理、资源导出、Web 服务）
-├─ scripts/             # 通用脚本（批量下载、AI 打标、ComfyUI 生成等）
-├─ deploy/              # 部署脚本与配置
+├─ scripts/             # 通用脚本（批量下载、AI 打标、ComfyUI 生成、打包发布等）
 ├─ assets/              # 静态资源（images / bg / icons / audio）
 ├─ docs/                # 项目文档与变更日志
 ├─ test/ & integration_test/ # 单元/Widget/集成测试
@@ -95,7 +93,6 @@ flutter devices           # 查看可用设备
 
 ### 产品与设计
 - [产品需求 PRD](docs/jigsaw-puzzle-game-prd.md)
-- [UI/UX 架构与 Tab 重构](docs/ui-ux-architecture-and-tabs-refactor-20260905.md)
 - [成就与难度设计](docs/jigsaw-difficulty-scoring-achievements-design.md) · [星级评定](docs/jigsaw-star-rating-casual-two-track-design-20260904.md)
 
 ### 架构与算法
@@ -114,10 +111,10 @@ flutter devices           # 查看可用设备
 ### 工作室与工具
 - [Studio 技术架构](studio/docs/studio-technical-architecture.md)
 - [统一导出与存储架构](studio/docs/unified-content-export-and-storage-architecture.md)
-- [ComfyUI 批量生成指南](docs/comfyui-batch-generation-guide.md)
+- [ComfyUI 批量生成指南 v5](docs/comfyui-batch-generation-guide-v5.md)
 
 ### 变更日志
-- [CHANGES-20260908](docs/CHANGES-20260908.md) · [CHANGES-20260907](docs/CHANGES-20260907.md) · 归档见 [docs/archived/](docs/archived/)
+- [CHANGES-20260913](docs/CHANGES-20260913.md) · [CHANGES-20260912](docs/CHANGES-20260912.md) · 归档见 [docs/archived/](docs/archived/)
 
 ---
 
@@ -148,7 +145,7 @@ flutter build web --release        # Web
 dart run flutter_launcher_icons    # 生成图标
 ```
 
-`version: 1.0.0+1` · `minSdk 25` · 图标配置见 `flutter_launcher_icons.yaml`
+`version: 1.0.0+1` · `minSdk 26` · 图标配置见 `flutter_launcher_icons.yaml`
 
 ---
 

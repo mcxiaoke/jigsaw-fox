@@ -1,5 +1,7 @@
 # 网络关卡懒落地统一方案（见缩略必可玩）
 
+> **2026-09-14 状态标注**：本方案核心流程（`LevelImageResolver` 同步快查 → FNV-1a 哈希命名 `net_<hash>.<ext>` 落盘 → per-targetPath 单飞 → 失败回退原 URL）已落地；但文中引用的 `EngineTaskQueue` 全局限并发调度（桌面4/移动2）属当时设计，该类随后续重构**已整体移除**，现行为 resolver 层 per-targetPath 的 `_inFlight` 单飞去重，无全局限并发。`prewarmThumbnail` 亦已随三级缓存体系删除。
+
 - 日期：2026-09-02
 - 状态：Draft → 待实施（不做全量 syncAll，改为 Grid 滚动到可视即后台下载）
 - 基线：`master` 4afb4ec（含 enum 档位 + 网络封面磁盘缓存）

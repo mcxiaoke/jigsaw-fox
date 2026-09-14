@@ -148,7 +148,7 @@ static int starsFromHints(int hints) {
 | L6 | 1.5~3 小时 | 约 1~3 小时 |
 | L7 | 3~5 小时 | 约 2~6 小时 |
 
-实现：`puzzle_model.dart` L194-216 `estimatedMinutes` 静态文案更新即可。
+实现：`puzzle_model.dart` `estimatedMinutes` 静态文案更新即可（getter 现位于 `lib/logic/puzzle_model.dart:246` 一带）。
 
 ### 4.7 计时器保留（只作展示/统计）
 

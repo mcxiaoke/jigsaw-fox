@@ -1,7 +1,8 @@
-# 拼图 20 类标签主体元素百科与生图指南
+# 拼图标签主体元素百科与生图指南
 
 > **用途**：为 Z-Image / ComfyUI 等文生图模型提供每个 Tag 下主流主体元素参考词表、环境搭档与 Prompt 关键词。
-> **依据**：`jigsaw-image-tagging-specification.md` v1.1 的 20 个固定 Tag，综合图库分类、摄影分类及奇幻生物、美食摄影等专题资料整理。
+> **依据**：`jigsaw-image-tagging-specification.md` 的固定 Tag 体系，综合图库分类、摄影分类及奇幻生物、美食摄影等专题资料整理。
+> **基线说明（2026-09-14）**：本目录整理自打标规范 v1.0 的 20 个 Tag；v1.1 已扩展为 **21 个固定 Tag**（新增 `16 Sports / 运动`，见打标规范 §16），生图打标时请以 v1.1 清单为准。另注意：AI 打标 21 Tag 体系与 App 内 SSOT 主标签体系（`data/taxonomy.json` 17 主类）通过 `tag_patterns` 映射，两者并非一一对应。
 
 ---
 

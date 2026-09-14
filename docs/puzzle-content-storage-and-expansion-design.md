@@ -1,5 +1,11 @@
 # 拼图关卡内容体系、存储架构与扩展包系统设计规范 (v3 极简动态推导与路由版)
 
+> [!WARNING]
+> **部分内容已被取代（2026-09-14 标注）**：本文的清单路由、主线增量合并、每日时间锁、活动状态机等核心设计仍然有效；但以下细节已随后续重构过时，请以 [`app-storage-directory-architecture-20260911.md`](app-storage-directory-architecture-20260911.md) 为准：
+> - §6 存储目录树：`thumbnail_cache/` 三级缩略图缓存已整体删除；网络关卡懒落地目录为 `levels/network/`（而非 `network_levels/`）；packs 实际位于 `[App Support]/levels/packs/`；快照文件命名为 `{safeId}_{FNV1a8hex}__{difficultyKey}.snapshot`；
+> - §7.1 通关进度存储：实际为 Hive `game-progress-v1` box（key 为裸 canonicalId），非 SharedPreferences/SQLite；
+> - 内置 100 关 demo 已下线（assets 中不再打包 featured 关卡图）。
+
 > **文档状态**：已完整落地实现并集成 (v3 生产落地版)
 > **实现工程**：`lib/logic/content/` (根路由清单、增量主线、每日时间锁、活动状态机)、`lib/pages/tabs/` (主页/每日/活动/自制 4-Tab 矩阵)
 > **面向模块**：Root Manifest 根路由、首页主线 (Main)、每日挑战 (Daily)、活动中心 (Events)、关卡扩展包 (Zip / 文件夹)、本地 UGC、统一存档与残局隔离
@@ -119,7 +125,7 @@ App 客户端代码内部**只内置主备 2~3 个根清单的静态 URL**（如
 ### 3.2 客户端发现与容灾流程
 1. **主备轮询**：客户端优先请求主 URL，若超时（如 3 秒）或返回 5xx，自动无缝重试备用 URL；
 2. **本地落盘**：请求成功后将 `manifest.json` 缓存至本地 `[App Support]/manifest_cache.json`；
-3. **离线回退**：若完全无网络且无缓存，回退至 App 打包时内置的 `assets/data/manifest_default.json`。
+3. **离线回退**：若完全无网络且无缓存，回退至代码内置的默认保底清单（`ManifestRouter._createDefaultFallbackManifest()`，schemaVersion 3、`notice: 'Offline mode'`，见 `lib/logic/content/pipelines/manifest_router.dart`），不读取 assets 文件。
 
 ---
 
@@ -315,10 +321,7 @@ for (final file in directory.listSync()) {
 ```
 [App Sandbox]
 ├── assets/                                      # 只读打包资源 (Assets)
-│   ├── data/
-│   │   ├── manifest_default.json                # 默认根路由兜底
-│   │   └── tags.json                            # 默认标签多语言定义 (tag -> 显示名称)
-│   └── images/levels/featured/                  # 内置 1~100 关
+│   ├── images/levels/featured/                  # 内置 1~100 关
 │       ├── level_001.webp (映射为 main:001)
 │       └── ...
 │

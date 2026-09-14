@@ -90,7 +90,7 @@ python scripts/batch_image_downloader.py --source pixabay --dry-run --per-catego
 - 过滤 `min_width` / `orientation` / `image_type=photo`
 - 并发下载 + 重试 + 去重（按 `id`/`hash`）
 - 生成 `download_manifest.json` 记录 `sourceUrl`、`license`、`author`，对接 `online-image-picker-and-source-tracking-design.md` 的溯源需求
-- 下载后可直接跑质检：`python scripts/puzzle_quality_analyzer.py --source assets/images/levels --html temp/report.html`
+- 下载后可直接跑质检：`python scripts/puzzle_quality_analyzer.py --input assets/images/levels [--output temp/report_dir] [--no-vlm]`
 
 ### 方法 B：浏览器插件（一键批量，无代码）
 
@@ -138,11 +138,11 @@ flowchart LR
 # 下载 4 分类各 50 张（Pixabay）
 python scripts/batch_image_downloader.py --source pixabay --per-category 50 --min-width 1920 --out-dir assets/images/levels
 
-# 质检并生成 HTML 报告
-python scripts/puzzle_quality_analyzer.py --source assets/images/levels --html temp/batch_download_report.html --json temp/batch_download_report.json
+# 质检并生成 HTML 报告（报告默认输出到输入目录；可用 --output 指定报告目录）
+python scripts/puzzle_quality_analyzer.py --input assets/images/levels --output temp
 
-# 交互式挑选 S/A 级后一键归档（示例：仅归档 S+A）
-python scripts/export_selected_puzzles.py --source temp/batch_download_report.json --filter-grade S,A --out-dir assets/images/levels
+# 交互式挑选 S/A 级后一键归档（--min-grade 为单值，可选 S/A/B/C）
+python scripts/export_selected_puzzles.py --input-json temp/puzzle_quality_report.json --min-grade S --output-dir assets/images/levels
 ```
 
 ---
@@ -161,7 +161,7 @@ python scripts/export_selected_puzzles.py --source temp/batch_download_report.js
 
 ### 5.3 限流与效率
 - Pixabay 免费限 `10000` 请求/月，`per_page` 设 50~200，分批 `page=1..20` 即可拉上千张
-- Pexels 限 `200` 请求/小时，Unsplash 限 `50` 请求/小时，脚本内置 `rate_limit_delay` 与 `retry 3` 次
+- Pexels 限 `200` 请求/小时，Unsplash 限 `50` 请求/小时，脚本内置 3 次重试与递增间隔退避限速（无独立 `rate_limit_delay` 配置项）
 - 建议首次小批量 `--per-category 20 --dry-run` 验证关键词命中率，再全量
 
 ### 5.4 存储与扩展
@@ -172,7 +172,7 @@ python scripts/export_selected_puzzles.py --source temp/batch_download_report.js
 
 ## 6. 快速开始清单
 
-- [ ] 注册 Pixabay/Pexels API Key，写入环境变量或 `scripts/.env`
+- [ ] 注册 Pixabay/Pexels API Key，写入系统环境变量（`PIXABAY_API_KEY` / `PEXELS_API_KEY` / `UNSPLASH_ACCESS_KEY`；脚本只读环境变量，不加载 `.env` 文件）
 - [ ] `pip install requests pillow tqdm`
 - [ ] `python scripts/batch_image_downloader.py --source pixabay --per-category 30 --dry-run`
 - [ ] 确认命中后去掉 `--dry-run` 正式下载

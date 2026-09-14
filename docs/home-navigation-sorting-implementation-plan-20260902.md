@@ -1,6 +1,7 @@
 # 首页导航与排序重构实现方案
 
 > **文档版本**：v1.0  
+> **实施状态（2026-09-14 核对）**：方案为部分采纳——吸顶 Tag 栏已落地（简化为单行 44dp `SliverPersistentHeader`，`home_tab_view.dart`）；数据源已切网络 main 内容。**未采纳**：`LevelStatusFilter` 状态过滤枚举（实际为字符串 Tag 过滤 `_selectedTag`）与 `LevelSortOrder` 排序枚举/锁定解锁公式（首页无排序逻辑）。阅读时请注意区分"方案"与"现状"。  
 > **创建日期**：2026-09-02  
 > **基础文档**：`home-navigation-and-sorting-ux-design-20260902.md` v2.0 + 4 份独立评审（dsf / bdm / gmp / msf）  
 > **适用项目**：Flutter 拼图游戏（`C:\Home\Projects\jigsawpuzzle`）  

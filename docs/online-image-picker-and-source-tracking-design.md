@@ -1,5 +1,7 @@
 # 在线图库选图与关卡来源追踪设计方案
 
+> **实施状态（2026-09-14 核对）**：核心方案已落地（三通道入口、单 WebView、素材库、来源追踪字段 `sourceType/sourcePlatform/sourceUrl`，见 `online_image_picker_page.dart`、`download_manager.dart`）。注意：早期草案中的 `sourcePlatform` 中文语义值域已被 [`i18n-persistent-source-labels-design-20260906.md`](i18n-persistent-source-labels-design-20260906.md) 的稳定 key 方案（`main/daily/custom/pack/album/online/preset/official/event`）取代。另：`DownloadManager` 为逐条顺序下载（无队列调度与并发上限）。
+
 ## 1. 概述与核心目标
 
 为了让用户拥有丰富的高质量拼图素材，本方案在「我的自制」模块中引入**全屏在线免版权图库浏览器（Pixabay / Unsplash / Pexels）**，实现与本地相册选图并行的“双通道自制拼图”体验。

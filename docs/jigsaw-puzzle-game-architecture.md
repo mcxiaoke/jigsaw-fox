@@ -32,8 +32,8 @@
 │  JigsawPuzzleGame (FlameGame)                               │
 │   ├─ BoardGhostComponent (底图透视参考水印层)                │
 │   ├─ TrayBackgroundComponent (托盘纯色半透明遮罩与手势捕获)   │
-│   ├─ PuzzlePieceComponent (单碎片: 局部渲染/拖拽手势/拾取反馈)│
-│   └─ GhostOutlineComponent (磁吸虚线高亮层)                 │
+│   └─ PuzzlePieceComponent (单碎片: 局部渲染/拖拽手势/拾取反馈)│
+│   （吸附高亮由 PuzzlePieceComponent 内部绘制，无独立组件）     │
 │  * 职责: 60fps 实时手势平移、磁吸 Tween 缓动、Canvas 批渲染  │
 └──────────────────────────────┬──────────────────────────────┘
                                │ 拖拽释放结算 / 内容数据供给
@@ -49,7 +49,7 @@
 ┌──────────────────────────────▼──────────────────────────────┐
 │  4. 领域逻辑与数据层 (Domain & Data Layer)                   │
 │  ├─ 几何切割: EdgeLayout (确定性拓扑) / PieceShape (贝塞尔路径)│
-│  ├─ 状态机模型: PuzzleDifficulty / Snapshot v2 / UndoManager │
+│  ├─ 状态机模型: PuzzleDifficulty / Snapshot v3 / UndoManager │
 │  ├─ 纯函数群: resolveSnap() / isSolved() / hintFor()        │
 │  ├─ 超分引擎: ImageUpscaler (导向滤波降噪/Cubic插值/CAS锐化) │
 │  └─ 持久化仓储: GameRepository (关卡存档、打卡日历、自制拼图)  │
@@ -69,11 +69,11 @@ $$\frac{\text{cols}}{\text{rows}} = \frac{W_{\text{image}}}{H_{\text{image}}}$$
   在屏幕棋盘基准尺寸下：
   $$w = \frac{\text{boardW}}{\text{cols}}, \quad h = \frac{\text{boardH}}{\text{rows}} = \frac{\text{boardW} \cdot \frac{H_{\text{image}}}{W_{\text{image}}}}{\text{cols} \cdot \frac{H_{\text{image}}}{W_{\text{image}}}} = \frac{\text{boardW}}{\text{cols}} = w$$
   因此，切片在施加贝塞尔凹凸卡扣前，基础单元格恒定为严格正方形。
-- **智能棋盘最大化居中排布**：
+- **智能棋盘居中自适应排布**：
   - 设游戏工作区可用尺寸为 $W_{\text{avail}} \times H_{\text{avail}}$（扣除底部托盘高度与 Margin）。
   - 原图长宽比 $R_{\text{img}} = \frac{\text{image.width}}{\text{image.height}}$，工作区长宽比 $R_{\text{avail}} = \frac{W_{\text{avail}}}{H_{\text{avail}}}$。
-  - **最大化占满策略**：
-    $$\begin{cases} \text{boardW} = W_{\text{avail}} \times 0.90, \quad \text{boardH} = \frac{\text{boardW}}{R_{\text{img}}} & (R_{\text{img}} \ge R_{\text{avail}} \text{，图片偏宽/横屏}) \\ \text{boardH} = H_{\text{avail}} \times 0.90, \quad \text{boardW} = \text{boardH} \times R_{\text{img}} & (R_{\text{img}} < R_{\text{avail}} \text{，图片偏高/竖屏/正方形}) \end{cases}$$
+  - **桌面散落模式的二分搜索自适应**（`jigsaw_puzzle_game.dart` 桌面模式棋盘定尺寸逻辑）：
+    以基准 $0.56$ 为初值，在 $[0.50, 0.92]$ 区间对「棋盘缩放比例」做 12 轮二分搜索：取满足「散落槽位数 $\ge \lceil rows \times cols \times 0.80 \rceil$ 且四周分布均衡」的最大比例，最终再作 $0.97$ 视觉收缩留出呼吸感；极端小窗口回退 $0.50$ 基准。托盘模式则由托盘高度直接推导棋盘可用区。基础切片恒为正方形的数学性质与该缩放比例无关（$w = h$ 恒成立）。
   - 原图切片对应的像素基准尺寸：
     $$\text{srcW} = \frac{\text{image.width}}{\text{cols}},\quad \text{srcH} = \frac{\text{image.height}}{\text{rows}} \quad (\text{srcW} = \text{srcH})$$
 
@@ -244,7 +244,7 @@ $$\frac{\text{cols}}{\text{rows}} = \frac{W_{\text{image}}}{H_{\text{image}}}$$
 ### 3.10 自适应响应式网格与跨平台拖拽滚动管线
 
 1. **统一自适应网格委托 (`SliverGridDelegateWithMaxCrossAxisExtent`)**：
-   - 关卡画廊、每日挑战与我的自制三大 Tab 统一采用 `maxCrossAxisExtent: 220, childAspectRatio: 1.0`；
+   - 关卡画廊、每日挑战与我的自制三大 Tab 统一采用 `maxCrossAxisExtent: 220`；`childAspectRatio` 关卡画廊/每日挑战为 `1.0`，我的自制为 `0.95`；
    - 窄屏自动计算为 2 列，宽屏自适应扩展为 3~6 列，保证卡片无拉伸变形。
 2. **跨平台多模态手势滚动 (`AppScrollBehavior`)**：
    - 扩展 `dragDevices` 包含 `{touch, mouse, trackpad, stylus}`；
@@ -254,49 +254,43 @@ $$\frac{\text{cols}}{\text{rows}} = \frac{W_{\text{image}}}{H_{\text{image}}}$$
 
 ### 3.11 Windows 鼠标单击吸附抓取 (Click-to-Pick & Move-to-Drop) 与双模手势架构
 
-为彻底消除桌面端/Windows 玩家长时间按住鼠标拖动导致的食指疲劳，系统内置**智能双模手势状态机**：
+为彻底消除桌面端/Windows 玩家长时间按住鼠标拖动导致的食指疲劳，系统内置**持握跟随手势模式**（按下即拾取，无需长按）：
 
 ```
                     ┌────────────────────────┐
                     │ 用户在未归位碎片上按下   │
                     └───────────┬────────────┘
-                                │ onDragStart
+                                │ onTapDown / onDragStart
                                 ▼
                     ┌────────────────────────┐
-                    │ 记录起始位置与时间戳     │
-                    │ _dragStartTime / Pos   │
+                    │ 立即开启光标吸附跟随模式 │
+                    │ startHoldingPiece      │
                     └───────────┬────────────┘
-                                │ onDragEnd (松开)
-                ┌───────────────┴───────────────┐
-                │                               │
-    [位移 < 8px 且 时间 < 350ms]      [位移 ≥ 8px 或 长按拖动]
-    (典型鼠标单击 / 点选)             (传统按住拖拽 / 移动端触控)
-                │                               │
-                ▼                               ▼
-    ┌────────────────────────┐      ┌────────────────────────┐
-    │ 开启光标吸附跟随模式    │      │ 直接释放放置           │
-    │ startHoldingPiece      │      │ handlePieceDragEnd     │
-    └───────────┬────────────┘      └────────────────────────┘
+                                │ onMouseMove (光标任意移动，无需长按)
+                                ▼
+                    ┌────────────────────────┐
+                    │ 碎片及其集群跟随光标平滑 │
+                    │ 移动并实时计算缩放插值   │
+                    └───────────┬────────────┘
+                ┌───────────────┴───────────────────┐
+                │                                   │
+    [按住拖动后松开左键 / 触屏松手]     [持握未拖动：移到目标后再次单击左键]
+                │                                   │
+                ▼                                   ▼
+┌────────────────────────┐           ┌────────────────────────┐
+│ 释放放置并执行吸附判定  │           │ 释放放置并执行吸附判定  │
+│ handlePieceDragEnd     │           │ dropHoldingPiece       │
+└────────────────────────┘           └────────────────────────┘
                 │
-                │ onMouseMove (光标任意移动，无需长按)
+                │ 持握未拖动时按 ESC 键
                 ▼
     ┌────────────────────────┐
-    │ 碎片及其集群跟随光标平滑 │
-    │ 移动并实时计算缩放插值   │
-    └───────────┬────────────┘
-                │
-        ┌───────┴───────────────────────┐
-        │                               │
-    [再次单击鼠标左键]             [右键单击 或 按 ESC 键]
-        │                               │
-        ▼                               ▼
-┌────────────────────────┐      ┌────────────────────────┐
-│ 释放放置并执行吸附判定  │      │ 取消抓取并平滑飞回原位 │
-│ dropHoldingPiece       │      │ cancelHoldingPiece     │
-└────────────────────────┘      └────────────────────────┘
+    │ 取消抓取并平滑飞回原位 │
+    │ cancelHoldingPiece     │
+    └────────────────────────┘
 ```
 
-1. **全链路轻点响应与零漏触**：`PuzzlePieceComponent` 同时混入 `DragCallbacks` 与 `TapCallbacks`，并在 `onTapDown` 与 `onDragStart` 中双向拦截响应，无论是轻点还是按住拖动均 100% 灵敏秒响应。
+1. **全链路轻点响应与零漏触**：`PuzzlePieceComponent` 同时混入 `DragCallbacks` 与 `TapCallbacks`，`onTapDown` 与 `onDragStart` 均直接调用 `startHoldingPiece` 进入持握（双路径互为兜底，不依赖时间/位移双阈值判定），无论是轻点还是按住拖动均 100% 灵敏秒响应。
 2. **归一化抓取锚点模型 (Normalized Grab Anchor Model)**：
    - 拾起碎片时，计算光标在碎片逻辑尺寸中的相对比例锚点：
      $$anchorX = \frac{x_{\text{cursor}} - pos.x}{size.x \cdot scale.x}, \quad anchorY = \frac{y_{\text{cursor}} - pos.y}{size.y \cdot scale.y}$$
@@ -304,12 +298,11 @@ $$\frac{\text{cols}}{\text{rows}} = \frac{W_{\text{image}}}{H_{\text{image}}}$$
      $$pos.x = x_{\text{cursor}} - anchorX \cdot size.x \cdot scale_{\text{current}}$$
      $$pos.y = y_{\text{cursor}} - anchorY \cdot size.y \cdot scale_{\text{current}}$$
    - **数学保证**：光标永远 100% 牢牢对准碎片上玩家最初抓取的那一个相对纹理点，无论变大变小多少倍，光标与抓握点零位移发散、零距离拉大，实现绝对跟手！
-3. **再次单击放置**：光标移动到目标区域（棋盘或托盘）后，再次单击左键即可放置并触发精准吸附或托盘收纳。
-4. **传统拖动与触屏 100% 兼容**：若玩家采用“按住拖动到位置后松开”的传统操作，位移超过阈值时直接在松手时放置，两套习惯无缝共存。
-5. **防误触与快捷取消**：在吸附状态下，点击鼠标右键或按键盘 `ESC` 键，碎片将平滑缓动飞回原位。
+3. **再次单击放置**：持握未拖动状态下，光标移动到目标区域（棋盘或托盘）后再次单击左键即调用 `dropHoldingPiece` 放置并触发精准吸附或托盘收纳。
+4. **传统拖动与触屏 100% 兼容**：若玩家采用“按住拖动到位置后松开”的传统操作，松手时经 `handlePieceDragEnd` 直接放置，两套习惯无缝共存。
+5. **防误触与快捷取消**：持握未拖动状态下按键盘 `ESC` 键（`game_page.dart` 快捷键处理调用 `cancelHoldingPiece`），碎片将平滑缓动飞回原位。
 
 ---
-
 ### 3.12 画布缩放平移、窗口自适应与桌面散落布局
 
 #### A. 全局缩放与定点平移 (Zoom & Pan)
@@ -335,12 +328,11 @@ $$\frac{\text{cols}}{\text{rows}} = \frac{W_{\text{image}}}{H_{\text{image}}}$$
 
 为解决玩家导入小尺寸/低分辨率图片在切片后出现马赛克模糊、且确保切片碎片边长安全满足最小物理分辨率（$\ge 30\text{px}$）的要求，系统内置了**纯 Dart 非 AI 图像超分辨率与保边降噪引擎**：
 
-1. **真实物理像素自适应与短边 2160 上限制约**：
-   - 裁切导出尺寸由玩家在视口中所框选的原图实际物理像素范围 $\left(W_{\text{crop}}, H_{\text{crop}}\right)$ 动态自适应决定；
-   - 施加**短边最大 2160px 4K 黄金上限约束**（1:1 最大 $2160 \times 2160$、2:3 最大 $2160 \times 3240$、3:4 最大 $2160 \times 2880$），避免极端大图引起显存暴涨与切片卡顿；
+1. **真实物理像素自适应裁切导出**：
+   - 裁切导出尺寸由玩家在视口中所框选的原图实际物理像素范围 $\left(W_{\text{crop}}, H_{\text{crop}}\right)$ 动态自适应决定，无额外的固定像素上限；
    - 1080P~2K 正常高清原图保持 100% 1:1 无损物理裁切导出。
 2. **低分辨率智能触发条件**：
-   - 若实际裁切导出的像素尺寸满足 **短边 $\le 750\text{px}$** 或 **长边 $\le 1000\text{px}$**（满足任意一个），自动触发 2x 高清超分辨率增强管线。
+   - 若实际裁切导出的像素尺寸满足 **短边 $\le 750\text{px}$** 或 **长边 $\le 1000\text{px}$**（满足任意一个），自动触发 2x 高清超分辨率增强管线（`ImageUpscaler.shouldUpscale`，`lib/logic/image_upscaler.dart`）。
 3. **三阶滤波管线流程**：
    - **温和导向滤波 (Guided Filter)**：基于 $O(1)$ 盒状可分离均值加速，仅平滑传感器暗光杂色与 JPEG 压缩伪影，结合线性残差混合，100% 锁死动物毛发与物体轮廓；
    - **高质量空间插值**：采用双三次（Cubic）平滑重采样；
@@ -389,9 +381,10 @@ $$\frac{\text{cols}}{\text{rows}} = \frac{W_{\text{image}}}{H_{\text{image}}}$$
 
 ## 4. 数据持久化与存档体系
 
-### 4.1 存档快照规范 (Snapshot v2)
+### 4.1 存档快照规范 (Snapshot v3，向下兼容 v2 读入)
 - **坐标系统一规范**：碎片坐标统一采用**棋盘归一化浮点比例坐标**（$[0.0, 1.0]$）。
 - **无损分辨率重映射**：跨设备同步或窗口拉伸 Resize 时，只需将归一化坐标乘当前屏幕实际 `(boardW, boardH)`，彻底解决错位问题。
+- **版本**：当前快照版本 `currentVersion = 3`，`minSupportedVersion = 2`（v2 仅作 fromJson 兼容输入，见 `lib/logic/models/puzzle_state.dart`）。
 
 ### 4.2 本地仓储管理 (GameRepository)
 - 管理关卡状态、多难度独立通关记录、每日挑战历史、自制拼图元数据与全局用户设置。
@@ -401,16 +394,14 @@ $$\frac{\text{cols}}{\text{rows}} = \frac{W_{\text{image}}}{H_{\text{image}}}$$
 - **来源追踪字段**：`CustomPuzzleItem` 扩展 `sourceType`（`gallery | online | preset`）、`sourcePlatform` 与 `sourceUrl`，序列化向下兼容历史老数据。
 - **响应式状态通知**：暴露 `customPuzzlesNotifier`（`ValueNotifier<List<CustomPuzzleItem>>`），在增删改自制关卡时自动派发通知，实现列表 100% 响应式自动刷新。
 
-### 4.3 独立分层图片缓存与缩略图引擎 (Image Cache Pipeline) — 2026-09-02 修订
-- **档位枚举收敛**：`ThumbnailDimension {card(360), eventCover(720)}` 取代任意 `int`，编译期杜绝同源多份，`removeThumbnailForSource` 遍历全档位；FNV 掩码 `0x7FFFFFFFFFFFFFFF` 消负号，`_rebuildDiskKeyIndexAsync` 自清理 `thumb_-*.jpg` 与 `_600/_1440` 孤儿
-- **严格分层解耦**：
-  - **核心引擎** `ImageCacheManager`：`L1 150张/30MB → L2 thumbnail_cache + Set索引 → L3 EngineTaskQueue(桌面4/移动2, Single-Flight)`，`getThumbnailBytes` 本地与 `getNetworkThumbnailBytes` 网络同流水线、同目录、同 Key
-  - **L2 磁盘容量治理（2026-09-09 新增）**：`kMaxDiskCacheBytes = 500MB`，超限后按文件修改时间升序（LRU）淘汰至 90% 水位，避免离线使用过程中磁盘占用单调增长；运行时以 `_diskCacheBytes` 计数，未超限时零扫描开销
-  - **缓存性质区分**：`thumbnail_cache` 为**可重建派生缓存**，可安全自动淘汰；`download_cache` 存放用户主动下载的原图，属**用户资产，不做自动淘汰**，容量由用户在设置中显式管理
-  - **后台生成** `ThumbnailGenerator`：`package:image` Isolate 下采样，`ImageDescriptor.encoded` 零像素探针测尺寸
-  - **渲染适配** `AppCachedImageProvider` 本地 / `AppCachedNetworkImageProvider` 网络，`getTargetSize` 钳 `720/360` 解码期降采样；`LevelImageResolver` 网络关卡可视即后台落原图到 `network_levels/` 再缩略，`LazyLevelImage` 保证见缩略必可玩
-  - **UI 便捷** `AppCachedImage(targetDimension)` + `LazyLevelImage(level)` + `Image.memory(cacheWidth:600/1080/1440)`
-- **预热+懒落地**：导入/下载/自制落盘 `prewarmThumbnail` 0ms 秒开；网络关卡 `Grid` 可视触发 `LevelImageResolver` 单次下载落盘，后续离线 L2 命中。详见 `docs/image-cache-and-thumbnail-pipeline-architecture.md` 与 `docs/network-level-lazy-download-plan-20260902.md`
+### 4.3 图片解码档位与网络图加载管线 — 2026-09-14 修订
+- **历史说明**：早期的三级缩略图缓存引擎（`ImageCacheManager`：L1 内存 / L2 `thumbnail_cache` 磁盘 / L3 `EngineTaskQueue` 限并发）已于后续重构中**整体删除**（仅存 `main.dart` 与 `level_image_resolver.dart` 中的移除说明注释），`prewarmThumbnail` / `removeThumbnailForSource` / `kMaxDiskCacheBytes` 等接口不复存在。
+- **现行实现**：
+  - **档位枚举**：`ThumbnailDimension {card(360), eventCover(720)}` 仍作为解码期降采样档位（`lib/logic/cache/thumbnail_dimension.dart`）；
+  - **入库规格化**：`ThumbnailGenerator` 退化为「独立后台 Isolate 图像裁剪规格化处理器」——只裁不缩（智能/居中裁切至标准比例），供 ZIP 图包导入等入库流程使用；
+  - **网络关卡图片**：`LevelImageResolver` 统一承担——同步快查本地 → FNV-1a 63 位哈希命名 `net_<hash>.<ext>` 落盘 `levels/network/` → per-targetPath Single-Flight 去重下载 → 失败回退原 URL；`LazyLevelImage` 保证「见缩略必可玩」；
+  - **UI 便捷**：`AppCachedImage(targetDimension)` + `LazyLevelImage(level)` + `Image.memory(cacheWidth:…)` 解码期降采样。
+- **懒落地**：网络关卡 Grid 可视触发 `LevelImageResolver` 单次下载落盘，后续离线直接命中本地文件。详见 `docs/network-level-lazy-download-plan-20260902.md`。
 
 ---
 
@@ -421,7 +412,7 @@ $$\frac{\text{cols}}{\text{rows}} = \frac{W_{\text{image}}}{H_{\text{image}}}$$
 | `EdgeLayoutTest` | 纯 Dart 单元测试 | 确定性（同 seed 拓扑恒定）、四向相邻互补镜像（一 tab 一 blank） |
 | `PieceShapeTest` | 纯 Dart 几何测试 | 共享边路径重合度误差、局部包围盒与采样矩形 1:1 对齐 |
 | `ImageUpscalerTest`| 纯 Dart 算法测试 | 2x 尺寸放大、温和导向降噪与 CAS 锐化管道正确性、低分辨率判定边界 |
-| `SnapshotRestoreTest`| 纯 Dart 往返测试 | Snapshot v2 序列化与反序列化还原状态、坐标、朝向与簇归属 100% 一致 |
+| `SnapshotRestoreTest`| 纯 Dart 往返测试 | Snapshot v3（兼容 v2）序列化与反序列化还原状态、坐标、朝向与簇归属 100% 一致 |
 | `SnapAlgorithmTest` | 纯 Dart 算法测试 | 距离阈值内吸附、带朝向校验吸附、整组 Cluster 坐标协同平移 |
 | `UndoManagerTest` | 纯 Dart 状态测试 | 连续多步状态入栈/撤销/重做幂等性 |
 | `CropPuzzleTest` | Flutter Widget 测试 | 5 种标准长宽比、手势拖动裁切、动态最大缩放比限制校验 |

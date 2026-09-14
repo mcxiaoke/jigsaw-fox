@@ -87,21 +87,18 @@
 │   └── ...
 │
 ├── hive_data/                             # 【Hive CE 嵌入式持久化数据】
-│   ├── app-state-v1.hive                  # 应用全局状态 (引导、版本、标记)
-│   ├── game-progress-v1.hive              # 关卡进度 (星级、用时、已拼步数)
-│   ├── game-collections-v1.hive           # 自定义关卡元数据 (CustomPuzzleItem)
-│   ├── favorites-v1.hive                  # 收藏夹列表
-│   ├── economy-v1.hive                    # 虚拟经济 (金币、提示券)
-│   ├── achievements-v1.hive               # 成就系统解锁状态
+│   ├── app-state-v1.hive                  # 应用全局状态 (统计、经济 econ:*、成就 ach:*、标记)
+│   ├── game-progress-v1.hive              # 关卡进度 (星级、用时、已拼步数，key 为裸 canonicalId)
+│   ├── game-collections-v1.hive           # 自制关卡 custom:{id} / 收藏 favorite:{cid} / 素材 material:{id}
 │   └── *.lock                             # 进程文件锁 (并发保护)
 │
 ├── hive_backups/                          # 【数据写前快照自动备份】
-│   ├── backup-2026-09-11T10-30-00/        # 轮替保留最近 3 份历史快照
+│   ├── backup-2026-09-11T10-30-00/        # 轮替保留最近 5 份历史快照 (kMaxBackups=5)
 │   └── ...
 │
 ├── snapshots/                             # 【游戏中途盘面存档快照】
-│   ├── snap_main_101_d25.json             # 未拼完盘面状态 (位置、吸附群组、旋转)
-│   └── ...
+│   ├── main_101_1a2b3c4d__1x1_d25.snapshot # 未拼完盘面状态 (位置、吸附群组、旋转)
+│   └── ...                                # 命名: {safeId}_{FNV1a8hex}__{difficultyKey}.snapshot
 │
 ├── logs/                                  # 【系统滚动运行日志】
 │   ├── app_2026-09-11.log                 # 当日主日志
@@ -159,7 +156,7 @@
 | 目录 | 负责类 | 作用与安全保障机制 |
 | :--- | :--- | :--- |
 | `hive_data/` | `StorageManager` | 生产级 Hive CE 嵌入式键值数据库，存放成就、收藏、金币、已拼关卡记录与进度等。使用独立 `.lock` 保护并发写入。 |
-| `hive_backups/` | `StorageManager` | 每次核心数据写入前对 `hive_data/` 执行快照备份，采用原子临时目录创建并重命名，自动轮替保留最新 3 份历史快照，防闪退损坏。 |
+| `hive_backups/` | `StorageManager` | 每次核心数据写入前对 `hive_data/` 执行快照备份，采用原子临时目录创建并重命名，自动轮替保留最新 5 份历史快照（`kMaxBackups = 5`），防闪退损坏。 |
 | `snapshots/` | `SnapshotStore` | 拼图过程中途退出的盘面状态恢复存档（JSON 格式）。恢复并拼通关或主动放弃时由系统自动删除。 |
 
 ### 4.5 诊断与运行时环境
@@ -177,7 +174,7 @@
 
 | 触发操作 | 作用目标与清理规则 | 受保护（绝对保留）项目 | 备注与机制 |
 | :--- | :--- | :--- | :--- |
-| **冷启动启动清理<br>(Startup GC & Self-Healing)** | • 清空整个 `temp/` 暂存区（清理残留的 `temp/downloads/` 与 `temp/extract/`）；<br>• 扫描 `levels/` 下 5 个业务子目录，自愈删除历史遗留的 `temp_*` 和 `*.part` / `*.tmp` 遗留碎片。 | • `levels/` 下的所有正式关卡原图（**红线 R1**）<br>• `download_cache/` 素材箱原图<br>• `hive_data/` 用户游戏进度 | 在 `ContentManager.initialize()` 启动最早期、前后台尚未发起任何网络请求时执行。零网络并发竞态，100% 安全。 |
+| **冷启动启动清理<br>(Startup GC & Self-Healing)** | • 清空整个 `temp/` 暂存区（清理残留的 `temp/downloads/` 与 `temp/extract/`）；<br>• 自愈清理各级内容目录下的 `temp_*` 临时目录与 `*.bak_<ts>` 原子替换备份残留（`cleanupStaleAtomicArtifacts` / `sweepStaleBackupSiblings`，见 `atomic_replace.dart`）。 | • `levels/` 下的所有正式关卡原图（**红线 R1**）<br>• `download_cache/` 素材箱原图<br>• `hive_data/` 用户游戏进度 | 在 `ContentManager.initialize()` 启动最早期、前后台尚未发起任何网络请求时执行。零网络并发竞态，100% 安全。 |
 | **素材箱：一键清空素材** | • 清空 `download_cache/` 物理素材原图 | • 已制作完成的 `levels/custom/` 自制拼图关卡<br>• 所有官方与扩展关卡 | 用户在“我的”页面素材箱抽屉显式点击触发。 |
 | **用户删除扩展包** | • 物理删除对应 `levels/packs/{packId}/` 整个目录<br>• 清除图包清单索引并广播通知 UI | • 其他已导入的扩展图包<br>• 所有官方关卡 | 用户在图包管理界面显式点击删除触发。 |
 | **服务端活动 / 图集下架同步<br>(Delist Sync)** | • 当服务端同步判定某活动或图集被下架（delisted）或禁用（disabled）时，**仅在内存与清单缓存中更新标记，绝不删除本地磁盘已下载内容** | • **所有已下载的 `levels/events/{id}/` 与 `levels/collections/{id}/` 关卡资产** | **严格遵循红线 R1**。旧文档中关于“Auto-GC 自动物理删除 disabled 活动”的描述已被废除并修正。已下载内容玩家永久可玩。 |

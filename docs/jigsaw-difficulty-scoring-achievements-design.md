@@ -26,7 +26,7 @@
 | 1:1       | 正方形       | n × n，片数 n²              |
 | 2:3 / 3:2 | 竖屏/横屏（转置） | 2k × 3k 或 3k × 2k，片数 6k² |
 
-`PuzzleAspectRatio` 收敛为：`square1x1`、`portrait2x3`、`landscape3x2`（删除 `portrait3x4`、`landscape4x3`）。
+`PuzzleAspectRatio` 收敛为：`square1x1`、`portrait2x3`、`landscape3x2`（删除 `portrait3x4`、`landscape4x3`。**注：该删除决策后被 v3.4 撤销**——`portrait3x4` / `landscape4x3` 已恢复并落地，见 `lib/logic/puzzle_model.dart` 当前枚举与文档头部注）。
 
 ### 2.2 裁剪适配（移除 3:4 的必备配套）
 

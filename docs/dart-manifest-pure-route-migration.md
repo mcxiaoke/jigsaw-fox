@@ -1,5 +1,7 @@
 # Dart 端 Manifest 纯路由改造迁移指南
 
+> **实施状态（2026-09-14 核对）**：本纯路由改造**未按原方案落地**。当前 `root_manifest.dart` 的 `DailyModuleConfig` 仍保留 `currentMonth` 主字段，`url/zipUrlPattern/listUrlPattern` 为可选辅助字段；`manifest_router._createDefaultFallbackManifest` 实际生成 `DailyModuleConfig(currentMonth: '', version: 0)`。本文仅作设计参考，若重启该改造需重新评审。
+>
 > **关联文档**：[`unified-export-and-manifest-restructure-design.md`](./unified-export-and-manifest-restructure-design.md)
 >
 > **前置条件**：服务端 `daily.json` 已就绪且 `manifest.json` 已切换为纯路由格式。
@@ -341,7 +343,7 @@ factory DailyModuleConfig.fromJson(Map<String, dynamic> json) {
 
 ## 测试检查清单
 
-- [ ] 离线兜底：`manifest_router._createDefaultFallbackManifest` 生成的新格式 `DailyModuleConfig(url: '', version: 0)` 不崩溃
+- [ ] 离线兜底：`manifest_router._createDefaultFallbackManifest` 生成的 `DailyModuleConfig`（现行为 `currentMonth: '', version: 0`）不崩溃
 - [ ] 首次启动：App 从 `manifest.dailyModule.url` 请求 `daily.json`，解析 `DailyManifest` 成功
 - [ ] 当月下载：`ensureMonthReady` 使用 `daily.json` 中 `months[].zipUrl` 直接下载，不再做 `{YYYYMM}` 拼接
 - [ ] daily_tab_view：`currentMonth` 从 `dailyManifest` 获取，月份列表正确显示

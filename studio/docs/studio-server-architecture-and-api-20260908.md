@@ -3,6 +3,7 @@
 > 适用范围：`studio/` 子项目后端（`server.py` + `core/` + `exporters/` + `taxonomy.py`）
 > 代码基线：2026-09-09（`server.py` 1800 行，`core/` 9 模块 4458 行，`exporters/` 8 模块 1982 行；行数随 CHANGES 累积而增长，以当前源码为准）
 > 说明：本文所有接口、字段、常量均以当前源码为准；如与旧设计文档冲突，以本文（源码）为准。
+> **2026-09-14 与代码同步修订**：主 Tag 数 14→17；`/api/exported` 已移除；新增 `/api/rollback` 与 ledger/export-limits 等端点；`export_tracker.py` 旧 exported.json 兼容层已移除（仅保留账本只读视图）；日志改为三路（控制台/服务日志/源库日志）；软删除目标为 `<src>/.deleted/`；缓存库文件名为 `studio.db`（旧 `<src>/.studio.db` 自动迁移）；导出环境改为启动强校验（缺 Pillow/OpenCV/numpy 直接退出）。正文行号引用为撰写时快照，已漂移，以符号名为准。
 
 ---
 
@@ -13,7 +14,7 @@ Content Studio Server 是拼图内容打包工作台的**本地后端**，为 We
 三条硬性设计约束贯穿全部代码：
 
 1. **零第三方 Web 框架**：只用 Python 标准库 `http.server` / `sqlite3` / `logging`，`pip install` 不是启动前置条件，`python studio/server.py` 秒开。
-2. **永不因可选依赖缺失而崩溃**：OpenCV / NumPy / Pillow 任一缺失都有降级路径（`HAS_PIL`、`HAS_CV2` 开关）。
+2. **依赖启动强校验**：启动时经 `_require_export_environment()` 强校验 Pillow / OpenCV / NumPy，缺一即 `SystemExit(1)`，不做静默降级；运行期内 `HAS_PIL`、`HAS_CV2` 开关仅用于细分功能降级。
 3. **纯本地单机**：监听 `127.0.0.1`，不做鉴权；靠 Windows 端口独占（`SO_EXCLUSIVEADDRUSE`）防多实例踩踏。
 
 ---
@@ -23,7 +24,7 @@ Content Studio Server 是拼图内容打包工作台的**本地后端**，为 We
 ```
 studio/
 ├── server.py               HTTP 服务：路由分发、业务编排、JobStore、质检 worker、日志初始化
-├── taxonomy.py             分类法单一事实源（14 主 Tag + 中文名 + 路径推断规则）
+├── taxonomy.py             分类法单一事实源（17 主 Tag + 中文名 + 路径推断规则）
 ├── __main__.py             支持 `python -m studio` 启动
 ├── core/                   领域核心层（不依赖 HTTP）
 │   ├── cache_db.py         SQLite 算力缓存（文件元数据 / 质检分 / 用户裁切覆盖）
@@ -33,7 +34,10 @@ studio/
 │   ├── crop_compute.py     纯几何/能量裁剪算法（与 scripts/imgcrop.py 共用）
 │   ├── image_proc.py       缩略图、转码、规格化、并行进程池
 │   ├── exports_ledger.py   导出账本（.studio/ledger，含 read_only 试导出模式）
-│   ├── export_tracker.py   旧版 exported.json 账本读取（兼容层）
+│   ├── export_tracker.py   导出账本只读视图适配层（把 .studio/ledger/exports.json 投影为 dict 视图；旧版 exported.json 兼容层已整体移除）
+│   ├── export_rollback.py  回滚操作记录与 undo（list_ops / undo_op）
+│   ├── git_guard.py        导出 git 守卫与自动提交（load_mode/ensure_repo/guard_export/commit_after_export 等）
+│   ├── log_routing.py      源库日志分流（LibraryRoutingHandler / SrcAwareFormatter / bind_src）
 │   └── workspace.py        源目录 .studio 工作区（目录结构、审计流水、发布镜像）
 ├── exporters/              策略模式导出引擎
 │   ├── base.py             BaseExporter 抽象基类 + 试导出隔离 + 进度上报
@@ -123,17 +127,18 @@ def server_bind(self):
 
 **导出的执行模型刻意保持同步**：导出仍在原 POST 请求线程内同步跑完，前端靠并发轮询只读状态接口拿进度。取舍是「执行模型零改动 + 无 clientTaskId 时行为完全不变」。
 
-### 4.1 JobStore（server.py:164-279）
+### 4.1 JobStore（server.py，约 :241-430）
 
-导出与质检共用的**只读观测通道**，不是任务调度器：
+质检 / 导出 / 回滚三类任务共用的**只读观测通道**，不是任务调度器：
 
 - 全局 `_JOBS: dict[str, dict]` + 单把 `_JOB_LOCK`，所有读写持同一锁；
+- 任务分 `quality / export / rollback` 三类（`_JOB_KIND_LABELS`），`_job_register(task_id, kind, exclusive=True)` **同类互斥**：已有 running 同类任务时新请求返回 **409**；
 - `_job_snapshot()` **返回拷贝**（`list(logs)`），绝不外泄可变引用；
-- 惰性清理：终态（done/error）超 300s 剔除，最多保留 50 条，**无定时器**；
-- 无 `clientTaskId` 的请求不注册，整条路径与旧版完全一致（向后兼容底线）；
+- 惰性清理：终态超 300s 剔除（`_JOB_TTL_SECONDS = 300`），最多保留 50 条（`_JOB_MAX_KEEP = 50`），**无定时器**；
+- 无 `clientTaskId` 的导出自动注册 `export_anon_{ts}` 匿名任务；另有兜底强制结束 `_job_ensure_finished`；
 - 取消为协作式：只置 `cancel=True`，worker 在子批边界检查（`_QUALITY_SUB_BATCH = 50`）。
 
-任务状态机：`running → done | error`（取消记为 `error="cancelled"`）。
+任务状态机：`running → done | error | cancelled`（取消为独立终态，非 error）。
 
 ### 4.2 质检后台 worker `_run_quality_job`（server.py:289）
 
@@ -150,7 +155,7 @@ def server_bind(self):
 
 ## 五、日志体系
 
-- **双 Handler**：控制台按 `--loglevel`（默认 INFO）；文件恒为 DEBUG，落在 `temp/studio-YYYYMMDD.log`（`_default_log_file()`，**按日期命名，不做大小轮转**）。
+- **三 Handler**：控制台按 `--loglevel`（默认 INFO）；服务日志落在 `temp/studio-YYYYMMDD.log`；源库日志落在 `<src>/.logs/studio-YYYYMMDD.log`（经 `studio.core.log_routing` 分流，加 `[src=…]` 前缀；`--logfile off` 一并关闭）。三个 handler 同一级别，**DEBUG 仅 `--debug` 时落盘**（`_default_log_file()`，按日期命名，不做大小轮转）。
 - 格式：控制台 `[时间] [级别] 消息`；文件追加 `(文件名:行号)`，便于定位。
 - **导出链路双写**：`_handle_export` 的 `log_fn` 同时写 JobStore（供前端轮询）和 Python logger（落盘），因此任务结束后仍可回溯逐张转码、index 写入、账本更新。
 - 各 `core/` 模块用 `logging.getLogger(__name__)` 正常 propagate 到 `studio` logger；历史静默 `except: pass` 已改为 `logger.warning/error`。
@@ -172,8 +177,13 @@ def server_bind(self):
 | `/api/taxonomy` | — | 分类法元数据 | `{ok, tags, main_tags, catalogs, specific_tags, tag_zh, catalog_to_tags, tag_to_catalogs, all_canonical_tags}`。注：`tags`/`main_tags`/`catalogs`/`specific_tags` 当前**同为 `MAIN_TAGS`**（一份数据多个键，兼容前端历史字段名） |
 | `/api/scan` | `dir`（必填） | 主扫描入口 | 见 6.2 |
 | `/api/tags` | `dir`（必填） | 只读 tags.json + 关联导出/重复态 | `{ok, file, records}` |
-| `/api/exported` | `dir`（必填） | 旧版 exported.json 账本 | `{ok, ledger}` |
 | `/api/export/status`、`/api/job/status` | `task` | 任务快照（两路径同处理，向后兼容） | `{ok, found, state, logs, done, total, summary, error}`；未知任务 `{"ok":false,"found":false}` 且 **HTTP 200** |
+| `/api/export/limits` | — | 导出参数限额 | `{ok, limits}` |
+| `/api/export/check-outdir` | `outDir` 等 | 导出目录占用预检 | `{ok, ...}` |
+| `/api/export/check-pack-id` | `packId` 等 | 扩展包 ID 冲突预检 | `{ok, ...}` |
+| `/api/ledger/ops` | `dir` | 回滚操作记录列表（`core/export_rollback.list_ops`） | `{ok, ops}` |
+| `/api/ledger/records` | `dir` | 账本记录只读查询 | `{ok, records}` |
+| `/api/ledger/audit` | `dir` | 账本与实际产物一致性审计 | `{ok, ...}` |
 | `/api/thumb` | `path`、`size`(默认360)、`dir` | 缩略图 | `Cache-Control: public, max-age=86400, immutable` + `ETag`（md5 of 路径+mtime_ns+size+size param）；命中 `If-None-Match` 返回 304 |
 | `/api/file` | `path`、`dir` | 原图直出 | — |
 | `/api/quality` | `path`、`hash`、`dir`、`force=1` | 单张质检（命中缓存直返） | `{ok, hash, quality, cached}` |
@@ -228,7 +238,8 @@ find_tags_file → 读 tags.json（若有）
 | `/api/quality/batch` | `{dir, clientTaskId, paths?, limit?, force?, maxWorkers?}` | 注册任务后**立即返回** `{ok, taskId, total, started}` |
 | `/api/quality/cancel` | `{task}` | 协作式取消，仅 running 可取消 |
 | `/api/crop/manual` | `{hash, dir, x0,y0,x1,y1, ratio}` | 保存手动裁切框（百分比坐标，校验 `0.0~1.0` 且 `x1>x0 / y1>y0`） |
-| `/api/delete` | `{dir, path, hash}` | 软删除单张素材（移动到 `<src>/Deleted/`，并从缓存库移除），返回 `{ok, path, hash, deletedTo, removedHashes, cleaned}`；已导出的图服务端拒绝并返回 **409** |
+| `/api/delete` | `{dir, path, hash}` | 软删除单张素材（移动到 `<src>/.deleted/`，旧版 `Deleted/` 仅兼容识别为回收目录，并从缓存库移除），返回 `{ok, path, hash, deletedTo, removedHashes, cleaned}`；已导出的图服务端拒绝并返回 **409** |
+| `/api/rollback` | `{dir, dryRun?/confirm?, reason?, cleanRelease?}` | 回滚预检（`dryRun`）或执行回滚（`confirm`，与 export/quality 任务互斥 409；undo_op 恢复 `commit_after_rollback`） |
 
 `/api/quality/batch` 的目标集选择：`paths` 优先；否则 `force=true` 用 `db.get_all_items()`（重算全部），否则用 `db.get_unscored_items()`（只补未评分）。`limit`：`limit<=0` 表示**全量**（不截断），`>0` 时钳制在 `[1, 2000]`；`maxWorkers` 仅在 `[1,24]` 内生效。**并发拦截**：已有 running 任务时新请求返回 **409**。
 
@@ -238,11 +249,12 @@ find_tags_file → 读 tags.json（若有）
 
 执行链：
 
-1. 注册任务（无 `clientTaskId` 则跳过）；
+1. 注册任务（无 `clientTaskId` 自动注册 `export_anon_{ts}`；与 running 的同类任务互斥 409）；
 2. 构造 `log_fn`（双写 JobStore + logger）与 `progress_fn`；
 3. **注入手动裁切框**：查 `CacheDB.get_all_user_overrides()`，把有 `has_crop` 的转成 `{hash: (x0,y0,x1,y1)}` 写入 `data["manual_boxes"]`，导出器按 hash 查找并对该文件跳过自动 smart crop；
 4. `get_exporter(type)` → `validate()` → `execute()`；
 5. 成功：试导出回 `trial/trialDir/wouldCommit`（`_write_trial_meta` 输出 `_trial_meta/{source_map.json, ledger_delta.json, trial.log}`，且走 read_only 路径——**不写** `.studio/ledger` 事件流、`exports.json` 与账本快照，零污染）；正式导出回 `totalExported`；失败回 `{"ok":false,"error","logs"}` + HTTP 500。
+6. **git 守卫链（非 trial）**：`git_guard.load_mode → ensure_repo → guard_export`（导出前）→ … → `commit_after_export`（导出后自动提交）；回滚走 `commit_after_rollback`。`git_mode=off` 时整链跳过。
 
 响应结构（`ExportResult.to_dict()`）：`{ok, summary, files, logs, error}`，成功时另加 `totalExported` 或 trial 三件套。
 
@@ -277,7 +289,7 @@ scan_images → 按 selectedPaths 过滤 → 剔除 excludedPaths
 
 ### 7.1 `core/cache_db.py` — SQLite 算力缓存
 
-库文件：源目录下 `.studio.db`（`CACHE_DB_NAME`），上下文管理器用法 `with CacheDB(root) as db`。
+库文件：`studio.db`（`CACHE_DB_NAME`，位于源库工作区规范子目录；旧版 `<src>/.studio.db` 由 `workspace._migrate_legacy_files` 自动迁移），上下文管理器用法 `with CacheDB(root) as db`。
 
 | 表 | 用途 | 主要方法 |
 |---|---|---|
@@ -363,11 +375,11 @@ scan_images → 按 selectedPaths 过滤 → 剔除 excludedPaths
 
 | 产物 | 位置 | 说明 |
 |---|---|---|
-| SQLite 算力缓存 | `<src>/.studio.db` | 文件元数据 / 质检分 / 用户裁切覆盖 |
+| SQLite 算力缓存 | `<src>/.studio/cache/studio.db` | 文件元数据 / 质检分 / 用户裁切覆盖 |
 | 导出账本 | `<src>/.studio/`（ledger、logs、release） | `ExportsLedger` + `StudioWorkspace` |
 | 账本事件流 | `<src>/.studio/ledger/exports_events.jsonl` | append-only，记账先于物化 `exports.json` |
 | 账本快照 | `<src>/.studio/ledger/backups/exports-YYYYMMDD-HHMMSS.json` | 保留最近 30 份，用于回滚 |
-| 旧版账本 | `<src>/exported.json` | `export_tracker.py` 兼容读取 |
+| 旧版账本 | `<src>/exported.json` | **已停用**：旧 exported.json 兼容层已移除，仅历史文件可能残留（workspace 会提示自动迁移） |
 | tags | `<src>/tags.json` | 路径由 `find_tags_file` 发现 |
 | 试导出目录 | `<out>/_trial_{YYYYMMDD_HHMMSS}/` | 含 `_trial_meta/` 三件套 |
 | 缩略图缓存 | `studio` 缓存目录（`get_thumb_cache_path`） | 命中则跳过解码 |

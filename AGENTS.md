@@ -3,8 +3,7 @@
 ## 项目结构
 - `lib/` — Flutter 游戏主项目（拼图游戏核心逻辑与 UI）
 - `studio/` — 素材处理工作室（图片切割、资源导出等工具）
-- `scripts/` — 通用构建/部署/维护脚本（Python/Shell/Dart）
-- `deploy/` — 部署相关脚本与配置
+- `scripts/` — 通用构建/部署/维护脚本（Python/Shell/Dart，部署脚本在 `scripts/deploy/`）
 - `integration_test/` — 集成测试
 - `test/` — 单元/Widget 测试
 - `docs/` — 项目文档与变更日志

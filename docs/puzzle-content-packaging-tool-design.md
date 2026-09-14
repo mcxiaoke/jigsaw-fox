@@ -13,7 +13,7 @@
 
 ### 1.1 现状痛点
 
-- `scripts/setup_test_server.py` 仅用 `predefined_tags:43` 随机打标生成 `X:\www\game\test -> http://192.168.1.118/data/www/game/test` 测试数据，无可视化校正，无法生产。
+- `scripts/setup_test_server.py` 早期仅用 `predefined_tags`（现 `scripts/setup_test_server.py:52` 起）随机打标生成 `X:\www\game\test -> http://192.168.1.118/data/www/game/test` 测试数据（现已扩展为 main/daily/events/collections/manifest/packs 完整测试集），但无可视化校正，无法生产。
 - `main.json:§4.1` 要求 `levels:[{url,tags,order}]` 的 `tags` 参与 `MainContentPipeline.filterByTag:42` 前台 Tab 筛选；现在无稳定产出链路。
 - 活动 `events.json:§4.3` 需手写 `title/desc/coverUrl/status/type/zipUrl/displayOrder` 等元数据，易错。
 
@@ -59,12 +59,12 @@
 
 ```json
 // 实际由 scripts/ai_tag_images.py 产出的 tags.json 为扁平数组（本工具亦兼容此格式）：
-// [{"path":"cat_01.jpg","sha1":"...","tag":"Pets","confidence":0.96,"subject":"cat","scene":"indoor home","reason":"...","review_required":false,"model":"qwen3-vl:4b","taxonomy_version":"jigsaw-tag-v1.1-21","correctedTag":"Pets?"}]
+// [{"path":"cat_01.jpg","sha1":"...","tag":"Pets","confidence":0.96,"subject":"cat","scene":"indoor home","reason":"...","review_required":false,"model":"qwen3-vl:4b","taxonomy_version":"jigsaw-tag-v1.0-21","correctedTag":"Pets?"}]
 // 校正后本工具以 correctedTag 为准（effectiveTag = correctedTag || tag），导出时映射为 tags:["Pets"]
 {
   "version": 1,
   "generatedAt": "2026-08-28T10:00:00+08:00",
-  "generator": "qwen3-vl:8b jigsaw-tag-v1.1-21",
+  "generator": "qwen3-vl:4b jigsaw-tag-v1.0-21",
   "tagVocab": "jigsaw-image-tagging-spec v1.1 (21 tags, single primary)",
   "stats": { "total": 120, "byTag": { "Pets": 18, "Landscapes": 22 } },
   "images": [
@@ -199,13 +199,16 @@ IMG_2022.jpg -> 20260902.webp
 | 方法 | 路径 | 说明 |
 |---|---|---|
 | `GET /` | 单页 HTML | 工具主界面 |
+| `GET /api/health` | 探活 | 前端心跳 |
 | `GET /api/scan?dir=D:\raw` | 扫描目录，返回 `[{file,size,w,h,mime}]` + 若存在 `tags.json` 则一并返回 |
 | `GET /api/thumb?path=D:\raw\cat.jpg&s=240` | 返回 `image/jpeg` 缩略图（Pillow 等比缩略，`w* h <= 240`） |
+| `GET /api/file?path=…&dir=…` | 原图直出 |
 | `GET /api/tags?dir=D:\raw` | 读取 `tags.json` |
 | `POST /api/tags` `body:{dir, images:[{file,correctedTag}]}` | 原子写回 `tags.json`（先写 `.tmp` 再 `rename`） |
 | `POST /api/export/main` `body:{srcDir,outDir,httpBase,version}` | 生成 `main.json` + 复制图片，返回日志 |
 | `POST /api/export/events` | 生成 `events.json` + Zip |
 | `POST /api/export/daily` | 生成 `daily/YYYYMM.zip` |
+| `POST /api/export` | 统一导出入口（后续扩展，见 unified 导出设计） |
 
 前端也支持纯离线模式：不调接口，直接在浏览器内存中生成 JSON/ZIP 供下载（`File System Access API` 不可用时的降级）。
 
@@ -233,7 +236,7 @@ IMG_2022.jpg -> 20260902.webp
 
 ## 7. 与现有链路的衔接
 
-1.  **AI 侧**：在 `scripts/` 或外部流水线中用 `ollama + qwen3-vl:8b` 按 `tagging-spec §9 JSON Schema + §7 System Prompt` 批量产出 `tags.json`（`temperature=0, format=SCHEMA`），与本工具解耦。
+1.  **AI 侧**：在 `scripts/` 或外部流水线中用 `ollama + qwen3-vl:4b`（`ai_tag_images.py` 默认模型，可显式覆盖为 8b）按 `tagging-spec §9 JSON Schema + §7 System Prompt` 批量产出 `tags.json`（`temperature=0, format=SCHEMA`），与本工具解耦。
 2.  **人工侧**：本工具消费 `tags.json`，校正后覆盖写回。
 3.  **测试验证**：导出到 `X:\www\game\test` 后，直接用 `ContentManager` 的 `MainContentPipeline/EventsContentPipeline` 本地同步验证（或 `flutter test`）。
 4.  **发布**：后期 `out/` 推送到 `GitHub Repo`，`manifest.json` 指向 `https://cdn.jsdelivr.net/gh/.../main.json` 或 `raw.githubusercontent.com`，Zip 作为 `Release Asset`。

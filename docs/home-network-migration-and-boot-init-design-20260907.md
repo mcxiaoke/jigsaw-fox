@@ -16,7 +16,7 @@
 | D2 | 内置 100 关 demo | **删除调用、保留函数**：`GameRepository.init()` 不再调 `_initLevels()`，函数体保留（预留内置 samples）；`reloadBuiltinLevelsForTest()` 供测试注入 |
 | D3 | 首启门禁范围 | **只等 main**：manifest.json + main/index.json（+缺失批次 batch json）+ main 前 4 关原图。**daily / events / collections 全部后台 best-effort，不进门禁**（首页只消费 main；daily 无 index JSON 落盘机制，无法构成秒开判据；避免二级 Tab 抖动锁死 App） |
 | D4 | 老用户秒开判定 | manifest 缓存存在 **且** main 元数据已缓存 **且** 前 4 关图本地存在 → 秒开；任一缺失 → 走初始化 Splash 补齐 |
-| D5 | 首启失败策略 | **严格：不满足条件绝不进首页**。manifest/main 元数据/4 图任一失败（含 20s 整体超时）→ 失败页 + 重试。无"降级放行"（没数据/没图进首页无意义；该门槛只在首次初始化发生，后续带缓存秒开） |
+| D5 | 首启失败策略 | **严格：不满足条件绝不进首页**。manifest/main 元数据/4 图任一失败（含 25s 整体超时，实现常量 `kFirstBootTotalBudget = 25s`，较 D6 原 20s 上调以容纳多源回退）→ 失败页 + 重试。无"降级放行"（没数据/没图进首页无意义；该门槛只在首次初始化发生，后续带缓存秒开） |
 | D6 | 整体时限 | 首启整体上限 25s，拆阶段预算：manifest+main 元数据 ≤12s / 前 4 图各 ≤8s（外层 25s 兜底；多源轮询每 URL 4s，最坏 2 源失败 + 命中 ≈ 12s 已覆盖）。首启下载请求显式传小 timeout，防止 downloadFile 默认 60s 吃掉预算 |
 | D7 | 默认难度 | studio 下发前统一默认第二档 = square **6×6 / 36 片（L1.5）**：`PuzzleAspectRatio.square1x1.tiers.firstWhere((t) => t.difficulty.recommended)`（与 daily/event/crop 一致） |
 | D8 | 首启数据范围 | = D3 集合（main 相关 json + 前 4 图）。daily/events/collections 的 index json **不进首启**，仍由后台增量同步（各自 Tab 保留失败态） |
@@ -89,7 +89,7 @@ BootGatePage.initState
    校验 A：mainPipeline.localBatchIds ⊇ 远端 index 全部 batchId   // 防部分批次静默丢失
    校验 B：levels.length ≥ min(kFirstBootMainLevelCount, 远端 totalCount)
 3. 前 4 关原图：按 order 升序取前 4，并发 ensureLevelImageDownloaded（单张 ≤8s，方法失败 rethrow）
-4. 整体 ≤20s 外层兜底
+4. 整体 ≤25s 外层兜底（`kFirstBootTotalBudget`，实现较 D6 原值 20s 上调）
 说明：全程收敛到 ContentManager（共享 _isSyncing 互斥）；
       events/collections/daily 的同步不在此路径，由进入 MainScreen 后的后台 syncAll 接管。
 ```
@@ -176,7 +176,7 @@ BootGatePage.initState
 | 二次启动（缓存+4 图齐） | **0 闪烁**直进首页，后台增量 |
 | 删掉前 4 图任一（manifest/main 缓存仍在） | 判定不满足 → Splash 补齐 4 图后进 |
 | events/collections/daily JSON 全挂（main 正常） | **不影响首启**，正常进首页；切到对应 Tab 显示各自失败态/重试 |
-| 断网冷启动（无缓存） | 失败页（≤20s），重试按钮；联网后成功进入；断网下不进入（D5） |
+| 断网冷启动（无缓存） | 失败页（≤25s），重试按钮；联网后成功进入；断网下不进入（D5） |
 | 首页点开网络关卡 | 懒下载原图 → 选难度(默认 36) → 进游戏 → 进度落 `main:NNN` |
 | 胜利弹窗 | 无"下一关" |
 | 分类过滤 | 中英双向映射过滤正确；无 tag 关卡归 Others；无伪 tag 轮转 |

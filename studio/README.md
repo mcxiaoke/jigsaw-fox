@@ -120,7 +120,7 @@ python studio/server.py --loglevel DEBUG --logfile temp/my_studio.log
 ### 步骤 3：高效分类与纯批量打标
 
 1. **标签导航栏**：
-   - 左侧常驻 14 个核心大类分类栏（风光、自然、花卉、动物、宠物、旅行、交通、温馨、美食、艺术、奇幻、缤纷、节日、其他等）；
+   - 左侧常驻 17 个核心大类分类栏（风光、自然、花卉、动物、宠物、城市、建筑、交通、人物、物品、美食、艺术、奇幻、庆典、色彩、组合、其他）；
    - 点击任一标签即可快速查看该分类下的全部图片及已打标统计。
 2. **快捷选择控制**：
    - `全选`：选中当前筛选出的所有图片；
@@ -159,7 +159,7 @@ python studio/server.py --loglevel DEBUG --logfile temp/my_studio.log
 ```text
 studio/
 ├── server.py               HTTP 服务：路由分发、业务编排、JobStore、质检 worker、日志初始化
-├── taxonomy.py             分类法单一事实源（14 主 Tag + 中文名 + 路径推断规则）
+├── taxonomy.py             分类法单一事实源（17 主 Tag + 中文名 + 路径推断规则）
 ├── __main__.py             支持 `python -m studio` 启动
 ├── core/                   领域核心层（不依赖 HTTP）
 │   ├── cache_db.py         SQLite 算力缓存（文件元数据 / 质检分 / 用户裁切覆盖）
@@ -170,6 +170,9 @@ studio/
 │   ├── image_proc.py       缩略图、转码、规格化、并行进程池
 │   ├── exports_ledger.py   导出账本（.studio/ledger，含 read_only 试导出模式）
 │   ├── export_tracker.py   导出账本只读视图适配层（投影为 hashes/path_to_hash）
+│   ├── export_rollback.py  回滚操作记录与 undo
+│   ├── git_guard.py        导出 git 守卫与自动提交
+│   ├── log_routing.py      源库日志分流（[src=] 前缀）
 │   └── workspace.py        源目录 .studio 工作区（目录结构、审计流水、发布镜像）
 ├── exporters/              策略模式导出引擎
 │   ├── base.py             BaseExporter 抽象基类 + 试导出隔离 + 进度上报

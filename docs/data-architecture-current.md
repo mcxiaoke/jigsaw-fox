@@ -1,5 +1,8 @@
 # 拼图游戏 App 数据架构总结
 
+> [!WARNING]
+> **本文已过时（2026-09-14 标注）**：描述的是 Hive 迁移与网络内容管线落地**之前**的旧架构（持久化层为 SharedPreferences、内置 100 关 + 必应每日挑战静态数据）。当前实际架构为 **Hive CE 三 box（`game-progress-v1` / `game-collections-v1` / `app-state-v1`）+ SharedPreferences 设置项 + 网络内容管线**，请以 [`app-storage-directory-architecture-20260911.md`](app-storage-directory-architecture-20260911.md)、[`hive-migration-design.md`](hive-migration-design.md) 与 [`home-network-migration-and-boot-init-design-20260907.md`](home-network-migration-and-boot-init-design-20260907.md) 为准。本文仅作历史参考，下文中的存储后端、Key 模式、每日挑战数据来源、Snapshot v2 等描述均已被取代。
+
 ## 概览
 
 数据分为两大层次：**持久化层**（SharedPreferences）和**运行时内存层**（Dart 对象），通过 `GameRepository` 单例统一管理，序列化格式全部为 JSON。

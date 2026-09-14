@@ -3,6 +3,9 @@
 
 本文档详细阐述拼图游戏（Jigsaw Puzzle）内部图片加载、下采样、磁盘缩略图持久化缓存及渲染适配的基础设施架构设计。
 
+> [!WARNING]
+> **本文已过时（2026-09-14 标注）**：本文所述的三级缓存体系（`ImageCacheManager` L1 内存 / L2 `thumbnail_cache` 磁盘 / L3 `EngineTaskQueue` 限并发）已在后续重构中**整体删除**，`getThumbnailBytes` / `getNetworkThumbnailBytes` / `prewarmThumbnail` / `removeThumbnailForSource` / `kMaxDiskCacheBytes` 等接口均不复存在（仅存 `lib/main.dart` 与 `lib/logic/cache/level_image_resolver.dart` 中的移除说明注释）。现行实现：**`LevelImageResolver`** 统一承担网络关卡图懒下载（FNV-1a 哈希命名 `net_<hash>.<ext>` 落盘 `levels/network/`，per-targetPath 单飞），**`ThumbnailGenerator`** 仅负责入库前智能/居中裁剪规格化（只裁不缩），**`ThumbnailDimension {card(360), eventCover(720)}`** 仍作为解码期降采样档位。现行架构见 `docs/jigsaw-puzzle-game-architecture.md` §4.3 与 `docs/app-storage-directory-architecture-20260911.md`。本文仅作历史设计参考。
+
 > 修订 2026-09-02：缩略图档位 `ThumbnailDimension` 枚举化、网络封面/关卡懒落地、GamePage/裁切页解码泄漏修复、负号孤儿清理已落地。
 
 ---

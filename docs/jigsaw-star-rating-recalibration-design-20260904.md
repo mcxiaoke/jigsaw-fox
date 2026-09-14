@@ -23,6 +23,8 @@
 | R10 | UI 文案对齐（§4.6）标称「三星线~二星线」实际仍写旧区间（L1「1~3 分钟」下沿 1min < 三星线 1.5min） | 改为严格 ceil 取整表，保证「承诺下沿 ≥ 三星线」可证明自洽 |
 
 > 代码事实核对（本版依据）：`puzzle_model.dart` L22-116（宽高比 × multipliers → tiers）、L135-144（tierLevel 分桶 30/40/75/125/200/320/450）、L194-240（estimatedMinutes / secPerPiece 查表）；`star_calculator.dart` 全文（0.7/1.0 阈值、0 提示=3、min 取星、保底 1）；`game_page.dart` L94-101（initState 并行起表）、L104-114（切后台仅存档不暂停）、L199-211（计时器含 _isPaused / _hintPauseUntil）、L994-1000（看原图停表）。
+>
+> **行号时效说明（2026-09-14 核对）**：上文行号为 2026-09-04 撰写时的代码位置，行为描述经复核仍然成立，但行号已漂移——当前参考位置：`puzzle_model.dart` tierLevel 分桶 ≈L191-200、`estimatedMinutes` getter ≈L246-259；`game_page.dart` initState 起表 ≈L110、`didChangeAppLifecycleState` ≈L115、`_startTimer` ≈L223、看原图停表（`_isPaused = _showOriginalImage`）≈L1158。下文出现的旧行号请按此对照。
 
 ---
 

@@ -27,7 +27,7 @@ C:\Users\<user>\AppData\Roaming\com.mcxiaoke\JigsawFox\
 │
 └── temp\                            # [专用临时暂存区] 允许随时无负担清扫
     ├── downloads\                   # 存放所有在途下载文件 (*.zip.part) 与下载就绪的临时 *.zip
-    └── extract\                     # 存放正在后台解压中的临时目录 (extract_<id>_<timestamp>)
+    └── extract\                     # 存放正在后台解压中的临时目录 (extract_<prefix>_<id>_<ts>)
 ```
 
 ### 同驱动器原子性能保证（Same-Volume Atomic Move）

@@ -1,6 +1,12 @@
 # 存档与续玩（继续 / 重新开始）长期最优设计方案
 
-> **状态**：已落地（8040f70）· 2026-08-30 13:38 增补“只留最新残局”简化  
+> **状态**：已落地（8040f70）· 2026-08-30 13:38 增补"只留最新残局"简化  
+> **2026-09-14 勘误（与当前代码对照）**：本文撰写后的多次重构已取代下列细节——
+> ① 快照版本已升至 **v3**（`currentVersion=3`，v2 仅作 fromJson 兼容输入，见 `puzzle_state.dart`）；`checksum` 字段与 gzip 压缩**未实施**（写入为明文 JSON）；
+> ② 进度存储已随 Hive 迁移改为 `game-progress-v1` box、key 为**裸 canonicalId**（`jigsaw_progress_` 前缀废弃）；统计走 `app-state-v1` 的 `stat:*`，设置仍走 SharedPreferences `jigsaw_setting_*`；
+> ③ 快照文件名为 `<safeId>_<FNV1a8hex>__<difficultyKey>.snapshot`（多哈希段 + 双下划线，见 `snapshot_store.dart`）；
+> ④ 续玩弹窗实际文件为 `lib/widgets/continue_dialog.dart`，主按钮色为 `palette.brand`（琥珀金 0xFFD4963C）；
+> ⑤ 重开（restart）分支实际经 `resume_helper.handleResumeResult` 走 `clearResume` 后回到难度选择，不直接进 `GamePage(null)`。  
 > **日期**：2026-08-30 10:38 GMT+8（初版）/ 2026-08-30 13:38 增补  
 > **作者**：OpenCode / Muse Spark  
 > **关联现状**：`lib/data/game_repository.dart`、`lib/logic/models/puzzle_state.dart:114`、`lib/game/jigsaw_puzzle_game.dart:1799`、`lib/pages/game_page.dart:192`、`lib/widgets/choose_difficulty_sheet.dart:554`、`docs/data-architecture-current.md`、`docs/puzzle-content-storage-and-expansion-design.md:6`  
