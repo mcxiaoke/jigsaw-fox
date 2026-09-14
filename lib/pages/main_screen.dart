@@ -1,3 +1,6 @@
+import 'dart:async';
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:jigsawpuzzle/l10n/gen/strings.g.dart';
 import 'package:jigsawpuzzle/logic/content/app_content.dart';
@@ -12,6 +15,8 @@ import 'package:jigsawpuzzle/services/locale_service.dart';
 import 'package:jigsawpuzzle/services/sound_service.dart';
 import 'package:jigsawpuzzle/theme/app_palette.dart';
 import 'package:jigsawpuzzle/theme/app_text_styles.dart';
+import 'package:jigsawpuzzle/update/update_service.dart';
+import 'package:jigsawpuzzle/update/widgets/update_dialog.dart';
 import 'package:phosphoricons_flutter/phosphoricons_flutter.dart';
 
 /// Main screen featuring the 4-tab bottom navigation (Home / Daily / Collections / My)
@@ -26,6 +31,8 @@ class MainScreen extends StatefulWidget {
 class _MainScreenState extends State<MainScreen> {
   int _currentIndex = 0;
 
+  Timer? _updateCheckTimer;
+
   @override
   void initState() {
     super.initState();
@@ -36,11 +43,32 @@ class _MainScreenState extends State<MainScreen> {
       if (AppContent.instance.isInitialized) {
         AppContent.instance.backgroundSyncOnce();
       }
+      _checkAutoUpdateSilent();
+    });
+  }
+
+  void _checkAutoUpdateSilent() {
+    // 单元测试环境中跳过异步定时器，避免 pending timers 报错
+    if (Platform.environment.containsKey('FLUTTER_TEST')) return;
+
+    _updateCheckTimer = Timer(const Duration(seconds: 3), () async {
+      if (!mounted) return;
+      try {
+        final result = await UpdateService.instance.checkForUpdate(
+          isSilent: true,
+        );
+        if (mounted && result.hasUpdate) {
+          await UpdateDialog.show(context, result);
+        }
+      } on Object catch (_) {
+        // 静默检查吞掉异常
+      }
     });
   }
 
   @override
   void dispose() {
+    _updateCheckTimer?.cancel();
     LocaleService.instance.removeListener(_onLocaleChanged);
     super.dispose();
   }

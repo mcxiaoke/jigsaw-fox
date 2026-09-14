@@ -46,6 +46,7 @@ class AppLogger {
   static final Logger thumbnail = Logger('App.Thumbnail');
   static final Logger upscaler = Logger('App.Upscaler');
   static final Logger image = Logger('App.Image');
+  static final Logger update = Logger('App.Update');
 
   // --- 文件落盘状态 ---
   static Directory? _logDir;

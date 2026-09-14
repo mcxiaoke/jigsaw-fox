@@ -122,6 +122,23 @@ def zip_windows(github: Path, version: str, dry_run: bool = False) -> None:
     if not exe_path.exists():
         raise SystemExit(f"Windows 构建产物缺失：{exe_path}")
 
+    # 注入通用极简更新器 updater.exe 与保护清单 .updatekeep
+    updater_candidates = [
+        ROOT / "tools" / "windows" / "updater.exe",
+        Path("C:/Home/Projects/mytools/tools/updater/rust/target/release/updater.exe"),
+    ]
+    updater_src = next((p for p in updater_candidates if p.exists()), None)
+    if updater_src:
+        shutil.copy2(src=str(updater_src), dst=str(src / "updater.exe"))
+        print(f"-> 注入更新器：{updater_src.name} -> {src / 'updater.exe'}")
+    else:
+        print("-> [WARN] 未找到 updater.exe，跳过注入更新器")
+
+    keep_file = ROOT / "windows" / ".updatekeep"
+    if keep_file.exists():
+        shutil.copy2(src=str(keep_file), dst=str(src / ".updatekeep"))
+        print(f"-> 注入保护清单：{keep_file.name} -> {src / '.updatekeep'}")
+
     with zipfile.ZipFile(dst, "w", zipfile.ZIP_DEFLATED) as zf:
         for f in sorted(src.rglob("*")):
             if f.is_dir():

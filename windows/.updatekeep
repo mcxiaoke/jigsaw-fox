@@ -1,0 +1,11 @@
+# JigsawFox Windows 自动更新保护清单 (.updatekeep)
+# 该文件定义在原地覆盖更新时，更新器必须跳过且绝对不触碰的目录和文件规则
+
+# 1. 目录规则（以反斜杠或斜杠结尾）
+logs\
+temp\
+
+# 2. 通配符规则
+*.log
+
+# 警告：切勿添加 data\ 目录，该目录包含 Flutter 引擎依赖、flutter_assets、icudtl.dat 等核心文件！

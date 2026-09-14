@@ -265,6 +265,48 @@ class Translations$settings$en {
 	/// en: 'Version {version}'
 	String footerVersion({required Object version}) => 'Version ${version}';
 
+	/// en: 'Check for Updates'
+	String get checkUpdateTitle => 'Check for Updates';
+
+	/// en: 'Current version: {version}'
+	String checkUpdateDesc({required Object version}) => 'Current version: ${version}';
+
+	/// en: 'Checking for updates…'
+	String get checkingUpdate => 'Checking for updates…';
+
+	/// en: 'Already up to date'
+	String get alreadyLatest => 'Already up to date';
+
+	/// en: 'Failed to check for updates, please try again later'
+	String get updateFailed => 'Failed to check for updates, please try again later';
+
+	/// en: 'New Version Available {version}'
+	String updateDialogTitle({required Object version}) => 'New Version Available ${version}';
+
+	/// en: 'Size: {size}'
+	String updateDialogSize({required Object size}) => 'Size: ${size}';
+
+	/// en: 'Update Now'
+	String get updateBtnNow => 'Update Now';
+
+	/// en: 'Later'
+	String get updateBtnLater => 'Later';
+
+	/// en: 'Skip This Version'
+	String get updateBtnIgnore => 'Skip This Version';
+
+	/// en: 'Downloading update… {percent}%'
+	String updateDownloading({required Object percent}) => 'Downloading update… ${percent}%';
+
+	/// en: 'Verifying package…'
+	String get updateVerifying => 'Verifying package…';
+
+	/// en: 'Starting installation…'
+	String get updateInstalling => 'Starting installation…';
+
+	/// en: 'Failed to start install: {error}'
+	String updateInstallFailed({required Object error}) => 'Failed to start install: ${error}';
+
 	/// en: 'Thumbnail cache cleared, will regenerate on next browse'
 	String get toastCacheCleared => 'Thumbnail cache cleared, will regenerate on next browse';
 
@@ -2203,6 +2245,20 @@ extension on Translations {
 			'settings.dataViewLogsTitle' => 'View Logs',
 			'settings.dataViewLogsDesc' => 'Browse, filter and copy runtime logs',
 			'settings.footerVersion' => ({required Object version}) => 'Version ${version}',
+			'settings.checkUpdateTitle' => 'Check for Updates',
+			'settings.checkUpdateDesc' => ({required Object version}) => 'Current version: ${version}',
+			'settings.checkingUpdate' => 'Checking for updates…',
+			'settings.alreadyLatest' => 'Already up to date',
+			'settings.updateFailed' => 'Failed to check for updates, please try again later',
+			'settings.updateDialogTitle' => ({required Object version}) => 'New Version Available ${version}',
+			'settings.updateDialogSize' => ({required Object size}) => 'Size: ${size}',
+			'settings.updateBtnNow' => 'Update Now',
+			'settings.updateBtnLater' => 'Later',
+			'settings.updateBtnIgnore' => 'Skip This Version',
+			'settings.updateDownloading' => ({required Object percent}) => 'Downloading update… ${percent}%',
+			'settings.updateVerifying' => 'Verifying package…',
+			'settings.updateInstalling' => 'Starting installation…',
+			'settings.updateInstallFailed' => ({required Object error}) => 'Failed to start install: ${error}',
 			'settings.toastCacheCleared' => 'Thumbnail cache cleared, will regenerate on next browse',
 			'settings.toastCacheClearFailed' => ({required Object error}) => 'Failed to clear cache: ${error}',
 			'settings.languageTitle' => 'Language',

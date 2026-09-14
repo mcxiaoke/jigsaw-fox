@@ -158,6 +158,20 @@ class _Translations$settings$zh extends Translations$settings$en {
 	@override String get dataViewLogsTitle => '查看运行日志';
 	@override String get dataViewLogsDesc => '查看、过滤并复制 App 运行日志（诊断用）';
 	@override String footerVersion({required Object version}) => '版本 ${version}';
+	@override String get checkUpdateTitle => '检查更新';
+	@override String checkUpdateDesc({required Object version}) => '当前版本: ${version}';
+	@override String get checkingUpdate => '正在检查更新…';
+	@override String get alreadyLatest => '当前已是最新版本';
+	@override String get updateFailed => '检查更新失败，请稍后重试';
+	@override String updateDialogTitle({required Object version}) => '发现新版本 ${version}';
+	@override String updateDialogSize({required Object size}) => '大小: ${size}';
+	@override String get updateBtnNow => '立即更新';
+	@override String get updateBtnLater => '稍后';
+	@override String get updateBtnIgnore => '忽略此版本';
+	@override String updateDownloading({required Object percent}) => '正在下载更新… ${percent}%';
+	@override String get updateVerifying => '正在校验安装包…';
+	@override String get updateInstalling => '正在启动安装…';
+	@override String updateInstallFailed({required Object error}) => '启动安装失败: ${error}';
 	@override String get toastCacheCleared => '缩略图缓存已清空，下次浏览时会自动重新生成';
 	@override String toastCacheClearFailed({required Object error}) => '清理缓存失败: ${error}';
 	@override String get languageTitle => '语言';
@@ -1280,6 +1294,20 @@ extension on TranslationsZh {
 			'settings.dataViewLogsTitle' => '查看运行日志',
 			'settings.dataViewLogsDesc' => '查看、过滤并复制 App 运行日志（诊断用）',
 			'settings.footerVersion' => ({required Object version}) => '版本 ${version}',
+			'settings.checkUpdateTitle' => '检查更新',
+			'settings.checkUpdateDesc' => ({required Object version}) => '当前版本: ${version}',
+			'settings.checkingUpdate' => '正在检查更新…',
+			'settings.alreadyLatest' => '当前已是最新版本',
+			'settings.updateFailed' => '检查更新失败，请稍后重试',
+			'settings.updateDialogTitle' => ({required Object version}) => '发现新版本 ${version}',
+			'settings.updateDialogSize' => ({required Object size}) => '大小: ${size}',
+			'settings.updateBtnNow' => '立即更新',
+			'settings.updateBtnLater' => '稍后',
+			'settings.updateBtnIgnore' => '忽略此版本',
+			'settings.updateDownloading' => ({required Object percent}) => '正在下载更新… ${percent}%',
+			'settings.updateVerifying' => '正在校验安装包…',
+			'settings.updateInstalling' => '正在启动安装…',
+			'settings.updateInstallFailed' => ({required Object error}) => '启动安装失败: ${error}',
 			'settings.toastCacheCleared' => '缩略图缓存已清空，下次浏览时会自动重新生成',
 			'settings.toastCacheClearFailed' => ({required Object error}) => '清理缓存失败: ${error}',
 			'settings.languageTitle' => '语言',

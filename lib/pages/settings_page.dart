@@ -11,6 +11,9 @@ import 'package:jigsawpuzzle/services/locale_service.dart';
 import 'package:jigsawpuzzle/services/sound_service.dart';
 import 'package:jigsawpuzzle/theme/app_palette.dart';
 import 'package:jigsawpuzzle/theme/app_text_styles.dart';
+import 'package:jigsawpuzzle/update/update_models.dart';
+import 'package:jigsawpuzzle/update/update_service.dart';
+import 'package:jigsawpuzzle/update/widgets/update_dialog.dart';
 import 'package:jigsawpuzzle/widgets/choose_background_sheet.dart';
 import 'package:phosphoricons_flutter/phosphoricons_flutter.dart';
 
@@ -33,6 +36,8 @@ class _SettingsPageState extends State<SettingsPage> {
   int _totalSolved = 0;
   int _totalStars = 0;
   int _coins = 0;
+  String _appVersion = '1.0.0';
+  bool _isCheckingUpdate = false;
 
   @override
   void initState() {
@@ -45,11 +50,13 @@ class _SettingsPageState extends State<SettingsPage> {
   Future<void> _loadStats() async {
     final solved = await ProgressStore.instance.getTotalSolved();
     final stars = await ProgressStore.instance.getTotalStars();
+    final pkg = await UpdateService.instance.getPackageInfo();
     if (mounted) {
       setState(() {
         _totalSolved = solved;
         _totalStars = stars;
         _coins = EconomyService.instance.coins;
+        _appVersion = '${pkg.version}+${pkg.buildNumber}';
       });
     }
   }
@@ -312,6 +319,33 @@ class _SettingsPageState extends State<SettingsPage> {
                   ),
                   onTap: () => LogViewerPage.open(context),
                 ),
+                Divider(height: 1, indent: 56, color: palette.divider),
+                ListTile(
+                  leading: Icon(
+                    PhosphorIconsBold.arrowsClockwise,
+                    color: palette.brand,
+                  ),
+                  title: Text(
+                    t.settings.checkUpdateTitle,
+                    style: styles.bodyBold,
+                  ),
+                  subtitle: Text(
+                    t.settings.checkUpdateDesc(version: _appVersion),
+                    style: styles.caption,
+                  ),
+                  trailing: _isCheckingUpdate
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : Icon(
+                          PhosphorIconsBold.caretRight,
+                          size: 18,
+                          color: palette.secondaryText,
+                        ),
+                  onTap: _isCheckingUpdate ? null : _handleManualCheckUpdate,
+                ),
               ], palette),
 
               const SizedBox(height: 24),
@@ -319,7 +353,7 @@ class _SettingsPageState extends State<SettingsPage> {
               // App Footer
               Center(
                 child: Text(
-                  t.settings.footerVersion(version: '1.0.0'),
+                  t.settings.footerVersion(version: _appVersion),
                   style: styles.caption.copyWith(color: palette.disabledText),
                 ),
               ),
@@ -329,6 +363,37 @@ class _SettingsPageState extends State<SettingsPage> {
         ),
       ),
     );
+  }
+
+  Future<void> _handleManualCheckUpdate() async {
+    setState(() => _isCheckingUpdate = true);
+    try {
+      final result = await UpdateService.instance.checkForUpdate();
+      if (!mounted) return;
+
+      if (result.hasUpdate) {
+        await UpdateDialog.show(context, result);
+      } else if (result.status == UpdateStatus.noUpdate) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(t.settings.alreadyLatest),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } on Object catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(t.settings.updateFailed),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _isCheckingUpdate = false);
+      }
+    }
   }
 
   Widget _buildSectionHeader(
