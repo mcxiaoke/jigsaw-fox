@@ -80,6 +80,18 @@ android {
             signingConfig signingConfigs.release
         }
     }
+
+    // Flutter 插件在 --split-per-abi 构建时会把各 ABI 包 versionCode 改写为 abiIndex*1000+baseVersionCode
+    // （为 Play Store 多包同时上传设计，见 flutter_tools 的 FlutterPlugin.kt）。
+    // 本项目使用自有 updates.json 分发，采用单一 versionCode 模型（设计文档
+    // docs/app-auto-update-design-20260914.md），且客户端版本比对依赖安装包真实 versionCode
+    // 与清单基础值一致（lib/update/update_service.dart），因此强制所有 ABI 包 versionCode
+    // 与 pubspec 基础值保持一致。
+    applicationVariants.all { variant ->
+        variant.outputs.all { output ->
+            output.versionCodeOverride = flutterVersionCode.toInteger()
+        }
+    }
 }
 
 flutter {

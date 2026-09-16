@@ -12,7 +12,8 @@ release_app.py — App 自动更新发版与全链路完整性巡检工具（支
    - verify --remote: 流式抓取远端 updates.json，探测并校验所有平台所有 ABI 的主源与全部镜像，
                       真实下载 APK 二进制验证 apksigner 签名有效性与 aapt versionCode
 3. publish 安全时序发版：
-   [本地校验] -> [上传所有安装包至 R2/备源] -> [远端真机下载各 ABI 验签+验版本] -> [最后更新 updates.json] -> [远端终检巡检]
+   [本地校验] -> [上传所有安装包至 R2] -> [远端 HEAD 快速校验(状态码+大小)]
+   -> [发布 GitHub/Gitee Release 镜像资产] -> [最后更新 updates.json] -> [远端全量下载终检巡检]
 """
 
 from __future__ import annotations
@@ -26,6 +27,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -44,8 +46,24 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 PUBSPEC_PATH = PROJECT_ROOT / "pubspec.yaml"
 OUTPUT_DIR = PROJECT_ROOT / "temp" / "app-release"
 R2_APP_BASE = "https://jigsawdata.umao.top/"
-UPDATES_JSON_REMOTE = f"{R2_APP_BASE}app/updates.json"
-R2_REMOTE_PREFIX = "r2:jigsaw-data/app"
+# R2 bucket 根（自定义域名 jigsawdata.umao.top 映射到 bucket 根目录）
+R2_BUCKET_ROOT = "r2:jigsaw-data"
+# bucket 内 App 更新资源目录：安装包位于 app/<版本目录>/<平台>/，updates.json 位于 app/updates.json
+R2_APP_DIR = "app"
+UPDATES_JSON_REMOTE = f"{R2_APP_BASE}{R2_APP_DIR}/updates.json"
+# GitHub / Gitee Release 镜像仓库（与 updates.json 中 mirrors 配置保持一致，tag 统一为 v{version}）
+GITHUB_MIRROR_REPO = "mcxiaoke/jigsaw-fox"
+GITEE_MIRROR_REPO = "mcxiaoke/jigsaw-fox"
+# Gitee Release 附件体积上限与软告警线（与素材侧 gitee_release.py 一致）
+GITEE_LIMIT_BYTES = 1024 * 1024 * 1024
+GITEE_SOFT_WARN_BYTES = 800 * 1024 * 1024
+GITEE_API = "https://gitee.com/api/v5"
+
+
+def version_dir(version_name: str, version_code: int) -> str:
+    """对象存储版本目录名：使用 '-' 分隔，避免 URL 路径中出现 '+'"""
+    return f"{version_name}-{version_code}"
+
 
 # GMT+8 时区
 TZ_CN = timezone(timedelta(hours=8))
@@ -73,7 +91,9 @@ def get_pubspec_version(pubspec_path: Path = PUBSPEC_PATH) -> Tuple[str, int]:
         raise FileNotFoundError(f"pubspec.yaml 不存在: {pubspec_path}")
 
     content = pubspec_path.read_text(encoding="utf-8")
-    match = re.search(r"^version:\s*([0-9]+\.[0-9]+\.[0-9]+)\+([0-9]+)", content, re.MULTILINE)
+    match = re.search(
+        r"^version:\s*([0-9]+\.[0-9]+\.[0-9]+)\+([0-9]+)", content, re.MULTILINE
+    )
     if not match:
         raise ValueError("未能从 pubspec.yaml 提取到合法的 version: x.y.z+N 格式")
 
@@ -130,7 +150,9 @@ def find_android_tool(tool_name: str) -> Optional[str]:
     return None
 
 
-def verify_apk_binary(apk_path: Path, expected_version_code: Optional[int] = None) -> Dict[str, Any]:
+def verify_apk_binary(
+    apk_path: Path, expected_version_code: Optional[int] = None
+) -> Dict[str, Any]:
     """
     深度校验 APK 二进制文件：
     1. 使用 apksigner verify 校验签名有效性
@@ -155,16 +177,28 @@ def verify_apk_binary(apk_path: Path, expected_version_code: Optional[int] = Non
         shell_needed = apksigner.lower().endswith(".bat")
         proc = subprocess.run(cmd, capture_output=True, text=True, shell=shell_needed)
         if proc.returncode != 0:
-            raise ValueError(f"APK 签名校验失败 ({apk_path.name}, 返回码 {proc.returncode}):\n{proc.stderr}\n{proc.stdout}")
+            raise ValueError(
+                f"APK 签名校验失败 ({apk_path.name}, 返回码 {proc.returncode}):\n{proc.stderr}\n{proc.stdout}"
+            )
         result["verified_signature"] = True
         log_info(f"APK 签名校验通过: {apk_path.name} (via {Path(apksigner).name})")
     else:
-        log_warn(f"未找到 apksigner 工具，退回使用 ZIP 签名文件基础检查: {apk_path.name}")
+        log_warn(
+            f"未找到 apksigner 工具，退回使用 ZIP 签名文件基础检查: {apk_path.name}"
+        )
         import zipfile
+
         with zipfile.ZipFile(apk_path, "r") as z:
-            signatures = [n for n in z.namelist() if n.startswith("META-INF/") and (n.endswith(".RSA") or n.endswith(".DSA") or n.endswith(".EC"))]
+            signatures = [
+                n
+                for n in z.namelist()
+                if n.startswith("META-INF/")
+                and (n.endswith(".RSA") or n.endswith(".DSA") or n.endswith(".EC"))
+            ]
             if not signatures:
-                raise ValueError(f"APK 文件中未找到任何 META-INF 签名证书！可能为未签名包: {apk_path.name}")
+                raise ValueError(
+                    f"APK 文件中未找到任何 META-INF 签名证书！可能为未签名包: {apk_path.name}"
+                )
         result["verified_signature"] = True
 
     # 2. 元数据与 versionCode 校验 (aapt)
@@ -174,28 +208,75 @@ def verify_apk_binary(apk_path: Path, expected_version_code: Optional[int] = Non
         cmd = [aapt, "dump", "badging", str(apk_path)]
         proc = subprocess.run(cmd, capture_output=True, text=True)
         if proc.returncode != 0:
-            raise ValueError(f"aapt dump badging 解析失败 ({apk_path.name}): {proc.stderr}")
+            raise ValueError(
+                f"aapt dump badging 解析失败 ({apk_path.name}): {proc.stderr}"
+            )
 
         output = proc.stdout
-        match = re.search(r"package:\s+name='([^']+)'\s+versionCode='(\d+)'\s+versionName='([^']*)'", output)
+        match = re.search(
+            r"package:\s+name='([^']+)'\s+versionCode='(\d+)'\s+versionName='([^']*)'",
+            output,
+        )
         if match:
             result["package_name"] = match.group(1)
             result["version_code"] = int(match.group(2))
             result["version_name"] = match.group(3)
 
-            log_info(f"APK 元数据: {apk_path.name} -> package={result['package_name']}, "
-                     f"versionCode={result['version_code']}, versionName={result['version_name']}")
+            log_info(
+                f"APK 元数据: {apk_path.name} -> package={result['package_name']}, "
+                f"versionCode={result['version_code']}, versionName={result['version_name']}"
+            )
 
-            if expected_version_code is not None and result["version_code"] != expected_version_code:
+            if (
+                expected_version_code is not None
+                and result["version_code"] != expected_version_code
+            ):
                 raise ValueError(
                     f"APK versionCode 不匹配！文件: {apk_path.name}, 预期: {expected_version_code}, 实际: {result['version_code']}"
                 )
         else:
-            log_warn(f"未能从 aapt dump badging 输出中解析到 package 格式: {apk_path.name}")
+            log_warn(
+                f"未能从 aapt dump badging 输出中解析到 package 格式: {apk_path.name}"
+            )
     else:
         log_warn("未找到 aapt 工具，跳过 aapt 元数据深度比对")
 
     return result
+
+
+def verify_windows_binary(file_path: Path) -> None:
+    """Windows 产物一致性检查：文件名与 zip 内容均不得出现 Android 痕迹，zip 内须含 .exe"""
+    fname = file_path.name.lower()
+    if "android" in fname:
+        raise ValueError(
+            f"Windows 产物文件名含 android，疑似平台错配: {file_path.name}"
+        )
+    if file_path.suffix.lower() == ".zip":
+        import zipfile
+
+        with zipfile.ZipFile(file_path, "r") as z:
+            names = z.namelist()
+        if not any(n.lower().endswith(".exe") for n in names):
+            raise ValueError(
+                f"Windows zip 内未找到 .exe 可执行文件，疑似平台错配: {file_path.name}"
+            )
+        log_info(f"Windows 产物内容检查通过: {file_path.name} (含 .exe)")
+
+
+def _build_http_opener() -> urllib.request.OpenerDirector:
+    """构建显式直连 opener。
+
+    urllib.request.urlopen 会自动读取环境变量代理与 Windows 注册表系统代理
+    （getproxies()，且环境变量优先级高于注册表），而 wget/curl 只认环境变量
+    代理。若本机残留失效代理（如 VPN/加速器代理黑洞：TCP 层接受连接但数据
+    不转发），urllib 的大文件流式下载会无限挂起，而 wget 直连正常——此问题
+    曾现网复现（verify --remote 卡死在首个 APK 下载）。本工具巡检目标均为
+    公网 CDN/镜像，显式直连最可靠。
+    """
+    return urllib.request.build_opener(urllib.request.ProxyHandler({}))
+
+
+_HTTP_OPENER = _build_http_opener()
 
 
 def fetch_remote_stream_and_verify(
@@ -211,7 +292,7 @@ def fetch_remote_stream_and_verify(
         headers={"User-Agent": "JigsawReleaseChecker/1.0", "Cache-Control": "no-cache"},
     )
     try:
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
+        with _HTTP_OPENER.open(req, timeout=timeout) as resp:
             if resp.status != 200:
                 raise ValueError(f"HTTP 请求返回非 200 状态码: {resp.status} ({url})")
 
@@ -250,14 +331,45 @@ def fetch_remote_stream_and_verify(
     return calc_sha, downloaded_size
 
 
-def fetch_remote_updates_json(url: str = UPDATES_JSON_REMOTE) -> Optional[Dict[str, Any]]:
+def check_remote_head(url: str, expected_size: int, timeout: int = 30) -> None:
+    """远端快速存在性校验：HEAD 请求校验状态码与 Content-Length（本地产物已做完整哈希/验签）"""
+    req = urllib.request.Request(
+        url,
+        method="HEAD",
+        headers={"User-Agent": "JigsawReleaseChecker/1.0", "Cache-Control": "no-cache"},
+    )
+    try:
+        with _HTTP_OPENER.open(req, timeout=timeout) as resp:
+            if resp.status != 200:
+                raise ValueError(f"HTTP 请求返回非 200 状态码: {resp.status} ({url})")
+            content_length = resp.headers.get("Content-Length")
+            if content_length is None:
+                log_warn(f"远端未返回 Content-Length，跳过大小比对: {url}")
+                return
+            if int(content_length) != int(expected_size):
+                raise ValueError(
+                    f"远端文件大小不匹配 ({url})！预期: {expected_size}, 实际: {content_length}"
+                )
+            log_success(f"远端 HEAD 校验通过: {url} ({content_length} bytes)")
+    except urllib.error.HTTPError as e:
+        raise ValueError(f"HTTP 请求失败 ({e.code} {e.reason}): {url}") from e
+    except urllib.error.URLError as e:
+        raise ValueError(f"网络连接异常 ({e.reason}): {url}") from e
+
+
+def fetch_remote_updates_json(
+    url: str = UPDATES_JSON_REMOTE,
+) -> Optional[Dict[str, Any]]:
     """拉取线上当前的 updates.json，若 404 返回 None"""
     try:
         req = urllib.request.Request(
             url,
-            headers={"User-Agent": "JigsawReleaseChecker/1.0", "Cache-Control": "no-cache"},
+            headers={
+                "User-Agent": "JigsawReleaseChecker/1.0",
+                "Cache-Control": "no-cache",
+            },
         )
-        with urllib.request.urlopen(req, timeout=15) as resp:
+        with _HTTP_OPENER.open(req, timeout=15) as resp:
             if resp.status == 200:
                 data = resp.read().decode("utf-8")
                 return json.loads(data)
@@ -270,7 +382,9 @@ def fetch_remote_updates_json(url: str = UPDATES_JSON_REMOTE) -> Optional[Dict[s
     return None
 
 
-def flatten_platform_entries(platforms: Dict[str, Any]) -> List[Tuple[str, Optional[str], Dict[str, Any]]]:
+def flatten_platform_entries(
+    platforms: Dict[str, Any],
+) -> List[Tuple[str, Optional[str], Dict[str, Any]]]:
     """
     扁平化解析 platforms：
     返回列表: [(platform_name, sub_key_or_abi, info_dict), ...]
@@ -324,6 +438,7 @@ def generate_manifest(
 # 命令实现
 # ==============================================================================
 
+
 def cmd_prepare(args: argparse.Namespace) -> Path:
     """生成本地 updates.json 与版本产物准备（支持分 ABI）"""
     version_name, version_code = get_pubspec_version()
@@ -333,12 +448,10 @@ def cmd_prepare(args: argparse.Namespace) -> Path:
     platforms_data: Dict[str, Any] = {}
 
     # 1. 扫描 Android APK（分 ABI 优先）
-    # 查找目录候选：releases/<version>/github/ -> build/app/outputs/flutter-apk/ -> temp/app-release/android/
+    # 查找目录候选：仅 releases/<version>/github/（发布唯一可信产物目录）
+    # 发布只认 releases/<version>/github 目录，build/、temp/ 等项目临时产物不参与发布
     apk_search_dirs = [
         PROJECT_ROOT / "releases" / version_name / "github",
-        PROJECT_ROOT / "build" / "app" / "outputs" / "flutter-apk",
-        PROJECT_ROOT / "build" / "app" / "outputs" / "apk" / "release",
-        OUTPUT_DIR / "android",
     ]
     if args.apk_dir:
         apk_search_dirs.insert(0, Path(args.apk_dir))
@@ -357,7 +470,9 @@ def cmd_prepare(args: argparse.Namespace) -> Path:
                 abi_map["armeabi-v7a"] = f
             elif "x86_64" in fname and "x86_64" not in abi_map:
                 abi_map["x86_64"] = f
-            elif ("all" in fname or fname == "app-release.apk" or "universal" in fname) and "all" not in abi_map:
+            elif (
+                "all" in fname or fname == "app-release.apk" or "universal" in fname
+            ) and "all" not in abi_map:
                 abi_map["all"] = f
 
     if abi_map:
@@ -366,7 +481,7 @@ def cmd_prepare(args: argparse.Namespace) -> Path:
             sha256, size = calculate_sha256_and_size(apk_file)
             verify_apk_binary(apk_file, expected_version_code=version_code)
 
-            rel_url = f"app/{version_name}+{version_code}/android/{apk_file.name}"
+            rel_url = f"{R2_APP_DIR}/{version_dir(version_name, version_code)}/android/{apk_file.name}"
             android_dict[abi_key] = {
                 "url": rel_url,
                 "sha256": sha256,
@@ -376,7 +491,9 @@ def cmd_prepare(args: argparse.Namespace) -> Path:
                     f"https://gitee.com/mcxiaoke/jigsaw-fox/releases/download/v{version_name}/{apk_file.name}",
                 ],
             }
-            log_success(f"已包含 Android [{abi_key}]: {apk_file.name} ({size} bytes, sha256={sha256[:12]}...)")
+            log_success(
+                f"已包含 Android [{abi_key}]: {apk_file.name} ({size} bytes, sha256={sha256[:12]}...)"
+            )
 
         # 若只有一个且是 all，也可以直接输出单包结构兼容旧客户端，但输出分 ABI 字典新客户端更优
         platforms_data["android"] = android_dict
@@ -386,8 +503,6 @@ def cmd_prepare(args: argparse.Namespace) -> Path:
     # 2. 扫描 Windows 安装包 / 绿色 Zip
     win_search_dirs = [
         PROJECT_ROOT / "releases" / version_name / "github",
-        PROJECT_ROOT / "releases",
-        OUTPUT_DIR / "windows",
     ]
     if args.windows_path:
         win_candidates = [Path(args.windows_path)]
@@ -396,8 +511,17 @@ def cmd_prepare(args: argparse.Namespace) -> Path:
         for d in win_search_dirs:
             if not d.is_dir():
                 continue
-            win_candidates.extend(d.glob(f"*{version_name}*.zip"))
-            win_candidates.extend(d.glob(f"*{version_name}*.exe"))
+            # 仅接受 windows/exe 命名，排除 Android 打包 zip，避免平台错配
+            win_candidates.extend(
+                f
+                for f in d.glob(f"*{version_name}*.exe")
+                if "android" not in f.name.lower()
+            )
+            win_candidates.extend(
+                f
+                for f in d.glob(f"*{version_name}*.zip")
+                if "windows" in f.name.lower() and "android" not in f.name.lower()
+            )
 
     win_file: Optional[Path] = None
     for c in win_candidates:
@@ -406,8 +530,9 @@ def cmd_prepare(args: argparse.Namespace) -> Path:
             break
 
     if win_file:
+        verify_windows_binary(win_file)
         sha256, size = calculate_sha256_and_size(win_file)
-        rel_url = f"app/{version_name}+{version_code}/windows/{win_file.name}"
+        rel_url = f"{R2_APP_DIR}/{version_dir(version_name, version_code)}/windows/{win_file.name}"
         platforms_data["windows"] = {
             "url": rel_url,
             "sha256": sha256,
@@ -417,7 +542,9 @@ def cmd_prepare(args: argparse.Namespace) -> Path:
                 f"https://gitee.com/mcxiaoke/jigsaw-fox/releases/download/v{version_name}/{win_file.name}",
             ],
         }
-        log_success(f"已包含 Windows 产物: {win_file.name} ({size} bytes, sha256={sha256[:12]}...)")
+        log_success(
+            f"已包含 Windows 产物: {win_file.name} ({size} bytes, sha256={sha256[:12]}...)"
+        )
     else:
         log_warn("未找到 Windows 产物文件 (*.zip / *.exe)")
 
@@ -432,7 +559,9 @@ def cmd_prepare(args: argparse.Namespace) -> Path:
     )
 
     out_json = OUTPUT_DIR / "updates.json"
-    out_json.write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
+    out_json.write_text(
+        json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
     log_success(f"已生成 updates.json -> {out_json}")
     return out_json
 
@@ -452,7 +581,9 @@ def cmd_verify_local(manifest_path: Path) -> None:
     online_manifest = fetch_remote_updates_json()
     if online_manifest:
         online_code = online_manifest.get("versionCode", 0)
-        log_info(f"线上当前 versionCode={online_code}，本地待发布 versionCode={local_version_code}")
+        log_info(
+            f"线上当前 versionCode={online_code}，本地待发布 versionCode={local_version_code}"
+        )
         if local_version_code <= online_code:
             raise ValueError(
                 f"版本递增门禁失败！本地 versionCode ({local_version_code}) 必须大于线上当前值 ({online_code})"
@@ -476,9 +607,6 @@ def cmd_verify_local(manifest_path: Path) -> None:
         # 查找本地对应文件
         search_dirs = [
             PROJECT_ROOT / "releases" / manifest.get("version", "") / "github",
-            PROJECT_ROOT / "build" / "app" / "outputs" / "flutter-apk",
-            OUTPUT_DIR / plat_name,
-            PROJECT_ROOT / "releases",
         ]
         found_file = None
         for d in search_dirs:
@@ -497,6 +625,8 @@ def cmd_verify_local(manifest_path: Path) -> None:
                 )
             if found_file.suffix.lower() == ".apk":
                 verify_apk_binary(found_file, expected_version_code=local_version_code)
+            elif plat_name == "windows":
+                verify_windows_binary(found_file)
             log_success(f"本地平台产物 [{tag_name}] 校验通过: {found_file.name}")
         else:
             log_warn(f"未找到本地平台产物物理文件 [{tag_name}]: {file_name}")
@@ -539,9 +669,11 @@ def cmd_verify_remote(url: str = UPDATES_JSON_REMOTE) -> None:
 
             all_urls = [("main", main_url)]
             for idx, mirror in enumerate(info.get("mirrors", [])):
-                all_urls.append((f"mirror-{idx+1}", mirror))
+                all_urls.append((f"mirror-{idx + 1}", mirror))
 
-            log_info(f"\n--- 巡检平台产物 [{tag_name}] (共 {len(all_urls)} 个下载来源) ---")
+            log_info(
+                f"\n--- 巡检平台产物 [{tag_name}] (共 {len(all_urls)} 个下载来源) ---"
+            )
 
             downloaded_apk_path: Optional[Path] = None
 
@@ -558,28 +690,328 @@ def cmd_verify_remote(url: str = UPDATES_JSON_REMOTE) -> None:
                     expected_size=exp_size,
                     save_to_file=save_file,
                 )
-                log_success(f"[{tag_name}][{label}] 校验通过: {calc_size} 字节, SHA256 匹配")
+                log_success(
+                    f"[{tag_name}][{label}] 校验通过: {calc_size} 字节, SHA256 匹配"
+                )
 
                 if save_file and save_file.is_file():
                     downloaded_apk_path = save_file
 
             # 若为 Android APK，对远端下载文件进行真实签名与版本比对
             if plat_name == "android" and downloaded_apk_path:
-                log_info(f"正在对远端下载的 [{tag_name}] 进行本地签名与 versionCode 深度验签...")
-                verify_apk_binary(downloaded_apk_path, expected_version_code=version_code)
+                log_info(
+                    f"正在对远端下载的 [{tag_name}] 进行本地签名与 versionCode 深度验签..."
+                )
+                verify_apk_binary(
+                    downloaded_apk_path, expected_version_code=version_code
+                )
                 log_success(f"远端下载 [{tag_name}] 验签与版本号比对全部通过！")
 
-    log_success("=== 远程全链路巡检通过！线上所有平台所有 ABI 安装包 100% 存在、哈希完全匹配且无损坏 ===")
+    log_success(
+        "=== 远程全链路巡检通过！线上所有平台所有 ABI 安装包 100% 存在、哈希完全匹配且无损坏 ==="
+    )
+
+
+def _app_release_assets(assets_dir: Path) -> List[Path]:
+    """App 发布资产 = 目录下全部文件（APK/zip/SHA256SUMS/metadata.json 等），按文件名排序。"""
+    return sorted(p for p in assets_dir.iterdir() if p.is_file())
+
+
+def _missing_assets(assets: List[Path], existing: set[str], force: bool) -> List[Path]:
+    """计算需上传的资产：--force 时全部重传，否则仅上传远端缺失的文件（同名视为同内容）。"""
+    if force:
+        return list(assets)
+    return [f for f in assets if f.name not in existing]
+
+
+def publish_github_release(tag: str, assets_dir: Path, force: bool = False) -> int:
+    """GitHub Release 幂等发布（gh CLI，逻辑对齐素材侧 publish.py::_github_release）。
+
+    - Release 不存在则创建（先 --verify-tag，tag 未推送时退化为不带该标志重试）；
+    - 附件按文件名差集增量上传，--force 时忽略清单全部重传。
+    返回 gh 命令退出码（需 0 表示成功）。
+    """
+    repo = GITHUB_MIRROR_REPO
+    assets = _app_release_assets(assets_dir)
+    if not assets:
+        log_error(f"GitHub Release 资产目录为空: {assets_dir}")
+        return 2
+    log_info(f"[github] repo={repo} tag={tag} 本地资产 {len(assets)} 个")
+
+    # 1. 幂等确保 Release 存在
+    if (
+        subprocess.run(
+            ["gh", "release", "view", tag, "-R", repo],
+            capture_output=True,
+            text=True,
+        ).returncode
+        != 0
+    ):
+        log_info(f"[github] Release {tag} 不存在，创建中")
+        create_cmd = [
+            "gh",
+            "release",
+            "create",
+            tag,
+            "-R",
+            repo,
+            "--title",
+            f"JigsawFox {tag}",
+            "--notes",
+            f"JigsawFox {tag} 自动更新发布",
+        ]
+        if (
+            subprocess.run(
+                [*create_cmd, "--verify-tag"],
+                capture_output=True,
+                text=True,
+            ).returncode
+            != 0
+        ):
+            subprocess.run(create_cmd, capture_output=True, text=True)
+
+    # 2. 已有附件清单 -> 按文件名差集增量上传
+    existing: set[str] = set()
+    if not force:
+        p = subprocess.run(
+            [
+                "gh",
+                "release",
+                "view",
+                tag,
+                "-R",
+                repo,
+                "--json",
+                "assets",
+                "-q",
+                ".assets[].name",
+            ],
+            capture_output=True,
+            text=True,
+        )
+        if p.returncode == 0:
+            existing = {ln.strip() for ln in p.stdout.splitlines() if ln.strip()}
+
+    missing = _missing_assets(assets, existing, force)
+    if not missing:
+        log_info(f"[github] 已是最新，无需上传（远端已有 {len(existing)} 个附件）")
+        return 0
+    log_info(
+        f"[github] {'强制重传' if force else '新增'} {len(missing)} 个资产: "
+        f"{[f.name for f in missing]}"
+    )
+    rc = subprocess.run(
+        [
+            "gh",
+            "release",
+            "upload",
+            tag,
+            "-R",
+            repo,
+            *[str(f) for f in missing],
+            "--clobber",
+        ],
+        capture_output=True,
+        text=True,
+    ).returncode
+    if rc != 0:
+        log_error(f"[github] 附件上传失败 rc={rc}")
+    return rc
+
+
+def _gitee_req(
+    method: str,
+    url: str,
+    token: str,
+    data: bytes | None = None,
+    content_type: str | None = None,
+    timeout: int = 60,
+) -> Tuple[int, str]:
+    """Gitee OpenAPI 请求（走 _HTTP_OPENER 显式直连，规避系统代理黑洞；对齐素材侧 gitee_release.py）。"""
+    headers = {"Authorization": f"token {token}"}
+    if content_type:
+        headers["Content-Type"] = content_type
+    req = urllib.request.Request(url, data=data, headers=headers, method=method)
+    try:
+        with _HTTP_OPENER.open(req, timeout=timeout) as r:
+            return r.status, r.read().decode("utf-8", "replace")
+    except urllib.error.HTTPError as e:
+        return e.code, e.read().decode("utf-8", "replace")
+    except Exception as e:  # 网络异常统一为 0 便于上层判错
+        return 0, str(e)
+
+
+def _gitee_multipart_upload(url: str, token: str, path: Path) -> Tuple[int, str]:
+    boundary = "----jigsawboundary" + os.urandom(8).hex()
+    size = path.stat().st_size
+    head = (
+        f"--{boundary}\r\n"
+        f'Content-Disposition: form-data; name="file"; filename="{path.name}"\r\n'
+        f"Content-Type: application/octet-stream\r\n\r\n"
+    ).encode()
+    tail = f"\r\n--{boundary}--\r\n".encode()
+    body = head + path.read_bytes() + tail
+    return _gitee_req(
+        "POST",
+        url,
+        token,
+        data=body,
+        content_type=f"multipart/form-data; boundary={boundary}",
+        timeout=max(120, int(size / (64 * 1024)) + 60),  # 按 64KB/s 保守下限给超时
+    )
+
+
+def _gitee_existing_assets(repo: str, token: str, release: dict) -> Dict[str, int]:
+    """返回 {文件名: 字节数}；优先用 attach_files 接口，失败时退回 release.assets 字段。"""
+    rid = release.get("id")
+    if rid is not None:
+        st, body = _gitee_req(
+            "GET",
+            f"{GITEE_API}/repos/{repo}/releases/{rid}/attach_files?per_page=100",
+            token,
+        )
+        if st == 200:
+            try:
+                out: Dict[str, int] = {}
+                for a in json.loads(body):
+                    name = a.get("name") or ""
+                    if name:
+                        out[name] = int(a.get("size") or 0)
+                if out:
+                    return out
+            except Exception:
+                pass
+    return {
+        a.get("name"): int(a.get("size") or 0)
+        for a in (release.get("assets") or [])
+        if a.get("name")
+    }
+
+
+def _gitee_warn_size(total: int) -> None:
+    log_info(f"[gitee] 附件总规模 {total / 1048576:.1f} MB")
+    if total > GITEE_LIMIT_BYTES:
+        log_error(f"[gitee] 已超过 Gitee 1GB 上限，Release 可能被拒！")
+    elif total > GITEE_SOFT_WARN_BYTES:
+        log_warn(f"[gitee] 已超过 800MB 软告警线（上限 1GB），请规划分卷或迁移")
+
+
+def publish_gitee_release(tag: str, assets_dir: Path, force: bool = False) -> int:
+    """Gitee Release 幂等发布（OpenAPI v5，逻辑对齐素材侧 gitee_release.py，token 取环境变量）。
+
+    - Release 不存在则由仓库默认分支建占位；附件走 attach_files 接口按文件名差集增量上传；
+    - GITEE_TOKEN 缺失时 FATAL 返回 2（与素材发布一致，避免发布残缺镜像）。
+    """
+    token = os.environ.get("GITEE_TOKEN", "").strip()
+    if not token:
+        log_error("[gitee][FATAL] 未设置环境变量 GITEE_TOKEN，无法上传 Gitee 镜像源")
+        return 2
+    repo = GITEE_MIRROR_REPO
+    assets = _app_release_assets(assets_dir)
+    if not assets:
+        log_error(f"[gitee][FATAL] Gitee Release 资产目录为空: {assets_dir}")
+        return 2
+    log_info(
+        f"[gitee] repo={repo} tag={tag} 本地资产 {len(assets)} 个 共 "
+        f"{sum(f.stat().st_size for f in assets):,} bytes"
+    )
+
+    # 1. 幂等确保 Release 存在
+    #    注意：Gitee API 对「不存在的 release」返回 HTTP 200 + body `null`（而非 404），
+    #    因此必须同时判断状态码与返回体是否可解析为 dict。
+    st, body = _gitee_req("GET", f"{GITEE_API}/repos/{repo}/releases/tags/{tag}", token)
+    release = None
+    if st == 200:
+        try:
+            parsed = json.loads(body)
+        except Exception:
+            parsed = None
+        if isinstance(parsed, dict) and parsed.get("id"):
+            release = parsed
+    if release is not None:
+        log_info(f"[gitee] Release 已存在 id={release.get('id')}")
+    else:
+        log_info(f"[gitee] Release tag={tag} 不存在（HTTP {st}），尝试创建")
+        # 不指定 target_commitish：由 Gitee 使用仓库默认分支（jigsaw-fox 为 App 仓库）
+        payload = json.dumps(
+            {
+                "tag_name": tag,
+                "name": f"JigsawFox {tag}",
+                "body": f"JigsawFox {tag} 自动更新发布",
+            }
+        ).encode()
+        st, body = _gitee_req(
+            "POST",
+            f"{GITEE_API}/repos/{repo}/releases",
+            token,
+            data=payload,
+            content_type="application/json",
+        )
+        if st not in (200, 201):
+            log_error(f"[gitee][FATAL] 创建 Release 失败 HTTP {st}: {body[:300]}")
+            return 1
+        try:
+            release = json.loads(body)
+        except Exception:
+            release = None
+        if not isinstance(release, dict) or not release.get("id"):
+            log_error(f"[gitee][FATAL] 创建 Release 返回异常: {body[:300]}")
+            return 1
+        log_info(f"[gitee] Release 创建成功 id={release.get('id')}")
+
+    rid = release["id"]
+
+    # 2. 已有附件 -> 按文件名差集增量上传（--force 时全部重传）
+    existing = {} if force else _gitee_existing_assets(repo, token, release)
+    log_info(
+        f"[gitee] 远端已有附件 {len(existing)} 个"
+        + ("（--force 忽略，将重传全部）" if force else "")
+    )
+    missing = _missing_assets(assets, set(existing), force)
+    if not missing:
+        log_info("[gitee] 已是最新，无需上传")
+        _gitee_warn_size(sum(f.stat().st_size for f in assets))
+        return 0
+    log_info(
+        f"[gitee] {'强制重传' if force else '新增'} {len(missing)} 个: "
+        f"{[f.name for f in missing]}"
+    )
+
+    # 3. 逐个上传
+    uploaded, failed = [], []
+    for f in missing:
+        sw = time.monotonic()
+        st, body = _gitee_multipart_upload(
+            f"{GITEE_API}/repos/{repo}/releases/{rid}/attach_files", token, f
+        )
+        dt = time.monotonic() - sw
+        if st in (200, 201):
+            uploaded.append(f.name)
+            log_info(f"  [ok]   {f.name:<40} {f.stat().st_size:>12,} bytes  {dt:.1f}s")
+        else:
+            failed.append(f.name)
+            log_error(f"  [FAIL] {f.name:<40} HTTP {st}  {body[:200]}")
+
+    # 4. 体积累计与告警
+    _gitee_warn_size(sum(f.stat().st_size for f in assets))
+
+    if failed:
+        log_error(f"[gitee][FATAL] 上传失败 {len(failed)} 个: {failed}")
+        return 1
+    log_info(f"[gitee] 上传完成 {len(uploaded)}/{len(missing)}")
+    return 0
 
 
 def cmd_publish(args: argparse.Namespace) -> None:
     """
     安全时序发布：
-    1. 本地 pre-flight 深度校验
-    2. rclone copy 上传所有平台所有 ABI 安装包到 R2
-    3. 远端真实下载所有 APK 进行深度验签
-    4. 校验通过后，最后上传 updates.json 切生效
-    5. verify --remote 线上终检
+    1. 本地 pre-flight 深度校验（哈希、签名、版本递增门禁）
+    2. rclone copy 上传所有平台所有 ABI 安装包到 R2（传输出错直接中断）
+    3. 远端 HEAD 快速校验（状态码 + Content-Length）
+    4. 发布 GitHub / Gitee Release 镜像资产（必须在切 updates.json 前完成：
+       镜像 URL 内嵌于 updates.json，镜像未就绪会导致客户端 404）
+    5. 校验通过后，最后上传 updates.json 切生效
+    6. verify --remote 线上全量下载终检（内容级完整性兜底）
     """
     log_info("=== 开始执行 App 发布流程 ===")
     out_json = cmd_prepare(args)
@@ -594,7 +1026,9 @@ def cmd_publish(args: argparse.Namespace) -> None:
         return
 
     if not shutil.which("rclone"):
-        raise EnvironmentError("系统中未找到 rclone 命令，请先配置 rclone 访问 R2 存储桶")
+        raise EnvironmentError(
+            "系统中未找到 rclone 命令，请先配置 rclone 访问 R2 存储桶"
+        )
 
     entries = flatten_platform_entries(manifest.get("platforms", {}))
 
@@ -604,13 +1038,11 @@ def cmd_publish(args: argparse.Namespace) -> None:
         tag_name = f"{plat_name}/{sub_key}" if sub_key else plat_name
         rel_url = info["url"]
         file_name = Path(rel_url).name
-        r2_dest_dir = f"{R2_REMOTE_PREFIX}/{Path(rel_url).parent.as_posix()}"
+        # rel_url 已含 app/ 前缀，直接以 bucket 根为基准拼接，避免出现 app/app/ 双层路径
+        r2_dest_dir = f"{R2_BUCKET_ROOT}/{Path(rel_url).parent.as_posix()}"
 
         search_dirs = [
             PROJECT_ROOT / "releases" / version_name / "github",
-            PROJECT_ROOT / "build" / "app" / "outputs" / "flutter-apk",
-            OUTPUT_DIR / plat_name,
-            PROJECT_ROOT / "releases",
         ]
         local_file = None
         for d in search_dirs:
@@ -625,33 +1057,46 @@ def cmd_publish(args: argparse.Namespace) -> None:
         else:
             raise FileNotFoundError(f"未找到待上传的本地文件: {file_name}")
 
-    # 2. 远端下载二进制深度验签
-    log_info("\nStep 2: 从远端真实下载刚刚上传的所有安装包进行深度验签...")
-    with tempfile.TemporaryDirectory(prefix="jigsaw_publish_verify_") as tmp_dir:
-        tmp_path = Path(tmp_dir)
-        for plat_name, sub_key, info in entries:
-            tag_name = f"{plat_name}/{sub_key}" if sub_key else plat_name
-            main_url = info["url"]
-            if not main_url.startswith("http"):
-                main_url = urllib.parse.urljoin(R2_APP_BASE, main_url)
+    # 2. 远端 HEAD 快速校验（rclone copy 传输出错会直接抛错中断，本地产物已过完整硬校验，
+    #    这里只确认对象存在且大小一致；上传内容级完整性由 Step 4 的 verify --remote 全量下载终检兜底）
+    log_info("\nStep 2: 远端 HEAD 快速校验刚上传的安装包（状态码 + Content-Length）...")
+    for plat_name, sub_key, info in entries:
+        tag_name = f"{plat_name}/{sub_key}" if sub_key else plat_name
+        main_url = info["url"]
+        if not main_url.startswith("http"):
+            main_url = urllib.parse.urljoin(R2_APP_BASE, main_url)
+        log_info(f"HEAD 校验 [{tag_name}]: {main_url}")
+        check_remote_head(main_url, info["size"])
 
-            safe_tag = tag_name.replace("/", "_")
-            down_path = tmp_path / f"target_{safe_tag}.bin"
-            log_info(f"下载远端主源文件 [{tag_name}]: {main_url}")
-            fetch_remote_stream_and_verify(
-                url=main_url,
-                expected_sha256=info["sha256"],
-                expected_size=info["size"],
-                save_to_file=down_path,
-            )
-            if plat_name == "android":
-                log_info(f"深度校验远端下载的 [{tag_name}] 签名与 versionCode...")
-                verify_apk_binary(down_path, expected_version_code=version_code)
-                log_success(f"远端下载 [{tag_name}] 验签通过！")
+    # 2.5 发布 GitHub / Gitee Release 镜像资产。置于 updates.json 切换之前：
+    #     updates.json 内嵌镜像 URL，镜像未发布会导致客户端点击 404；
+    #     任一镜像发布失败即中止（未切 updates.json，线上仍是旧版本，可安全重试）。
+    log_info(
+        "\nStep 2.5: 发布 GitHub / Gitee Release 镜像资产（updates.json 切换前）..."
+    )
+    assets_dir = PROJECT_ROOT / "releases" / version_name / "github"
+    if not assets_dir.is_dir():
+        raise FileNotFoundError(
+            f"镜像资产目录不存在: {assets_dir}（请先运行 prepare 生成发布产物）"
+        )
+    rc_gh = publish_github_release(
+        f"v{version_name}", assets_dir, force=getattr(args, "force", False)
+    )
+    rc_gt = publish_gitee_release(
+        f"v{version_name}", assets_dir, force=getattr(args, "force", False)
+    )
+    if rc_gh != 0 or rc_gt != 0:
+        raise RuntimeError(
+            f"GitHub/Gitee Release 镜像发布失败 (github={rc_gh}, gitee={rc_gt})，"
+            f"未切换 updates.json，请修复后重跑 publish"
+        )
+    log_success("GitHub / Gitee Release 镜像资产发布完成")
 
     # 3. 最后上传 updates.json
-    log_info("\nStep 3: 远端所有安装包深度校验全绿，上传 updates.json 切生效...")
-    subprocess.run(["rclone", "copy", str(out_json), f"{R2_REMOTE_PREFIX}/"], check=True)
+    log_info("\nStep 3: 远端 HEAD 校验全部通过，上传 updates.json 切生效...")
+    subprocess.run(
+        ["rclone", "copy", str(out_json), f"{R2_BUCKET_ROOT}/{R2_APP_DIR}/"], check=True
+    )
     log_success("updates.json 已上线！")
 
     # 4. 端到端巡检
@@ -661,7 +1106,9 @@ def cmd_publish(args: argparse.Namespace) -> None:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="App 自动更新发布与完整性巡检编排工具（支持分 ABI）")
+    parser = argparse.ArgumentParser(
+        description="App 自动更新发布与完整性巡检编排工具（支持分 ABI）"
+    )
     subparsers = parser.add_subparsers(dest="subcommand", required=True)
 
     # prepare
@@ -674,8 +1121,14 @@ def main() -> None:
     p_ver = subparsers.add_parser("verify", help="完整性验证与巡检")
     p_ver.add_argument("--local", action="store_true", help="执行本地硬门禁校验")
     p_ver.add_argument("--remote", action="store_true", help="执行远端全链路巡检与验签")
-    p_ver.add_argument("--url", default=UPDATES_JSON_REMOTE, help="指定远程 updates.json URL")
-    p_ver.add_argument("--manifest", default=str(OUTPUT_DIR / "updates.json"), help="指定本地 updates.json 路径")
+    p_ver.add_argument(
+        "--url", default=UPDATES_JSON_REMOTE, help="指定远程 updates.json URL"
+    )
+    p_ver.add_argument(
+        "--manifest",
+        default=str(OUTPUT_DIR / "updates.json"),
+        help="指定本地 updates.json 路径",
+    )
     p_ver.add_argument("--apk-dir", help="指定 APK 所在目录")
 
     # publish
@@ -684,6 +1137,11 @@ def main() -> None:
     p_pub.add_argument("--apk-dir", help="指定 APK 所在目录")
     p_pub.add_argument("--windows-path", help="指定 Windows 安装包或 Zip 路径")
     p_pub.add_argument("--min-version-code", type=int, help="最低强制更新版本号")
+    p_pub.add_argument(
+        "--force",
+        action="store_true",
+        help="强制重传 GitHub/Gitee Release 附件（内容已改但文件名未变时使用）",
+    )
 
     args = parser.parse_args()
 

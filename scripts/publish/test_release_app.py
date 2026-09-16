@@ -7,11 +7,15 @@ test_release_app.py — 针对 release_app.py 的单元测试与完整性验证�
 import hashlib
 import http.server
 import json
+import os
 import socketserver
 import tempfile
 import threading
 import unittest
 from pathlib import Path
+from unittest import mock
+
+import release_app
 
 from release_app import (
     calculate_sha256_and_size,
@@ -19,11 +23,12 @@ from release_app import (
     get_pubspec_version,
     fetch_remote_stream_and_verify,
     flatten_platform_entries,
+    _app_release_assets,
+    _missing_assets,
 )
 
 
 class TestReleaseApp(unittest.TestCase):
-
     def test_flatten_platform_entries(self):
         platforms = {
             "android": {
@@ -31,14 +36,24 @@ class TestReleaseApp(unittest.TestCase):
                 "all": {"url": "all.apk", "sha256": "2", "size": 20},
             },
             "windows": {
-                "url": "win.zip", "sha256": "3", "size": 30,
-            }
+                "url": "win.zip",
+                "sha256": "3",
+                "size": 30,
+            },
         }
         entries = flatten_platform_entries(platforms)
         self.assertEqual(len(entries), 3)
-        self.assertEqual(entries[0], ("android", "arm64-v8a", {"url": "a.apk", "sha256": "1", "size": 10}))
-        self.assertEqual(entries[1], ("android", "all", {"url": "all.apk", "sha256": "2", "size": 20}))
-        self.assertEqual(entries[2], ("windows", None, {"url": "win.zip", "sha256": "3", "size": 30}))
+        self.assertEqual(
+            entries[0],
+            ("android", "arm64-v8a", {"url": "a.apk", "sha256": "1", "size": 10}),
+        )
+        self.assertEqual(
+            entries[1],
+            ("android", "all", {"url": "all.apk", "sha256": "2", "size": 20}),
+        )
+        self.assertEqual(
+            entries[2], ("windows", None, {"url": "win.zip", "sha256": "3", "size": 30})
+        )
 
     def test_calculate_sha256_and_size(self):
         with tempfile.NamedTemporaryFile(delete=False) as tf:
@@ -138,6 +153,156 @@ class TestReleaseApp(unittest.TestCase):
             self.assertIn("404", str(cm.exception))
 
             httpd.shutdown()
+
+    def test_app_release_assets(self):
+        # 仅收集目录下的文件（排除子目录），按文件名排序
+        with tempfile.TemporaryDirectory() as td:
+            d = Path(td)
+            (d / "b.txt").write_text("x", encoding="utf-8")
+            (d / "a.apk").write_bytes(b"apk")
+            (d / "sub").mkdir()
+            (d / "sub" / "nested.zip").write_bytes(b"z")
+            assets = _app_release_assets(d)
+            self.assertEqual([p.name for p in assets], ["a.apk", "b.txt"])
+            self.assertEqual(
+                [p.name for p in _app_release_assets(d / "sub")], ["nested.zip"]
+            )
+
+    def test_missing_assets(self):
+        assets = [Path("JigsawFox-1.0.1-all.apk"), Path("updates.json"), Path("SHA256SUMS")]
+        existing = {"JigsawFox-1.0.1-all.apk"}
+        missing = _missing_assets(assets, existing, force=False)
+        self.assertEqual([f.name for f in missing], ["updates.json", "SHA256SUMS"])
+        # --force 时忽略远端清单，全部重传
+        self.assertEqual(len(_missing_assets(assets, existing, force=True)), 3)
+
+    # ---------------------------------------------------------------- 镜像发布逻辑（mock gh/OpenAPI，零网络）
+    def test_publish_github_release_incremental(self):
+        # release 已存在：只按文件名差集上传缺失资产，不创建
+        with tempfile.TemporaryDirectory() as td:
+            d = Path(td)
+            (d / "a.apk").write_bytes(b"a")
+            (d / "b.txt").write_text("b", encoding="utf-8")
+            calls: list = []
+
+            def fake_run(cmd, **kw):
+                calls.append(cmd)
+                if cmd[:3] == ["gh", "release", "view"] and "--json" not in cmd:
+                    return mock.Mock(returncode=0)  # release 存在
+                if "--json" in cmd and "-q" in cmd:
+                    return mock.Mock(returncode=0, stdout="a.apk\n")  # 远端已有 a.apk
+                return mock.Mock(returncode=0)
+
+            with mock.patch.object(release_app.subprocess, "run", side_effect=fake_run):
+                rc = release_app.publish_github_release("v1.0.1", d)
+            self.assertEqual(rc, 0)
+            uploads = [c for c in calls if c[:3] == ["gh", "release", "upload"]]
+            creates = [c for c in calls if c[:3] == ["gh", "release", "create"]]
+            self.assertEqual(len(uploads), 1)
+            # upload 参数为绝对路径，按文件名校验仅上传缺失的 b.txt
+            file_args = [str(c) for c in uploads[0] if c.endswith(".apk") or c.endswith(".txt")]
+            self.assertEqual([Path(c).name for c in file_args], ["b.txt"])
+            self.assertIn("--clobber", uploads[0])
+            self.assertEqual(len(creates), 0)
+
+    def test_publish_github_release_creates_if_missing(self):
+        # release 不存在：先带 --verify-tag 创建，失败后退化重试
+        with tempfile.TemporaryDirectory() as td:
+            d = Path(td)
+            (d / "a.apk").write_bytes(b"a")
+            seen: list = []
+
+            def fake_run(cmd, **kw):
+                seen.append(cmd)
+                if cmd[:3] == ["gh", "release", "view"]:
+                    return mock.Mock(returncode=1)
+                if cmd[:3] == ["gh", "release", "create"]:
+                    return mock.Mock(returncode=1 if "--verify-tag" in cmd else 0)
+                if "--json" in cmd:
+                    return mock.Mock(returncode=0, stdout="")
+                return mock.Mock(returncode=0)
+
+            with mock.patch.object(release_app.subprocess, "run", side_effect=fake_run):
+                rc = release_app.publish_github_release("v1.0.1", d)
+            self.assertEqual(rc, 0)
+            creates = [c for c in seen if c[:3] == ["gh", "release", "create"]]
+            self.assertEqual(len(creates), 2)
+            self.assertIn("--verify-tag", creates[0])
+            self.assertNotIn("--verify-tag", creates[1])
+
+    def test_publish_gitee_release_incremental(self):
+        # release 已存在 + attach_files 已含 a.apk -> 仅上传 b.txt；token 缺失则 FATAL
+        api = release_app.GITEE_API
+        repo = f"{api}/repos/{release_app.GITEE_MIRROR_REPO}"
+        responses = {
+            ("GET", f"{repo}/releases/tags/v9.9.9"): (200, json.dumps({"id": 42, "assets": []})),
+            ("GET", f"{repo}/releases/42/attach_files?per_page=100"): (
+                200, json.dumps([{"name": "a.apk", "size": 1}])),
+        }
+        post_count = {"n": 0}
+
+        def fake_req(method, url, token=None, data=None, content_type=None, timeout=60):
+            key = (method, url)
+            if key == ("POST", f"{repo}/releases/42/attach_files"):
+                post_count["n"] += 1
+                return 201, "{}"
+            return responses.get(key, (404, f"unexpected {key}"))
+
+        old_token = os.environ.get("GITEE_TOKEN")
+        os.environ["GITEE_TOKEN"] = "test-token"
+        try:
+            with tempfile.TemporaryDirectory() as td:
+                d = Path(td)
+                (d / "a.apk").write_bytes(b"a")
+                (d / "b.txt").write_text("b", encoding="utf-8")
+                with mock.patch.object(release_app, "_gitee_req", side_effect=fake_req):
+                    rc = release_app.publish_gitee_release("v9.9.9", d)
+            self.assertEqual(rc, 0)
+            self.assertEqual(post_count["n"], 1)  # 只上传缺失的 b.txt
+            # token 缺失 -> FATAL rc=2
+            os.environ.pop("GITEE_TOKEN", None)
+            with tempfile.TemporaryDirectory() as td:
+                d = Path(td)
+                (d / "a.apk").write_bytes(b"a")
+                rc2 = release_app.publish_gitee_release("v9.9.9", d)
+            self.assertEqual(rc2, 2)
+        finally:
+            if old_token is None:
+                os.environ.pop("GITEE_TOKEN", None)
+            else:
+                os.environ["GITEE_TOKEN"] = old_token
+
+    def test_publish_gitee_release_creates_and_fails(self):
+        # release 不存在 -> 创建成功；上传失败 -> 返回 1（中止发布）
+        api = release_app.GITEE_API
+        repo = f"{api}/repos/{release_app.GITEE_MIRROR_REPO}"
+        responses = {
+            # Gitee 对不存在 release 返回 200 + body "null" 的坑
+            ("GET", f"{repo}/releases/tags/v9.9.8"): (200, "null"),
+            ("POST", f"{repo}/releases"): (201, json.dumps({"id": 7, "assets": []})),
+            ("GET", f"{repo}/releases/7/attach_files?per_page=100"): (200, "[]"),
+        }
+
+        def fake_req(method, url, token=None, data=None, content_type=None, timeout=60):
+            key = (method, url)
+            if key == ("POST", f"{repo}/releases/7/attach_files"):
+                return 500, "boom"
+            return responses.get(key, (404, f"unexpected {key}"))
+
+        old_token = os.environ.get("GITEE_TOKEN")
+        os.environ["GITEE_TOKEN"] = "test-token"
+        try:
+            with tempfile.TemporaryDirectory() as td:
+                d = Path(td)
+                (d / "a.apk").write_bytes(b"a")
+                with mock.patch.object(release_app, "_gitee_req", side_effect=fake_req):
+                    rc = release_app.publish_gitee_release("v9.9.8", d)
+            self.assertEqual(rc, 1)
+        finally:
+            if old_token is None:
+                os.environ.pop("GITEE_TOKEN", None)
+            else:
+                os.environ["GITEE_TOKEN"] = old_token
 
 
 if __name__ == "__main__":
