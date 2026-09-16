@@ -29,9 +29,36 @@ class UpdateInstaller {
     }
   }
 
+  /// 检查是否存在上次崩溃未完成的事务，若存在则执行自愈恢复
+  static void checkForCrashRecovery() {
+    if (!Platform.isWindows) return;
+    try {
+      final targetDir = p.dirname(Platform.resolvedExecutable);
+      final journalFile = File(p.join(targetDir, '.updater', 'journal'));
+      if (journalFile.existsSync()) {
+        AppLogger.update.warning(
+          'Found uncommitted .updater/journal from previous crash, recovering...',
+        );
+        final updaterPath = p.join(targetDir, 'updater.exe');
+        if (File(updaterPath).existsSync()) {
+          final res = Process.runSync(
+            updaterPath,
+            <String>['--recover', '--target', targetDir, '--silent'],
+            workingDirectory: targetDir,
+          );
+          AppLogger.update.info(
+            'Crash recovery completed with exitCode=${res.exitCode}',
+          );
+        }
+      }
+    } on Object catch (e, st) {
+      AppLogger.update.warning('Crash recovery attempt failed', e, st);
+    }
+  }
+
   static Future<void> _installWindows(File zipFile) async {
     AppLogger.update.info(
-      'Preparing Windows in-place update using updater-rs for: ${zipFile.path}',
+      'Preparing Windows in-place update using better-updater for: ${zipFile.path}',
     );
 
     final currentExe = Platform.resolvedExecutable;
@@ -39,9 +66,11 @@ class UpdateInstaller {
     final exeName = p.basename(currentExe);
 
     // 1. 查找 updater.exe 二进制
+    final targetUpdater = p.join(targetDir, 'updater.exe');
     final candidatePaths = [
-      p.join(targetDir, 'updater.exe'),
+      targetUpdater,
       p.join(Directory.current.path, 'tools', 'windows', 'updater.exe'),
+      r'C:\Home\Projects\mytools\tools\better-updater\target\release\updater.exe',
       r'C:\Home\Projects\mytools\tools\updater\rust\target\release\updater.exe',
     ];
 
@@ -60,15 +89,17 @@ class UpdateInstaller {
     }
 
     try {
-      // 2. 遵循最佳实践：将 updater.exe 复制到系统临时目录执行
-      // 保证安装目录下的 updater.exe 也能随新版本 zip 覆盖更新
-      final tempDir = p.join(Directory.systemTemp.path, 'jigsawfox_updater');
-      final tempDirObj = Directory(tempDir);
-      if (!tempDirObj.existsSync()) {
-        await tempDirObj.create(recursive: true);
+      // 2. 保证安装目录下存在 updater.exe。
+      // better-updater 原生支持影子 Worker（Shadow Worker），即使在安装目录下运行，
+      // 它也会自动把自身复制到运行期临时目录派生 Worker，释放原可执行文件句柄，因此支持自我更新。
+      final execUpdater = File(targetUpdater);
+      if (!execUpdater.existsSync() && foundUpdater != targetUpdater) {
+        await File(foundUpdater).copy(targetUpdater);
       }
-      final tempUpdater = p.join(tempDir, 'updater.exe');
-      await File(foundUpdater).copy(tempUpdater);
+
+      final executableToRun = execUpdater.existsSync()
+          ? targetUpdater
+          : foundUpdater;
 
       final args = <String>[
         '--pid',
@@ -82,25 +113,26 @@ class UpdateInstaller {
         '--args',
         '--updated',
         '--gui',
-        '--delete-zip',
       ];
 
       AppLogger.update.info(
-        'Launching updater from $tempUpdater with args: $args',
+        'Launching better-updater from $executableToRun with args: $args',
       );
 
-      // 3. 以 detached 模式启动，脱离当前主程序进程树
+      // 3. 按照契约：必须以 detached 模式启动，工作目录设为 targetDir
       await Process.start(
-        tempUpdater,
+        executableToRun,
         args,
         mode: ProcessStartMode.detached,
+        workingDirectory: targetDir,
       );
 
       AppLogger.update.info(
-        'Updater launched successfully. Exiting main process to release file locks...',
+        'Updater launched. Exiting host process immediately to hand over locks...',
       );
 
-      // 4. 短暂延时后退出主程序释放所有文件锁
+      // 4. 关键契约：必须立即退出自身，绝不能等待 updater 的退出码
+      // （影子 Worker 派生后主实例瞬间返回 0 仅代表交接完成，等待退出码会导致文件锁冲突）
       await Future<void>.delayed(const Duration(milliseconds: 200));
       exit(0);
     } catch (e, st) {

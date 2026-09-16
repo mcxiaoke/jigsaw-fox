@@ -86,3 +86,7 @@ jigsaw_raw/
 
 # Studio runtime SQLite database
 studio/studio.db
+
+*.exe
+*.bin
+*.log

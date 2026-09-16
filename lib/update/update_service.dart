@@ -90,6 +90,9 @@ class UpdateService {
     final currentCode = int.tryParse(pkg.buildNumber) ?? 1;
     final supportedAbis = await getSupportedAbis();
 
+    // Windows 平台崩溃自愈探测
+    UpdateInstaller.checkForCrashRecovery();
+
     AppLogger.update.info(
       'Check update started: source=${isSilent ? "silent" : "manual"}, '
       'local=$currentVersion+$currentCode, abis=$supportedAbis, url=$updatesUrl',

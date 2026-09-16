@@ -125,12 +125,13 @@ def zip_windows(github: Path, version: str, dry_run: bool = False) -> None:
     # 注入通用极简更新器 updater.exe 与保护清单 .updatekeep
     updater_candidates = [
         ROOT / "tools" / "windows" / "updater.exe",
-        Path("C:/Home/Projects/mytools/tools/updater/rust/target/release/updater.exe"),
+        Path("C:/Home/Projects/mytools/tools/better-updater/target/dist/updater.exe"),
+        Path("C:/Home/Projects/mytools/tools/better-updater/target/release/updater.exe"),
     ]
     updater_src = next((p for p in updater_candidates if p.exists()), None)
     if updater_src:
         shutil.copy2(src=str(updater_src), dst=str(src / "updater.exe"))
-        print(f"-> 注入更新器：{updater_src.name} -> {src / 'updater.exe'}")
+        print(f"-> 注入更新器：{updater_src} -> {src / 'updater.exe'}")
     else:
         print("-> [WARN] 未找到 updater.exe，跳过注入更新器")
 
@@ -139,18 +140,53 @@ def zip_windows(github: Path, version: str, dry_run: bool = False) -> None:
         shutil.copy2(src=str(keep_file), dst=str(src / ".updatekeep"))
         print(f"-> 注入保护清单：{keep_file.name} -> {src / '.updatekeep'}")
 
+    # 优先使用 better-updater 官方配套的 packer.exe 打包（自动生成清单、排布启动闭包、回读机械自检）
+    packer_candidates = [
+        ROOT / "tools" / "windows" / "packer.exe",
+        Path("C:/Home/Projects/mytools/tools/better-updater/target/dist/packer.exe"),
+    ]
+    packer_bin = next((p for p in packer_candidates if p.exists()), None)
+    if packer_bin:
+        print(f"-> 使用 better-updater packer 打包：{packer_bin}")
+        cmd = f'"{packer_bin}" --stage "{src}" --version "{version}" --out "{dst}" --force'
+        run(cmd, dry_run=dry_run)
+        if not dry_run and dst.exists():
+            size_mb = dst.stat().st_size / 1024 / 1024
+            print(f"-> Windows 打包完成：{dst.name}（{size_mb:.1f} MB）")
+        return
+
+    # Fallback: 若无 packer.exe 则走内置 Python zip 打包
+    def is_boot_closure(path: Path) -> bool:
+        rel = path.relative_to(src)
+        if len(rel.parts) == 1:
+            return True
+        if len(rel.parts) == 2 and rel.parts[0].lower() == "data":
+            if rel.suffix.lower() in (".so", ".dat"):
+                return True
+        return False
+
+    regular_files = []
+    boot_files = []
+    for f in sorted(src.rglob("*")):
+        if f.is_dir():
+            continue
+        rel = f.relative_to(src).as_posix()
+        if rel.startswith("logs/"):
+            continue
+        if f.suffix.lower() in EXCLUDED_WIN_EXTS:
+            continue
+        if is_boot_closure(f):
+            boot_files.append(f)
+        else:
+            regular_files.append(f)
+
     with zipfile.ZipFile(dst, "w", zipfile.ZIP_DEFLATED) as zf:
-        for f in sorted(src.rglob("*")):
-            if f.is_dir():
-                continue
-            rel = f.relative_to(src).as_posix()
-            if rel.startswith("logs/"):
-                continue
-            if f.suffix.lower() in EXCLUDED_WIN_EXTS:
-                continue
-            zf.write(f, rel)
+        for f in regular_files:
+            zf.write(f, f.relative_to(src).as_posix())
+        for f in boot_files:
+            zf.write(f, f.relative_to(src).as_posix())
     size_mb = dst.stat().st_size / 1024 / 1024
-    print(f"-> Windows 打包完成：{dst.name}（{size_mb:.1f} MB）")
+    print(f"-> Windows 打包完成：{dst.name}（{size_mb:.1f} MB，普通条目 {len(regular_files)}，闭包条目 {len(boot_files)}）")
 
 
 def zip_android(github: Path, version: str, dry_run: bool = False) -> None:
