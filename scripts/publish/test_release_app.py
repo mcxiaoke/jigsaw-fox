@@ -68,6 +68,25 @@ class TestReleaseApp(unittest.TestCase):
         finally:
             tf_path.unlink(missing_ok=True)
 
+    def test_mirror_urls(self):
+        # 镜像 URL 必须按 GITHUB_MIRROR_REPO / GITEE_MIRROR_REPO 常量拼接，不得写死仓库名
+        urls = release_app._mirror_urls("1.0.1", "JigsawFox-1.0.1-all.apk")
+        self.assertEqual(len(urls), 2)
+        self.assertEqual(
+            urls[0],
+            f"https://github.com/{release_app.GITHUB_MIRROR_REPO}/releases/download/v1.0.1/JigsawFox-1.0.1-all.apk",
+        )
+        self.assertEqual(
+            urls[1],
+            f"https://gitee.com/{release_app.GITEE_MIRROR_REPO}/releases/download/v1.0.1/JigsawFox-1.0.1-all.apk",
+        )
+        gh_repo = "myorg/jigsaw-fox"
+        with mock.patch.object(release_app, "GITHUB_MIRROR_REPO", gh_repo):
+            ghu = release_app._mirror_urls("1.0.2", "x.apk")[0]
+            self.assertIn(
+                f"https://github.com/{gh_repo}/releases/download/v1.0.2/x.apk", ghu
+            )
+
     def test_generate_manifest(self):
         manifest = generate_manifest(
             version_name="1.0.1",
@@ -155,22 +174,39 @@ class TestReleaseApp(unittest.TestCase):
             httpd.shutdown()
 
     def test_app_release_assets(self):
-        # 仅收集目录下的文件（排除子目录），按文件名排序
+        # 仅收集收敛后的发布产物（arm64-v8a / armeabi-v7a APK、windows zip、SHA256SUMS.txt），
+        # 排除 all / x86_64 / android.zip / metadata 等旧或非发布产物，且排除子目录
         with tempfile.TemporaryDirectory() as td:
             d = Path(td)
-            (d / "b.txt").write_text("x", encoding="utf-8")
-            (d / "a.apk").write_bytes(b"apk")
+            (d / "JigsawFox-1.0.1-arm64-v8a.apk").write_bytes(b"apk")
+            (d / "JigsawFox-1.0.1-armeabi-v7a.apk").write_bytes(b"apk")
+            (d / "JigsawFox-1.0.1-windows-x64.zip").write_bytes(b"zip")
+            (d / "SHA256SUMS.txt").write_text("x", encoding="utf-8")
+            (d / "JigsawFox-1.0.1-all.apk").write_bytes(b"old")
+            (d / "JigsawFox-1.0.1-x86_64.apk").write_bytes(b"old")
+            (d / "JigsawFox-1.0.1-android.zip").write_bytes(b"old")
+            (d / "metadata-1.0.1-all.json").write_text("{}", encoding="utf-8")
             (d / "sub").mkdir()
             (d / "sub" / "nested.zip").write_bytes(b"z")
             assets = _app_release_assets(d)
-            self.assertEqual([p.name for p in assets], ["a.apk", "b.txt"])
             self.assertEqual(
-                [p.name for p in _app_release_assets(d / "sub")], ["nested.zip"]
+                [p.name for p in assets],
+                [
+                    "JigsawFox-1.0.1-arm64-v8a.apk",
+                    "JigsawFox-1.0.1-armeabi-v7a.apk",
+                    "JigsawFox-1.0.1-windows-x64.zip",
+                    "SHA256SUMS.txt",
+                ],
             )
+            self.assertEqual([p.name for p in _app_release_assets(d / "sub")], [])
 
     def test_missing_assets(self):
-        assets = [Path("JigsawFox-1.0.1-all.apk"), Path("updates.json"), Path("SHA256SUMS")]
-        existing = {"JigsawFox-1.0.1-all.apk"}
+        assets = [
+            Path("JigsawFox-1.0.1-arm64-v8a.apk"),
+            Path("updates.json"),
+            Path("SHA256SUMS"),
+        ]
+        existing = {"JigsawFox-1.0.1-arm64-v8a.apk"}
         missing = _missing_assets(assets, existing, force=False)
         self.assertEqual([f.name for f in missing], ["updates.json", "SHA256SUMS"])
         # --force 时忽略远端清单，全部重传
@@ -181,27 +217,40 @@ class TestReleaseApp(unittest.TestCase):
         # release 已存在：只按文件名差集上传缺失资产，不创建
         with tempfile.TemporaryDirectory() as td:
             d = Path(td)
-            (d / "a.apk").write_bytes(b"a")
-            (d / "b.txt").write_text("b", encoding="utf-8")
+            (d / "JigsawFox-1.0.1-arm64-v8a.apk").write_bytes(b"a")
+            (d / "JigsawFox-1.0.1-windows-x64.zip").write_bytes(b"b")
             calls: list = []
+            encodings: list = []
 
             def fake_run(cmd, **kw):
                 calls.append(cmd)
+                encodings.append(kw.get("encoding"))
                 if cmd[:3] == ["gh", "release", "view"] and "--json" not in cmd:
                     return mock.Mock(returncode=0)  # release 存在
                 if "--json" in cmd and "-q" in cmd:
-                    return mock.Mock(returncode=0, stdout="a.apk\n")  # 远端已有 a.apk
+                    # 远端已有 arm64-v8a.apk
+                    return mock.Mock(
+                        returncode=0, stdout="JigsawFox-1.0.1-arm64-v8a.apk\n"
+                    )
                 return mock.Mock(returncode=0)
 
             with mock.patch.object(release_app.subprocess, "run", side_effect=fake_run):
                 rc = release_app.publish_github_release("v1.0.1", d)
             self.assertEqual(rc, 0)
+            self.assertTrue(
+                encodings, "gh 调用必须显式 UTF-8 解码（防 Windows GBK 噪音）"
+            )
+            self.assertTrue(all(e == "utf-8" for e in encodings))
             uploads = [c for c in calls if c[:3] == ["gh", "release", "upload"]]
             creates = [c for c in calls if c[:3] == ["gh", "release", "create"]]
             self.assertEqual(len(uploads), 1)
-            # upload 参数为绝对路径，按文件名校验仅上传缺失的 b.txt
-            file_args = [str(c) for c in uploads[0] if c.endswith(".apk") or c.endswith(".txt")]
-            self.assertEqual([Path(c).name for c in file_args], ["b.txt"])
+            # upload 参数为绝对路径，按文件名校验仅上传缺失的 windows zip
+            file_args = [
+                str(c) for c in uploads[0] if c.endswith(".apk") or c.endswith(".zip")
+            ]
+            self.assertEqual(
+                [Path(c).name for c in file_args], ["JigsawFox-1.0.1-windows-x64.zip"]
+            )
             self.assertIn("--clobber", uploads[0])
             self.assertEqual(len(creates), 0)
 
@@ -209,11 +258,13 @@ class TestReleaseApp(unittest.TestCase):
         # release 不存在：先带 --verify-tag 创建，失败后退化重试
         with tempfile.TemporaryDirectory() as td:
             d = Path(td)
-            (d / "a.apk").write_bytes(b"a")
+            (d / "JigsawFox-1.0.1-arm64-v8a.apk").write_bytes(b"a")
             seen: list = []
+            encodings: list = []
 
             def fake_run(cmd, **kw):
                 seen.append(cmd)
+                encodings.append(kw.get("encoding"))
                 if cmd[:3] == ["gh", "release", "view"]:
                     return mock.Mock(returncode=1)
                 if cmd[:3] == ["gh", "release", "create"]:
@@ -225,19 +276,25 @@ class TestReleaseApp(unittest.TestCase):
             with mock.patch.object(release_app.subprocess, "run", side_effect=fake_run):
                 rc = release_app.publish_github_release("v1.0.1", d)
             self.assertEqual(rc, 0)
+            self.assertTrue(all(e == "utf-8" for e in encodings))
             creates = [c for c in seen if c[:3] == ["gh", "release", "create"]]
             self.assertEqual(len(creates), 2)
             self.assertIn("--verify-tag", creates[0])
             self.assertNotIn("--verify-tag", creates[1])
 
     def test_publish_gitee_release_incremental(self):
-        # release 已存在 + attach_files 已含 a.apk -> 仅上传 b.txt；token 缺失则 FATAL
+        # release 已存在 + attach_files 已含 arm64 apk -> 仅上传缺失的 windows zip；token 缺失则 FATAL
         api = release_app.GITEE_API
         repo = f"{api}/repos/{release_app.GITEE_MIRROR_REPO}"
         responses = {
-            ("GET", f"{repo}/releases/tags/v9.9.9"): (200, json.dumps({"id": 42, "assets": []})),
+            ("GET", f"{repo}/releases/tags/v9.9.9"): (
+                200,
+                json.dumps({"id": 42, "assets": []}),
+            ),
             ("GET", f"{repo}/releases/42/attach_files?per_page=100"): (
-                200, json.dumps([{"name": "a.apk", "size": 1}])),
+                200,
+                json.dumps([{"name": "JigsawFox-1.0.1-arm64-v8a.apk", "size": 1}]),
+            ),
         }
         post_count = {"n": 0}
 
@@ -253,17 +310,17 @@ class TestReleaseApp(unittest.TestCase):
         try:
             with tempfile.TemporaryDirectory() as td:
                 d = Path(td)
-                (d / "a.apk").write_bytes(b"a")
-                (d / "b.txt").write_text("b", encoding="utf-8")
+                (d / "JigsawFox-1.0.1-arm64-v8a.apk").write_bytes(b"a")
+                (d / "JigsawFox-1.0.1-windows-x64.zip").write_bytes(b"b")
                 with mock.patch.object(release_app, "_gitee_req", side_effect=fake_req):
                     rc = release_app.publish_gitee_release("v9.9.9", d)
             self.assertEqual(rc, 0)
-            self.assertEqual(post_count["n"], 1)  # 只上传缺失的 b.txt
+            self.assertEqual(post_count["n"], 1)  # 只上传缺失的 windows zip
             # token 缺失 -> FATAL rc=2
             os.environ.pop("GITEE_TOKEN", None)
             with tempfile.TemporaryDirectory() as td:
                 d = Path(td)
-                (d / "a.apk").write_bytes(b"a")
+                (d / "JigsawFox-1.0.1-arm64-v8a.apk").write_bytes(b"a")
                 rc2 = release_app.publish_gitee_release("v9.9.9", d)
             self.assertEqual(rc2, 2)
         finally:
@@ -279,12 +336,17 @@ class TestReleaseApp(unittest.TestCase):
         responses = {
             # Gitee 对不存在 release 返回 200 + body "null" 的坑
             ("GET", f"{repo}/releases/tags/v9.9.8"): (200, "null"),
+            ("GET", f"{repo}"): (200, json.dumps({"default_branch": "master"})),
             ("POST", f"{repo}/releases"): (201, json.dumps({"id": 7, "assets": []})),
             ("GET", f"{repo}/releases/7/attach_files?per_page=100"): (200, "[]"),
         }
 
         def fake_req(method, url, token=None, data=None, content_type=None, timeout=60):
             key = (method, url)
+            if key == ("POST", f"{repo}/releases"):
+                # 创建时必须显式传 target_commitish（缺失 Gitee 返回 HTTP 400）
+                self.assertIn(b'"target_commitish": "master"', data)
+                self.assertIn(b'"tag_name": "v9.9.8"', data)
             if key == ("POST", f"{repo}/releases/7/attach_files"):
                 return 500, "boom"
             return responses.get(key, (404, f"unexpected {key}"))
@@ -294,7 +356,7 @@ class TestReleaseApp(unittest.TestCase):
         try:
             with tempfile.TemporaryDirectory() as td:
                 d = Path(td)
-                (d / "a.apk").write_bytes(b"a")
+                (d / "JigsawFox-1.0.1-arm64-v8a.apk").write_bytes(b"a")
                 with mock.patch.object(release_app, "_gitee_req", side_effect=fake_req):
                     rc = release_app.publish_gitee_release("v9.9.8", d)
             self.assertEqual(rc, 1)

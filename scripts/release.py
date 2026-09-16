@@ -6,7 +6,7 @@ release.py — JigsawFox 多平台发布与打包脚本
 功能：
 1. 自动从 pubspec.yaml 解析当前版本号
 2. 支持构建 Windows Desktop Release，排除调试符号与临时文件并打包成 zip
-3. 支持构建 Android APK（分 ABI 包与通用 fat 包）及打包 zip
+3. 支持构建 Android APK（分 ABI：arm64-v8a / armeabi-v7a）
 4. 为全部构建产物自动生成 SHA256SUMS.txt 校验清单
 5. 统一输出到 releases/<version>/github/ 目录，方便 gh release 上传
 
@@ -78,7 +78,9 @@ def get_destination() -> tuple[Path, str]:
     pubspec = (ROOT / "pubspec.yaml").read_text(encoding="utf-8")
     m = re.search(r"version:\s*([0-9][0-9.]*)\+(\d+)", pubspec)
     if m is None:
-        raise SystemExit("无法从 pubspec.yaml 解析 version（需形如 'version: x.y.z+<build>'）")
+        raise SystemExit(
+            "无法从 pubspec.yaml 解析 version（需形如 'version: x.y.z+<build>'）"
+        )
     version = m.group(1)
 
     github = (ROOT / "releases" / version / "github").resolve()
@@ -126,7 +128,9 @@ def zip_windows(github: Path, version: str, dry_run: bool = False) -> None:
     updater_candidates = [
         ROOT / "tools" / "windows" / "updater.exe",
         Path("C:/Home/Projects/mytools/tools/better-updater/target/dist/updater.exe"),
-        Path("C:/Home/Projects/mytools/tools/better-updater/target/release/updater.exe"),
+        Path(
+            "C:/Home/Projects/mytools/tools/better-updater/target/release/updater.exe"
+        ),
     ]
     updater_src = next((p for p in updater_candidates if p.exists()), None)
     if updater_src:
@@ -186,29 +190,9 @@ def zip_windows(github: Path, version: str, dry_run: bool = False) -> None:
         for f in boot_files:
             zf.write(f, f.relative_to(src).as_posix())
     size_mb = dst.stat().st_size / 1024 / 1024
-    print(f"-> Windows 打包完成：{dst.name}（{size_mb:.1f} MB，普通条目 {len(regular_files)}，闭包条目 {len(boot_files)}）")
-
-
-def zip_android(github: Path, version: str, dry_run: bool = False) -> None:
-    """把全部 Android APK + metadata 汇总打成一个 android zip。"""
-    dst = github / f"{APP_NAME}-{version}-android.zip"
-    if dry_run:
-        print(f"-> [dry-run] 打包 Android zip 到 {dst}")
-        return
-
-    apks = sorted(github.glob(f"{APP_NAME}-{version}-*.apk"))
-    jsons = sorted(github.glob(f"metadata-{version}-*.json"))
-    if not apks:
-        print("-> 未发现 APK 产物，跳过 Android zip 打包")
-        return
-
-    with zipfile.ZipFile(dst, "w", zipfile.ZIP_DEFLATED) as zf:
-        for f in apks:
-            zf.write(f, f.name)
-        for f in jsons:
-            zf.write(f, f.name)
-    size_mb = dst.stat().st_size / 1024 / 1024
-    print(f"-> Android zip 打包完成：{dst.name}（{size_mb:.1f} MB）")
+    print(
+        f"-> Windows 打包完成：{dst.name}（{size_mb:.1f} MB，普通条目 {len(regular_files)}，闭包条目 {len(boot_files)}）"
+    )
 
 
 def write_sha256(github: Path, dry_run: bool = False) -> None:
@@ -222,7 +206,7 @@ def write_sha256(github: Path, dry_run: bool = False) -> None:
         for f in sorted(github.iterdir()):
             if not f.is_file() or f.name == "SHA256SUMS.txt":
                 continue
-            if f.suffix.lower() not in (".zip", ".apk", ".json"):
+            if f.suffix.lower() not in (".zip", ".apk"):
                 continue
             digest = hashlib.sha256(f.read_bytes()).hexdigest()
             out.write(f"{digest}  {f.name}\n")
@@ -245,32 +229,25 @@ def build_android(
     github: Path,
     version: str,
     *,
-    split_abi: bool = True,
     dry_run: bool = False,
 ) -> None:
-    """执行 Android 构建与收集。"""
-    if split_abi:
-        print("\n--- [Android] 构建分 ABI APK（arm / arm64 / x64）---")
-        run(
-            "flutter build apk --release --split-per-abi "
-            "--target-platform android-arm,android-arm64,android-x64",
-            dry_run=dry_run,
-        )
-        copy_file(find_apk_file("app-x86_64-release.apk"), github / f"{APP_NAME}-{version}-x86_64.apk", dry_run=dry_run)
-        copy_file(find_apk_file("app-arm64-v8a-release.apk"), github / f"{APP_NAME}-{version}-arm64-v8a.apk", dry_run=dry_run)
-        copy_file(find_apk_file("app-armeabi-v7a-release.apk"), github / f"{APP_NAME}-{version}-armeabi-v7a.apk", dry_run=dry_run)
-        meta_split = find_apk_file("output-metadata.json")
-        if meta_split.exists() or dry_run:
-            copy_file(meta_split, github / f"metadata-{version}-split-per-abi.json", dry_run=dry_run)
-
-    print("\n--- [Android] 构建全 ABI 通用 fat APK ---")
-    run("flutter build apk --release", dry_run=dry_run)
-    copy_file(find_apk_file("app-release.apk"), github / f"{APP_NAME}-{version}-all.apk", dry_run=dry_run)
-    meta_all = find_apk_file("output-metadata.json")
-    if meta_all.exists() or dry_run:
-        copy_file(meta_all, github / f"metadata-{version}-all.json", dry_run=dry_run)
-
-    zip_android(github, version, dry_run=dry_run)
+    """执行 Android 构建与收集（分 ABI：arm64-v8a / armeabi-v7a，不构建 fat all 包）。"""
+    print("\n--- [Android] 构建分 ABI APK（arm64-v8a / armeabi-v7a）---")
+    run(
+        "flutter build apk --release --split-per-abi "
+        "--target-platform android-arm,android-arm64",
+        dry_run=dry_run,
+    )
+    copy_file(
+        find_apk_file("app-arm64-v8a-release.apk"),
+        github / f"{APP_NAME}-{version}-arm64-v8a.apk",
+        dry_run=dry_run,
+    )
+    copy_file(
+        find_apk_file("app-armeabi-v7a-release.apk"),
+        github / f"{APP_NAME}-{version}-armeabi-v7a.apk",
+        dry_run=dry_run,
+    )
 
 
 def build_windows(github: Path, version: str, *, dry_run: bool = False) -> None:
@@ -295,11 +272,6 @@ def parse_args() -> argparse.Namespace:
         help="构建前执行 flutter clean && flutter pub get（清理缓存，构建耗时增加）",
     )
     parser.add_argument(
-        "--no-split-abi",
-        action="store_true",
-        help="跳过 Android 分 ABI 构建，仅构建通用 fat APK",
-    )
-    parser.add_argument(
         "--dry-run",
         action="store_true",
         help="预演模式：仅打印构建步骤和命令，不实际执行构建与打包",
@@ -322,7 +294,7 @@ def make_release() -> None:
         run("flutter clean && flutter pub get", dry_run=args.dry_run)
 
     if args.platform in ("all", "android"):
-        build_android(github, version, split_abi=not args.no_split_abi, dry_run=args.dry_run)
+        build_android(github, version, dry_run=args.dry_run)
 
     if args.platform in ("all", "windows"):
         build_windows(github, version, dry_run=args.dry_run)

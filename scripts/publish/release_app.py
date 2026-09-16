@@ -6,7 +6,7 @@ release_app.py — App 自动更新发版与全链路完整性巡检工具（支
 依据设计文档：docs/app-auto-update-design-20260914.md
 
 核心特性：
-1. Android 支持按 ABI 分包（arm64-v8a, armeabi-v7a, x86_64, all），大幅缩减客户端下载包体积
+1. Android 支持按 ABI 分包（arm64-v8a, armeabi-v7a），大幅缩减客户端下载包体积
 2. 自动化完整性校验：
    - verify --local: 检查本地安装包、SHA256、线上版本递增门禁、APK 签名有效性与 aapt versionCode
    - verify --remote: 流式抓取远端 updates.json，探测并校验所有平台所有 ABI 的主源与全部镜像，
@@ -53,7 +53,7 @@ R2_APP_DIR = "app"
 UPDATES_JSON_REMOTE = f"{R2_APP_BASE}{R2_APP_DIR}/updates.json"
 # GitHub / Gitee Release 镜像仓库（与 updates.json 中 mirrors 配置保持一致，tag 统一为 v{version}）
 GITHUB_MIRROR_REPO = "mcxiaoke/jigsaw-fox"
-GITEE_MIRROR_REPO = "mcxiaoke/jigsaw-fox"
+GITEE_MIRROR_REPO = "macitee/jigsaw-fox"
 # Gitee Release 附件体积上限与软告警线（与素材侧 gitee_release.py 一致）
 GITEE_LIMIT_BYTES = 1024 * 1024 * 1024
 GITEE_SOFT_WARN_BYTES = 800 * 1024 * 1024
@@ -63,6 +63,14 @@ GITEE_API = "https://gitee.com/api/v5"
 def version_dir(version_name: str, version_code: int) -> str:
     """对象存储版本目录名：使用 '-' 分隔，避免 URL 路径中出现 '+'"""
     return f"{version_name}-{version_code}"
+
+
+def _mirror_urls(version_name: str, file_name: str) -> List[str]:
+    """镜像 Release 下载 URL 列表（GitHub + Gitee），按镜像仓库常量拼接，禁止写死仓库名。"""
+    return [
+        f"https://github.com/{GITHUB_MIRROR_REPO}/releases/download/v{version_name}/{file_name}",
+        f"https://gitee.com/{GITEE_MIRROR_REPO}/releases/download/v{version_name}/{file_name}",
+    ]
 
 
 # GMT+8 时区
@@ -457,7 +465,8 @@ def cmd_prepare(args: argparse.Namespace) -> Path:
         apk_search_dirs.insert(0, Path(args.apk_dir))
 
     abi_map: Dict[str, Path] = {}
-    known_abis = ["arm64-v8a", "armeabi-v7a", "x86_64", "all"]
+    # 仅发布 arm64-v8a / armeabi-v7a 两个 ABI（与 scripts/release.py 构建产物集合保持一致）
+    known_abis = ["arm64-v8a", "armeabi-v7a"]
 
     for d in apk_search_dirs:
         if not d.is_dir():
@@ -468,12 +477,6 @@ def cmd_prepare(args: argparse.Namespace) -> Path:
                 abi_map["arm64-v8a"] = f
             elif "armeabi-v7a" in fname and "armeabi-v7a" not in abi_map:
                 abi_map["armeabi-v7a"] = f
-            elif "x86_64" in fname and "x86_64" not in abi_map:
-                abi_map["x86_64"] = f
-            elif (
-                "all" in fname or fname == "app-release.apk" or "universal" in fname
-            ) and "all" not in abi_map:
-                abi_map["all"] = f
 
     if abi_map:
         android_dict: Dict[str, Any] = {}
@@ -486,10 +489,7 @@ def cmd_prepare(args: argparse.Namespace) -> Path:
                 "url": rel_url,
                 "sha256": sha256,
                 "size": size,
-                "mirrors": [
-                    f"https://github.com/mcxiaoke/jigsaw-fox/releases/download/v{version_name}/{apk_file.name}",
-                    f"https://gitee.com/mcxiaoke/jigsaw-fox/releases/download/v{version_name}/{apk_file.name}",
-                ],
+                "mirrors": _mirror_urls(version_name, apk_file.name),
             }
             log_success(
                 f"已包含 Android [{abi_key}]: {apk_file.name} ({size} bytes, sha256={sha256[:12]}...)"
@@ -537,10 +537,7 @@ def cmd_prepare(args: argparse.Namespace) -> Path:
             "url": rel_url,
             "sha256": sha256,
             "size": size,
-            "mirrors": [
-                f"https://github.com/mcxiaoke/jigsaw-fox/releases/download/v{version_name}/{win_file.name}",
-                f"https://gitee.com/mcxiaoke/jigsaw-fox/releases/download/v{version_name}/{win_file.name}",
-            ],
+            "mirrors": _mirror_urls(version_name, win_file.name),
         }
         log_success(
             f"已包含 Windows 产物: {win_file.name} ({size} bytes, sha256={sha256[:12]}...)"
@@ -712,9 +709,27 @@ def cmd_verify_remote(url: str = UPDATES_JSON_REMOTE) -> None:
     )
 
 
+def _is_release_asset(name: str) -> bool:
+    """是否属于收敛后的发布产物集合（与 scripts/release.py 构建产物一致）。
+
+    仅发布 arm64-v8a / armeabi-v7a APK、windows-x64 zip 与 SHA256SUMS.txt，
+    排除 all / x86_64 / android.zip / metadata-*.json / universal 等旧或非发布产物。
+    """
+    if name == "SHA256SUMS.txt":
+        return True
+    low = name.lower()
+    if low.endswith(".apk"):
+        return "arm64-v8a" in low or "armeabi-v7a" in low
+    if low.endswith(".zip"):
+        return "windows" in low
+    return False
+
+
 def _app_release_assets(assets_dir: Path) -> List[Path]:
-    """App 发布资产 = 目录下全部文件（APK/zip/SHA256SUMS/metadata.json 等），按文件名排序。"""
-    return sorted(p for p in assets_dir.iterdir() if p.is_file())
+    """App 发布资产 = 目录下收敛后的发布产物（arm64-v8a/armeabi-v7a APK、windows zip、SHA256SUMS.txt），按文件名排序。"""
+    return sorted(
+        p for p in assets_dir.iterdir() if p.is_file() and _is_release_asset(p.name)
+    )
 
 
 def _missing_assets(assets: List[Path], existing: set[str], force: bool) -> List[Path]:
@@ -722,6 +737,17 @@ def _missing_assets(assets: List[Path], existing: set[str], force: bool) -> List
     if force:
         return list(assets)
     return [f for f in assets if f.name not in existing]
+
+
+def _gh_run(cmd: List[str]) -> subprocess.CompletedProcess:
+    """运行 gh CLI，显式以 UTF-8 解码输出。
+
+    Windows 下 subprocess.run(text=True) 默认按 GBK 解码，gh 的 UTF-8 中文输出
+    （如 Release 名称/说明）会使 reader thread 抛 UnicodeDecodeError。
+    """
+    return subprocess.run(
+        cmd, capture_output=True, text=True, encoding="utf-8", errors="replace"
+    )
 
 
 def publish_github_release(tag: str, assets_dir: Path, force: bool = False) -> int:
@@ -739,14 +765,7 @@ def publish_github_release(tag: str, assets_dir: Path, force: bool = False) -> i
     log_info(f"[github] repo={repo} tag={tag} 本地资产 {len(assets)} 个")
 
     # 1. 幂等确保 Release 存在
-    if (
-        subprocess.run(
-            ["gh", "release", "view", tag, "-R", repo],
-            capture_output=True,
-            text=True,
-        ).returncode
-        != 0
-    ):
+    if _gh_run(["gh", "release", "view", tag, "-R", repo]).returncode != 0:
         log_info(f"[github] Release {tag} 不存在，创建中")
         create_cmd = [
             "gh",
@@ -760,20 +779,18 @@ def publish_github_release(tag: str, assets_dir: Path, force: bool = False) -> i
             "--notes",
             f"JigsawFox {tag} 自动更新发布",
         ]
-        if (
-            subprocess.run(
-                [*create_cmd, "--verify-tag"],
-                capture_output=True,
-                text=True,
-            ).returncode
-            != 0
-        ):
-            subprocess.run(create_cmd, capture_output=True, text=True)
+        if _gh_run([*create_cmd, "--verify-tag"]).returncode != 0:
+            log_warn(
+                f"[github] --verify-tag 创建失败（tag 可能未推送），退化为不带该标志重试"
+            )
+            _gh_run(create_cmd)
+    else:
+        log_info(f"[github] Release {tag} 已存在")
 
     # 2. 已有附件清单 -> 按文件名差集增量上传
     existing: set[str] = set()
     if not force:
-        p = subprocess.run(
+        p = _gh_run(
             [
                 "gh",
                 "release",
@@ -785,9 +802,7 @@ def publish_github_release(tag: str, assets_dir: Path, force: bool = False) -> i
                 "assets",
                 "-q",
                 ".assets[].name",
-            ],
-            capture_output=True,
-            text=True,
+            ]
         )
         if p.returncode == 0:
             existing = {ln.strip() for ln in p.stdout.splitlines() if ln.strip()}
@@ -800,7 +815,7 @@ def publish_github_release(tag: str, assets_dir: Path, force: bool = False) -> i
         f"[github] {'强制重传' if force else '新增'} {len(missing)} 个资产: "
         f"{[f.name for f in missing]}"
     )
-    rc = subprocess.run(
+    rc = _gh_run(
         [
             "gh",
             "release",
@@ -810,9 +825,7 @@ def publish_github_release(tag: str, assets_dir: Path, force: bool = False) -> i
             repo,
             *[str(f) for f in missing],
             "--clobber",
-        ],
-        capture_output=True,
-        text=True,
+        ]
     ).returncode
     if rc != 0:
         log_error(f"[github] 附件上传失败 rc={rc}")
@@ -859,6 +872,20 @@ def _gitee_multipart_upload(url: str, token: str, path: Path) -> Tuple[int, str]
         content_type=f"multipart/form-data; boundary={boundary}",
         timeout=max(120, int(size / (64 * 1024)) + 60),  # 按 64KB/s 保守下限给超时
     )
+
+
+def _gitee_default_branch(repo: str, token: str) -> str:
+    """查询仓库默认分支（Gitee 创建 Release 时必须显式传 target_commitish，实测缺失会 HTTP 400）。"""
+    st, body = _gitee_req("GET", f"{GITEE_API}/repos/{repo}", token)
+    if st == 200:
+        try:
+            br = json.loads(body).get("default_branch")
+            if br:
+                return br
+        except Exception:
+            pass
+    log_warn(f"[gitee] 查询默认分支失败（HTTP {st}），回退 master")
+    return "master"
 
 
 def _gitee_existing_assets(repo: str, token: str, release: dict) -> Dict[str, int]:
@@ -932,10 +959,12 @@ def publish_gitee_release(tag: str, assets_dir: Path, force: bool = False) -> in
         log_info(f"[gitee] Release 已存在 id={release.get('id')}")
     else:
         log_info(f"[gitee] Release tag={tag} 不存在（HTTP {st}），尝试创建")
-        # 不指定 target_commitish：由 Gitee 使用仓库默认分支（jigsaw-fox 为 App 仓库）
+        default_branch = _gitee_default_branch(repo, token)
+        log_info(f"[gitee] 仓库默认分支: {default_branch}")
         payload = json.dumps(
             {
                 "tag_name": tag,
+                "target_commitish": default_branch,  # Gitee 必填，缺失返回 HTTP 400
                 "name": f"JigsawFox {tag}",
                 "body": f"JigsawFox {tag} 自动更新发布",
             }
