@@ -1,5 +1,27 @@
+import 'dart:math';
+
 import 'package:jigsawpuzzle/services/app_logger.dart';
 import 'package:meta/meta.dart';
+
+/// 吸附半径占单格边长的比例（唯一主源；引擎侧 PuzzleEngine.defaultSnapRatio 引用本常量）。
+const double puzzleSnapRatio = 0.40;
+
+/// 通关判定绝对容差上限：小网格（边长 <= 5）保持历史宽松度，零手感回退。
+const double solvedCapEpsilon = 0.035;
+
+/// 通关容差相对吸附半径的比例（0.5，即吸附半径 0.4/N 的一半 = 0.2/N）。
+const double solvedEpsilonRatio = 0.5;
+
+/// 网格感知的通关判定容差（归一化空间，欧氏距离）：
+/// `min(0.035, min(1/cols, 1/rows) * 0.40 * 0.5)`。
+///
+/// 与吸附阈值（`min(1/cols, 1/rows) * 0.40`，见引擎侧 PuzzleEngine.calculateSnapThreshold）
+/// 同源，保证任意网格下「通关容差 <= 吸附容差」，杜绝「碎片比吸附还远却被判定已就位」；
+/// 小网格取值 0.035 保持既有行为，网格越大容差按比例收紧。
+double solvedEpsilonFor(int rows, int cols) {
+  final cell = min(1.0 / cols, 1.0 / rows);
+  return min(solvedCapEpsilon, cell * puzzleSnapRatio * solvedEpsilonRatio);
+}
 
 /// Immutable state representing a single puzzle piece on the board.
 @immutable
@@ -66,11 +88,14 @@ class PieceState {
   double targetNy(int rows) => r / rows;
 
   /// Check if the piece is at its solved slot (within epsilon) and correctly oriented.
-  bool isSolved(int rows, int cols, {double epsilon = 0.035}) {
+  ///
+  /// 默认容差为网格感知的 [solvedEpsilonFor]（见其注释）；
+  /// 判定度量与吸附一致，统一为欧氏距离。
+  bool isSolved(int rows, int cols, {double? epsilon}) {
     final tnx = targetNx(cols);
     final tny = targetNy(rows);
-    return (nx - tnx).abs() <= epsilon &&
-        (ny - tny).abs() <= epsilon &&
+    final e = epsilon ?? solvedEpsilonFor(rows, cols);
+    return Point(nx - tnx, ny - tny).distanceTo(const Point(0, 0)) <= e &&
         (rot % 4 == 0);
   }
 

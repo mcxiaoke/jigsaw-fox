@@ -321,7 +321,8 @@ class PuzzlePieceComponent extends PositionComponent
 
     // 托盘内碎片：点击不立即拾取，交由拖拽阈值统一判定为“横向滚动托盘”或“向上拖出”
     // 避免手机上左右滑动托盘时误触移动碎片，符合“大部分时候判定为左右滑动”的预期
-    if (isInTray && !game.isTabletop) {
+    // 防御校验：碎片物理坐标必须真正落在托盘交互区域内，避免因状态与位置脱节导致游离碎片被误锁
+    if (isInTray && !game.isTabletop && game.isPointInTrayArea(position)) {
       return;
     }
 
@@ -346,7 +347,8 @@ class PuzzlePieceComponent extends PositionComponent
 
     // 托盘内碎片：进入待判定状态，不立即拾取；由 onDragUpdate 依据滑动角度阈值
     // 区分“横向滚动托盘”与“向上拖出碎片”，阈值设计保证大部分手势判定为滚动
-    if (isInTray && !game.isTabletop) {
+    // 防御校验：碎片物理坐标必须真正落在托盘交互区域内，避免因状态与位置脱节导致游离碎片被误锁
+    if (isInTray && !game.isTabletop && game.isPointInTrayArea(position)) {
       _pendingTrayDrag = true;
       _trayScrollLocked = false;
       _trayDragStartPos = event.canvasPosition.clone();
@@ -470,6 +472,10 @@ class PuzzlePieceComponent extends PositionComponent
 
   /// 带有平滑曲线的缓动平移位移动画
   void animateTo(Vector2 targetPos, {double duration = 0.15}) {
+    if (!isMounted) {
+      position.setFrom(targetPos);
+      return;
+    }
     removeAll(children.whereType<MoveEffect>());
     if ((position - targetPos).length < 0.5) {
       position.setFrom(targetPos);
@@ -487,6 +493,10 @@ class PuzzlePieceComponent extends PositionComponent
 
   /// 带有平滑曲线的缓动缩放动画
   void animateScaleTo(Vector2 targetScale, {double duration = 0.15}) {
+    if (!isMounted) {
+      scale.setFrom(targetScale);
+      return;
+    }
     removeAll(children.whereType<ScaleEffect>());
     if ((scale - targetScale).length < 0.01) {
       scale.setFrom(targetScale);

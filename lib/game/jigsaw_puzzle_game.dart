@@ -1423,6 +1423,12 @@ class JigsawPuzzleGame extends FlameGame
     }
   }
 
+  /// 判断指定屏幕坐标是否落在托盘物理交互区域内（含微容差）
+  bool isPointInTrayArea(Vector2 pos) {
+    if (isTabletop) return false;
+    return pos.y >= trayPosition.y - 20.0;
+  }
+
   Vector2 _normalizedToScreen(double nx, double ny) {
     final effectiveTopLeft = boardTopLeft + _panOffset;
     final effectiveBoardSize = boardSize * _zoom;
@@ -2188,6 +2194,114 @@ class JigsawPuzzleGame extends FlameGame
     onStateUpdated?.call();
   }
 
+  /// 视口越界收拢（Domain Clamp & Pullback）：
+  /// 检查全场所有不在托盘内、未锁定的游离单片与多片拼合集群，
+  /// 若超出当前模式的屏幕安全可视区域（托盘模式避让顶部栏与托盘；桌面模式避让全屏四周），
+  /// 按外接包围盒整体原子平移拉回到安全可视区域内（绝不拆散拼合集群）。
+  void _pullbackOutOfBoundsClustersAndPieces({bool animate = false}) {
+    const safeLeft = _sideMargin;
+    final safeRight = max(safeLeft, size.x - _sideMargin);
+    const safeTop = _topToolbarHeight;
+    final safeBottom = max(
+      safeTop,
+      isTabletop ? size.y - _bottomTrayMargin : trayPosition.y - 8.0,
+    );
+
+    // 收集全场不在托盘中、未被锁定的碎片，按 clusterId 分组
+    final clusters = <int, List<PuzzlePieceComponent>>{};
+    for (final comp in _pieces.values) {
+      if (comp.isInTray ||
+          comp.isLocked ||
+          comp.isDragging ||
+          comp == _holdingPiece) {
+        continue;
+      }
+      clusters.putIfAbsent(comp.clusterId, () => []).add(comp);
+    }
+
+    final normOut = [0.0, 0.0];
+    final updatedPiecesMap = <int, PieceState>{};
+
+    for (final cluster in clusters.values) {
+      if (cluster.isEmpty) continue;
+
+      var minX = double.infinity;
+      var maxX = -double.infinity;
+      var minY = double.infinity;
+      var maxY = -double.infinity;
+
+      for (final comp in cluster) {
+        final w = comp.size.x * comp.scale.x;
+        final h = comp.size.y * comp.scale.y;
+        minX = min(minX, comp.position.x);
+        maxX = max(maxX, comp.position.x + w);
+        minY = min(minY, comp.position.y);
+        maxY = max(maxY, comp.position.y + h);
+      }
+
+      var shiftX = 0.0;
+      var shiftY = 0.0;
+
+      final clusterW = maxX - minX;
+      final viewW = safeRight - safeLeft;
+      if (clusterW <= viewW) {
+        if (minX < safeLeft) {
+          shiftX = safeLeft - minX;
+        } else if (maxX > safeRight) {
+          shiftX = safeRight - maxX;
+        }
+      } else {
+        // 超大集群：保证至少有 48px 在可视区内可供抓取
+        if (maxX < safeLeft + 48.0) {
+          shiftX = (safeLeft + 48.0) - maxX;
+        } else if (minX > safeRight - 48.0) {
+          shiftX = (safeRight - 48.0) - minX;
+        }
+      }
+
+      final clusterH = maxY - minY;
+      final viewH = safeBottom - safeTop;
+      if (clusterH <= viewH) {
+        if (minY < safeTop) {
+          shiftY = safeTop - minY;
+        } else if (maxY > safeBottom) {
+          shiftY = safeBottom - maxY;
+        }
+      } else {
+        if (maxY < safeTop + 48.0) {
+          shiftY = (safeTop + 48.0) - maxY;
+        } else if (minY > safeBottom - 48.0) {
+          shiftY = (safeBottom - 48.0) - minY;
+        }
+      }
+
+      if (shiftX.abs() > 1e-4 || shiftY.abs() > 1e-4) {
+        final shift = Vector2(shiftX, shiftY);
+        for (final comp in cluster) {
+          final target = comp.position + shift;
+          if (animate) {
+            comp.animateTo(target, duration: 0.25);
+          } else {
+            comp.position.setFrom(target);
+          }
+          _screenToNormalized(target, normOut);
+          final pState = _boardState.pieceById(comp.id);
+          updatedPiecesMap[comp.id] = pState.copyWith(
+            nx: normOut[0],
+            ny: normOut[1],
+          );
+        }
+      }
+    }
+
+    if (updatedPiecesMap.isNotEmpty) {
+      final newPieces = _boardState.pieces.map((p) {
+        return updatedPiecesMap[p.id] ?? p;
+      }).toList();
+      _boardState = _boardState.copyWith(pieces: newPieces);
+    }
+  }
+
   /// Organizes all unlinked/unplaced floating pieces cleanly back into the tray or scattered table.
   void organizeTray() {
     AppLogger.game.info(
@@ -2236,12 +2350,39 @@ class JigsawPuzzleGame extends FlameGame
         }
       }
       _boardState = _boardState.copyWith(pieces: updatedPieces);
+      // 扫把收拢越界的多片拼合集群
+      _pullbackOutOfBoundsClustersAndPieces(animate: true);
       updatePieceVisibility();
       updatePiecesStateAndPriorities();
       onStateUpdated?.call();
       return;
     }
 
+    // 托盘模式下：
+    // 1. 全量扫描所有碎片，未吸附的游离单片（!isSolved && clusterSize == 1）无论此前在棋盘还是托盘全部收回托盘
+    final singlePiecesToTray = <PuzzlePieceComponent>[];
+    for (final p in _pieces.values) {
+      final statePiece = _boardState.pieceById(p.id);
+      final isSolved = statePiece.isSolved(rows, cols);
+      final clusterSize = _pieces.values
+          .where((o) => o.clusterId == p.clusterId)
+          .length;
+      if (!isSolved && clusterSize == 1) {
+        singlePiecesToTray.add(p);
+      }
+    }
+
+    // 重建 _trayOrder：保留原托盘中仍为未拼单片的相对顺序，并追加新收回的单片
+    final singlePieceIds = singlePiecesToTray.map((p) => p.id).toSet();
+    final newTrayOrder = _trayOrder.where(singlePieceIds.contains).toList();
+    for (final p in singlePiecesToTray) {
+      if (!newTrayOrder.contains(p.id)) {
+        newTrayOrder.add(p.id);
+      }
+    }
+    _trayOrder = newTrayOrder;
+
+    _trayScrollX = 0.0;
     final normOut = [0.0, 0.0];
     final updatedPiecesMap = <int, PieceState>{};
     var idx = 0;
@@ -2250,24 +2391,19 @@ class JigsawPuzzleGame extends FlameGame
       final p = _pieces[id];
       if (p == null) continue;
       final statePiece = _boardState.pieceById(p.id);
-      final isSolved = statePiece.isSolved(rows, cols);
-      final clusterSize = _pieces.values
-          .where((o) => o.clusterId == p.clusterId)
-          .length;
 
-      if (!isSolved && clusterSize == 1) {
-        p.isInTray = true;
-      }
+      p.isInTray = true;
+      p.clearActiveEffects();
+      p.animateScaleTo(Vector2.all(_trayPieceScale), duration: 0.25);
 
-      if (p.isInTray && !p.isFilteredOut) {
-        final targetPos = _getTrayPositionForIndex(idx);
-        _screenToNormalized(targetPos, normOut);
-        updatedPiecesMap[p.id] = statePiece.copyWith(
-          nx: normOut[0],
-          ny: normOut[1],
-        );
-        idx++;
-      }
+      final targetPos = _getTrayPositionForIndex(idx);
+      p.animateTo(targetPos, duration: 0.25);
+      _screenToNormalized(targetPos, normOut);
+      updatedPiecesMap[p.id] = statePiece.copyWith(
+        nx: normOut[0],
+        ny: normOut[1],
+      );
+      idx++;
     }
 
     if (updatedPiecesMap.isNotEmpty) {
@@ -2277,7 +2413,9 @@ class JigsawPuzzleGame extends FlameGame
       _boardState = _boardState.copyWith(pieces: newPieces);
     }
 
-    _trayScrollX = 0.0;
+    // 2. 对留在棋盘上的多片拼合集群（clusterSize > 1），执行视口越界安全拉回！
+    _pullbackOutOfBoundsClustersAndPieces(animate: true);
+
     updatePieceVisibility();
     updatePiecesStateAndPriorities();
     onStateUpdated?.call();
@@ -2475,18 +2613,12 @@ class JigsawPuzzleGame extends FlameGame
       for (final id in _trayOrder) {
         final p = newState.pieceById(id);
         final comp = _pieces[id];
-        if (needsRealign) {
-          // 旧存档或模式切换：未吸附游离单片直接初始化归位到托盘槽位（相当于自动扫把）
-          final targetPos = _getTrayPositionForIndex(trayIdx);
-          comp?.position.setFrom(targetPos);
-          _screenToNormalized(targetPos, normOut);
-          updatedPiecesMap[id] = p.copyWith(nx: normOut[0], ny: normOut[1]);
-        } else {
-          // 同模式继续：保持原托盘滚动位置
-          final targetScreenPos = _normalizedToScreen(p.nx, p.ny);
-          comp?.position.setFrom(targetScreenPos);
-          updatedPiecesMap[id] = p;
-        }
+        // 关键修复：托盘内碎片严格根据 _getTrayPositionForIndex 排布
+        // 绝不使用 _normalizedToScreen（避免因棋盘世界矩阵在视口/缩放变动后把托盘碎片甩出屏幕）
+        final targetPos = _getTrayPositionForIndex(trayIdx);
+        comp?.position.setFrom(targetPos);
+        _screenToNormalized(targetPos, normOut);
+        updatedPiecesMap[id] = p.copyWith(nx: normOut[0], ny: normOut[1]);
         trayIdx++;
       }
     }
@@ -2500,6 +2632,11 @@ class JigsawPuzzleGame extends FlameGame
       pieces: updatedPieces,
       extra: {...newState.extra, 'scatterMode': currentMode},
     );
+
+    // 关键修复：恢复快照后，统一执行视口越界安全收拢（Domain Clamp & Pullback），
+    // 确保任何因跨模式切换、分辨率改变或视口变动导致卡在屏幕边缘/托盘背后的拼合集群或棋盘碎片，
+    // 均被完整原子平移拉回到安全可视区域！
+    _pullbackOutOfBoundsClustersAndPieces();
 
     updatePieceVisibility(animateTray: false);
     updatePiecesStateAndPriorities();

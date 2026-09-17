@@ -18,7 +18,8 @@ class PuzzleEngine {
   /// 又不会在密集拖动时误触发旁边不相干的槽位。
   ///
   /// 注意：早期版本曾取 0.48，注释与代码一度不一致，调参时请以本常量实际值为准。
-  static const double defaultSnapRatio = 0.40;
+  /// 主源为 [puzzleSnapRatio]（puzzle_state.dart），通关容差/锁定窗口均由它派生。
+  static const double defaultSnapRatio = puzzleSnapRatio;
 
   /// 生成打散后的初始拼图棋盘状态（Scatter Pieces）。
   ///
@@ -226,15 +227,21 @@ class PuzzleEngine {
         currentPieces = _translateCluster(currentPieces, clusterId, dx, dy);
 
         // 锁定归一化标准坐标，消除累积浮点误差
+        // [容差同源] 锁定窗口取 min(0.05, snapDist)：足够吸收合法合并裂缝
+        // （级联合并/阶段二合并均要求误差 <= snapDist），又不至于在 24x24 等高片数下
+        // 把离槽位近 1.2 格宽（0.05）的成员硬拉到槽位造成跳变。
+        final lockEps = min(0.05, snapDist);
         var lockCount = 0;
         currentPieces = currentPieces.map((p) {
           if (p.clusterId == clusterId &&
               (!state.rotationEnabled || p.rot % 4 == 0)) {
             final tnx = p.targetNx(state.cols);
             final tny = p.targetNy(state.rows);
-            final dx = (p.nx - tnx).abs();
-            final dy = (p.ny - tny).abs();
-            if (dx <= 0.05 && dy <= 0.05) {
+            final dist = Point(
+              p.nx - tnx,
+              p.ny - tny,
+            ).distanceTo(const Point(0, 0));
+            if (dist <= lockEps) {
               lockCount++;
               return p.copyWith(nx: tnx, ny: tny);
             }
@@ -287,13 +294,32 @@ class PuzzleEngine {
           final alignDy = actualDy - expectedDy;
 
           // 主装配体保护判定：小集群平移对齐向大集群（定海神针机制）
-          final countA = activeClusterPieces.length;
-          final countB = currentPieces
+          // [槽位就位保护]：若一方已在正确槽位就位（isSolved），其为绝对定海神针，严禁平移；
+          // 仅当就位状态相同时，才按集群规模（countB >= countA）裁决。
+          final aHasSolved = activeClusterPieces.any(
+            (p) => p.isSolved(state.rows, state.cols),
+          );
+          final bClusterPieces = currentPieces
               .where((p) => p.clusterId == pB.clusterId)
-              .length;
+              .toList();
+          final bHasSolved = bClusterPieces.any(
+            (p) => p.isSolved(state.rows, state.cols),
+          );
 
-          if (countB >= countA) {
-            // 集群 B 规模更大（为主装配体），平移集群 A 向集群 B 对齐
+          final countA = activeClusterPieces.length;
+          final countB = bClusterPieces.length;
+
+          final bool aToB;
+          if (bHasSolved && !aHasSolved) {
+            aToB = true; // B 在槽位上，移动 A 向 B 对齐
+          } else if (aHasSolved && !bHasSolved) {
+            aToB = false; // A 在槽位上，移动 B 向 A 对齐
+          } else {
+            aToB = countB >= countA;
+          }
+
+          if (aToB) {
+            // 集群 B 为主装配体，平移集群 A 向集群 B 对齐
             currentPieces = _translateCluster(
               currentPieces,
               clusterId,
@@ -316,7 +342,7 @@ class PuzzleEngine {
                   .map((p) => p.id),
             );
           } else {
-            // 集群 A 规模更大（为主装配体），平移小集群 B 向集群 A 对齐，集群 A 纹丝不动
+            // 集群 A 为主装配体，平移小集群 B 向集群 A 对齐，集群 A 纹丝不动
             currentPieces = _translateCluster(
               currentPieces,
               pB.clusterId,
@@ -352,13 +378,21 @@ class PuzzleEngine {
     }
 
     // 3. 级联传递合并：检查是否同时触碰到了第三个集群并触发多重合并（严禁合并托盘碎片）
-    currentPieces = _mergeAllAdjacentClusters(
+    // [容差同源] 与阶段一/二共用同一 snapDist（欧氏），杜绝级联路径使用独立绝对常量
+    // 造成的“比吸附还远的碎片被合并/判定已就位”。
+    final (cascadePieces, didCascadeMerge) = _mergeAllAdjacentClusters(
       currentPieces,
       state.rows,
       state.cols,
       state.rotationEnabled,
       onBoardPieceIds: onBoardPieceIds,
+      epsilon: snapDist,
+      affectedPieceIds: affectedIds,
     );
+    currentPieces = cascadePieces;
+    if (didCascadeMerge) {
+      didMerge = true;
+    }
 
     final newState = state.copyWith(pieces: currentPieces);
     if (didSnap || didMerge || newState.isSolved) {
@@ -393,15 +427,21 @@ class PuzzleEngine {
   }
 
   /// 迭代扫描并合并所有空间接触且位置对齐的相邻碎片集群。
-  static List<PieceState> _mergeAllAdjacentClusters(
+  ///
+  /// 与阶段二（自由邻居合并）同一判定标准与同一对齐行为：
+  /// - 判定：欧氏 offsetError <= epsilon（epsilon 由调用方传入吸附阈值 snapDist）；
+  /// - 行为：先按「小集群向大集群、已就位槽位绝对保护」规则平移对齐（定海神针机制），再合并 clusterId；
+  /// - 同步：合并涉及的碎片 ID 全部记录至 [affectedPieceIds]，返回 (pieces, didMerge) 元组，消除裂缝与 UI 脱节。
+  static (List<PieceState>, bool) _mergeAllAdjacentClusters(
     List<PieceState> pieces,
     int rows,
     int cols,
     bool rotationEnabled, {
+    required double epsilon,
     Set<int>? onBoardPieceIds,
-    double epsilon = 0.035,
+    Set<int>? affectedPieceIds,
   }) {
-    final result = List<PieceState>.from(pieces);
+    var result = List<PieceState>.from(pieces);
 
     // Pre-compute cluster sizes (incrementally updated on each merge)
     final clusterSizes = <int, int>{};
@@ -409,6 +449,7 @@ class PuzzleEngine {
       clusterSizes[p.clusterId] = (clusterSizes[p.clusterId] ?? 0) + 1;
     }
 
+    var anyMerged = false;
     var changed = true;
 
     while (changed) {
@@ -435,13 +476,47 @@ class PuzzleEngine {
           final actualDx = pB.nx - pA.nx;
           final actualDy = pB.ny - pA.ny;
 
-          final dxErr = (actualDx - expectedDx).abs();
-          final dyErr = (actualDy - expectedDy).abs();
-          if (dxErr <= epsilon && dyErr <= epsilon) {
+          // [度量统一] 欧氏距离判定，与阶段二（自由邻居合并）完全一致
+          final offsetError = Point(
+            actualDx,
+            actualDy,
+          ).distanceTo(Point(expectedDx, expectedDy));
+          if (offsetError <= epsilon) {
+            // [槽位就位保护]：若一方已在正确槽位就位（isSolved），其为绝对定海神针，严禁平移；
+            // 仅当就位状态相同时，才按集群规模（countB >= countA）裁决。
+            final aHasSolved = result.any(
+              (p) => p.clusterId == pA.clusterId && p.isSolved(rows, cols),
+            );
+            final bHasSolved = result.any(
+              (p) => p.clusterId == pB.clusterId && p.isSolved(rows, cols),
+            );
+
             final countA = clusterSizes[pA.clusterId] ?? 0;
             final countB = clusterSizes[pB.clusterId] ?? 0;
-            final sourceId = countB >= countA ? pA.clusterId : pB.clusterId;
-            final targetId = countB >= countA ? pB.clusterId : pA.clusterId;
+
+            final bool aToB;
+            if (bHasSolved && !aHasSolved) {
+              aToB = true; // B 在槽位上，移动 A 向 B 对齐
+            } else if (aHasSolved && !bHasSolved) {
+              aToB = false; // A 在槽位上，移动 B 向 A 对齐
+            } else {
+              aToB = countB >= countA;
+            }
+
+            final sourceId = aToB ? pA.clusterId : pB.clusterId;
+            final targetId = aToB ? pB.clusterId : pA.clusterId;
+
+            // [裂缝修复] 合并前先平移对齐（小簇向大簇，定海神针规则），
+            // 消除级联路径残留偏移被永久固化的裂缝。
+            final alignDx = actualDx - expectedDx;
+            final alignDy = actualDy - expectedDy;
+            if (sourceId == pA.clusterId) {
+              // 平移集群 A（source）向集群 B（target）对齐（+alignDx 把 A 推向 B）
+              result = _translateCluster(result, sourceId, alignDx, alignDy);
+            } else {
+              // 平移集群 B（source）向集群 A（target）对齐（-alignDx 把 B 推向 A）
+              result = _translateCluster(result, sourceId, -alignDx, -alignDy);
+            }
             // In-place cluster ID remap (no new list allocation)
             for (var k = 0; k < result.length; k++) {
               if (result[k].clusterId == sourceId) {
@@ -452,6 +527,13 @@ class PuzzleEngine {
             clusterSizes[targetId] =
                 (clusterSizes[targetId] ?? 0) + (clusterSizes[sourceId] ?? 0);
             clusterSizes.remove(sourceId);
+
+            // [UI与动画同步] 将新合并集群的所有碎片加入 affectedPieceIds，驱动 Flame 层调用 animateTo 落位
+            affectedPieceIds?.addAll(
+              result.where((p) => p.clusterId == targetId).map((p) => p.id),
+            );
+
+            anyMerged = true;
             changed = true;
             break;
           }
@@ -460,7 +542,7 @@ class PuzzleEngine {
       }
     }
 
-    return result;
+    return (result, anyMerged);
   }
 
   /// 将单块碎片或其所属的整个集群顺时针旋转 90°。

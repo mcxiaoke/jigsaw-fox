@@ -2383,4 +2383,172 @@ void main() {
       }
     }
   });
+
+  test('托盘模式下扫把一键收拢棋盘上的游离单片回托盘', () async {
+    final img = await _decodePng();
+    final game = JigsawPuzzleGame(
+      image: img,
+      rows: 3,
+      cols: 3,
+      onSolved: () {},
+    );
+    game.onGameResize(Vector2(600, 800));
+    await game.onLoad();
+
+    // 拖出第 0 块碎片到棋盘中央并松手
+    final p0 = game.children.whereType<PuzzlePieceComponent>().first;
+    game.startHoldingPiece(p0, 0.5, 0.5);
+    game.updateHoldingPiecePosition(Vector2(300, 300));
+    game.dropHoldingPiece();
+
+    expect(p0.isInTray, isFalse, reason: '拖到棋盘中央松手后 isInTray 应为 false');
+
+    // 点击扫把一键整理
+    game.organizeTray();
+
+    expect(p0.isInTray, isTrue, reason: '扫把整理后棋盘游离单片应被收回托盘');
+    final p0State = game.boardState.pieceById(p0.id);
+    expect(p0State.ny, greaterThan(1.10), reason: '收回托盘后归一化 Y 应处于托盘区域内');
+  });
+
+  test('托盘模式下扫把将越出屏幕右侧边缘的多片拼合集群拉回安全视口', () async {
+    final img = await _decodePng();
+    final game = JigsawPuzzleGame(
+      image: img,
+      rows: 3,
+      cols: 3,
+      onSolved: () {},
+    );
+    game.onGameResize(Vector2(600, 800));
+    await game.onLoad();
+
+    final p0 = game.children.whereType<PuzzlePieceComponent>().first;
+    final p1 = game.children.whereType<PuzzlePieceComponent>().elementAt(1);
+
+    // 人工合并 p0 与 p1 为多片集群（clusterId=99）并移到右侧屏幕外
+    p0.clusterId = 99;
+    p1.clusterId = 99;
+    p0.isInTray = false;
+    p1.isInTray = false;
+    game.boardState = game.boardState.copyWith(
+      pieces: game.boardState.pieces.map((p) {
+        if (p.id == p0.id || p.id == p1.id) {
+          return p.copyWith(clusterId: 99);
+        }
+        return p;
+      }).toList(),
+    );
+
+    // 将集群推到右边界外（580 + pieceSize.x 远超出 600 - 8）
+    p0.position.setValues(550, 300);
+    p1.position.setValues(550 + game.pieceSize.x, 300);
+
+    // 点击扫把整理
+    game.organizeTray();
+
+    // 验证：集群未被拆散，且整体被拉回安全可视区（maxX <= 600 - 8 = 592）
+    expect(p0.clusterId, equals(99));
+    expect(p1.clusterId, equals(99));
+    final clusterMaxX = max(
+      p0.position.x + p0.size.x * p0.scale.x,
+      p1.position.x + p1.size.x * p1.scale.x,
+    );
+    expect(
+      clusterMaxX,
+      lessThanOrEqualTo(600.0 - 8.0 + 0.1),
+      reason: '多片集群右边缘应被拉回视口安全边距 592px 之内',
+    );
+  });
+
+  test('读档恢复越界多片集群自动执行 Pullback 安全拉回可视区', () async {
+    final img = await _decodePng();
+    final gameInit = JigsawPuzzleGame(
+      image: img,
+      rows: 3,
+      cols: 3,
+      scatterMode: 'tabletop',
+      onSolved: () {},
+    );
+    gameInit.onGameResize(Vector2(600, 800));
+    await gameInit.onLoad();
+
+    // 构造一个在屏幕右侧下方的 2 片集群快照（nx=1.25/1.35, ny=0.5）
+    final jsonStr = gameInit.exportSnapshotJson();
+    final map = jsonDecode(jsonStr) as Map<String, dynamic>;
+    final piecesList = (map['pieces'] as List<dynamic>)
+        .map((e) => Map<String, dynamic>.from(e as Map))
+        .toList();
+    // 关键：PieceState 的 clusterId 在 JSON 中序列化为 'g'
+    piecesList[0]['g'] = 88;
+    piecesList[0]['nx'] = 1.25;
+    piecesList[0]['ny'] = 0.5;
+    piecesList[1]['g'] = 88;
+    piecesList[1]['nx'] = 1.35;
+    piecesList[1]['ny'] = 0.5;
+    map['pieces'] = piecesList;
+    map['scatterMode'] = 'tray';
+
+    // 在托盘模式下加载该快照
+    final gameRestored = JigsawPuzzleGame(
+      image: img,
+      rows: 3,
+      cols: 3,
+      initialSnapshotJson: jsonEncode(map),
+      onSolved: () {},
+    );
+    gameRestored.onGameResize(Vector2(600, 800));
+    await gameRestored.onLoad();
+
+    final restoredPieces = gameRestored.children
+        .whereType<PuzzlePieceComponent>()
+        .where((p) => p.clusterId == 88)
+        .toList();
+    expect(restoredPieces.length, equals(2));
+
+    var maxX = 0.0;
+    for (final p in restoredPieces) {
+      final right = p.position.x + p.size.x * p.scale.x;
+      if (right > maxX) maxX = right;
+    }
+    expect(
+      maxX,
+      lessThanOrEqualTo(600.0 - 8.0 + 0.1),
+      reason: '快照中越界的多片集群在恢复后应被 Pullback 安全拉回到屏幕内',
+    );
+  });
+
+  test('手势物理防御：isInTray 异常为 true 但在棋盘上的碎片不会被拦截为托盘滚动', () async {
+    final img = await _decodePng();
+    final game = JigsawPuzzleGame(
+      image: img,
+      rows: 2,
+      cols: 2,
+      onSolved: () {},
+    );
+    game.onGameResize(Vector2(400, 800));
+    await game.onLoad();
+
+    final p = game.children.whereType<PuzzlePieceComponent>().first;
+    // 物理位置在棋盘中央，但假设状态异常标记为 isInTray = true
+    p.position.setValues(200, 200);
+    p.isInTray = true;
+
+    // 校验物理托盘区域判断：棋盘位置 (200, 200) 绝不在托盘区域内
+    expect(game.isPointInTrayArea(p.position), isFalse);
+
+    // 校验物理托盘区域判断：处于托盘 Y 范围（trayPosition.y 处）的碎片判定在托盘内
+    expect(game.isPointInTrayArea(game.trayPosition), isTrue);
+
+    // 桌面模式下，任何坐标都不属于托盘
+    final gameTabletop = JigsawPuzzleGame(
+      image: img,
+      rows: 2,
+      cols: 2,
+      scatterMode: 'tabletop',
+      onSolved: () {},
+    );
+    gameTabletop.onGameResize(Vector2(400, 800));
+    await gameTabletop.onLoad();
+    expect(gameTabletop.isPointInTrayArea(Vector2(200, 750)), isFalse);
+  });
 }
