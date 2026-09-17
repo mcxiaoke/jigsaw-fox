@@ -14,6 +14,7 @@ import threading
 import unittest
 from pathlib import Path
 from unittest import mock
+import urllib.request
 
 import release_app
 
@@ -23,6 +24,8 @@ from release_app import (
     get_pubspec_version,
     fetch_remote_stream_and_verify,
     flatten_platform_entries,
+    check_remote_head,
+    cmd_verify_remote,
     _app_release_assets,
     _missing_assets,
 )
@@ -172,6 +175,149 @@ class TestReleaseApp(unittest.TestCase):
             self.assertIn("404", str(cm.exception))
 
             httpd.shutdown()
+
+    def test_check_remote_head(self):
+        class HeadHandler(http.server.BaseHTTPRequestHandler):
+            def do_HEAD(self):
+                if self.path == "/test.apk":
+                    self.send_response(200)
+                    self.send_header("Content-Length", "1024")
+                    self.end_headers()
+                else:
+                    self.send_response(404)
+                    self.end_headers()
+
+            def log_message(self, format, *args):
+                pass
+
+        with socketserver.TCPServer(("127.0.0.1", 0), HeadHandler) as httpd:
+            port = httpd.server_address[1]
+            t = threading.Thread(target=httpd.serve_forever, daemon=True)
+            t.start()
+            base_url = f"http://127.0.0.1:{port}"
+
+            # 1. 成功匹配大小
+            check_remote_head(f"{base_url}/test.apk", expected_size=1024)
+
+            # 2. 大小不匹配
+            with self.assertRaises(ValueError) as cm:
+                check_remote_head(f"{base_url}/test.apk", expected_size=2048)
+            self.assertIn("远端文件大小不匹配", str(cm.exception))
+
+            # 3. 404
+            with self.assertRaises(ValueError) as cm:
+                check_remote_head(f"{base_url}/nonexistent.apk", expected_size=1024)
+            self.assertIn("404", str(cm.exception))
+
+            httpd.shutdown()
+
+    def test_cmd_verify_remote_uses_head_without_downloading(self):
+        fake_manifest = {
+            "version": "1.0.5",
+            "versionCode": 6,
+            "platforms": {
+                "android": {
+                    "arm64-v8a": {
+                        "url": "app/1.0.5-6/android/JigsawFox-1.0.5-arm64-v8a.apk",
+                        "sha256": "fake_hash_1",
+                        "size": 12345,
+                        "mirrors": ["https://mirror.example.com/arm64.apk"],
+                    }
+                },
+                "windows": {
+                    "url": "app/1.0.5-6/windows/JigsawFox-1.0.5-windows-x64.zip",
+                    "sha256": "fake_hash_2",
+                    "size": 67890,
+                },
+            },
+        }
+
+        checked_urls = []
+
+        def fake_head(url, expected_size, timeout=30, tag=""):
+            checked_urls.append((url, expected_size, tag))
+
+        with mock.patch(
+            "release_app.fetch_remote_updates_json", return_value=fake_manifest
+        ), mock.patch(
+            "release_app.check_remote_head", side_effect=fake_head
+        ), mock.patch(
+            "release_app.fetch_remote_stream_and_verify"
+        ) as mock_fetch_stream, mock.patch(
+            "release_app.verify_apk_binary"
+        ) as mock_verify_apk:
+            cmd_verify_remote("http://test.com/updates.json")
+
+            # 确保绝对没有调用流式二进制下载或 APK 验签
+            mock_fetch_stream.assert_not_called()
+            mock_verify_apk.assert_not_called()
+
+            # 确保对所有产物及其镜像都调用了 HEAD 检查
+            self.assertEqual(len(checked_urls), 3)
+            self.assertEqual(
+                checked_urls[0],
+                (
+                    "https://jigsawdata.umao.top/app/1.0.5-6/android/JigsawFox-1.0.5-arm64-v8a.apk",
+                    12345,
+                    "android/arm64-v8a][main",
+                ),
+            )
+            self.assertEqual(
+                checked_urls[1],
+                (
+                    "https://mirror.example.com/arm64.apk",
+                    12345,
+                    "android/arm64-v8a][mirror-1",
+                ),
+            )
+            self.assertEqual(
+                checked_urls[2],
+                (
+                    "https://jigsawdata.umao.top/app/1.0.5-6/windows/JigsawFox-1.0.5-windows-x64.zip",
+                    67890,
+                    "windows][main",
+                ),
+            )
+
+    def test_build_http_opener_respects_proxy_env(self):
+        # 1. 设置 HTTP_PROXY / HTTPS_PROXY 时，opener 包含对应 ProxyHandler
+        with mock.patch.dict(
+            os.environ,
+            {
+                "HTTP_PROXY": "http://proxy.test:8080",
+                "HTTPS_PROXY": "http://secure-proxy.test:8443",
+            },
+            clear=True,
+        ):
+            opener = release_app._build_http_opener()
+            proxy_handlers = [
+                h for h in opener.handlers if isinstance(h, urllib.request.ProxyHandler)
+            ]
+            self.assertTrue(len(proxy_handlers) > 0)
+            self.assertEqual(
+                proxy_handlers[0].proxies.get("http"), "http://proxy.test:8080"
+            )
+            self.assertEqual(
+                proxy_handlers[0].proxies.get("https"), "http://secure-proxy.test:8443"
+            )
+
+        # 2. 设置 ALL_PROXY 时，自动映射到 http 与 https
+        with mock.patch.dict(
+            os.environ,
+            {"ALL_PROXY": "http://all-proxy.test:1080"},
+            clear=True,
+        ):
+            opener = release_app._build_http_opener()
+            proxy_handlers = [
+                h for h in opener.handlers if isinstance(h, urllib.request.ProxyHandler)
+            ]
+            self.assertTrue(len(proxy_handlers) > 0)
+            self.assertEqual(
+                proxy_handlers[0].proxies.get("http"), "http://all-proxy.test:1080"
+            )
+            self.assertEqual(
+                proxy_handlers[0].proxies.get("https"), "http://all-proxy.test:1080"
+            )
 
     def test_app_release_assets(self):
         # 仅收集收敛后的发布产物（arm64-v8a / armeabi-v7a APK、windows zip、SHA256SUMS.txt），

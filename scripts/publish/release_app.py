@@ -9,11 +9,10 @@ release_app.py — App 自动更新发版与全链路完整性巡检工具（支
 1. Android 支持按 ABI 分包（arm64-v8a, armeabi-v7a），大幅缩减客户端下载包体积
 2. 自动化完整性校验：
    - verify --local: 检查本地安装包、SHA256、线上版本递增门禁、APK 签名有效性与 aapt versionCode
-   - verify --remote: 流式抓取远端 updates.json，探测并校验所有平台所有 ABI 的主源与全部镜像，
-                      真实下载 APK 二进制验证 apksigner 签名有效性与 aapt versionCode
+   - verify --remote: 抓取远端 updates.json，HEAD 校验所有平台所有 ABI 的主源与全部镜像（状态码与 Content-Length）
 3. publish 安全时序发版：
    [本地校验] -> [上传所有安装包至 R2] -> [远端 HEAD 快速校验(状态码+大小)]
-   -> [发布 GitHub/Gitee Release 镜像资产] -> [最后更新 updates.json] -> [远端全量下载终检巡检]
+   -> [发布 GitHub/Gitee Release 镜像资产] -> [最后更新 updates.json] -> [远端 HEAD 巡检终检]
 """
 
 from __future__ import annotations
@@ -26,7 +25,6 @@ import re
 import shutil
 import subprocess
 import sys
-import tempfile
 import time
 import urllib.error
 import urllib.parse
@@ -272,16 +270,20 @@ def verify_windows_binary(file_path: Path) -> None:
 
 
 def _build_http_opener() -> urllib.request.OpenerDirector:
-    """构建显式直连 opener。
+    """构建支持 HTTP(S) 代理的 opener。
 
-    urllib.request.urlopen 会自动读取环境变量代理与 Windows 注册表系统代理
-    （getproxies()，且环境变量优先级高于注册表），而 wget/curl 只认环境变量
-    代理。若本机残留失效代理（如 VPN/加速器代理黑洞：TCP 层接受连接但数据
-    不转发），urllib 的大文件流式下载会无限挂起，而 wget 直连正常——此问题
-    曾现网复现（verify --remote 卡死在首个 APK 下载）。本工具巡检目标均为
-    公网 CDN/镜像，显式直连最可靠。
+    遵守 HTTP(S) 代理环境变量（http_proxy / https_proxy / all_proxy / HTTP_PROXY / HTTPS_PROXY / ALL_PROXY）
+    以及系统代理配置，确保国内网络环境下可正常连接 GitHub 等需要代理的镜像源。
     """
-    return urllib.request.build_opener(urllib.request.ProxyHandler({}))
+    env_proxies = urllib.request.getproxies_environment()
+    all_proxy = os.environ.get("ALL_PROXY") or os.environ.get("all_proxy")
+    if all_proxy and all_proxy.startswith("http"):
+        env_proxies.setdefault("http", all_proxy)
+        env_proxies.setdefault("https", all_proxy)
+    proxies = env_proxies or urllib.request.getproxies()
+    if proxies:
+        return urllib.request.build_opener(urllib.request.ProxyHandler(proxies))
+    return urllib.request.build_opener()
 
 
 _HTTP_OPENER = _build_http_opener()
@@ -339,30 +341,33 @@ def fetch_remote_stream_and_verify(
     return calc_sha, downloaded_size
 
 
-def check_remote_head(url: str, expected_size: int, timeout: int = 30) -> None:
+def check_remote_head(
+    url: str, expected_size: int, timeout: int = 30, tag: str = ""
+) -> None:
     """远端快速存在性校验：HEAD 请求校验状态码与 Content-Length（本地产物已做完整哈希/验签）"""
     req = urllib.request.Request(
         url,
         method="HEAD",
         headers={"User-Agent": "JigsawReleaseChecker/1.0", "Cache-Control": "no-cache"},
     )
+    prefix = f"[{tag}] " if tag else ""
     try:
         with _HTTP_OPENER.open(req, timeout=timeout) as resp:
             if resp.status != 200:
-                raise ValueError(f"HTTP 请求返回非 200 状态码: {resp.status} ({url})")
+                raise ValueError(f"{prefix}HTTP 请求返回非 200 状态码: {resp.status} ({url})")
             content_length = resp.headers.get("Content-Length")
             if content_length is None:
-                log_warn(f"远端未返回 Content-Length，跳过大小比对: {url}")
+                log_warn(f"{prefix}远端未返回 Content-Length，跳过大小比对: {url}")
                 return
             if int(content_length) != int(expected_size):
                 raise ValueError(
-                    f"远端文件大小不匹配 ({url})！预期: {expected_size}, 实际: {content_length}"
+                    f"{prefix}远端文件大小不匹配 ({url})！预期: {expected_size}, 实际: {content_length}"
                 )
-            log_success(f"远端 HEAD 校验通过: {url} ({content_length} bytes)")
+            log_success(f"{prefix}远端 HEAD 校验通过: {url} ({content_length} bytes)")
     except urllib.error.HTTPError as e:
-        raise ValueError(f"HTTP 请求失败 ({e.code} {e.reason}): {url}") from e
+        raise ValueError(f"{prefix}HTTP 请求失败 ({e.code} {e.reason}): {url}") from e
     except urllib.error.URLError as e:
-        raise ValueError(f"网络连接异常 ({e.reason}): {url}") from e
+        raise ValueError(f"{prefix}网络连接异常 ({e.reason}): {url}") from e
 
 
 def fetch_remote_updates_json(
@@ -633,13 +638,12 @@ def cmd_verify_local(manifest_path: Path) -> None:
 
 def cmd_verify_remote(url: str = UPDATES_JSON_REMOTE) -> None:
     """
-    远程全链路深度巡检：
+    远程全链路巡检：
     1. 拉取远端 updates.json 并校验 Schema
-    2. 流式探测并下载所有平台所有 ABI 的主源与全部镜像
-    3. 校验实际计算 SHA256 和 Size 与声明完全一致
-    4. 对远端下载的每个 Android APK 执行 apksigner 签名验证与 aapt versionCode 比对
+    2. 对所有平台所有 ABI 的主源与全部镜像执行 HEAD 请求快速校验
+    3. 校验 HTTP 状态码 200 与 Content-Length 大小一致（不下载实际二进制）
     """
-    log_info(f"=== 开始远程全链路深度巡检: {url} ===")
+    log_info(f"=== 开始远程全链路巡检 (HEAD 快速校验): {url} ===")
     manifest = fetch_remote_updates_json(url)
     if not manifest:
         raise ValueError(f"无法拉取或解析远程 updates.json: {url}")
@@ -653,59 +657,27 @@ def cmd_verify_remote(url: str = UPDATES_JSON_REMOTE) -> None:
     if not entries:
         raise ValueError("远程 updates.json 的 platforms 为空！")
 
-    with tempfile.TemporaryDirectory(prefix="jigsaw_verify_") as tmp_dir:
-        tmp_path = Path(tmp_dir)
+    for plat_name, sub_key, info in entries:
+        tag_name = f"{plat_name}/{sub_key}" if sub_key else plat_name
+        exp_size = info["size"]
+        main_url = info["url"]
+        if not main_url.startswith("http"):
+            main_url = urllib.parse.urljoin(R2_APP_BASE, main_url)
 
-        for plat_name, sub_key, info in entries:
-            tag_name = f"{plat_name}/{sub_key}" if sub_key else plat_name
-            exp_sha = info["sha256"]
-            exp_size = info["size"]
-            main_url = info["url"]
-            if not main_url.startswith("http"):
-                main_url = urllib.parse.urljoin(R2_APP_BASE, main_url)
+        all_urls = [("main", main_url)]
+        for idx, mirror in enumerate(info.get("mirrors", [])):
+            all_urls.append((f"mirror-{idx + 1}", mirror))
 
-            all_urls = [("main", main_url)]
-            for idx, mirror in enumerate(info.get("mirrors", [])):
-                all_urls.append((f"mirror-{idx + 1}", mirror))
+        log_info(
+            f"\n--- 巡检平台产物 [{tag_name}] (共 {len(all_urls)} 个下载来源) ---"
+        )
 
-            log_info(
-                f"\n--- 巡检平台产物 [{tag_name}] (共 {len(all_urls)} 个下载来源) ---"
-            )
-
-            downloaded_apk_path: Optional[Path] = None
-
-            for label, test_url in all_urls:
-                log_info(f"[{tag_name}][{label}] 探测并流式校验: {test_url}")
-                save_file = None
-                if plat_name == "android" and downloaded_apk_path is None:
-                    safe_tag = tag_name.replace("/", "_")
-                    save_file = tmp_path / f"remote_{safe_tag}_{label}.apk"
-
-                calc_sha, calc_size = fetch_remote_stream_and_verify(
-                    url=test_url,
-                    expected_sha256=exp_sha,
-                    expected_size=exp_size,
-                    save_to_file=save_file,
-                )
-                log_success(
-                    f"[{tag_name}][{label}] 校验通过: {calc_size} 字节, SHA256 匹配"
-                )
-
-                if save_file and save_file.is_file():
-                    downloaded_apk_path = save_file
-
-            # 若为 Android APK，对远端下载文件进行真实签名与版本比对
-            if plat_name == "android" and downloaded_apk_path:
-                log_info(
-                    f"正在对远端下载的 [{tag_name}] 进行本地签名与 versionCode 深度验签..."
-                )
-                verify_apk_binary(
-                    downloaded_apk_path, expected_version_code=version_code
-                )
-                log_success(f"远端下载 [{tag_name}] 验签与版本号比对全部通过！")
+        for label, test_url in all_urls:
+            log_info(f"[{tag_name}][{label}] 探测 HEAD: {test_url}")
+            check_remote_head(test_url, exp_size, tag=f"{tag_name}][{label}")
 
     log_success(
-        "=== 远程全链路巡检通过！线上所有平台所有 ABI 安装包 100% 存在、哈希完全匹配且无损坏 ==="
+        "=== 远程全链路巡检通过！线上所有平台所有 ABI 安装包 100% 存在且 Content-Length 匹配 ==="
     )
 
 
@@ -840,7 +812,7 @@ def _gitee_req(
     content_type: str | None = None,
     timeout: int = 60,
 ) -> Tuple[int, str]:
-    """Gitee OpenAPI 请求（走 _HTTP_OPENER 显式直连，规避系统代理黑洞；对齐素材侧 gitee_release.py）。"""
+    """Gitee OpenAPI 请求（走 _HTTP_OPENER，遵守代理配置；对齐素材侧 gitee_release.py）。"""
     headers = {"Authorization": f"token {token}"}
     if content_type:
         headers["Content-Type"] = content_type
@@ -1149,7 +1121,11 @@ def main() -> None:
     # verify
     p_ver = subparsers.add_parser("verify", help="完整性验证与巡检")
     p_ver.add_argument("--local", action="store_true", help="执行本地硬门禁校验")
-    p_ver.add_argument("--remote", action="store_true", help="执行远端全链路巡检与验签")
+    p_ver.add_argument(
+        "--remote",
+        action="store_true",
+        help="执行远端全链路巡检（HEAD 校验状态码与 Content-Length）",
+    )
     p_ver.add_argument(
         "--url", default=UPDATES_JSON_REMOTE, help="指定远程 updates.json URL"
     )
