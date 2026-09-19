@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:jigsawpuzzle/data/progress_store.dart';
 import 'package:jigsawpuzzle/data/resume_helper.dart';
 import 'package:jigsawpuzzle/data/snapshot_store.dart';
 import 'package:jigsawpuzzle/l10n/gen/strings.g.dart';
@@ -53,7 +54,20 @@ class _CollectionLevelsPageState extends State<CollectionLevelsPage> {
   void initState() {
     super.initState();
     _currentCollection = widget.collection;
+    ProgressStore.instance.progressNotifier.addListener(_onProgressChanged);
     unawaited(_loadLevels());
+  }
+
+  @override
+  void dispose() {
+    ProgressStore.instance.progressNotifier.removeListener(_onProgressChanged);
+    super.dispose();
+  }
+
+  void _onProgressChanged() {
+    if (mounted) {
+      setState(() {});
+    }
   }
 
   Future<void> _loadLevels() async {
@@ -431,124 +445,120 @@ class _CollectionLevelsPageState extends State<CollectionLevelsPage> {
     AppPalette palette,
     AppTextStyles styles,
   ) {
-    return FutureBuilder(
-      future: ResumeHelper.loadProgress(level.id),
-      builder: (context, snapshot) {
-        final progress = snapshot.data;
-        final isCompleted = progress?.isCompleted == true;
-        final percent = progress?.progressPercent ?? 0;
-        final isNew = level.isNew && !isCompleted;
+    // D-13 同步读取内存进度，消除 FutureBuilder 闪烁与每帧异步读盘
+    final progress = ProgressStore.instance.getLevelProgress(level.id);
+    final isCompleted = progress.isCompleted;
+    final percent = progress.progressPercent;
+    final isNew = level.isNew && !isCompleted;
 
-        return InkWell(
-          onTap: () => _openLevel(level, index),
+    return InkWell(
+      onTap: () => _openLevel(level, index),
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        decoration: BoxDecoration(
+          color: palette.surfaceContainer,
           borderRadius: BorderRadius.circular(12),
-          child: Container(
-            decoration: BoxDecoration(
-              color: palette.surfaceContainer,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: palette.divider),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.08),
-                  blurRadius: 6,
-                  offset: const Offset(0, 2),
-                ),
-              ],
+          border: Border.all(color: palette.divider),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.08),
+              blurRadius: 6,
+              offset: const Offset(0, 2),
             ),
-            clipBehavior: Clip.antiAlias,
-            child: Stack(
-              fit: StackFit.expand,
-              children: [
-                LazyLevelImage(level: level),
-                // 渐变保护
-                Container(
+          ],
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            LazyLevelImage(level: level),
+            // 渐变保护
+            Container(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [
+                    Colors.black.withValues(alpha: 0.45),
+                    Colors.transparent,
+                    Colors.black.withValues(alpha: 0.55),
+                  ],
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  stops: const [0.0, 0.45, 1.0],
+                ),
+              ),
+            ),
+            // NEW 角标 (与首页 Home 保持一致)
+            if (isNew)
+              Positioned(
+                left: 0,
+                top: 8,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 3,
+                  ),
+                  decoration: const BoxDecoration(
+                    color: Color(0xFFC97A2E),
+                    borderRadius: BorderRadius.only(
+                      topRight: Radius.circular(4),
+                      bottomRight: Radius.circular(4),
+                    ),
+                  ),
+                  child: const Text(
+                    'New',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w800,
+                      fontStyle: FontStyle.italic,
+                    ),
+                  ),
+                ),
+              ),
+            // 右上角状态 (完成/进度)
+            if (isCompleted)
+              Positioned(
+                right: 8,
+                top: 8,
+                child: Container(
+                  padding: const EdgeInsets.all(3.5),
+                  decoration: const BoxDecoration(
+                    color: Colors.green,
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    PhosphorIconsBold.check,
+                    color: Colors.white,
+                    size: 11,
+                  ),
+                ),
+              )
+            else if (percent > 0)
+              Positioned(
+                right: 8,
+                top: 8,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 6,
+                    vertical: 2,
+                  ),
                   decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: [
-                        Colors.black.withValues(alpha: 0.45),
-                        Colors.transparent,
-                        Colors.black.withValues(alpha: 0.55),
-                      ],
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
-                      stops: const [0.0, 0.45, 1.0],
+                    color: Colors.black54,
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Text(
+                    '$percent%',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 10,
+                      fontWeight: FontWeight.bold,
                     ),
                   ),
                 ),
-                // NEW 角标 (与首页 Home 保持一致)
-                if (isNew)
-                  Positioned(
-                    left: 0,
-                    top: 8,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 10,
-                        vertical: 3,
-                      ),
-                      decoration: const BoxDecoration(
-                        color: Color(0xFFC97A2E),
-                        borderRadius: BorderRadius.only(
-                          topRight: Radius.circular(4),
-                          bottomRight: Radius.circular(4),
-                        ),
-                      ),
-                      child: const Text(
-                        'New',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 11,
-                          fontWeight: FontWeight.w800,
-                          fontStyle: FontStyle.italic,
-                        ),
-                      ),
-                    ),
-                  ),
-                // 右上角状态 (完成/进度)
-                if (isCompleted)
-                  Positioned(
-                    right: 8,
-                    top: 8,
-                    child: Container(
-                      padding: const EdgeInsets.all(3.5),
-                      decoration: const BoxDecoration(
-                        color: Colors.green,
-                        shape: BoxShape.circle,
-                      ),
-                      child: const Icon(
-                        PhosphorIconsBold.check,
-                        color: Colors.white,
-                        size: 11,
-                      ),
-                    ),
-                  )
-                else if (percent > 0)
-                  Positioned(
-                    right: 8,
-                    top: 8,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 6,
-                        vertical: 2,
-                      ),
-                      decoration: BoxDecoration(
-                        color: Colors.black54,
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                      child: Text(
-                        '$percent%',
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 10,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
-                  ),
-              ],
-            ),
-          ),
-        );
-      },
+              ),
+          ],
+        ),
+      ),
     );
   }
 }

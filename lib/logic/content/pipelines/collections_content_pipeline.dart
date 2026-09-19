@@ -600,7 +600,12 @@ class CollectionsContentPipeline {
     }
 
     final next = Map<String, double>.from(progressNotifier.value);
-    next[id] = progress;
+    if (status == CollectionDownloadStatus.error ||
+        status == CollectionDownloadStatus.notDownloaded) {
+      next.remove(id);
+    } else {
+      next[id] = progress;
+    }
     progressNotifier.value = next;
   }
 

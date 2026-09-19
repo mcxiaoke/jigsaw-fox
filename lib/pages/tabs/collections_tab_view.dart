@@ -242,7 +242,15 @@ class _CollectionsTabViewState extends State<CollectionsTabView> {
     }).toList();
 
     return RefreshIndicator(
-      onRefresh: () async => _content.syncAll(),
+      onRefresh: () async {
+        try {
+          await _content.syncAll();
+          // best-effort：记录后降级继续
+          // ignore: avoid_catches_without_on_clauses
+        } catch (e, st) {
+          AppLogger.content.warning('Collections tab syncAll failed', e, st);
+        }
+      },
       color: palette.brand,
       child: CustomScrollView(
         physics: const AlwaysScrollableScrollPhysics(
@@ -412,11 +420,9 @@ class _CollectionsTabViewState extends State<CollectionsTabView> {
       valueListenable: _content.collections.progressNotifier,
       builder: (context, progressMap, _) {
         final downloadProgress = progressMap[col.id] ?? col.downloadProgress;
+        // D-12: 下载态严格以 downloadStatus 枚举为准，杜绝残留浮点进度导致永久"下载中"
         final isDownloading =
-            col.downloadStatus == CollectionDownloadStatus.downloading ||
-            (downloadProgress > 0 &&
-                downloadProgress < 1.0 &&
-                !col.isLocalDownloaded);
+            col.downloadStatus == CollectionDownloadStatus.downloading;
 
         final isZipNotDownloaded = col.isZipType && !col.isLocalDownloaded;
 

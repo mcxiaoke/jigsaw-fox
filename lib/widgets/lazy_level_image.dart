@@ -37,6 +37,8 @@ class LazyLevelImage extends StatefulWidget {
 class _LazyLevelImageState extends State<LazyLevelImage> {
   String? _resolvedPath;
   bool _failed = false;
+  int _resolveToken = 0;
+  DateTime? _lastFailureTime;
 
   @override
   void initState() {
@@ -48,19 +50,33 @@ class _LazyLevelImageState extends State<LazyLevelImage> {
   @override
   void didUpdateWidget(covariant LazyLevelImage oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.level.id != widget.level.id ||
-        oldWidget.level.imagePathOrUrl != widget.level.imagePathOrUrl ||
-        (_failed && _resolvedPath == null)) {
+    final isDifferentLevel =
+        oldWidget.level.id != widget.level.id ||
+        oldWidget.level.imagePathOrUrl != widget.level.imagePathOrUrl;
+
+    if (isDifferentLevel) {
       _resolvedPath = null;
       _failed = false;
+      _lastFailureTime = null;
       _checkSyncHit();
       unawaited(_resolve());
+    } else if (_failed && _resolvedPath == null) {
+      // D-11 防重试风暴：同关卡失败后，非用户主动点击时设置 10 秒冷却退避
+      final now = DateTime.now();
+      if (_lastFailureTime == null ||
+          now.difference(_lastFailureTime!) >= const Duration(seconds: 10)) {
+        _failed = false;
+        unawaited(_resolve());
+      }
     }
   }
 
   void _retry() {
     if (!mounted) return;
-    setState(() => _failed = false);
+    setState(() {
+      _failed = false;
+      _lastFailureTime = null;
+    });
     unawaited(_resolve());
   }
 
@@ -80,33 +96,49 @@ class _LazyLevelImageState extends State<LazyLevelImage> {
   }
 
   Future<void> _resolve() async {
+    final token = ++_resolveToken;
+    final targetLevel = widget.level;
     // P3-2：删除仅含注释、无任何行为的空 if 块。存在性校验统一由
     // LevelImageResolver.resolveLevelLocalPath 完成。
     try {
       final localPath = await LevelImageResolver.instance.resolveLevelLocalPath(
-        widget.level,
+        targetLevel,
       );
-      if (!mounted) return;
+      // D-11 代次校验：若已有更新的解析请求发出或已被复用，丢弃旧代次结果，防错图覆盖
+      if (!mounted || token != _resolveToken) return;
+
       // 若解析后仍是 http（下载失败），标记失败走 errorWidget
       if (localPath.startsWith('http')) {
         AppLogger.imageCache.warning(
           'LazyLevelImage resolve returned remote (download failed) '
-          'id=${widget.level.id} url=${AppLogger.sanitizeUrl(localPath)}',
+          'id=${targetLevel.id} url=${AppLogger.sanitizeUrl(localPath)}',
         );
-        setState(() => _failed = true);
+        setState(() {
+          _failed = true;
+          _lastFailureTime = DateTime.now();
+        });
         return;
       }
-      setState(() => _resolvedPath = localPath);
+      setState(() {
+        _resolvedPath = localPath;
+        _failed = false;
+        _lastFailureTime = null;
+      });
       // best-effort：记录后降级继续
       // ignore: avoid_catches_without_on_clauses
     } catch (e, st) {
       AppLogger.imageCache.warning(
         'LazyLevelImage resolve failed '
-        'id=${widget.level.id} path=${AppLogger.sanitizePath(widget.level.imagePathOrUrl)}',
+        'id=${targetLevel.id} path=${AppLogger.sanitizePath(targetLevel.imagePathOrUrl)}',
         e,
         st,
       );
-      if (mounted) setState(() => _failed = true);
+      if (mounted && token == _resolveToken) {
+        setState(() {
+          _failed = true;
+          _lastFailureTime = DateTime.now();
+        });
+      }
     }
   }
 
