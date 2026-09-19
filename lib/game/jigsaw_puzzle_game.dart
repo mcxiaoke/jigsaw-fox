@@ -121,7 +121,7 @@ class JigsawPuzzleGame extends FlameGame
   final String? initialSnapshotJson;
   final double initialGhostOpacity;
   final VoidCallback onSolved;
-  final VoidCallback? onPieceSnapped;
+  final ValueChanged<int>? onPieceSnapped;
   final ValueChanged<int>? onProgressChanged;
   final VoidCallback? onStateUpdated;
   final VoidCallback? onMoveMade;
@@ -1994,7 +1994,8 @@ class JigsawPuzzleGame extends FlameGame
     _checkEdgeCompleteAutoDismiss();
     missingPieceCheck();
 
-    onPieceSnapped?.call();
+    final snapCount = finalAffectedIds.isNotEmpty ? finalAffectedIds.length : 1;
+    onPieceSnapped?.call(snapCount);
     onProgressChanged?.call(solvedCount);
     onStateUpdated?.call();
 

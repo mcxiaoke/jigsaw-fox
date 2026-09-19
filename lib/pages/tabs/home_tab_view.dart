@@ -268,7 +268,7 @@ class _HomeTabViewState extends State<HomeTabView> {
             ),
           ),
         );
-        setState(() {});
+        if (mounted) setState(() {});
       },
       onStart: (diff) async {
         final dkey = SnapshotStore.difficultyKeyFor(diff);
@@ -288,7 +288,7 @@ class _HomeTabViewState extends State<HomeTabView> {
             ),
           ),
         );
-        setState(() {});
+        if (mounted) setState(() {});
       },
     );
   }

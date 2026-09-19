@@ -460,6 +460,7 @@ class _MyCenterTabViewState extends State<MyCenterTabView> {
       sourcePlatform: card.sourceLabel,
       completedPieceCounts: card.completedPieceCounts,
       onStart: (diff) async {
+        if (!mounted) return;
         await Navigator.of(context).push(
           MaterialPageRoute<void>(
             builder: (_) => GamePage(
@@ -469,10 +470,10 @@ class _MyCenterTabViewState extends State<MyCenterTabView> {
             ),
           ),
         );
-        unawaited(_loadAllData());
+        if (mounted) unawaited(_loadAllData());
       },
     );
-    unawaited(_loadAllData());
+    if (mounted) unawaited(_loadAllData());
   }
 
   /// P0-5（红线 R2）：仅用户长按主动清理单条记录时调用。禁止在任何自动路径

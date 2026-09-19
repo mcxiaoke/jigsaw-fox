@@ -368,12 +368,13 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
     }
   }
 
-  void _onPieceSnapped() {
+  void _onPieceSnapped(int count) {
     // snap 音效已前置到 JigsawPuzzleGame 吸附分支开头，避免同步逻辑阻塞导致超时丢音
     if (_repo.hapticEnabled) {
       unawaited(HapticFeedback.lightImpact());
     }
-    unawaited(_repo.recordSnapStats());
+    unawaited(_repo.recordSnapStats(pieceCount: count));
+    unawaited(AchievementService.instance.recordPieceSnapped(count: count));
   }
 
   /// 将 onProgressChanged / onStateUpdated 的 UI 刷新合并为一次 postFrameCallback，

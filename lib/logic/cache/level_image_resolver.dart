@@ -25,6 +25,7 @@ class LevelImageResolver {
 
   ContentHttpClient _httpClient = ContentHttpClient();
   final Map<String, Future<String>> _inFlight = <String, Future<String>>{};
+  final Map<String, String> _availableUrlCache = <String, String>{};
   String? _networkLevelsDir;
 
   @visibleForTesting
@@ -37,6 +38,7 @@ class LevelImageResolver {
       _httpClient = httpClientOverride;
     }
     _inFlight.clear();
+    _availableUrlCache.clear();
   }
 
   @visibleForTesting
@@ -112,6 +114,7 @@ class LevelImageResolver {
         );
         final downloaded = await _httpClient.downloadFile(url, targetPath);
         if (downloaded.existsSync() && downloaded.lengthSync() > 0) {
+          _availableUrlCache[url] = downloaded.path;
           AppLogger.content.info(
             'LevelImageResolver done $hash bytes=${downloaded.lengthSync()}',
           );
@@ -139,12 +142,15 @@ class LevelImageResolver {
     if (_networkLevelsDir == null || url.isEmpty || !url.startsWith('http')) {
       return null;
     }
+    final cached = _availableUrlCache[url];
+    if (cached != null) return cached;
     try {
       final hash = _hashUrl(url);
       final ext = _extensionForUrl(url);
       final targetPath = p.join(_networkLevelsDir!, 'net_$hash$ext');
       final file = File(targetPath);
       if (file.existsSync() && file.lengthSync() > 0) {
+        _availableUrlCache[url] = targetPath;
         return targetPath;
       }
     } catch (_) {}

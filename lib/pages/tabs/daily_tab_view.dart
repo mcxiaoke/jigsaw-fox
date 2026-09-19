@@ -52,12 +52,17 @@ class _DailyTabViewState extends State<DailyTabView> {
     final manager = AppContent.instance.manager;
     if (manager.availableDailyMonths.isEmpty) {
       unawaited(
-        manager.fetchDailyIndexMetadata().then((_) {
-          if (mounted) {
-            _cleanInvalidFoldPrefs();
-            setState(() {});
-          }
-        }),
+        manager
+            .fetchDailyIndexMetadata()
+            .then((_) {
+              if (mounted) {
+                _cleanInvalidFoldPrefs();
+                setState(() {});
+              }
+            })
+            .catchError((dynamic e, StackTrace st) {
+              AppLogger.daily.warning('fetchDailyIndexMetadata failed', e, st);
+            }),
       );
     }
   }
@@ -176,6 +181,7 @@ class _DailyTabViewState extends State<DailyTabView> {
       }
     }
 
+    if (!mounted) return;
     setState(() {
       _loadingMonths.add(yyyyMm);
       _failedMonths.remove(yyyyMm);
@@ -415,7 +421,7 @@ class _DailyTabViewState extends State<DailyTabView> {
             ),
           ),
         );
-        setState(() {});
+        if (mounted) setState(() {});
       },
       onStart: (diff) async {
         final dkey = SnapshotStore.difficultyKeyFor(diff);
@@ -435,7 +441,7 @@ class _DailyTabViewState extends State<DailyTabView> {
             ),
           ),
         );
-        setState(() {});
+        if (mounted) setState(() {});
       },
     );
   }

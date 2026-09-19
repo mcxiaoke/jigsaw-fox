@@ -473,10 +473,7 @@ class AchievementService {
       await _store.incrementCounter('daily_solved');
     }
 
-    // 6. 吸附碎片总数累加
-    if (actualPieces > 0) {
-      await _store.incrementCounter('total_snaps', actualPieces);
-    }
+    // 6. 吸附碎片总数已在局内吸附时实时累加（D-14），此处不再重复累加
 
     // 7. 条件型：0 提示
     if (hintsUsed == 0 || isFirstNoHintWin) {
@@ -512,6 +509,23 @@ class AchievementService {
       );
     }
     return newlyUnlocked;
+  }
+
+  /// 实时记录单次吸附的碎片数量（D-14：中途弃局或通关均实时准确累加）
+  Future<void> recordPieceSnapped({int count = 1}) async {
+    if (count <= 0) return;
+    try {
+      await _store.init();
+      await _store.incrementCounter('total_snaps', count);
+      final unlocked = await _evaluateAll();
+      if (unlocked.isNotEmpty) {
+        AppLogger.repo.info(
+          'Achievements unlocked on snap: ${unlocked.map((d) => d.id).join(',')}',
+        );
+      }
+    } catch (e, st) {
+      AppLogger.repo.warning('Achievement recordPieceSnapped failed', e, st);
+    }
   }
 
   final _claimingIds = <String>{};

@@ -154,7 +154,7 @@ class AppCachedImage extends StatelessWidget {
       final localPath = LevelImageResolver.instance.getUrlLocalPathIfAvailable(
         path,
       );
-      if (localPath != null && File(localPath).existsSync()) {
+      if (localPath != null) {
         return _wrapResize(FileImage(File(localPath)));
       }
     }
@@ -194,7 +194,7 @@ class AppCachedImage extends StatelessWidget {
       final localPath = LevelImageResolver.instance.getUrlLocalPathIfAvailable(
         path,
       );
-      if (localPath == null || !File(localPath).existsSync()) {
+      if (localPath == null) {
         return _NetworkImageLoader(
           url: path,
           width: width,
