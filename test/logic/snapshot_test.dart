@@ -155,5 +155,47 @@ void main() {
         throwsA(isA<FormatException>()),
       );
     });
+
+    test('inTray field serialization and backward compatibility', () {
+      // 1. 带 inTray=true
+      const pTray = PieceState(
+        id: 0,
+        r: 0,
+        c: 0,
+        nx: 0.1,
+        ny: 2.0,
+        clusterId: 0,
+        inTray: true,
+      );
+      final jsonTray = pTray.toJson();
+      expect(jsonTray['inTray'], isTrue);
+      final restoredTray = PieceState.fromJson(jsonTray);
+      expect(restoredTray.inTray, isTrue);
+
+      // 2. 兼容短键 't': true
+      final restoredShort = PieceState.fromJson(const {
+        'id': 1,
+        'r': 0,
+        'c': 1,
+        'nx': 0.5,
+        'ny': 2.0,
+        'g': 1,
+        'rot': 0,
+        't': true,
+      });
+      expect(restoredShort.inTray, isTrue);
+
+      // 3. 旧存档（无 inTray 键）：默认应为 false
+      final legacy = PieceState.fromJson(const {
+        'id': 2,
+        'r': 1,
+        'c': 0,
+        'nx': 0.2,
+        'ny': 0.3,
+        'g': 2,
+        'rot': 0,
+      });
+      expect(legacy.inTray, isFalse);
+    });
   });
 }

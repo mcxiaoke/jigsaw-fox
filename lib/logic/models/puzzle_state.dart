@@ -34,11 +34,23 @@ class PieceState {
     required this.ny,
     required this.clusterId,
     this.rot = 0,
+    this.inTray = false,
     this.extra = const {},
   });
 
   factory PieceState.fromJson(Map<String, dynamic> json) {
-    const known = {'id', 'r', 'c', 'nx', 'ny', 'g', 'clusterId', 'rot'};
+    const known = {
+      'id',
+      'r',
+      'c',
+      'nx',
+      'ny',
+      'g',
+      'clusterId',
+      'rot',
+      'inTray',
+      't',
+    };
     final extra = <String, dynamic>{};
     for (final e in json.entries) {
       if (!known.contains(e.key)) extra[e.key] = e.value;
@@ -51,6 +63,7 @@ class PieceState {
       ny: (json['ny'] as num).toDouble(),
       clusterId: (json['g'] ?? json['clusterId']) as int,
       rot: (json['rot'] ?? 0) as int,
+      inTray: (json['inTray'] ?? json['t']) == true,
       extra: extra,
     );
   }
@@ -77,6 +90,9 @@ class PieceState {
 
   /// Discrete orientation (0 = 0°, 1 = 90°, 2 = 180°, 3 = 270° clockwise).
   final int rot;
+
+  /// 托盘模式下是否仍停留在底部待拼托盘中（棋盘游离单片与已拼合碎片为 false）。
+  final bool inTray;
 
   /// 未来扩展保留字段：未知键透传，用于前瞻兼容（旧版本读新快照不丢字段）。
   final Map<String, dynamic> extra;
@@ -107,6 +123,7 @@ class PieceState {
     double? ny,
     int? clusterId,
     int? rot,
+    bool? inTray,
     Map<String, dynamic>? extra,
   }) {
     return PieceState(
@@ -117,6 +134,7 @@ class PieceState {
       ny: ny ?? this.ny,
       clusterId: clusterId ?? this.clusterId,
       rot: rot ?? this.rot,
+      inTray: inTray ?? this.inTray,
       extra: extra ?? this.extra,
     );
   }
@@ -131,6 +149,7 @@ class PieceState {
       'g': clusterId,
       'rot': rot,
     };
+    if (inTray) m['inTray'] = true;
     // 透传未来字段
     extra.forEach((k, v) {
       if (!m.containsKey(k)) m[k] = v;
@@ -149,14 +168,15 @@ class PieceState {
           nx == other.nx &&
           ny == other.ny &&
           clusterId == other.clusterId &&
-          rot == other.rot;
+          rot == other.rot &&
+          inTray == other.inTray;
 
   @override
-  int get hashCode => Object.hash(id, r, c, nx, ny, clusterId, rot);
+  int get hashCode => Object.hash(id, r, c, nx, ny, clusterId, rot, inTray);
 
   @override
   String toString() =>
-      'PieceState(id:$id, r:$r, c:$c, nx:${nx.toStringAsFixed(3)}, ny:${ny.toStringAsFixed(3)}, cluster:$clusterId, rot:$rot)';
+      'PieceState(id:$id, r:$r, c:$c, nx:${nx.toStringAsFixed(3)}, ny:${ny.toStringAsFixed(3)}, cluster:$clusterId, rot:$rot, inTray:$inTray)';
 }
 
 /// Immutable snapshot of the puzzle board.

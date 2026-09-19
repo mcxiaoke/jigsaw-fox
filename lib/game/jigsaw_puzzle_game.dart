@@ -350,6 +350,7 @@ class JigsawPuzzleGame extends FlameGame
         nx: normOut[0],
         ny: normOut[1],
         clusterId: id,
+        inTray: !isTabletop,
       );
       initialPieces.add(pState);
 
@@ -1770,6 +1771,7 @@ class JigsawPuzzleGame extends FlameGame
         nx: normOut[0],
         ny: normOut[1],
         clusterId: id,
+        inTray: !isTabletop,
       );
       initialPieces.add(pState);
 
@@ -1900,10 +1902,12 @@ class JigsawPuzzleGame extends FlameGame
     // 检查集群在被拖拽前的状态：若集群包含多块碎片或任一碎片在棋盘上，则集群整体归位于棋盘（严禁拆解集群）
     final isMultiCluster = clusterPieces.length > 1;
     final primaryState = _boardState.pieceById(piece.id);
-    final isPrimaryOnBoard = _isNormalizedOnBoard(
-      primaryState.nx,
-      primaryState.ny,
-    );
+    final isPrimaryOnBoard =
+        !primaryState.inTray &&
+        _isNormalizedOnBoard(
+          primaryState.nx,
+          primaryState.ny,
+        );
     final shouldStayOnBoard = isTabletop || isMultiCluster || isPrimaryOnBoard;
 
     for (final p in clusterPieces) {
@@ -2081,9 +2085,14 @@ class JigsawPuzzleGame extends FlameGame
           ny: out[1],
           clusterId: comp.clusterId,
           rot: comp.rot,
+          inTray: false,
         );
       }
-      return p.copyWith(clusterId: comp.clusterId, rot: comp.rot);
+      return p.copyWith(
+        clusterId: comp.clusterId,
+        rot: comp.rot,
+        inTray: true,
+      );
     }).toList();
 
     _boardState = _boardState.copyWith(pieces: updatedPieces);
@@ -2387,7 +2396,6 @@ class JigsawPuzzleGame extends FlameGame
     _trayOrder = newTrayOrder;
 
     _trayScrollX = 0.0;
-    final normOut = [0.0, 0.0];
     final updatedPiecesMap = <int, PieceState>{};
     var idx = 0;
 
@@ -2402,10 +2410,9 @@ class JigsawPuzzleGame extends FlameGame
 
       final targetPos = _getTrayPositionForIndex(idx);
       p.animateTo(targetPos, duration: 0.25);
-      _screenToNormalized(targetPos, normOut);
       updatedPiecesMap[p.id] = statePiece.copyWith(
-        nx: normOut[0],
-        ny: normOut[1],
+        inTray: true,
+        ny: max(statePiece.ny, 2.0),
       );
       idx++;
     }
@@ -2442,6 +2449,17 @@ class JigsawPuzzleGame extends FlameGame
             ny: p.r / rows,
             clusterId: comp.clusterId,
             rot: comp.rot,
+            inTray: false,
+          );
+        }
+        // 关键防护：托盘模式下的待拼托盘碎片（处于托盘内且在托盘物理交互区），
+        // 绝不能调用 _screenToNormalized，避免在棋盘高倍放大状态下把托盘屏幕绝对坐标转换为落入棋盘的归一化坐标！
+        if (!isTabletop && comp.isInTray && isPointInTrayArea(comp.position)) {
+          return p.copyWith(
+            clusterId: comp.clusterId,
+            rot: comp.rot,
+            inTray: true,
+            ny: max(p.ny, 2.0),
           );
         }
         _screenToNormalized(comp.position, out);
@@ -2450,6 +2468,7 @@ class JigsawPuzzleGame extends FlameGame
           ny: out[1],
           clusterId: comp.clusterId,
           rot: comp.rot,
+          inTray: false,
         );
       }
       return p;
@@ -2462,6 +2481,7 @@ class JigsawPuzzleGame extends FlameGame
             extra: {
               ..._boardState.extra,
               'scatterMode': isTabletop ? 'tabletop' : 'tray',
+              if (!isTabletop) 'trayOrder': _trayOrder,
             },
           )
           .toJson(),
@@ -2519,7 +2539,6 @@ class JigsawPuzzleGame extends FlameGame
     }
 
     final updatedPiecesMap = <int, PieceState>{};
-    final normOut = [0.0, 0.0];
 
     if (isTabletop) {
       // 当前为桌面模式：
@@ -2586,16 +2605,17 @@ class JigsawPuzzleGame extends FlameGame
         final inMultiCluster = (clusterSizes[p.clusterId] ?? 1) > 1;
         final isAdsorbedOrClustered = isSolved || inMultiCluster;
 
-        // 同模式继续时若单片原本放置在棋盘有效范围内，保持在棋盘上
-        final isLegacyOnBoardSingle =
-            !needsRealign && _isNormalizedOnBoard(p.nx, p.ny);
+        // 同模式继续时若单片非托盘碎片且原本放置在棋盘有效范围内，保持在棋盘上
+        final shouldStayOnBoard =
+            isAdsorbedOrClustered ||
+            (!needsRealign && !p.inTray && _isNormalizedOnBoard(p.nx, p.ny));
 
-        if (isAdsorbedOrClustered || isLegacyOnBoardSingle) {
+        if (shouldStayOnBoard) {
           comp.isInTray = false;
           comp.scale.setAll(_zoom);
           final targetScreenPos = _normalizedToScreen(p.nx, p.ny);
           comp.position.setFrom(targetScreenPos);
-          updatedPiecesMap[p.id] = p;
+          updatedPiecesMap[p.id] = p.copyWith(inTray: false);
         } else {
           comp.isInTray = true;
           comp.scale.setAll(_trayPieceScale);
@@ -2603,9 +2623,15 @@ class JigsawPuzzleGame extends FlameGame
         }
       }
 
-      // 维护托盘顺序
+      // 维护托盘顺序：优先从快照 extra 中读取保存的 trayOrder
+      final savedTrayOrder = (newState.extra['trayOrder'] as List<dynamic>?)
+          ?.map((e) => e as int)
+          .toList();
       final traySet = trayPieces.map((p) => p.id).toSet();
-      final orderedTrayIds = _trayOrder.where(traySet.contains).toList();
+      final baseOrder = (savedTrayOrder != null && savedTrayOrder.isNotEmpty)
+          ? savedTrayOrder
+          : _trayOrder;
+      final orderedTrayIds = baseOrder.where(traySet.contains).toList();
       for (final p in trayPieces) {
         if (!orderedTrayIds.contains(p.id)) {
           orderedTrayIds.add(p.id);
@@ -2618,11 +2644,13 @@ class JigsawPuzzleGame extends FlameGame
         final p = newState.pieceById(id);
         final comp = _pieces[id];
         // 关键修复：托盘内碎片严格根据 _getTrayPositionForIndex 排布
-        // 绝不使用 _normalizedToScreen（避免因棋盘世界矩阵在视口/缩放变动后把托盘碎片甩出屏幕）
+        // 绝不使用 _screenToNormalized（避免因棋盘世界矩阵在视口/缩放变动后把托盘碎片算入棋盘坐标）
         final targetPos = _getTrayPositionForIndex(trayIdx);
         comp?.position.setFrom(targetPos);
-        _screenToNormalized(targetPos, normOut);
-        updatedPiecesMap[id] = p.copyWith(nx: normOut[0], ny: normOut[1]);
+        updatedPiecesMap[id] = p.copyWith(
+          inTray: true,
+          ny: max(p.ny, 2.0),
+        );
         trayIdx++;
       }
     }

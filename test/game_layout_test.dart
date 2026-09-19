@@ -2551,4 +2551,183 @@ void main() {
     await gameTabletop.onLoad();
     expect(gameTabletop.isPointInTrayArea(Vector2(200, 750)), isFalse);
   });
+
+  test(
+    '高倍缩放及平移覆盖托盘时 exportSnapshotJson 不会污染托盘碎片坐标，且保持 inTray=true 与 trayOrder',
+    () async {
+      final img = await _decodePng();
+      final game = JigsawPuzzleGame(
+        image: img,
+        rows: 6,
+        cols: 6,
+        onSolved: () {},
+      );
+      game.onGameResize(Vector2(400, 800));
+      await game.onLoad();
+
+      // 放大棋盘到 maxZoom 并平移使其覆盖托盘区域
+      game.zoomAt(Vector2(200, 400), game.maxZoom - 1.0);
+      game.panBy(Vector2(0, -200));
+
+      final jsonStr = game.exportSnapshotJson();
+      final data = jsonDecode(jsonStr) as Map<String, dynamic>;
+      final restored = PuzzleBoardState.fromJson(data);
+
+      // 1. 验证所有托盘碎片的 inTray 为 true，且 ny >= 2.0（绝不落入棋盘 [0, 1] 范围）
+      for (final p in restored.pieces) {
+        expect(p.inTray, isTrue);
+        expect(p.ny, greaterThanOrEqualTo(2.0));
+      }
+
+      // 2. 验证保存了 trayOrder
+      final extraMap = data['extra'] as Map<String, dynamic>?;
+      final dynamic rawOrder = data['trayOrder'] ?? extraMap?['trayOrder'];
+      expect(rawOrder, isNotNull);
+      final savedOrder = (rawOrder as List).cast<int>();
+      expect(savedOrder.length, 36);
+    },
+  );
+
+  test('带 inTray: true 标记的碎片读档时权威归入托盘，不受坐标是否在棋盘内影响', () async {
+    final img = await _decodePng();
+    final game = JigsawPuzzleGame(
+      image: img,
+      rows: 4,
+      cols: 4,
+      onSolved: () {},
+    );
+    game.onGameResize(Vector2(400, 800));
+    await game.onLoad();
+
+    // 构造快照：
+    // - piece 0: 已吸附在原位 (0, 0)，clusterId=0
+    // - piece 1, 2, 3: 托盘碎片，即便其坐标在棋盘内部(ny=0.75)，但有 inTray: true 标记
+    // - piece 4: 真正的棋盘单片，单独拥有 ny=0.30
+    // - piece 5~15: 托盘碎片，inTray: true
+    final testPieces = <PieceState>[
+      const PieceState(
+        id: 0,
+        r: 0,
+        c: 0,
+        nx: 0.0,
+        ny: 0.0,
+        clusterId: 0,
+      ),
+      const PieceState(
+        id: 1,
+        r: 0,
+        c: 1,
+        nx: 0.2,
+        ny: 0.75,
+        clusterId: 1,
+        inTray: true,
+      ),
+      const PieceState(
+        id: 2,
+        r: 0,
+        c: 2,
+        nx: 0.4,
+        ny: 0.75,
+        clusterId: 2,
+        inTray: true,
+      ),
+      const PieceState(
+        id: 3,
+        r: 0,
+        c: 3,
+        nx: 0.6,
+        ny: 0.75,
+        clusterId: 3,
+        inTray: true,
+      ),
+      const PieceState(
+        id: 4,
+        r: 1,
+        c: 0,
+        nx: 0.3,
+        ny: 0.30,
+        clusterId: 4,
+      ),
+    ];
+    for (var i = 5; i < 16; i++) {
+      testPieces.add(
+        PieceState(
+          id: i,
+          r: i ~/ 4,
+          c: i % 4,
+          nx: 0.0,
+          ny: 2.0,
+          clusterId: i,
+          inTray: true,
+        ),
+      );
+    }
+
+    final testState = PuzzleBoardState(
+      rows: 4,
+      cols: 4,
+      seed: 42,
+      pieces: testPieces,
+      extra: {'scatterMode': 'tray'},
+    );
+
+    // 触发 applyBoardState 验证
+    final game2 = JigsawPuzzleGame(
+      image: img,
+      rows: 4,
+      cols: 4,
+      initialSnapshotJson: jsonEncode(testState.toJson()),
+      onSolved: () {},
+    );
+    game2.onGameResize(Vector2(400, 800));
+    await game2.onLoad();
+
+    final p0 = game2.children.whereType<PuzzlePieceComponent>().firstWhere(
+      (p) => p.id == 0,
+    );
+    final p1 = game2.children.whereType<PuzzlePieceComponent>().firstWhere(
+      (p) => p.id == 1,
+    );
+    final p2 = game2.children.whereType<PuzzlePieceComponent>().firstWhere(
+      (p) => p.id == 2,
+    );
+    final p3 = game2.children.whereType<PuzzlePieceComponent>().firstWhere(
+      (p) => p.id == 3,
+    );
+    final p4 = game2.children.whereType<PuzzlePieceComponent>().firstWhere(
+      (p) => p.id == 4,
+    );
+
+    // 1. 已就位吸附的 piece 0 必须留在棋盘上
+    expect(p0.isInTray, isFalse);
+
+    // 2. 标记了 inTray: true 的 piece 1, 2, 3 必须全部正确归入托盘
+    expect(p1.isInTray, isTrue);
+    expect(p2.isInTray, isTrue);
+    expect(p3.isInTray, isTrue);
+
+    // 3. 正常散落在棋盘上的单片 piece 4 保持留在棋盘上
+    expect(p4.isInTray, isFalse);
+  });
+
+  test('高倍缩放下 organizeTray 不会将托盘碎片坐标污染写入棋盘', () async {
+    final img = await _decodePng();
+    final game = JigsawPuzzleGame(
+      image: img,
+      rows: 4,
+      cols: 4,
+      onSolved: () {},
+    );
+    game.onGameResize(Vector2(400, 800));
+    await game.onLoad();
+
+    // 放大棋盘
+    game.zoomAt(Vector2(200, 400), game.maxZoom - 1.0);
+    game.organizeTray();
+
+    for (final p in game.boardState.pieces) {
+      expect(p.inTray, isTrue);
+      expect(p.ny, greaterThanOrEqualTo(2.0));
+    }
+  });
 }
