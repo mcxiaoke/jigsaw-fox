@@ -94,6 +94,7 @@
     "bannerDailyBadge": "Daily"
   },
   "daily": {
+    "todayBadge": "TODAY",
     "todayFallback": "Today's Challenge",
     "dateChallenge": "{month}/{day} Challenge",
     "notUnlocked": "⏳ Not unlocked yet. Please come back later!",
@@ -566,6 +567,8 @@
     "locked": "Locked",
     "claim": "Claim",
     "claimed": "Claimed",
+    "claimedReward": "Claimed: {reward}",
+    "claimFailed": "Failed to claim reward, please try again",
     "coins": "{count} coins"
   },
   "myCenter": {

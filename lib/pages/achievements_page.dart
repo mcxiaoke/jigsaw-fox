@@ -6,6 +6,7 @@ import 'package:jigsawpuzzle/data/progress_store.dart';
 import 'package:jigsawpuzzle/l10n/gen/strings.g.dart';
 import 'package:jigsawpuzzle/services/achievement_service.dart';
 import 'package:jigsawpuzzle/services/achievement_store.dart';
+import 'package:jigsawpuzzle/services/app_logger.dart';
 import 'package:jigsawpuzzle/services/economy_service.dart';
 import 'package:jigsawpuzzle/services/sound_service.dart';
 import 'package:jigsawpuzzle/theme/app_palette.dart';
@@ -103,11 +104,29 @@ class _AchievementsPageState extends State<AchievementsPage> {
         GameToast.show(
           context,
           icon: Icons.monetization_on,
-          message:
-              '${t.achievementsPage.claimed}: ${t.achievementsPage.coins(count: def.coinReward)}',
+          message: t.achievementsPage.claimedReward(
+            reward: t.achievementsPage.coins(count: def.coinReward),
+          ),
           type: GameToastType.success,
         );
         unawaited(_loadAsyncStats());
+      } else {
+        GameToast.show(
+          context,
+          message: t.achievementsPage.claimFailed,
+          type: GameToastType.error,
+        );
+      }
+      // best-effort：记录后降级提示
+      // ignore: avoid_catches_without_on_clauses
+    } catch (e, st) {
+      AppLogger.ui.warning('Claim achievement reward failed', e, st);
+      if (mounted) {
+        GameToast.show(
+          context,
+          message: t.achievementsPage.claimFailed,
+          type: GameToastType.error,
+        );
       }
     } finally {
       if (mounted) {
@@ -571,11 +590,17 @@ class _AchievementCard extends StatelessWidget {
                                 ],
                               )
                             : GestureDetector(
+                                behavior: HitTestBehavior.opaque,
                                 onTap: isClaiming ? null : onClaim,
                                 child: Container(
+                                  constraints: const BoxConstraints(
+                                    minHeight: 32,
+                                    minWidth: 64,
+                                  ),
+                                  alignment: Alignment.center,
                                   padding: const EdgeInsets.symmetric(
                                     horizontal: 10,
-                                    vertical: 5,
+                                    vertical: 6,
                                   ),
                                   decoration: BoxDecoration(
                                     gradient: AppPalette.brandGradient,

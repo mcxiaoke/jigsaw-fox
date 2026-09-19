@@ -379,6 +379,9 @@ class Translations$daily$en {
 
 	// Translations
 
+	/// en: 'TODAY'
+	String get todayBadge => 'TODAY';
+
 	/// en: 'Today's Challenge'
 	String get todayFallback => 'Today\'s Challenge';
 
@@ -1425,6 +1428,12 @@ class Translations$achievementsPage$en {
 	/// en: 'Claimed'
 	String get claimed => 'Claimed';
 
+	/// en: 'Claimed: {reward}'
+	String claimedReward({required Object reward}) => 'Claimed: ${reward}';
+
+	/// en: 'Failed to claim reward, please try again'
+	String get claimFailed => 'Failed to claim reward, please try again';
+
 	/// en: '{count} coins'
 	String coins({required Object count}) => '${count} coins';
 }
@@ -2277,6 +2286,7 @@ extension on Translations {
 			'home.bannerDailyTitle' => ({required Object month, required Object day}) => '${month}/${day} · Today\'s Special',
 			'home.bannerDailySub' => 'A fresh daily puzzle to keep your brain sharp',
 			'home.bannerDailyBadge' => 'Daily',
+			'daily.todayBadge' => 'TODAY',
 			'daily.todayFallback' => 'Today\'s Challenge',
 			'daily.dateChallenge' => ({required Object month, required Object day}) => '${month}/${day} Challenge',
 			'daily.notUnlocked' => '⏳ Not unlocked yet. Please come back later!',
@@ -2630,6 +2640,8 @@ extension on Translations {
 			'achievementsPage.locked' => 'Locked',
 			'achievementsPage.claim' => 'Claim',
 			'achievementsPage.claimed' => 'Claimed',
+			'achievementsPage.claimedReward' => ({required Object reward}) => 'Claimed: ${reward}',
+			'achievementsPage.claimFailed' => 'Failed to claim reward, please try again',
 			'achievementsPage.coins' => ({required Object count}) => '${count} coins',
 			'myCenter.tabs.inProgress' => ({required Object count}) => 'Active (${count})',
 			'myCenter.tabs.favorites' => ({required Object count}) => 'Saved (${count})',

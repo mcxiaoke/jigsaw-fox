@@ -208,6 +208,7 @@ class _Translations$daily$zh extends Translations$daily$en {
 	final TranslationsZh _root; // ignore: unused_field
 
 	// Translations
+	@override String get todayBadge => '今日';
 	@override String get todayFallback => '今日挑战';
 	@override String dateChallenge({required Object month, required Object day}) => '${month}月${day}日 挑战';
 	@override String get notUnlocked => '⏳ 未到解锁时间，敬请期待！';
@@ -723,6 +724,8 @@ class _Translations$achievementsPage$zh extends Translations$achievementsPage$en
 	@override String get locked => '未解锁';
 	@override String get claim => '领取';
 	@override String get claimed => '已领取';
+	@override String claimedReward({required Object reward}) => '已领取：${reward}';
+	@override String get claimFailed => '领取失败，请稍后重试';
 	@override String coins({required Object count}) => '${count} 金币';
 }
 
@@ -1326,6 +1329,7 @@ extension on TranslationsZh {
 			'home.bannerDailyTitle' => ({required Object month, required Object day}) => '${month}月${day}日 · 今日专属',
 			'home.bannerDailySub' => '每日专属拼图 · 激活大脑',
 			'home.bannerDailyBadge' => '每日挑战',
+			'daily.todayBadge' => '今日',
 			'daily.todayFallback' => '今日挑战',
 			'daily.dateChallenge' => ({required Object month, required Object day}) => '${month}月${day}日 挑战',
 			'daily.notUnlocked' => '⏳ 未到解锁时间，敬请期待！',
@@ -1679,6 +1683,8 @@ extension on TranslationsZh {
 			'achievementsPage.locked' => '未解锁',
 			'achievementsPage.claim' => '领取',
 			'achievementsPage.claimed' => '已领取',
+			'achievementsPage.claimedReward' => ({required Object reward}) => '已领取：${reward}',
+			'achievementsPage.claimFailed' => '领取失败，请稍后重试',
 			'achievementsPage.coins' => ({required Object count}) => '${count} 金币',
 			'myCenter.tabs.inProgress' => ({required Object count}) => '进行中 (${count})',
 			'myCenter.tabs.favorites' => ({required Object count}) => '收藏 (${count})',

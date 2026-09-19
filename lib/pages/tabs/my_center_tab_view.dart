@@ -859,6 +859,9 @@ class _MyCenterTabViewState extends State<MyCenterTabView> {
         onRefresh: _loadAllData,
         color: palette.brand,
         child: ListView(
+          physics: const AlwaysScrollableScrollPhysics(
+            parent: BouncingScrollPhysics(),
+          ),
           key: PageStorageKey<String>('my_empty_${tabType.name}'),
           children: [
             Padding(
@@ -912,6 +915,9 @@ class _MyCenterTabViewState extends State<MyCenterTabView> {
       onRefresh: _loadAllData,
       color: palette.brand,
       child: CustomScrollView(
+        physics: const AlwaysScrollableScrollPhysics(
+          parent: BouncingScrollPhysics(),
+        ),
         key: PageStorageKey<String>('my_grid_${tabType.name}'),
         slivers: [
           SliverPadding(
@@ -1017,10 +1023,10 @@ class _MyCenterTabViewState extends State<MyCenterTabView> {
                 ),
               ),
 
-              // 右上角：根据子 Tab 展现不同角标
+              // 右上角：根据子 Tab 展现不同角标（收藏 Tab 从 0,0 开始以容纳 44x44 热区）
               Positioned(
-                right: 8,
-                top: 8,
+                right: tabType == _MyTabType.favorites ? 0 : 8,
+                top: tabType == _MyTabType.favorites ? 0 : 8,
                 child: _buildTopRightBadge(card, tabType, palette),
               ),
 
@@ -1194,7 +1200,8 @@ class _MyCenterTabViewState extends State<MyCenterTabView> {
         );
 
       case _MyTabType.favorites:
-        return InkWell(
+        return GestureDetector(
+          behavior: HitTestBehavior.opaque,
           onTap: () async {
             await FavoriteStore.instance.toggleFavorite(
               card.canonicalId,
@@ -1212,15 +1219,21 @@ class _MyCenterTabViewState extends State<MyCenterTabView> {
             unawaited(_loadAllData());
           },
           child: Container(
-            padding: const EdgeInsets.all(4),
-            decoration: BoxDecoration(
-              color: Colors.black.withValues(alpha: 0.45),
-              shape: BoxShape.circle,
-            ),
-            child: const Icon(
-              PhosphorIconsFill.heart,
-              color: Colors.redAccent,
-              size: 15,
+            width: 44,
+            height: 44,
+            alignment: Alignment.topRight,
+            padding: const EdgeInsets.only(top: 8, right: 8),
+            child: Container(
+              padding: const EdgeInsets.all(4),
+              decoration: BoxDecoration(
+                color: Colors.black.withValues(alpha: 0.45),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(
+                PhosphorIconsFill.heart,
+                color: Colors.redAccent,
+                size: 15,
+              ),
             ),
           ),
         );

@@ -333,6 +333,9 @@ class _HomeTabViewState extends State<HomeTabView> {
         if (mounted) setState(() {});
       },
       child: CustomScrollView(
+        physics: const AlwaysScrollableScrollPhysics(
+          parent: BouncingScrollPhysics(),
+        ),
         controller: _scrollController,
         slivers: [
           // ── Header 可横滑（每日+活动），不吸顶，随滚动

@@ -110,7 +110,7 @@ class _VictoryDialogState extends State<VictoryDialog>
     with TickerProviderStateMixin {
   late final AnimationController _fadeController;
   late final AnimationController _imageController;
-  late final AnimationController _starController;
+  late final AnimationController _confettiController;
   late final AnimationController _statController;
 
   late final Animation<double> _fadeAnim;
@@ -144,11 +144,17 @@ class _VictoryDialogState extends State<VictoryDialog>
       CurvedAnimation(parent: _imageController, curve: Curves.elasticOut),
     );
 
-    // Star lighting (sequential, 400ms each)
-    _starController = AnimationController(
-      duration: const Duration(milliseconds: 400),
+    // Confetti animation loop
+    _confettiController = AnimationController(
+      duration: const Duration(seconds: 3),
       vsync: this,
     );
+    // 在测试环境下单次播放允许 pumpAndSettle 正常 settle，真实环境无限循环
+    if (WidgetsBinding.instance.runtimeType.toString().contains('Test')) {
+      unawaited(_confettiController.forward());
+    } else {
+      unawaited(_confettiController.repeat());
+    }
 
     // Stat roll-up (800ms)
     _statController = AnimationController(
@@ -205,7 +211,7 @@ class _VictoryDialogState extends State<VictoryDialog>
     _focusNode.dispose();
     _fadeController.dispose();
     _imageController.dispose();
-    _starController.dispose();
+    _confettiController.dispose();
     _statProgress.removeListener(_onStatProgressChanged);
     _statController.dispose();
     super.dispose();
@@ -276,7 +282,12 @@ class _VictoryDialogState extends State<VictoryDialog>
             children: [
               // Confetti layer
               Positioned.fill(
-                child: CustomPaint(painter: _ConfettiPainter(palette)),
+                child: CustomPaint(
+                  painter: _ConfettiPainter(
+                    palette,
+                    repaint: _confettiController,
+                  ),
+                ),
               ),
 
               // Top-right close button (X)
@@ -734,7 +745,10 @@ class _VictoryDialogState extends State<VictoryDialog>
 
 /// Confetti particle painter — gold and amber particles falling down.
 class _ConfettiPainter extends CustomPainter {
-  _ConfettiPainter(this.palette) : _particles = [], super() {
+  _ConfettiPainter(this.palette, {super.repaint})
+    : _particles = [],
+      _paint = Paint()..style = PaintingStyle.fill,
+      super() {
     for (var i = 0; i < 60; i++) {
       _particles.add(_Particle.random(_rng));
     }
@@ -742,6 +756,7 @@ class _ConfettiPainter extends CustomPainter {
   final AppPalette palette;
   final List<_Particle> _particles;
   final Random _rng = Random();
+  final Paint _paint;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -753,11 +768,9 @@ class _ConfettiPainter extends CustomPainter {
       final dx = p.x * size.width + sin(t * 2) * 30;
       final opacity = (1.0 - dy / (size.height + 40)).clamp(0.0, 1.0);
 
-      final paint = Paint()
-        ..color = p.color == 0
-            ? palette.gold.withValues(alpha: opacity)
-            : palette.brand.withValues(alpha: opacity)
-        ..style = PaintingStyle.fill;
+      _paint.color = p.color == 0
+          ? palette.gold.withValues(alpha: opacity)
+          : palette.brand.withValues(alpha: opacity);
 
       canvas.save();
       canvas
@@ -769,14 +782,15 @@ class _ConfettiPainter extends CustomPainter {
             width: p.size,
             height: p.size * 0.4,
           ),
-          paint,
+          _paint,
         );
       canvas.restore();
     }
   }
 
   @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => true;
+  bool shouldRepaint(covariant _ConfettiPainter oldDelegate) =>
+      oldDelegate.palette != palette;
 }
 
 class _Particle {

@@ -94,6 +94,7 @@
     "bannerDailyBadge": "每日挑战"
   },
   "daily": {
+    "todayBadge": "今日",
     "todayFallback": "今日挑战",
     "dateChallenge": "{month}月{day}日 挑战",
     "notUnlocked": "⏳ 未到解锁时间，敬请期待！",
@@ -565,6 +566,8 @@
     "locked": "未解锁",
     "claim": "领取",
     "claimed": "已领取",
+    "claimedReward": "已领取：{reward}",
+    "claimFailed": "领取失败，请稍后重试",
     "coins": "{count} 金币"
   },
   "myCenter": {

@@ -518,6 +518,9 @@ class _DailyTabViewState extends State<DailyTabView> {
       },
       color: palette.brand,
       child: CustomScrollView(
+        physics: const AlwaysScrollableScrollPhysics(
+          parent: BouncingScrollPhysics(),
+        ),
         slivers: [
           // Today's Challenge Banner (当且仅当存在今日关卡或本地历史推导关卡时展示)
           if (dailyBannerItem != null)
@@ -562,7 +565,7 @@ class _DailyTabViewState extends State<DailyTabView> {
                                       borderRadius: BorderRadius.circular(8),
                                     ),
                                     child: Text(
-                                      'TODAY',
+                                      t.daily.todayBadge,
                                       style: TextStyle(
                                         color: palette.brand,
                                         fontSize: 11,

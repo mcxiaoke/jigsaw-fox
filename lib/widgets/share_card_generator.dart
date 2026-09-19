@@ -294,6 +294,23 @@ class _ShareCardGeneratorState extends State<ShareCardGenerator>
                                               // 卡面图区实际渲染约 270px → 导出约 540px，
                                               // 1080 已留足 2 倍余量，不影响导出清晰度。
                                               cacheWidth: 1080,
+                                              errorBuilder:
+                                                  (
+                                                    context,
+                                                    error,
+                                                    stackTrace,
+                                                  ) => ColoredBox(
+                                                    color: palette
+                                                        .surfaceContainer,
+                                                    child: Center(
+                                                      child: Icon(
+                                                        PhosphorIconsFill
+                                                            .puzzlePiece,
+                                                        size: 48,
+                                                        color: palette.brand,
+                                                      ),
+                                                    ),
+                                                  ),
                                             ),
                                           ),
                                         ),
@@ -471,26 +488,36 @@ class _ShareCardGeneratorState extends State<ShareCardGenerator>
     required String label,
     required String value,
   }) {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Icon(icon, size: 18, color: palette.brand),
-        const SizedBox(height: 4),
-        Text(
-          value,
-          style: TextStyle(
-            fontSize: 20,
-            fontWeight: FontWeight.bold,
-            color: palette.primaryText,
-            fontFeatures: const [FontFeature.tabularFigures()],
+    return Flexible(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 18, color: palette.brand),
+          const SizedBox(height: 4),
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Text(
+              value,
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+                color: palette.primaryText,
+                fontFeatures: const [FontFeature.tabularFigures()],
+              ),
+              maxLines: 1,
+            ),
           ),
-        ),
-        const SizedBox(height: 2),
-        Text(
-          label,
-          style: TextStyle(fontSize: 11, color: palette.secondaryText),
-        ),
-      ],
+          const SizedBox(height: 2),
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Text(
+              label,
+              style: TextStyle(fontSize: 11, color: palette.secondaryText),
+              maxLines: 1,
+            ),
+          ),
+        ],
+      ),
     );
   }
 
