@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 
 import 'package:jigsawpuzzle/theme/app_palette.dart';
@@ -50,7 +51,8 @@ class GameToast {
     }
 
     final overlay = Overlay.of(context);
-    final entry = OverlayEntry(
+    late final OverlayEntry entry;
+    entry = OverlayEntry(
       builder: (ctx) => _GameToastWidget(
         message: message,
         icon: effectiveIcon,
@@ -58,8 +60,10 @@ class GameToast {
         palette: palette,
         duration: duration,
         onDismiss: () {
-          _currentEntry?.remove();
-          _currentEntry = null;
+          if (identical(_currentEntry, entry)) {
+            _currentEntry?.remove();
+            _currentEntry = null;
+          }
           onDismiss?.call();
         },
       ),
@@ -68,9 +72,11 @@ class GameToast {
     _currentEntry = entry;
     overlay.insert(entry);
 
-    _timer = Timer(duration, () {
-      _currentEntry?.remove();
-      _currentEntry = null;
+    _timer = Timer(duration + const Duration(milliseconds: 100), () {
+      if (identical(_currentEntry, entry)) {
+        _currentEntry?.remove();
+        _currentEntry = null;
+      }
     });
   }
 
@@ -120,10 +126,25 @@ class _GameToastWidgetState extends State<_GameToastWidget>
     ).animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeOutBack));
     unawaited(_ctrl.forward());
 
+    final dismissDelayMs = math.max(
+      0,
+      widget.duration.inMilliseconds - 300,
+    );
     unawaited(
-      Future.delayed(widget.duration - const Duration(milliseconds: 300), () {
+      Future.delayed(Duration(milliseconds: dismissDelayMs), () {
         if (mounted) {
-          unawaited(_ctrl.reverse().whenComplete(widget.onDismiss));
+          unawaited(
+            _ctrl
+                .reverse()
+                .then((_) {
+                  if (mounted) {
+                    widget.onDismiss();
+                  }
+                })
+                .catchError((_) {
+                  // 动画提前中断或被取消时，忽略异常且不执行 onDismiss
+                }),
+          );
         }
       }),
     );

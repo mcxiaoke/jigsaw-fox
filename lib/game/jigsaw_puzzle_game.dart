@@ -107,6 +107,7 @@ class JigsawPuzzleGame extends FlameGame
     this.onPieceSnapped,
     this.onProgressChanged,
     this.onStateUpdated,
+    this.onMoveMade,
   }) : seed = seed ?? (DateTime.now().millisecondsSinceEpoch % 1000000),
        _boardGhostOpacity = initialGhostOpacity,
        undoManager = UndoManager();
@@ -123,6 +124,7 @@ class JigsawPuzzleGame extends FlameGame
   final VoidCallback? onPieceSnapped;
   final ValueChanged<int>? onProgressChanged;
   final VoidCallback? onStateUpdated;
+  final VoidCallback? onMoveMade;
 
   final UndoManager undoManager;
 
@@ -2007,6 +2009,7 @@ class JigsawPuzzleGame extends FlameGame
 
   /// Called when user releases drag. Executes snap resolution & cluster merge.
   void handlePieceDragEnd(PuzzlePieceComponent piece) {
+    onMoveMade?.call();
     final inTrayArea = piece.position.y >= trayPosition.y - pieceSize.y * 0.25;
     final clusterPieces = _pieces.values
         .where((p) => p.clusterId == piece.clusterId)
@@ -2666,6 +2669,7 @@ class JigsawPuzzleGame extends FlameGame
       return;
     }
     AppLogger.game.info('hint used pieceId=$targetPieceId');
+    onMoveMade?.call();
 
     final prevState = _boardState;
     final updated = _boardState.pieces.map((p) {

@@ -90,18 +90,29 @@ class _AchievementsPageState extends State<AchievementsPage> {
     return t.settings.timeHoursMinutes(hours: h, minutes: remM);
   }
 
+  final _inFlightClaimIds = <String>{};
+
   Future<void> _claimReward(AchievementDefinition def) async {
-    final ok = await _achService.claimReward(def.id);
-    if (ok && mounted) {
-      SoundService.I.play(Sfx.coinsFly);
-      GameToast.show(
-        context,
-        icon: Icons.monetization_on,
-        message:
-            '${t.achievementsPage.claimed}: ${t.achievementsPage.coins(count: def.coinReward)}',
-        type: GameToastType.success,
-      );
-      unawaited(_loadAsyncStats());
+    if (_inFlightClaimIds.contains(def.id)) return;
+    setState(() => _inFlightClaimIds.add(def.id));
+    try {
+      final ok = await _achService.claimReward(def.id);
+      if (!mounted) return;
+      if (ok) {
+        SoundService.I.play(Sfx.coinsFly);
+        GameToast.show(
+          context,
+          icon: Icons.monetization_on,
+          message:
+              '${t.achievementsPage.claimed}: ${t.achievementsPage.coins(count: def.coinReward)}',
+          type: GameToastType.success,
+        );
+        unawaited(_loadAsyncStats());
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _inFlightClaimIds.remove(def.id));
+      }
     }
   }
 
@@ -292,6 +303,7 @@ class _AchievementsPageState extends State<AchievementsPage> {
                     store: _store,
                     palette: palette,
                     styles: styles,
+                    isClaiming: _inFlightClaimIds.contains(def.id),
                     onClaim: () => _claimReward(def),
                   ),
                   const SizedBox(height: 10),
@@ -457,6 +469,7 @@ class _AchievementCard extends StatelessWidget {
     required this.palette,
     required this.styles,
     required this.onClaim,
+    this.isClaiming = false,
   });
 
   final AchievementDefinition def;
@@ -464,6 +477,7 @@ class _AchievementCard extends StatelessWidget {
   final AppPalette palette;
   final AppTextStyles styles;
   final VoidCallback onClaim;
+  final bool isClaiming;
 
   @override
   Widget build(BuildContext context) {
@@ -557,7 +571,7 @@ class _AchievementCard extends StatelessWidget {
                                 ],
                               )
                             : GestureDetector(
-                                onTap: onClaim,
+                                onTap: isClaiming ? null : onClaim,
                                 child: Container(
                                   padding: const EdgeInsets.symmetric(
                                     horizontal: 10,
@@ -576,14 +590,23 @@ class _AchievementCard extends StatelessWidget {
                                       ),
                                     ],
                                   ),
-                                  child: Text(
-                                    '${t.achievementsPage.claim} ${t.achievementsPage.coins(count: def.coinReward)}',
-                                    style: TextStyle(
-                                      fontSize: 11,
-                                      fontWeight: FontWeight.w800,
-                                      color: palette.surface,
-                                    ),
-                                  ),
+                                  child: isClaiming
+                                      ? SizedBox(
+                                          width: 14,
+                                          height: 14,
+                                          child: CircularProgressIndicator(
+                                            strokeWidth: 2,
+                                            color: palette.surface,
+                                          ),
+                                        )
+                                      : Text(
+                                          '${t.achievementsPage.claim} ${t.achievementsPage.coins(count: def.coinReward)}',
+                                          style: TextStyle(
+                                            fontSize: 11,
+                                            fontWeight: FontWeight.w800,
+                                            color: palette.surface,
+                                          ),
+                                        ),
                                 ),
                               )
                       else

@@ -70,8 +70,6 @@ class UpdateInstaller {
     final candidatePaths = [
       targetUpdater,
       p.join(Directory.current.path, 'tools', 'windows', 'updater.exe'),
-      r'C:\Home\Projects\mytools\tools\better-updater\target\release\updater.exe',
-      r'C:\Home\Projects\mytools\tools\updater\rust\target\release\updater.exe',
     ];
 
     String? foundUpdater;

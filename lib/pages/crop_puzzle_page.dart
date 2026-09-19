@@ -772,10 +772,53 @@ class _CropPuzzlePageState extends State<CropPuzzlePage> {
                                       ),
                                     ],
                                   )
-                                : const Center(
-                                    child: CircularProgressIndicator(
-                                      color: Colors.white,
-                                    ),
+                                : Center(
+                                    child: _decodeFailed
+                                        ? Column(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              Icon(
+                                                PhosphorIconsBold.imageBroken,
+                                                size: 44,
+                                                color: palette.error,
+                                              ),
+                                              const SizedBox(height: 10),
+                                              Padding(
+                                                padding:
+                                                    const EdgeInsets.symmetric(
+                                                      horizontal: 20,
+                                                    ),
+                                                child: Text(
+                                                  t.crop.decodeFailedToast,
+                                                  style: const TextStyle(
+                                                    color: Colors.white70,
+                                                    fontSize: 13,
+                                                  ),
+                                                  textAlign: TextAlign.center,
+                                                ),
+                                              ),
+                                              const SizedBox(height: 12),
+                                              OutlinedButton.icon(
+                                                style: OutlinedButton.styleFrom(
+                                                  foregroundColor: Colors.white,
+                                                  side: const BorderSide(
+                                                    color: Colors.white30,
+                                                  ),
+                                                ),
+                                                onPressed: () =>
+                                                    Navigator.of(context).pop(),
+                                                icon: const Icon(
+                                                  PhosphorIconsRegular
+                                                      .arrowLeft,
+                                                  size: 16,
+                                                ),
+                                                label: Text(t.common.back),
+                                              ),
+                                            ],
+                                          )
+                                        : const CircularProgressIndicator(
+                                            color: Colors.white,
+                                          ),
                                   ),
                           ),
                           const SizedBox(height: 8),

@@ -182,6 +182,12 @@ class _MyCenterTabViewState extends State<MyCenterTabView> {
     // 4. 自制关卡列表 (从 GameRepository.instance.customPuzzles 装配)
     final custom = <UnifiedPuzzleCardData>[];
     for (final cp in GameRepository.instance.customPuzzles) {
+      if (cp.id.startsWith('sample_') ||
+          cp.imagePathOrUrl.contains('sample_') ||
+          cp.imagePathOrUrl.startsWith('assets/sample/')) {
+        unawaited(GameRepository.instance.deleteCustomPuzzle(cp.id));
+        continue;
+      }
       final cid = GameRepository.canonicalForCustom(cp.id);
       final p = progressMap[cid];
       final card = resolver.resolve(canonicalId: cid, progress: p);
@@ -361,9 +367,14 @@ class _MyCenterTabViewState extends State<MyCenterTabView> {
         if (!mounted) return;
         // P0-1：图片不可用时显式提示且不进入游戏，禁止静默无响应。
         if (imgBytes == null) {
+          final isNetwork =
+              card.imagePathOrUrl.startsWith('http://') ||
+              card.imagePathOrUrl.startsWith('https://');
           GameToast.show(
             context,
-            message: t.myCenter.toast.imageNotReady,
+            message: isNetwork
+                ? t.myCenter.toast.imageNotReady
+                : t.myCenter.toast.imageNotFound,
             type: GameToastType.warning,
           );
           return;

@@ -4,12 +4,15 @@ import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:jigsawpuzzle/data/progress_store.dart';
+import 'package:jigsawpuzzle/data/resume_helper.dart';
+import 'package:jigsawpuzzle/data/snapshot_store.dart';
 import 'package:jigsawpuzzle/l10n/gen/strings.g.dart';
 import 'package:jigsawpuzzle/logic/cache/level_image_resolver.dart';
 import 'package:jigsawpuzzle/logic/content/app_content.dart';
 import 'package:jigsawpuzzle/logic/content/content_manager.dart';
 import 'package:jigsawpuzzle/logic/content/models/puzzle_event_item.dart';
 import 'package:jigsawpuzzle/logic/content/models/puzzle_level_item.dart';
+import 'package:jigsawpuzzle/logic/puzzle_model.dart';
 import 'package:jigsawpuzzle/pages/game_page.dart';
 import 'package:jigsawpuzzle/services/app_logger.dart';
 import 'package:jigsawpuzzle/services/recommend_service.dart';
@@ -190,26 +193,88 @@ class _EventLevelsPageState extends State<EventLevelsPage> {
 
     if (imgBytes == null || !mounted) return;
 
-    // 默认难度 = 全局推荐档（按 1:1 假定，面板解码后按实际比例校正）
-    final defaultDiff = RecommendService.instance.squareDifficulty;
+    final canonicalId = level.id;
+    final progress = await ResumeHelper.loadProgress(canonicalId);
+    if (!mounted) return;
 
+    final fallbackDiff = PuzzleDifficulty.presets.firstWhere(
+      (d) => SnapshotStore.difficultyKeyFor(d) == progress.activeDifficultyKey,
+      orElse: () => RecommendService.instance.squareDifficulty,
+    );
+
+    // 1. 若有残局快照，优先进入断点续玩流程
+    if (progress.hasSnapshot) {
+      final handled = await ResumeHelper.tryHandleResumeFlow(
+        context: context,
+        canonicalId: canonicalId,
+        fallbackDifficulty: fallbackDiff,
+        title: t.levels.titleOf(
+          title: _currentEvent.displayTitle,
+          index: index,
+        ),
+        imageBytes: imgBytes,
+        onClearRepo: (dkey) async {
+          await ResumeHelper.clearResume(canonicalId, dkey);
+          if (mounted) setState(() {});
+        },
+        onPushGame: (diff, jsonStr) async {
+          if (!mounted) return;
+          await Navigator.of(context).push(
+            MaterialPageRoute<void>(
+              builder: (_) => GamePage(
+                imageBytes: imgBytes!,
+                difficulty: diff,
+                canonicalId: canonicalId,
+                packTitle: _currentEvent.displayTitle,
+                initialSnapshotJson: jsonStr,
+              ),
+            ),
+          );
+          if (mounted) setState(() {});
+        },
+        onCancelled: () {
+          if (mounted) setState(() {});
+        },
+      );
+      if (handled) return;
+    }
+
+    if (!mounted) return;
+
+    // 2. 无残局或点重新选择，弹出难度选择面板
     await ChooseDifficultySheet.show(
       context: context,
       imageBytes: imgBytes,
-      initialDifficulty: defaultDiff,
-      canonicalId: level.id,
-      title: t.levels.titleOf(title: _currentEvent.displayTitle, index: index),
+      initialDifficulty: fallbackDiff,
+      canonicalId: canonicalId,
+      title: t.levels.titleOf(
+        title: _currentEvent.displayTitle,
+        index: index,
+      ),
+      savedProgressPercent: progress.hasSnapshot
+          ? progress.progressPercent
+          : null,
+      completedPieceCounts: progress.completedPieceCounts.toSet(),
       onStart: (diff) async {
+        final snapshotJson = progress.hasSnapshot
+            ? await SnapshotStore.instance.loadJsonString(
+                canonicalId,
+                SnapshotStore.difficultyKeyFor(diff),
+              )
+            : null;
+        if (!mounted) return;
         await Navigator.of(context).push(
           MaterialPageRoute<void>(
             builder: (_) => GamePage(
               imageBytes: imgBytes!,
               difficulty: diff,
-              canonicalId: level.id,
+              canonicalId: canonicalId,
               packTitle: _currentEvent.displayTitle,
+              initialSnapshotJson: snapshotJson,
             ),
           ),
         );
+        if (mounted) setState(() {});
       },
     );
   }

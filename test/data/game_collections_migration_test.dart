@@ -188,28 +188,30 @@ void main() {
   });
 
   group('自制拼图 custom:{id}（§4.4 / §5.2 / §7.3）', () {
-    test('首次启动植入 3 个样例并置 presetsInitialized=true', () async {
+    test('首次启动不植入样例并置 presetsInitialized=true', () async {
       await GameRepository.instance.init();
-      expect(GameRepository.instance.customPuzzles, hasLength(3));
+      expect(GameRepository.instance.customPuzzles, isEmpty);
       expect(sm.state.get('custom:presetsInitialized'), isTrue);
-      // 元数据以 custom:{id} 逐条落盘
-      // 自制关卡去掉了虚假 title，默认为空字符串
-      expect(
-        getJson(sm.collections, 'custom:sample_01')?['title'],
-        '',
-      );
       final keys = sm.collections.keys
           .cast<String>()
           .where((k) => k.startsWith('custom:'))
           .length;
-      expect(keys, 3);
+      expect(keys, 0);
     });
 
     test('删光后重启不重生成（标志已置 true）', () async {
       await GameRepository.instance.init();
-      await GameRepository.instance.deleteCustomPuzzle('sample_01');
-      await GameRepository.instance.deleteCustomPuzzle('sample_02');
-      await GameRepository.instance.deleteCustomPuzzle('sample_03');
+      final tiers = PuzzleAspectRatio.square1x1.tiers;
+      await GameRepository.instance.addCustomPuzzle(
+        CustomPuzzleItem(
+          id: 'test_p1',
+          imagePathOrUrl: 'assets/bg/tile_000.webp',
+          isLocalFile: false,
+          difficulty: tiers.first.difficulty,
+        ),
+      );
+      expect(GameRepository.instance.customPuzzles, hasLength(1));
+      await GameRepository.instance.deleteCustomPuzzle('test_p1');
       expect(GameRepository.instance.customPuzzles, isEmpty);
 
       // 模拟重启
@@ -226,8 +228,17 @@ void main() {
 
     test('ugc:{id} 进度水合：重启后 isCompleted/progressPercent 回填', () async {
       await GameRepository.instance.init();
+      final tiers = PuzzleAspectRatio.square1x1.tiers;
+      await GameRepository.instance.addCustomPuzzle(
+        CustomPuzzleItem(
+          id: 'ugc_custom_01',
+          imagePathOrUrl: 'assets/bg/tile_000.webp',
+          isLocalFile: false,
+          difficulty: tiers.first.difficulty,
+        ),
+      );
       await ProgressStore.instance.updateProgress(
-        canonicalId: 'ugc:sample_01',
+        canonicalId: 'ugc:ugc_custom_01',
         isCompleted: true,
         progressPercent: 100,
         bestTimeSeconds: 42,
@@ -238,7 +249,7 @@ void main() {
       await ProgressStore.instance.reloadForTest();
       await GameRepository.instance.init();
       final s1 = GameRepository.instance.customPuzzles.firstWhere(
-        (p) => p.id == 'sample_01',
+        (p) => p.id == 'ugc_custom_01',
       );
       expect(s1.isCompleted, isTrue);
       expect(s1.progressPercent, 100);
@@ -248,18 +259,56 @@ void main() {
 
     test('deleteCustomPuzzle 级联删除 ugc:{id} 进度', () async {
       await GameRepository.instance.init();
+      final tiers = PuzzleAspectRatio.square1x1.tiers;
+      await GameRepository.instance.addCustomPuzzle(
+        CustomPuzzleItem(
+          id: 'ugc_custom_02',
+          imagePathOrUrl: 'assets/bg/tile_000.webp',
+          isLocalFile: false,
+          difficulty: tiers.first.difficulty,
+        ),
+      );
       await ProgressStore.instance.updateProgress(
-        canonicalId: 'ugc:sample_02',
+        canonicalId: 'ugc:ugc_custom_02',
         isCompleted: true,
         progressPercent: 100,
         completedPieceCount: 36,
       );
-      expect(getJson(sm.progress, 'ugc:sample_02'), isNotNull);
+      expect(getJson(sm.progress, 'ugc:ugc_custom_02'), isNotNull);
 
-      await GameRepository.instance.deleteCustomPuzzle('sample_02');
+      await GameRepository.instance.deleteCustomPuzzle('ugc_custom_02');
 
-      expect(sm.collections.get('custom:sample_02'), isNull);
-      expect(getJson(sm.progress, 'ugc:sample_02'), isNull);
+      expect(sm.collections.get('custom:ugc_custom_02'), isNull);
+      expect(getJson(sm.progress, 'ugc:ugc_custom_02'), isNull);
+    });
+
+    test('启动时自动物理清理历史残留 sample_ 示例及其进度与快照', () async {
+      // 模拟旧版本用户本地残留的 sample_01 示例与进度
+      final tiers = PuzzleAspectRatio.square1x1.tiers;
+      final legacyItem = CustomPuzzleItem(
+        id: 'sample_01',
+        title: 'Sample 1',
+        imagePathOrUrl: 'assets/sample/sample_01.jpg',
+        isLocalFile: false,
+        difficulty: tiers.first.difficulty,
+      );
+      await putJson(sm.collections, 'custom:sample_01', legacyItem.toJson());
+      await ProgressStore.instance.updateProgress(
+        canonicalId: 'ugc:sample_01',
+        isCompleted: true,
+      );
+      expect(sm.collections.get('custom:sample_01'), isNotNull);
+
+      // 执行初始化
+      await GameRepository.instance.init();
+
+      // 验证已被自动物理删除
+      expect(sm.collections.get('custom:sample_01'), isNull);
+      expect(getJson(sm.progress, 'ugc:sample_01'), isNull);
+      expect(
+        GameRepository.instance.customPuzzles.where((p) => p.id == 'sample_01'),
+        isEmpty,
+      );
     });
 
     test('addCustomPuzzle 单条落盘（不再整 JSON 数组重写）', () async {

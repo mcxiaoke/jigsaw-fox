@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:jigsawpuzzle/data/game_repository.dart';
+import 'package:jigsawpuzzle/data/progress_store.dart';
 import 'package:jigsawpuzzle/data/resume_helper.dart';
 import 'package:jigsawpuzzle/data/snapshot_store.dart';
 import 'package:jigsawpuzzle/l10n/gen/strings.g.dart';
@@ -42,6 +43,19 @@ class _PackLevelsPageState extends State<PackLevelsPage> {
   void initState() {
     super.initState();
     _loadLevels();
+    ProgressStore.instance.progressNotifier.addListener(_onProgressChanged);
+  }
+
+  @override
+  void dispose() {
+    ProgressStore.instance.progressNotifier.removeListener(_onProgressChanged);
+    super.dispose();
+  }
+
+  void _onProgressChanged() {
+    if (mounted) {
+      setState(() {});
+    }
   }
 
   void _loadLevels() {
@@ -389,7 +403,8 @@ class _PackLevelsPageState extends State<PackLevelsPage> {
   }
 
   Widget _buildLevelCard(PuzzleLevelItem level, AppPalette palette) {
-    final isCompleted = level.isCompleted;
+    final prog = ProgressStore.instance.getLevelProgress(level.id);
+    final isCompleted = prog.isCompleted;
 
     return InkWell(
       onTap: () => _openLevel(level),

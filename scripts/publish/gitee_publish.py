@@ -42,14 +42,36 @@ def _run(cmd, env=None):
     return subprocess.run(cmd, env=env).returncode
 
 
+import atexit
+import tempfile
+
+_askpass_file: str | None = None
+
+
+def _cleanup_askpass():
+    global _askpass_file
+    if _askpass_file and os.path.exists(_askpass_file):
+        try:
+            os.remove(_askpass_file)
+        except OSError:
+            pass
+        _askpass_file = None
+
+
+atexit.register(_cleanup_askpass)
+
+
 def _git_env() -> dict:
-    import os
+    global _askpass_file
     env = dict(os.environ)
     token = env.get("GITEE_TOKEN") or env.get("MODELSCOPE_TOKEN")
     if token:
-        askpass = Path(os.environ.get("TEMP", ".")) / "_git_askpass.py"
-        askpass.write_text("import sys\nsys.stdout.write(" + repr(token) + ")\n", encoding="utf-8")
-        env["GIT_ASKPASS"] = str(askpass)
+        if not _askpass_file or not os.path.exists(_askpass_file):
+            fd, path = tempfile.mkstemp(prefix="_git_askpass_", suffix=".py")
+            with os.fdopen(fd, "w", encoding="utf-8") as f:
+                f.write("import sys\nsys.stdout.write(" + repr(token) + ")\n")
+            _askpass_file = path
+        env["GIT_ASKPASS"] = str(_askpass_file)
         env["GCM_INTERACTIVE"] = "never"
     return env
 
@@ -150,6 +172,7 @@ def main():
         print(f"  upload {k}: {st}")
         ok += 1 if st in (200, 201) else 0
     print(f"[gitee] 上传完成 {ok}/{len(zips)}")
+    _cleanup_askpass()
     return 0
 
 

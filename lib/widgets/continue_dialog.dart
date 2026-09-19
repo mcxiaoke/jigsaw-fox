@@ -13,7 +13,14 @@ import 'package:phosphoricons_flutter/phosphoricons_flutter.dart';
 /// Two-button weight differentiation: "继续挑战" (brand solid) vs "退出" (ghost).
 class ContinueDialog extends StatelessWidget {
   const ContinueDialog({
-    required this.title, required this.imageBytes, required this.difficultyKey, required this.snapshot, required this.progressPercent, required this.onContinue, required this.onRestart, super.key,
+    required this.title,
+    required this.imageBytes,
+    required this.difficultyKey,
+    required this.snapshot,
+    required this.progressPercent,
+    required this.onContinue,
+    required this.onRestart,
+    super.key,
   });
 
   final String title;
@@ -97,8 +104,8 @@ class ContinueDialog extends StatelessWidget {
           ),
         ],
       ),
-      content: SizedBox(
-        width: 360,
+      content: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 360),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -147,7 +154,7 @@ class ContinueDialog extends StatelessWidget {
                           ),
                           const SizedBox(height: 2),
                           Text(
-                            '$progressPercent%  $progressPercent/100',
+                            '$progressPercent%',
                             style: styles.bodyBold.copyWith(
                               fontSize: 14,
                               color: palette.brand,

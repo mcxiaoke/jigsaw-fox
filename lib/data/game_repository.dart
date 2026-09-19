@@ -14,7 +14,6 @@ import 'package:jigsawpuzzle/data/storage_manager.dart';
 import 'package:jigsawpuzzle/l10n/gen/strings.g.dart';
 import 'package:jigsawpuzzle/logic/content/models/canonical_id.dart';
 import 'package:jigsawpuzzle/logic/download_manager.dart';
-import 'package:jigsawpuzzle/logic/image_source.dart';
 import 'package:jigsawpuzzle/logic/models/puzzle_state.dart';
 import 'package:jigsawpuzzle/logic/puzzle_model.dart';
 import 'package:jigsawpuzzle/services/achievement_store.dart';
@@ -159,7 +158,8 @@ class GameRepository {
     const totalLevels = 100;
 
     for (var i = 1; i <= totalLevels; i++) {
-      final assetPath = assetSamples[(i - 1) % assetSamples.length];
+      final assetPath =
+          'assets/images/sample_${((i - 1) % 10 + 1).toString().padLeft(2, '0')}.jpg';
 
       // 主线 100 关阶梯难度配置（对齐 v3.3.1 设计 §3）
       // 1~10: L1(25) | 11~35: L1.5(36) | 36~60: L2(64) | 61~80: L3(100) | 81~93: L4(144) | 94~100: L5(225)
@@ -235,76 +235,41 @@ class GameRepository {
         .where((k) => k.startsWith(_customKeyPrefix))
         .toList();
     for (final key in keys) {
+      final subId = key.substring(_customKeyPrefix.length);
+      // 彻底清理历史内置 sample 遗留数据（sample_01, sample_02, sample_03 等）
+      if (subId.startsWith('sample_')) {
+        await collectionsBox.delete(key);
+        await ProgressStore.instance.delete(canonicalForCustom(subId));
+        await SnapshotStore.instance.deleteAllFor(canonicalForCustom(subId));
+        AppLogger.repo.info('Purged legacy sample custom item key=$key');
+        continue;
+      }
+
       final m = getJson(collectionsBox, key);
       if (m == null) continue;
       try {
-        rawItems.add(CustomPuzzleItem.fromJson(m));
+        final item = CustomPuzzleItem.fromJson(m);
+        if (item.id.startsWith('sample_') ||
+            item.imagePathOrUrl.contains('sample_') ||
+            item.imagePathOrUrl.startsWith('assets/sample/')) {
+          await collectionsBox.delete(key);
+          await ProgressStore.instance.delete(canonicalForCustom(item.id));
+          await SnapshotStore.instance.deleteAllFor(
+            canonicalForCustom(item.id),
+          );
+          AppLogger.repo.info('Purged legacy sample custom item id=${item.id}');
+          continue;
+        }
+        rawItems.add(item);
       } catch (e, st) {
         AppLogger.repo.warning('Failed to parse custom item key=$key', e, st);
       }
     }
 
     if (presetsInitialized != true && rawItems.isEmpty) {
-      // Default preset samples for "My Puzzles"
-      final squareTiers = PuzzleAspectRatio.square1x1.tiers;
-      final samples = [
-        CustomPuzzleItem(
-          id: 'sample_01',
-          imagePathOrUrl: assetSamples[0],
-          isLocalFile: false,
-          sourcePlatform: '网络',
-          difficulty: squareTiers[0].difficulty, // 16
-          createdAt: DateTime.now().subtract(const Duration(days: 2)),
-        ),
-        CustomPuzzleItem(
-          id: 'sample_02',
-          imagePathOrUrl: assetSamples[1],
-          isLocalFile: false,
-          sourcePlatform: '网络',
-          difficulty: squareTiers[2].difficulty, // 36
-          createdAt: DateTime.now().subtract(const Duration(days: 1)),
-        ),
-        CustomPuzzleItem(
-          id: 'sample_03',
-          imagePathOrUrl: assetSamples[2],
-          isLocalFile: false,
-          sourcePlatform: '网络',
-          difficulty: squareTiers[3].difficulty, // 64
-          createdAt: DateTime.now(),
-        ),
-      ];
-      // 失败语义（§4.4）：全部成功才置 true，任一失败保持 false，
-      // 下次启动重新植入完整样例，避免「半套样例 + 永久跳过」的脏状态
-      var allOk = true;
-      final plantedSampleIds = <String>[];
-      for (final s in samples) {
-        try {
-          await _saveCustomPuzzle(s);
-          plantedSampleIds.add(s.id);
-        } catch (e, st) {
-          allOk = false;
-          AppLogger.repo.warning('Failed to plant sample ${s.id}', e, st);
-        }
-      }
-      if (allOk) {
-        rawItems.addAll(samples);
-        await putRaw(stateBox, kKeyPresetsInitialized, true);
-        AppLogger.repo.info('initCustom created default 3 samples');
-      } else {
-        // P1-17 回滚本轮已写入的样例：任一失败即删除已成功的样例 key，
-        // 保持「全有或全无」，下次启动重新植入完整样例，避免半套样例固化
-        for (final id in plantedSampleIds) {
-          try {
-            await _deleteCustomPuzzleKey(id);
-            AppLogger.repo.info('Rollback planted sample $id');
-          } catch (e, st) {
-            AppLogger.repo.warning('Rollback planted sample $id failed', e, st);
-          }
-        }
-        AppLogger.repo.warning(
-          'initCustom samples partial failure, rolled back ${plantedSampleIds.length}',
-        );
-      }
+      // 依产品规范：不再内置任何 demo 样例，首次启动直接标记已初始化，保持列表为空
+      await putRaw(stateBox, kKeyPresetsInitialized, true);
+      AppLogger.repo.info('initCustom initialized with zero presets');
     } else {
       if (presetsInitialized != true) {
         // 有历史数据但标志缺失（理论不可达，防御性补写）

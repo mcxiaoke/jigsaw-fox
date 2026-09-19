@@ -138,6 +138,18 @@ class DailyContentPipeline {
         'Extracted $extracted files for $yyyyMm to ${AppLogger.sanitizePath(tempExtractDir.path)}',
       );
 
+      if (extracted == 0) {
+        AppLogger.daily.warning(
+          'ensureMonthReady failed: no valid daily images extracted for $yyyyMm from ${AppLogger.sanitizeUrl(zipUrl)}',
+        );
+        if (tempExtractDir.existsSync()) {
+          try {
+            tempExtractDir.deleteSync(recursive: true);
+          } catch (_) {}
+        }
+        return false;
+      }
+
       // 3. 原子落位到正式目录（若配置了 TempStorage 则经由原子提升，否则采用本地双向交换）
       if (_tempStorage != null) {
         await _tempStorage.promoteExtractDir(tempExtractDir, monthDir);

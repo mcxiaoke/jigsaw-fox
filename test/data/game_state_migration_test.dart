@@ -173,20 +173,14 @@ void main() {
 
       await GameRepository.instance.resetAllData();
 
-      // 1. progress box 清空；collections 仅剩步骤 5 重新植入的 3 个样例
+      // 1. progress box 清空；collections 亦清空（不再植入样例）
       expect(sm.progress.isEmpty, isTrue);
-      final customKeys =
-          sm.collections.keys
-              .cast<String>()
-              .where((k) => k.startsWith('custom:'))
-              .toList()
-            ..sort();
-      expect(customKeys, [
-        'custom:sample_01',
-        'custom:sample_02',
-        'custom:sample_03',
-      ]);
-      expect(sm.collections.length, 3);
+      final customKeys = sm.collections.keys
+          .cast<String>()
+          .where((k) => k.startsWith('custom:'))
+          .toList();
+      expect(customKeys, isEmpty);
+      expect(sm.collections.length, 0);
       // state box：步骤 4 后只剩 starter 经济三键；成就/统计已清零
       expect(sm.state.get('econ:coins'), 100);
       expect(sm.state.get('econ:hintCoupons'), 5);
@@ -224,7 +218,7 @@ void main() {
       // 5. 与全新安装状态一致：重置后不再重植 100 关内置 demo
       //    （09-07 启动路径已注释 _initLevels，09-09 resetAllData 同步对齐）
       expect(GameRepository.instance.levels, isEmpty);
-      expect(GameRepository.instance.customPuzzles, hasLength(3));
+      expect(GameRepository.instance.customPuzzles, isEmpty);
       expect(sm.state.get('custom:presetsInitialized'), isTrue);
     });
 

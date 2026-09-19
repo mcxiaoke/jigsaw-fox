@@ -514,31 +514,48 @@ class AchievementService {
     return newlyUnlocked;
   }
 
-  /// 领取成就金币奖励（计入每日 200 币软帽，设计 §6.1 "全渠道" + §8.1 日上限兜底）
-  Future<bool> claimReward(String achievementId) async {
-    await _store.init();
-    if (!_store.isUnlocked(achievementId)) {
-      AppLogger.debug(
-        AppLogger.repo,
-        'claimReward skip notUnlocked id=$achievementId',
-      );
-      return false;
-    }
-    if (_store.isClaimed(achievementId)) {
-      AppLogger.debug(
-        AppLogger.repo,
-        'claimReward skip alreadyClaimed id=$achievementId',
-      );
-      return false;
-    }
+  final _claimingIds = <String>{};
 
-    final def = allAchievements.firstWhere((a) => a.id == achievementId);
-    await _store.markClaimed(achievementId);
-    await EconomyService.instance.init();
-    await EconomyService.instance.addCoins(def.coinReward);
-    AppLogger.repo.info(
-      'Achievement reward claimed id=$achievementId coins=+${def.coinReward}',
-    );
-    return true;
+  /// 检查指定成就是否正在领取中
+  bool isClaiming(String achievementId) => _claimingIds.contains(achievementId);
+
+  /// 领取成就金币奖励（成就里程碑发放 bypassCap: true，成功发币后再标记已领）
+  Future<bool> claimReward(String achievementId) async {
+    if (_claimingIds.contains(achievementId)) {
+      AppLogger.debug(
+        AppLogger.repo,
+        'claimReward skip already claiming id=$achievementId',
+      );
+      return false;
+    }
+    _claimingIds.add(achievementId);
+    try {
+      await _store.init();
+      if (!_store.isUnlocked(achievementId)) {
+        AppLogger.debug(
+          AppLogger.repo,
+          'claimReward skip notUnlocked id=$achievementId',
+        );
+        return false;
+      }
+      if (_store.isClaimed(achievementId)) {
+        AppLogger.debug(
+          AppLogger.repo,
+          'claimReward skip alreadyClaimed id=$achievementId',
+        );
+        return false;
+      }
+
+      final def = allAchievements.firstWhere((a) => a.id == achievementId);
+      await EconomyService.instance.init();
+      await EconomyService.instance.addCoins(def.coinReward, bypassCap: true);
+      await _store.markClaimed(achievementId);
+      AppLogger.repo.info(
+        'Achievement reward claimed id=$achievementId coins=+${def.coinReward}',
+      );
+      return true;
+    } finally {
+      _claimingIds.remove(achievementId);
+    }
   }
 }

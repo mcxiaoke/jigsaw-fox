@@ -49,7 +49,7 @@ void main() {
       expect(find.text('Active (0)'), findsOneWidget);
       expect(find.text('Saved (0)'), findsOneWidget);
       expect(find.text('Done (0)'), findsOneWidget);
-      expect(find.text('Custom (3)'), findsOneWidget);
+      expect(find.text('Custom (0)'), findsOneWidget);
 
       // Chinese test
       await LocaleService.instance.setLanguage(AppLanguage.zh);
@@ -69,7 +69,7 @@ void main() {
       expect(find.text('进行中 (0)'), findsOneWidget);
       expect(find.text('收藏 (0)'), findsOneWidget);
       expect(find.text('已完成 (0)'), findsOneWidget);
-      expect(find.text('自制 (3)'), findsOneWidget);
+      expect(find.text('自制 (0)'), findsOneWidget);
     },
   );
 }

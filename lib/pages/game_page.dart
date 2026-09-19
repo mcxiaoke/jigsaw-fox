@@ -63,12 +63,14 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
 
   bool _isSolved = false;
   bool _isPaused = false;
+  bool _isAppInactive = false;
   bool _isPopping = false;
   int _seconds = 0;
   final _secondsNotifier = ValueNotifier<int>(0);
   Timer? _timer;
   DateTime? _hintPauseUntil;
   int _solvedPieces = 0;
+  int _movesCount = 0;
 
   /// 已上报的游玩秒数游标（playSeconds 生命周期增量上报，设计 §8.1）
   int _reportedPlaySeconds = 0;
@@ -114,13 +116,17 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     super.didChangeAppLifecycleState(state);
-    if (state == AppLifecycleState.paused ||
+    if (state == AppLifecycleState.inactive ||
+        state == AppLifecycleState.paused ||
         state == AppLifecycleState.hidden ||
         state == AppLifecycleState.detached) {
+      _isAppInactive = true;
       AppLogger.game.info('GamePage lifecycle $state -> flushSync save');
       SoundService.I.stopAll();
       _reportPlaySeconds(); // 切后台/暂停：上报游玩时长增量（设计 §8.1）
       _flushSync();
+    } else if (state == AppLifecycleState.resumed) {
+      _isAppInactive = false;
     }
   }
 
@@ -222,7 +228,7 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
 
   void _startTimer() {
     _timer = Timer.periodic(const Duration(seconds: 1), (_) {
-      if (!_isSolved && !_isPaused && mounted) {
+      if (!_isSolved && !_isPaused && !_isAppInactive && mounted) {
         final now = DateTime.now();
         if (_hintPauseUntil != null && now.isBefore(_hintPauseUntil!)) {
           // 提示动画时停期间不累加用时
@@ -324,6 +330,9 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
       initialSnapshotJson: widget.initialSnapshotJson,
       onSolved: _handleSolved,
       onPieceSnapped: _onPieceSnapped,
+      onMoveMade: () {
+        _movesCount++;
+      },
       onProgressChanged: (count) {
         _solvedPieces = count;
         _markNeedsUIUpdate();
@@ -606,7 +615,7 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
             timeSeconds: _seconds,
             hintsUsed: hints,
             completedPieceCount: actualPieces,
-            moves: _solvedPieces,
+            moves: _movesCount > 0 ? _movesCount : _solvedPieces,
           );
       dialogDeltaStars = updateResult.deltaStars;
 
@@ -743,7 +752,7 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
   }
 
   Future<void> _onHintPressed() async {
-    if (_isSolved || _isPaused) return;
+    if (_game == null || _isSolved || _isPaused) return;
 
     final tier = (_effectiveDifficulty ?? widget.difficulty).tierIndex;
     final canUse = await EconomyService.instance.consumeHint(tierIndex: tier);
@@ -1080,13 +1089,13 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
           visualDensity: VisualDensity.compact,
           padding: const EdgeInsets.symmetric(horizontal: 5),
           constraints: const BoxConstraints(minWidth: 38, minHeight: 40),
-          icon: const Icon(
+          icon: Icon(
             PhosphorIconsFill.lightbulb,
             size: 21,
-            color: Colors.amber,
+            color: (_game == null || _isSolved) ? Colors.grey : Colors.amber,
           ),
           tooltip: tr.game.tooltipHint,
-          onPressed: _onHintPressed,
+          onPressed: (_game == null || _isSolved) ? null : _onHintPressed,
         ),
         // 3. 显示遮罩（底图透视 0%/20%/45%）
         IconButton(

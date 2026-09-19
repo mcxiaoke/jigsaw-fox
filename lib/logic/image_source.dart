@@ -5,18 +5,9 @@ import 'package:image_picker/image_picker.dart';
 
 import 'package:jigsawpuzzle/services/app_logger.dart';
 
-const assetSamples = <String>[
-  'assets/images/sample_01.jpg',
-  'assets/images/sample_02.jpg',
-  'assets/images/sample_03.jpg',
-  'assets/images/sample_04.jpg',
-  'assets/images/sample_05.jpg',
-  'assets/images/sample_06.jpg',
-  'assets/images/sample_07.jpg',
-  'assets/images/sample_08.jpg',
-  'assets/images/sample_09.jpg',
-  'assets/images/sample_10.jpg',
-];
+/// 已废弃，项目不再内置 demo 静态样本图（统一走网络内容或用户本地自制）。
+@Deprecated('项目不再内置 sample 图片资源')
+const assetSamples = <String>[];
 
 // Used as an interface with multiple implementations.
 // ignore: one_member_abstracts

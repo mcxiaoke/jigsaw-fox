@@ -131,11 +131,42 @@ class ContentHttpClient {
         throw HttpException('File too large $partLen > $maxDiskBytes for $url');
       }
 
-      // 原子重命名为目标文件
-      if (destFile.existsSync()) {
-        destFile.deleteSync();
+      // 原子重命名为目标文件（带备份与失败回滚保护，杜绝新旧两空）
+      final hasOld = destFile.existsSync();
+      final bakPath = hasOld
+          ? '$destinationPath.bak_${DateTime.now().millisecondsSinceEpoch}'
+          : null;
+      if (hasOld && bakPath != null) {
+        destFile.renameSync(bakPath);
       }
-      final finalFile = await partFile.rename(destinationPath);
+      File finalFile;
+      try {
+        finalFile = await partFile.rename(destinationPath);
+        if (bakPath != null) {
+          final bakFile = File(bakPath);
+          if (bakFile.existsSync()) {
+            try {
+              bakFile.deleteSync();
+            } catch (_) {}
+          }
+        }
+      } catch (e) {
+        if (bakPath != null) {
+          final bakFile = File(bakPath);
+          if (bakFile.existsSync()) {
+            try {
+              bakFile.renameSync(destinationPath);
+            } catch (re, rst) {
+              AppLogger.network.severe(
+                'Failed to restore backup $bakPath to $destinationPath',
+                re,
+                rst,
+              );
+            }
+          }
+        }
+        rethrow;
+      }
       AppLogger.network.info(
         'downloadFile success ${AppLogger.sanitizeUrl(url)} ${sw.elapsedMilliseconds}ms bytes=$partLen',
       );

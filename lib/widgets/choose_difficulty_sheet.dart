@@ -183,6 +183,7 @@ class _ChooseDifficultySheetState extends State<ChooseDifficultySheet> {
   double _imageWidth = 1;
   double _imageHeight = 1;
   bool _imageLoaded = false;
+  bool _decodeFailed = false;
   late bool _showGridOverlay;
 
   // Explicit slang references for tier/estimated (ensures t.difficulty.tier.* & t.difficulty.estimated.* usage)
@@ -261,6 +262,11 @@ class _ChooseDifficultySheetState extends State<ChooseDifficultySheet> {
       // best-effort：清理/降级失败可静默
       // ignore: avoid_catches_without_on_clauses
     } catch (_) {
+      if (mounted) {
+        setState(() {
+          _decodeFailed = true;
+        });
+      }
     } finally {
       descriptor?.dispose();
       buffer?.dispose();
@@ -343,7 +349,7 @@ class _ChooseDifficultySheetState extends State<ChooseDifficultySheet> {
     final isEffectivePassed = widget.completedPieceCounts.contains(
       effectiveDiff.pieceCount,
     );
-    final isFullyPlayable = widget.isUnlocked;
+    final isFullyPlayable = widget.isUnlocked && !_decodeFailed;
 
     return Scaffold(
       backgroundColor: palette.surface,
@@ -533,6 +539,28 @@ class _ChooseDifficultySheetState extends State<ChooseDifficultySheet> {
                             // 解码期降采样：预览区 maxWidth 520 × 3倍DPR ≈1560，
                             // 1080已足够清晰，避免按超分原图全量解码数十MB
                             cacheWidth: 1080,
+                            errorBuilder: (context, error, stackTrace) {
+                              return Center(
+                                child: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(
+                                      PhosphorIconsBold.imageBroken,
+                                      size: 44,
+                                      color: palette.error,
+                                    ),
+                                    const SizedBox(height: 8),
+                                    Text(
+                                      t.crop.decodeFailedToast,
+                                      style: TextStyle(
+                                        color: palette.secondaryText,
+                                        fontSize: 13,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              );
+                            },
                           ),
                           if (_showGridOverlay)
                             CustomPaint(
