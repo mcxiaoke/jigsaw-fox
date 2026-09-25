@@ -907,6 +907,188 @@ void main() {
     expect(lastPiece.position.y, lessThan(800.0));
   });
 
+  test('残局防丢自检按整簇原子平移：多片集群推至屏幕外绝不撕裂（BUG-1 回归）', () async {
+    final img = await _decodePng();
+    final game = JigsawPuzzleGame(
+      image: img,
+      rows: 3,
+      cols: 3,
+      onSolved: () {},
+    );
+    game.onGameResize(Vector2(400, 800));
+    await game.onLoad();
+
+    // 拼至仅剩最后 2 块未归位
+    for (var i = 0; i < 7; i++) {
+      game.hint();
+    }
+    expect(game.solvedCount, 7);
+
+    final unsolved = game.boardState.pieces
+        .where((p) => !p.isSolved(3, 3))
+        .toList();
+    expect(unsolved.length, 2);
+
+    // 把这 2 块人为构造成同一集群：偏移严格等于网格偏移，且最左成员整体甩出视口左侧
+    final sorted = [...unsolved]
+      ..sort((a, b) => a.c != b.c ? a.c.compareTo(b.c) : a.r.compareTo(b.r));
+    final leftmost = sorted.first;
+    const baseNx = -0.6;
+    const baseNy = 0.5;
+    final updated = game.boardState.pieces.map((p) {
+      if (p.id != unsolved[0].id && p.id != unsolved[1].id) return p;
+      return p.copyWith(
+        clusterId: leftmost.clusterId,
+        nx: baseNx + (p.c - leftmost.c) / 3,
+        ny: baseNy + (p.r - leftmost.r) / 3,
+        inTray: false,
+      );
+    }).toList();
+    game.boardState = game.boardState.copyWith(pieces: updated);
+
+    final clusterComps = game.children
+        .whereType<PuzzlePieceComponent>()
+        .where((c) => unsolved.any((p) => p.id == c.id))
+        .toList();
+    expect(clusterComps.length, 2);
+    for (final comp in clusterComps) {
+      final s = game.boardState.pieceById(comp.id);
+      comp
+        ..isInTray = false
+        ..scale.setAll(game.zoom)
+        ..position.setFrom(game.normalizedToScreen(s.nx, s.ny));
+    }
+
+    // 记录平移前的簇内相对偏移（归一化）
+    final stateBefore = game.boardState;
+    final refBefore = stateBefore.pieceById(leftmost.id);
+    final otherBefore = stateBefore.pieceById(
+      clusterComps.firstWhere((c) => c.id != leftmost.id).id,
+    );
+    final deltaNxBefore = otherBefore.nx - refBefore.nx;
+    final deltaNyBefore = otherBefore.ny - refBefore.ny;
+
+    // 触发自检
+    game.missingPieceCheck();
+
+    // 1. 整簇原子平移：归一化相对偏移严格不变（旧的逐片 clamp 会撕裂此处）
+    final stateAfter = game.boardState;
+    final refAfter = stateAfter.pieceById(leftmost.id);
+    final otherAfter = stateAfter.pieceById(otherBefore.id);
+    expect(otherAfter.nx - refAfter.nx, closeTo(deltaNxBefore, 1e-9));
+    expect(otherAfter.ny - refAfter.ny, closeTo(deltaNyBefore, 1e-9));
+    // 2. 组件视觉相对偏移同步保持（按真实网格差量校验，兼容横/竖相邻或斜向）
+    final compRef = clusterComps.firstWhere((c) => c.id == refAfter.id);
+    final compOther = clusterComps.firstWhere((c) => c.id == otherAfter.id);
+    final dcol = otherAfter.c - refAfter.c;
+    final drow = otherAfter.r - refAfter.r;
+    expect(
+      compOther.position.x - compRef.position.x,
+      closeTo(dcol * compOther.size.x * compOther.scale.x, 0.01),
+    );
+    expect(
+      compOther.position.y - compRef.position.y,
+      closeTo(drow * compOther.size.y * compOther.scale.y, 0.01),
+    );
+    // 3. 越界成员已被完整拉回可视区，且不变量自检通过
+    for (final comp in clusterComps) {
+      expect(comp.position.x, greaterThanOrEqualTo(0.0));
+      expect(comp.position.x + comp.size.x * comp.scale.x, lessThan(400.0));
+    }
+    expect(game.clusterGridInvariantViolation(), isNull);
+  });
+
+  test('单击抓取集群期间滚轮缩放：整簇 scale 与相对偏移同步，不撕裂（BUG-3 回归）', () async {
+    final img = await _decodePng();
+    final game = JigsawPuzzleGame(
+      image: img,
+      rows: 3,
+      cols: 3,
+      onSolved: () {},
+    );
+    game.onGameResize(Vector2(800, 800));
+    await game.onLoad();
+
+    // 构造 2 片网格相邻的游离集群（与“网格相邻两块自动合并”测试同法）
+    final a = game.children.whereType<PuzzlePieceComponent>().firstWhere(
+      (p) => p.id == 0,
+    );
+    final b = game.children.whereType<PuzzlePieceComponent>().firstWhere(
+      (p) => p.id == 1,
+    );
+    const anX = 0.50;
+    const anY = 0.55;
+    for (final (p, nx) in [(a, anX), (b, anX + 1 / 3)]) {
+      p
+        ..isInTray = false
+        ..scale.setAll(game.zoom)
+        ..position.setFrom(game.normalizedToScreen(nx, anY));
+    }
+    game.handlePieceDragEnd(a);
+    expect(a.clusterId, equals(b.clusterId));
+
+    // click-to-pick 抓取主片并移动到棋盘中部（此后不再移动鼠标）
+    game.startHoldingPiece(a, 0.5, 0.5);
+    game.updateHoldingPiecePosition(Vector2(300, 260));
+
+    // 持片状态下滚轮缩放
+    game.zoomAt(Vector2(300, 260), 0.5);
+
+    // 1. 主片与附属片的 scale 必须同步刷新为最新 zoom（旧实现主片被跳过而滞后）
+    expect(a.scale.x, closeTo(game.zoom, 1e-9));
+    expect(b.scale.x, closeTo(game.zoom, 1e-9));
+    // 2. 簇内相对偏移仍为精确网格偏移（旧实现附属片会被重置回拖拽前坐标 → 撕裂）
+    expect(
+      (b.position.x - a.position.x) / (b.size.x * game.zoom),
+      closeTo(1.0, 0.02),
+    );
+    expect(
+      (b.position.y - a.position.y) / (b.size.y * game.zoom),
+      closeTo(0.0, 0.02),
+    );
+    game.cancelHoldingPiece();
+  });
+
+  test('模式仅由设置决定：tabletop 模式下窗口缩小到极小也不发生模式翻转（V10 回归）', () async {
+    final img = await _decodePng();
+    final game = JigsawPuzzleGame(
+      image: img,
+      rows: 3,
+      cols: 3,
+      scatterMode: 'tabletop',
+      onSolved: () {},
+    );
+    game.onGameResize(Vector2(1280, 800));
+    await game.onLoad();
+    expect(game.isTabletop, isTrue);
+
+    // 缩到历史阈值内（同时 <=450x450）：仍是桌面散落模式（不再降级为托盘模式）
+    game.onGameResize(Vector2(400, 400));
+    expect(game.isTabletop, isTrue);
+
+    // 放大回去仍为桌面散落，且全场不存在托盘语义碎片（杜绝搁浅失踪）
+    game.onGameResize(Vector2(1280, 800));
+    expect(game.isTabletop, isTrue);
+    expect(
+      game.children.whereType<PuzzlePieceComponent>().where((p) => p.isInTray),
+      isEmpty,
+    );
+    expect(game.clusterGridInvariantViolation(), isNull);
+
+    // 托盘模式同理：任何窗口尺寸都保持托盘模式
+    final trayGame = JigsawPuzzleGame(
+      image: img,
+      rows: 3,
+      cols: 3,
+      onSolved: () {},
+    );
+    trayGame.onGameResize(Vector2(400, 400));
+    await trayGame.onLoad();
+    expect(trayGame.isTabletop, isFalse);
+    trayGame.onGameResize(Vector2(1920, 1080));
+    expect(trayGame.isTabletop, isFalse);
+  });
+
   test('窗口尺寸变化 (onGameResize) 时，托盘始终紧贴底部且棋盘与碎片同步按比例缩放', () async {
     final img = await _decodePng();
     final game = JigsawPuzzleGame(

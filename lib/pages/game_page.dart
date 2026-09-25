@@ -989,16 +989,26 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
           HardwareKeyboard.instance.isControlPressed ||
           HardwareKeyboard.instance.isMetaPressed;
       final mousePos = event.localPosition;
-      final inTray = !_game!.isTabletop && mousePos.dy >= _game!.trayPosition.y;
+      final scrollDelta = event.scrollDelta;
+      // 托盘命中区与托盘矩形严格一致（上下界都判）：
+      // 无上界会让托盘底部边距区（_bottomTrayMargin）误判为托盘而滚动。
+      final trayTop = _game!.trayPosition.y;
+      final trayBottom = trayTop + _game!.traySize.y;
+      final inTray =
+          !_game!.isTabletop &&
+          mousePos.dy >= trayTop &&
+          mousePos.dy <= trayBottom;
 
       if (inTray) {
-        // 托盘区域直接响应鼠标滚轮与触摸板水平/垂直滚动
-        final delta = event.scrollDelta.dx != 0
-            ? -event.scrollDelta.dx
-            : -event.scrollDelta.dy;
-        _game!.scrollTray(delta * 0.8);
-      } else if (isCtrl || event.scrollDelta.dy.abs() > 0) {
-        final zoomDelta = -event.scrollDelta.dy * 0.003;
+        // 托盘区域直接响应鼠标滚轮与触摸板水平/垂直滚动。
+        // 轴优先序取绝对分量较大者：鼠标滚轮只有 dy，触摸板横向滑动只有 dx，斜向手势取主轴。
+        // 阻尼 1.6：等价于修复前"页面侧 + 游戏侧各 0.8"的托盘主体实际速度，避免手感回退。
+        final delta = scrollDelta.dx.abs() > scrollDelta.dy.abs()
+            ? -scrollDelta.dx
+            : -scrollDelta.dy;
+        _game!.scrollTray(delta * 1.6);
+      } else if (isCtrl || scrollDelta.dy.abs() > 0) {
+        final zoomDelta = -scrollDelta.dy * 0.003;
         _game!.zoomAt(Vector2(mousePos.dx, mousePos.dy), zoomDelta);
       }
     }

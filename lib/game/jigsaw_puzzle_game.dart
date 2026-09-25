@@ -93,7 +93,7 @@ class TrayBackgroundComponent extends PositionComponent
 /// Flame game engine handling jigsaw puzzle canvas, multi-modal scrollable tray,
 /// smart aspect ratio adaptation, 3D piece rendering, cluster drag-and-drop, and undo/redo.
 class JigsawPuzzleGame extends FlameGame
-    with ScrollDetector, PanDetector, MouseMovementDetector, TapCallbacks {
+    with PanDetector, MouseMovementDetector, TapCallbacks {
   JigsawPuzzleGame({
     required this.image,
     required this.rows,
@@ -221,6 +221,13 @@ class JigsawPuzzleGame extends FlameGame
   double get boardGhostOpacity => _boardGhostOpacity;
   bool isPinching = false;
 
+  /// 是否启用“集群内精确网格相对偏移”不变量自检（仅 debug 生效，release 零开销）。
+  ///
+  /// 该不变量是锁定判定、“一个集群要么全就位要么全未就位”、整簇按 relCol/relRow 重排
+  /// 的共同基石，一旦被破坏会出现“集群撕裂 + 已植入碎片被拖离槽位”。
+  /// 排障时可临时置 false（断言只在 debug 下运行）。
+  bool assertClusterGridInvariant = true;
+
   late EdgeLayout edgeLayout;
   late PuzzleBoardState _boardState;
   PuzzleBoardState get boardState => _boardState;
@@ -237,9 +244,15 @@ class JigsawPuzzleGame extends FlameGame
   bool get canUndo => undoManager.canUndo;
   bool get canRedo => undoManager.canRedo;
 
-  /// 是否处于桌面散落模式（宽屏/平板/桌面端开启散落且空间充足）
-  bool get isTabletop =>
-      scatterMode == 'tabletop' && (size.x > 450.0 || size.y > 450.0);
+  /// 是否处于桌面散落模式（**仅由设置决定**，与窗口尺寸无关）。
+  ///
+  /// 【为何不随视口翻转】曾用 `size.x > 450 || size.y > 450` 做运行时降级，但模式在
+  /// 窗口缩放中途翻转会产生两个难以自洽的状态迁移：降级到托盘模式时，托盘哨兵坐标
+  /// （`ny >= 2.0`）的碎片会失去托盘容器而永久搁浅；反向翻转时散落在桌面四周的碎片
+  /// 又会被逐片 clamp 到小棋盘上（托盘却是空的，与"托盘模式 = 碎片收纳在底部托盘"不符）。
+  /// 现改为纯粹的设置项，小窗口的可玩性由桌面端最小窗口尺寸兜底
+  /// （见 `lib/main.dart` 的 `kDesktopMinWindowSize`）。
+  bool get isTabletop => scatterMode == 'tabletop';
 
   /// 当前是否有任意碎片正在被按住拖拽或光标吸附抓取
   bool get isDraggingAnyPiece =>
@@ -427,6 +440,7 @@ class JigsawPuzzleGame extends FlameGame
     _computeLayout();
     _tabletopScatterSlots = null;
     _scatterAssignmentCache = null;
+
     _syncResizeTransform(
       viewCenterNx: prevViewCenter.x,
       viewCenterNy: prevViewCenter.y,
@@ -498,6 +512,7 @@ class JigsawPuzzleGame extends FlameGame
     _updateBoardTransform();
 
     // 5. 动态刷新所有碎片的几何贝塞尔轮廓与基础尺寸
+    final holdingClusterId = _holdingPiece?.clusterId;
     for (final comp in _pieces.values) {
       final edges = edgeLayout.edgesFor(comp.r, comp.c);
       comp.updateShapeAndSize(
@@ -507,6 +522,12 @@ class JigsawPuzzleGame extends FlameGame
 
       if (comp.isDragging || comp == _holdingPiece) {
         // 若当前正在被鼠标吸附或拖拽，由 updateHoldingPiecePosition 在下一帧自动对准
+        continue;
+      }
+
+      // [holding 集群整体跳过] 只跳过主片会让附属片被重置到拖拽前的 nx/ny，
+      // 与停在光标处的主片撕裂；整簇跳过由方法末尾的 [_refreshHoldingClusterLayout] 重排。
+      if (holdingClusterId != null && comp.clusterId == holdingClusterId) {
         continue;
       }
 
@@ -538,6 +559,9 @@ class JigsawPuzzleGame extends FlameGame
     final freeComponents = _pieces.values.where((p) {
       if (p.isInTray || p.isLocked || p == _holdingPiece || p.isDragging) {
         return false;
+      }
+      if (holdingClusterId != null && p.clusterId == holdingClusterId) {
+        return false; // holding 集群整簇不动，由 _refreshHoldingClusterLayout 重排
       }
       final pState = _boardState.pieceById(p.id);
       // 若仍处于合法摆放域内（托盘模式 = 棋盘；桌面模式 = 大桌面），
@@ -645,6 +669,10 @@ class JigsawPuzzleGame extends FlameGame
     }
 
     updatePiecesStateAndPriorities();
+
+    // 9. 手持集群在新几何下的重排（必须放在步骤 5 之后：此处碎片 shape/基础尺寸已刷新）
+    _refreshHoldingClusterLayout();
+    _debugAssertClusterGridInvariant('syncResizeTransform');
   }
 
   /// Computes smart board maximizing layout and normalized tray metrics.
@@ -1152,18 +1180,13 @@ class JigsawPuzzleGame extends FlameGame
     return slots[_scatterAssignmentCache![id]];
   }
 
-  @override
-  void onScroll(PointerScrollInfo info) {
-    super.onScroll(info);
-    final mousePos = info.eventPosition.global;
-    if (mousePos.y >= trayPosition.y &&
-        mousePos.y <= trayPosition.y + traySize.y) {
-      final delta = info.scrollDelta.global.y != 0
-          ? -info.scrollDelta.global.y
-          : -info.scrollDelta.global.x;
-      scrollTray(delta * 0.8);
-    }
-  }
+  /// 滚轮事件（托盘横向滚动 / 棋盘缩放）统一由 GamePage 的 Listener 分发（见
+  /// `GamePage._onPointerSignal`），此处**刻意不再实现 `ScrollDetector.onScroll`**：
+  /// 1) 同一次滚轮事件会广播到命中路径上的所有 Listener，若此处再处理一次会与页面侧
+  ///    重复触发（托盘主体实际速度变成两倍）；
+  /// 2) 页面侧使用 `event.localPosition`（与 `trayPosition` 同为画布坐标），而 Flame 侧
+  ///    `info.eventPosition.global` 是**整屏坐标**，与画布相差一个 AppBar 高度，
+  ///    会导致托盘命中区整体上移、出现"托盘上方边滚托盘边缩放棋盘"的手势冲突。
 
   /// 单击吸附抓取状态机（Click-to-Pick & Move-to-Drop）
   PuzzlePieceComponent? _holdingPiece;
@@ -1463,8 +1486,13 @@ class JigsawPuzzleGame extends FlameGame
   /// 但在**屏幕像素**上随缩放成正比放大——放大后吸附半径暴涨，导致碎片在离槽位较远时
   /// 就被吸过去并锁定，出现“离槽位还有距离却被吸附/锁定”的 bug。
   ///
-  /// 【修复】：屏幕像素吸附半径恒定并设硬上限 48px，缩放越大归一化阈值越小，
+  /// 【修复】：把 48px 的**屏幕像素**硬上限换算回归一化阈值，缩放越大归一化阈值越小，
   /// 使吸附手感不再随放大而走样；1× 缩放、且单元格像素×0.40 < 48px 时与原始行为一致，无手感回退。
+  ///
+  /// 【口径说明（勿再写成"屏幕像素半径恒定"）】：阈值以 `min(boardSize.x, boardSize.y)`
+  /// 归一化，归一化空间内各向同性；映射回屏幕后，只有短边方向严格等于 48px，
+  /// 长边方向的实际半径 = 48 × 长边/短边（非正方形棋盘 > 48px），即屏幕上是椭圆。
+  /// 这是原引擎"归一化空间各向同性"口径的延续，属既定手感，不是缺陷。
   double effectiveSnapDistance() {
     const ratio = PuzzleEngine.defaultSnapRatio; // 0.40，见 PuzzleEngine
     const maxScreenPx = 48; // 吸附半径屏幕像素硬上限
@@ -1637,6 +1665,9 @@ class JigsawPuzzleGame extends FlameGame
     _clampPanOffset();
 
     _updateBoardTransform();
+    // 整簇跳过后的必要补丁：立即按新 _zoom 重排手持集群（主片与附属片的 scale、
+    // 相对网格偏移必须同时刷新，否则 click-to-pick 下不动鼠标时撕裂会一直保留）。
+    _refreshHoldingClusterLayout();
     AppLogger.game.fine(
       'zoomAt focal=${focalPoint.x.toStringAsFixed(1)},${focalPoint.y.toStringAsFixed(1)} delta=$deltaScale zoom $oldZoom->$newZoom pan=$_panOffset',
     );
@@ -1686,9 +1717,17 @@ class JigsawPuzzleGame extends FlameGame
     _boardOutlineRect.size.setFrom(effectiveBoardSize);
 
     // Update positions and scale of all pieces currently on the board
+    // [holding 集群整体跳过] 只有主片被置 isDragging，若仅跳过主片，同簇附属片会被
+    // 当作静态棋盘碎片重置回拖拽前的 nx/ny 并强制 _zoom 缩放，与停在光标处的主片撕裂
+    // （click-to-pick 模式下不动鼠标撕裂会持续可见）。整簇跳过由
+    // [_refreshHoldingClusterLayout] 在缩放后统一按新 _zoom 重排。
+    final holdingClusterId = _holdingPiece?.clusterId;
     for (final pState in _boardState.pieces) {
       final comp = _pieces[pState.id];
       if (comp == null || (!isTabletop && comp.isInTray) || comp.isDragging) {
+        continue;
+      }
+      if (holdingClusterId != null && comp.clusterId == holdingClusterId) {
         continue;
       }
 
@@ -1696,6 +1735,23 @@ class JigsawPuzzleGame extends FlameGame
       comp.position.setFrom(targetPos);
       comp.scale.setAll(_zoom);
     }
+  }
+
+  /// 手持集群的几何重排：缩放倍率或窗口尺寸变化后，被跳过的整簇必须按新 `_zoom`
+  /// 与新碎片尺寸重排一次，否则主片与其附属片的 scale / 相对位置会与棋盘脱节。
+  ///
+  /// 光标由「主片当前位置 + 归一化抓取锚点」反推（与 [handlePieceDragEnd] 同源），
+  /// 不使用缓存光标：`updateHoldingPiecePosition` 内含"托盘中向上拖出"分支
+  /// （`cursor.y < trayPosition.y - 20`），缓存旧光标叠加 resize 后的新 `trayPosition`
+  /// 可能误判为拖出托盘并触发 `_realignTrayPieces`。
+  void _refreshHoldingClusterLayout() {
+    final primary = _holdingPiece;
+    if (primary == null || _isSolved) return;
+    final cursor = Vector2(
+      primary.position.x + _holdingAnchorX * primary.size.x * primary.scale.x,
+      primary.position.y + _holdingAnchorY * primary.size.y * primary.scale.y,
+    );
+    updateHoldingPiecePosition(cursor);
   }
 
   /// Sets board ghost opacity directly.
@@ -1997,6 +2053,7 @@ class JigsawPuzzleGame extends FlameGame
     updatePiecesStateAndPriorities();
     _checkEdgeCompleteAutoDismiss();
     missingPieceCheck();
+    _debugAssertClusterGridInvariant('applySnapSettlement');
 
     final snapCount = finalAffectedIds.isNotEmpty ? finalAffectedIds.length : 1;
     onPieceSnapped?.call(snapCount);
@@ -2140,6 +2197,7 @@ class JigsawPuzzleGame extends FlameGame
         'dragEnd no snap piece=${piece.id} cluster=${piece.clusterId}',
       );
     }
+    _debugAssertClusterGridInvariant('handlePieceDragEnd');
   }
 
   /// 根据当前边缘筛选状态 [_borderFilterActive]，更新所有碎片的可见性并重排托盘
@@ -2745,9 +2803,65 @@ class JigsawPuzzleGame extends FlameGame
     );
   }
 
-  /// “失踪碎片”防丢自检与自愈机制：
+  /// 集群网格偏移不变量的容差（归一化坐标）。
+  /// 撕裂造成的偏差量级约 `1/cols`（≥ 0.04），远大于浮点累计误差，故此容差足够灵敏。
+  static const double _gridInvariantTolerance = 1e-6;
+
+  /// 校验“同一集群成员间的归一化坐标差 == 网格偏移”不变量，返回第一处违约描述（正常为 null）。
+  ///
+  /// 只校验权威状态 `_boardState`（不校验组件位置，后者可能正处于动画插值中）；
+  /// 跳过托盘碎片（不参与棋盘网格）与单成员簇。
+  @visibleForTesting
+  String? clusterGridInvariantViolation() {
+    final byCluster = <int, List<PieceState>>{};
+    for (final p in _boardState.pieces) {
+      if (p.inTray) continue;
+      byCluster.putIfAbsent(p.clusterId, () => []).add(p);
+    }
+    for (final entry in byCluster.entries) {
+      final members = entry.value;
+      if (members.length < 2) continue;
+      final ref = members.first;
+      for (final m in members.skip(1)) {
+        final expectedDx = (m.c - ref.c) / cols;
+        final expectedDy = (m.r - ref.r) / rows;
+        final dx = m.nx - ref.nx;
+        final dy = m.ny - ref.ny;
+        if ((dx - expectedDx).abs() > _gridInvariantTolerance ||
+            (dy - expectedDy).abs() > _gridInvariantTolerance) {
+          return 'cluster=${entry.key} ref=#${ref.id}(${ref.r},${ref.c}) '
+              'member=#${m.id}(${m.r},${m.c}) '
+              'delta=(${dx.toStringAsFixed(6)},${dy.toStringAsFixed(6)}) '
+              'expected=(${expectedDx.toStringAsFixed(6)},${expectedDy.toStringAsFixed(6)})';
+        }
+      }
+    }
+    return null;
+  }
+
+  /// 在状态关键变更点后做一次不变量自检（debug only；[assertClusterGridInvariant] 可关）。
+  void _debugAssertClusterGridInvariant(String tag) {
+    if (!assertClusterGridInvariant) return;
+    assert(
+      () {
+        final violation = clusterGridInvariantViolation();
+        if (violation != null) {
+          throw FlutterError('[$tag] 集群网格偏移不变量被破坏: $violation');
+        }
+        return true;
+      }(),
+      '集群网格偏移不变量自检（仅 debug）：$tag',
+    );
+  }
+
+  /// “失踪碎片”防丢自检与自愈机制（**按集群原子平移**版）：
   /// 当整幅拼图剩余未拼碎片 <= 2 块时，若检测到未归位碎片因平移/缩放被甩出可视视口，
-  /// 自动将其平滑弹回屏幕可视区域，彻底解决“找不到最后一块碎片”的挫败体验。
+  /// 自动把**整个集群**平移回可视区域，彻底解决“找不到最后一块碎片”的挫败体验。
+  ///
+  /// 【为何必须整簇平移】全体系依赖“集群成员间恒为精确网格相对偏移”这一不变量：
+  /// 锁定判定、整簇拖拽按 `relCol/relRow` 重排、以及“一个集群要么全就位、要么全未就位”
+  /// 都由它导出。旧实现逐片 clamp 会单独撬动某一成员 → 撕裂集群 + 破坏不变量，
+  /// 撕裂后同簇可能出现“已锁定 + 未锁定”混杂，进而可用未锁定成员把已植入碎片拖离槽位。
   void missingPieceCheck() {
     if (_isSolved) return;
     final unsolved = _boardState.pieces
@@ -2757,29 +2871,47 @@ class JigsawPuzzleGame extends FlameGame
 
     final holdingClusterId = _holdingPiece?.clusterId;
 
+    // 1. 按 clusterId 聚合：同一簇只处理一次，避免同簇成员互相“拉回”造成次序依赖
+    final clusterIds = <int>{};
     for (final pState in unsolved) {
       final comp = _pieces[pState.id];
-      if (comp == null ||
-          comp.isDragging ||
-          comp == _holdingPiece ||
-          (!isTabletop && comp.isInTray)) {
+      if (comp != null) clusterIds.add(comp.clusterId);
+    }
+
+    final normOut = [0.0, 0.0];
+    final updatedPiecesMap = <int, PieceState>{};
+
+    for (final clusterId in clusterIds) {
+      final members = _pieces.values
+          .where((p) => p.clusterId == clusterId)
+          .toList();
+      if (members.isEmpty) continue;
+      if (members.any((c) => c.isDragging || c == _holdingPiece) ||
+          (holdingClusterId != null && clusterId == holdingClusterId)) {
         continue;
       }
-      if (holdingClusterId != null && comp.clusterId == holdingClusterId) {
-        continue;
-      }
+      if (!isTabletop && members.any((c) => c.isInTray)) continue;
+      // 撕裂残态防御：簇内出现已就位成员（isSolved / isLocked）时严禁整簇平移，
+      // 否则会把已植入碎片搬离槽位。正常不变量下“整簇全就位或全未就位”，此分支不可达。
+      final hasPlacedMember = members.any(
+        (c) => c.isLocked || _boardState.pieceById(c.id).isSolved(rows, cols),
+      );
+      if (hasPlacedMember) continue;
 
-      final visualW = comp.size.x * comp.scale.x;
-      final visualH = comp.size.y * comp.scale.y;
-      final isOutOfBounds =
-          comp.position.x < -visualW * 0.5 ||
-          comp.position.x > size.x - visualW * 0.5 ||
-          comp.position.y < -visualH * 0.5 ||
-          comp.position.y > size.y - visualH * 0.5;
+      // 2. 位移取“越界最严重成员放回就近完整可见位置”所需向量；
+      //    越界判据与目标位置公式与原实现完全一致（中心越出可视范围半个自身尺寸）。
+      //    若簇内多成员需求方向冲突或整簇塞不进安全区，优先保证越界最严重者完整可见。
+      Vector2? shift;
+      for (final comp in members) {
+        final visualW = comp.size.x * comp.scale.x;
+        final visualH = comp.size.y * comp.scale.y;
+        final isOutOfBounds =
+            comp.position.x < -visualW * 0.5 ||
+            comp.position.x > size.x - visualW * 0.5 ||
+            comp.position.y < -visualH * 0.5 ||
+            comp.position.y > size.y - visualH * 0.5;
+        if (!isOutOfBounds) continue;
 
-      if (isOutOfBounds) {
-        // 就近落在视口内的"完整可见"位置（保留 44px 顶部操作栏避让），
-        // 而不是无条件搬到屏幕正中——避免玩家刚刚推到视野边的碎片被瞬移回中央。
         final horizontalLimit = max(
           _sideMargin,
           size.x - _sideMargin - visualW,
@@ -2792,20 +2924,38 @@ class JigsawPuzzleGame extends FlameGame
           comp.position.x.clamp(_sideMargin, horizontalLimit),
           comp.position.y.clamp(44.0, verticalLimit),
         );
-        comp.position.setFrom(safeTarget);
+        final candidate = safeTarget - comp.position;
+        if (shift == null || candidate.length2 > shift.length2) {
+          shift = candidate;
+        }
+      }
+      if (shift == null) continue;
+
+      // 3. 整簇原子平移：清掉在途位移动画（其目标已因本次平移失效），
+      //    并同步整簇 `nx/ny`，维持“集群内精确网格相对偏移”不变量。
+      for (final comp in members) {
+        comp.clearMoveEffects();
+        comp.position.add(shift);
         comp.triggerSnapGlow();
-        final normOut = [0.0, 0.0];
-        _screenToNormalized(safeTarget, normOut);
-        _boardState = _boardState.copyWith(
-          pieces: _boardState.pieces
-              .map(
-                (p) => p.id == pState.id
-                    ? p.copyWith(nx: normOut[0], ny: normOut[1])
-                    : p,
-              )
-              .toList(),
+        _screenToNormalized(comp.position, normOut);
+        final pState = _boardState.pieceById(comp.id);
+        updatedPiecesMap[comp.id] = pState.copyWith(
+          nx: normOut[0],
+          ny: normOut[1],
         );
       }
+      AppLogger.game.info(
+        'missingPieceCheck cluster=$clusterId members=${members.length} shift=${shift.x.toStringAsFixed(1)},${shift.y.toStringAsFixed(1)}',
+      );
     }
+
+    if (updatedPiecesMap.isEmpty) return;
+    final newPieces = _boardState.pieces.map((p) {
+      return updatedPiecesMap[p.id] ?? p;
+    }).toList();
+    _boardState = _boardState.copyWith(pieces: newPieces);
+    updatePieceVisibility();
+    updatePiecesStateAndPriorities();
+    _debugAssertClusterGridInvariant('missingPieceCheck');
   }
 }

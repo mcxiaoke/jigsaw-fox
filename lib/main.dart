@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:ui';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_native_splash/flutter_native_splash.dart';
@@ -20,6 +21,13 @@ import 'package:jigsawpuzzle/services/locale_service.dart';
 import 'package:jigsawpuzzle/services/recommend_service.dart';
 import 'package:jigsawpuzzle/services/sound_service.dart';
 import 'package:jigsawpuzzle/services/webview_service.dart';
+import 'package:window_manager/window_manager.dart';
+
+/// 桌面端窗口最小尺寸（逻辑像素）。
+///
+/// 依据："桌面散落"模式要把碎片铺在棋盘四周，窗口过小会把棋盘与碎片压到不可用尺寸；
+/// 托盘模式也需足够宽度容纳顶部 6 个操作图标与底部托盘 Dock。移动端全屏，不受此限制。
+const Size kDesktopMinWindowSize = Size(800, 600);
 
 /// 桌面生命周期监听器（**必须顶层持有**，设计 §7.5）。
 ///
@@ -98,6 +106,26 @@ void main() async {
   await AppLogger.init();
   AppLogger.system.info('App launch starting');
   final sw0 = Stopwatch()..start();
+
+  // 0.1 桌面端统一窗口尺寸下限（移动端全屏，不适用）。
+  // 理由："桌面散落"模式需要把碎片铺在棋盘四周，窗口过小会把棋盘与碎片压到不可用尺寸；
+  // 托盘模式也需要足够宽度容纳顶部操作栏与底部托盘 Dock。
+  if (!kIsWeb &&
+      (defaultTargetPlatform == TargetPlatform.windows ||
+          defaultTargetPlatform == TargetPlatform.macOS ||
+          defaultTargetPlatform == TargetPlatform.linux)) {
+    try {
+      await windowManager.ensureInitialized();
+      await windowManager.setMinimumSize(kDesktopMinWindowSize);
+      AppLogger.system.info(
+        'Window minimum size = ${kDesktopMinWindowSize.width}x${kDesktopMinWindowSize.height}',
+      );
+      // best-effort：设置失败不阻塞启动
+      // ignore: avoid_catches_without_on_clauses
+    } catch (e, st) {
+      AppLogger.system.warning('Set window minimum size failed', e, st);
+    }
+  }
 
   // Tune Flutter engine global ImageCache to optimize memory and prevent OOM
   PaintingBinding.instance.imageCache.maximumSize = 500;

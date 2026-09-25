@@ -470,6 +470,14 @@ class PuzzlePieceComponent extends PositionComponent
     removeAll(children.whereType<Effect>());
   }
 
+  /// 仅移除进行中的位移动画（保留缩放等其它效果）。
+  ///
+  /// 用于“整簇平移”这类会改写位置目标的路径：在途 `MoveToEffect` 的目标已失效，
+  /// 若不清除会在下一帧把组件拽回旧目标；而 `clearActiveEffects` 会连缩放动画一起清掉。
+  void clearMoveEffects() {
+    removeAll(children.whereType<MoveEffect>());
+  }
+
   /// 带有平滑曲线的缓动平移位移动画
   void animateTo(Vector2 targetPos, {double duration = 0.15}) {
     if (!isMounted) {
