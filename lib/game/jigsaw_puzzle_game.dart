@@ -258,6 +258,27 @@ class JigsawPuzzleGame extends FlameGame
   bool get isDraggingAnyPiece =>
       _holdingPiece != null || _pieces.values.any((p) => p.isDragging);
 
+  /// 画布坐标 [canvasPos] 是否落在**当前可被拾取**的碎片上。
+  ///
+  /// 【为何需要按下时预判定，而不能只靠 [isDraggingAnyPiece]】
+  /// 页面侧 `Listener` 比 Flame 手势识别器更早收到同一个 move 事件（Flutter 的
+  /// `dispatchEvent` 按 hit test path 顺序调用，`GestureBinding` 位于路径末尾才
+  /// `pointerRouter.route`），因此拖拽的第一个 move 到达时 `onDragStart` 尚未触发，
+  /// `isDraggingAnyPiece` 仍为 false，会被页面误判成"空白区拖动"而平移棋盘。
+  /// 另外托盘碎片的方向仲裁期（_pendingTrayDrag）既无 isDragging 也无 holdingPiece，
+  /// 同样会被误判。故在按下时按命中测试预先判定，供页面平移分支取反。
+  ///
+  /// 已锁定（已就位）与已过滤隐藏的碎片**不算**可拾取：在它们上面拖动仍应平移棋盘，
+  /// 否则放大后无法拖动已拼好的区域查看画面。
+  bool isPickablePieceAt(Vector2 canvasPos) {
+    if (_isSolved || !_isInitialized) return false;
+    return componentsAtPoint(
+      canvasPos,
+    ).whereType<PuzzlePieceComponent>().any(
+      (c) => !c.isFilteredOut && !c.isLocked,
+    );
+  }
+
   @override
   Color backgroundColor() => const Color(0x00000000);
 
@@ -2085,6 +2106,20 @@ class JigsawPuzzleGame extends FlameGame
       _insertPieceIntoTrayAt(piece, piece.position.x);
       piece.isInTray = true;
       piece.animateScaleTo(Vector2.all(_trayPieceScale));
+      // [状态必须同步落库] 早期实现此处直接 return，只改了组件 isInTray 而没写回
+      // _boardState，导致该碎片在权威状态里仍保留拖走前的棋盘坐标与 inTray=false：
+      // 1) solvedCount 继续把它算作"已就位"，进度虚高；
+      // 2) 一旦它后来被连通规则判为已植入装配体（如外框补全），
+      //    updatePiecesStateAndPriorities 会置 isLocked 并强制把组件瞬移回棋盘槽位，
+      //    表现为"拖回托盘的碎片凭空飞回棋盘且被锁死"。
+      // 托盘哨兵沿用项目既有约定 ny >= 2.0（见 organizeTray / _applyBoardState /
+      // exportSnapshotJson），使 _isNormalizedOnBoard 恒为 false。
+      _boardState = _boardState.copyWith(
+        pieces: _boardState.pieces.map((p) {
+          if (p.id != piece.id) return p;
+          return p.copyWith(inTray: true, ny: max(p.ny, 2.0));
+        }).toList(),
+      );
       updatePieceVisibility();
       updatePiecesStateAndPriorities();
       onStateUpdated?.call();

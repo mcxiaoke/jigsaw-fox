@@ -85,6 +85,12 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
 
   // Multi-touch tracking for pinch-to-zoom & two-finger pan
   final Map<int, Offset> _pointerPositions = {};
+
+  /// 每个指针按下时是否命中"可拾取碎片"（见 [JigsawPuzzleGame.isPickablePieceAt]）。
+  ///
+  /// 用于抑制放大态下单指平移：页面 Listener 先于 Flame 手势识别器收到首个 move，
+  /// 仅凭 `isDraggingAnyPiece` 会在抓取碎片的第一帧误平移棋盘。
+  final Map<int, bool> _pointerStartedOnPiece = {};
   double _baseDistance = 0;
   double _baseZoom = 1;
   Offset _baseFocalPoint = Offset.zero;
@@ -122,12 +128,32 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
         state == AppLifecycleState.detached) {
       _isAppInactive = true;
       AppLogger.game.info('GamePage lifecycle $state -> flushSync save');
+      // 切后台/失焦时系统可能直接吞掉 pointer up/cancel，页面层与 Flame 层的取消
+      // 回调不一定成对到达。残留的 holdingPiece/isDragging/_pointerPositions 会让
+      // 回到前台后的第一次点击变成"放下旧碎片"，或把单指手势误判为双指。
+      _cancelActivePointerInteraction();
       SoundService.I.stopAll();
       _reportPlaySeconds(); // 切后台/暂停：上报游玩时长增量（设计 §8.1）
       _flushSync();
     } else if (state == AppLifecycleState.resumed) {
       _isAppInactive = false;
     }
+  }
+
+  /// 幂等清理所有进行中的指针交互状态。
+  ///
+  /// 覆盖吸附抓取（click-to-pick）、Flame 拖拽、捏合标志与页面侧指针台账。
+  /// [clearGameInteraction] 为 false 时只清理页面侧台账（用于 dispose 阶段，
+  /// 避免对正在卸载的 Flame 组件树触发恢复动画）。
+  void _cancelActivePointerInteraction({bool clearGameInteraction = true}) {
+    if (clearGameInteraction) {
+      _game?.cancelHoldingPiece();
+      _game?.cancelAllPieceDragging();
+      _game?.isPinching = false;
+    }
+    _pointerPositions.clear();
+    _pointerStartedOnPiece.clear();
+    _baseDistance = 0.0;
   }
 
   /// 上报自上次上报以来的游玩秒数增量（暂停/切后台/结算/退出时调用）。
@@ -904,6 +930,12 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
     }
 
     _pointerPositions[event.pointer] = event.localPosition;
+    final g = _game;
+    _pointerStartedOnPiece[event.pointer] =
+        g != null &&
+        g.isPickablePieceAt(
+          Vector2(event.localPosition.dx, event.localPosition.dy),
+        );
     if (_pointerPositions.length >= 2) {
       _game?.isPinching = true;
       _game?.cancelHoldingPiece();
@@ -950,6 +982,9 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
         _game!.zoom > 1.0 &&
         _pointerPositions.length == 1 &&
         !_game!.isDraggingAnyPiece &&
+        // 按下点落在可拾取碎片上时一律不平移：覆盖"抓取碎片的第一帧"（isDragging
+        // 尚未置位）与"托盘碎片方向仲裁期"两种此前会与拖拽/托盘滚动并存的路径。
+        !(_pointerStartedOnPiece[event.pointer] ?? false) &&
         (_game!.isTabletop || event.localPosition.dy < _game!.trayPosition.y)) {
       // 放大状态下，鼠标左键或单指按住空白区域拖动 -> 实时平移棋盘画布
       // 使用 Listener 原生 pointer delta 直接驱动，避免 Flame PanDetector 与 DragCallbacks 的手势竞技场冲突
@@ -959,6 +994,7 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
 
   void _onPointerUp(PointerUpEvent event) {
     _pointerPositions.remove(event.pointer);
+    _pointerStartedOnPiece.remove(event.pointer);
     if (_pointerPositions.length < 2) {
       _baseDistance = 0.0;
       Future.delayed(const Duration(milliseconds: 60), () {
@@ -972,6 +1008,7 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
 
   void _onPointerCancel(PointerCancelEvent event) {
     _pointerPositions.remove(event.pointer);
+    _pointerStartedOnPiece.remove(event.pointer);
     if (_pointerPositions.length < 2) {
       _baseDistance = 0.0;
       Future.delayed(const Duration(milliseconds: 60), () {
@@ -1017,6 +1054,8 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    // 仅清理页面侧台账：此时 Flame 组件树可能已在卸载，不宜再触发恢复动画
+    _cancelActivePointerInteraction(clearGameInteraction: false);
     SoundService.I.stopAll();
     _saveDebounce?.cancel();
     _reportPlaySeconds(); // 退出/弃局：上报剩余游玩时长（设计 §8.1 弃局同样计入）
