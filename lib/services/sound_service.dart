@@ -81,7 +81,7 @@ enum Sfx {
 ///
 /// 使用 `flame_audio`（底层 `audioplayers`），与 Flame 原生契合。
 /// 预加载在 [init] 中完成，失败不阻塞启动；未初始化时 [play] 静默。
-/// 当前资产为纯 WAV（原始 27 个 `pcm_s16le 48kHz mono`），全平台统一，无需 OGG/WAV 双制与 Windows 编解码兜底。
+/// 当前资产为纯 WAV（原始 PCM，绝大多数 48kHz mono 16bit，个别 32kHz），全平台统一，无需 OGG/WAV 双制与 Windows 编解码兜底。
 class SoundService {
   SoundService._();
 
@@ -94,7 +94,7 @@ class SoundService {
   bool _initialized = false;
   bool get isInitialized => _initialized;
 
-  /// 已预加载的全部资产，与 `assets/audio` 实盘一致（27 wav）
+  /// 已预加载的全部资产，与 `assets/audio` 实盘一致（27 wav，含从未播放的备用资产 WinSound.wav / final.wav）
   static const List<String> allAssets = [
     'clear-short.wav',
     'coins-fly.wav',
@@ -169,54 +169,61 @@ class SoundService {
     }
   }
 
-  /// 音效实盘资产时长精准校准，避免 isBusy 窗口过长放大抢占率
+  /// 音效实盘资产时长校准（实测 header + 100ms 安全缓冲）。
+  ///
+  /// Android SoundPool 无播放完成回调，归还完全依赖此表；
+  /// 偏大会长时间占用槽位放大 LRU 抢占率，偏小会让仍在播放的声音被复用截断。
   Duration _durationFor(Sfx sfx) {
     switch (sfx) {
       case Sfx.numbers:
-        return const Duration(milliseconds: 100);
+        return const Duration(milliseconds: 110); // 实测 6ms
       case Sfx.place:
-        return const Duration(milliseconds: 150); // 实盘 16ms，留足 150ms 缓冲
+        return const Duration(milliseconds: 120); // 实测 16ms
       case Sfx.snap:
-        return const Duration(
-          milliseconds: 200,
-        ); // 实盘 27~40ms，留足 200ms 保证清脆吸附完整发声
+        return const Duration(milliseconds: 140); // 实测 glue1/2/3 27~40ms
       case Sfx.lock:
+        return const Duration(milliseconds: 160); // 实测 59ms
       case Sfx.switchToggle:
+        return const Duration(milliseconds: 160); // 实测 61ms
       case Sfx.tap:
+        return const Duration(milliseconds: 170); // 实测 69ms
       case Sfx.preview:
+        return const Duration(milliseconds: 200); // 实测 preview1/2/3 45~100ms
       case Sfx.rotate:
-        return const Duration(milliseconds: 200);
+        return const Duration(milliseconds: 190); // 实测 90ms
       case Sfx.coinSingle:
-        return const Duration(milliseconds: 250);
+        return const Duration(milliseconds: 210); // 实测 106ms
       case Sfx.edgesOut:
-        return const Duration(milliseconds: 350);
+        return const Duration(milliseconds: 290); // 实测 190ms
       case Sfx.clearShort:
+        return const Duration(milliseconds: 320); // 实测 220ms
       case Sfx.edgesIn:
+        return const Duration(milliseconds: 340); // 实测 240ms
       case Sfx.negative:
-        return const Duration(milliseconds: 400);
+        return const Duration(milliseconds: 350); // 实测 250ms
       case Sfx.moveIn:
-        return const Duration(milliseconds: 500);
+        return const Duration(milliseconds: 400); // 实测 300ms
       case Sfx.moveOut:
-        return const Duration(milliseconds: 600);
+        return const Duration(milliseconds: 500); // 实测 400ms
       case Sfx.coinsSpend:
-        return const Duration(milliseconds: 1200);
+        return const Duration(milliseconds: 1100); // 实测 1000ms
       case Sfx.hint:
-        return const Duration(milliseconds: 1300);
+        return const Duration(milliseconds: 1200); // 实测 1100ms
       case Sfx.win:
         return const Duration(
-          milliseconds: 1500,
-        ); // 实盘 win.wav 1233ms，设 1500ms 留足尾音
+          milliseconds: 1350,
+        ); // 实测 win.wav 32kHz 1233ms，留足尾音
       case Sfx.coinsFly:
-        return const Duration(milliseconds: 1500);
+        return const Duration(milliseconds: 1400); // 实测 1300ms
       case Sfx.jingle:
-        return const Duration(milliseconds: 2000);
+        return const Duration(milliseconds: 1760); // 实测 jingle3 1657ms
       case Sfx.winBig:
-        return const Duration(milliseconds: 5000); // 实盘 TrophySound.wav 4767ms
+        return const Duration(milliseconds: 4900); // 实测 TrophySound 4767ms
     }
   }
 
   Future<void> _ensurePoolInitialized() async {
-    if (_pool.isNotEmpty) return;
+    if (_pool.length >= _kPoolSize) return;
     if (_poolInitCompleter != null) {
       return _poolInitCompleter!.future;
     }
@@ -226,16 +233,26 @@ class SoundService {
       final audioContext = AudioContextConfig(
         focus: AudioContextConfigFocus.mixWithOthers,
       ).build();
-      for (var i = 0; i < _kPoolSize; i++) {
-        final player = AudioPlayer();
-        // 禁用每帧向原生平台查询播放进度的 FramePositionUpdater，彻底消除高频 MethodChannel 轮询与微任务开销
-        player
-          ..positionUpdater = null
-          ..audioCache = FlameAudio.audioCache;
-        await player.setAudioContext(audioContext);
-        await player.setReleaseMode(ReleaseMode.stop);
-        await player.setPlayerMode(PlayerMode.lowLatency);
-        _pool.add(SoundSlot(i, player));
+      // 自愈式补建：从现有池长度继续，单个槽位创建失败跳过而不中断整体建池，
+      // 下次进入时仍会检测到池未满并重试补齐
+      for (var i = _pool.length; i < _kPoolSize; i++) {
+        try {
+          final player = AudioPlayer();
+          // 禁用每帧向原生平台查询播放进度的 FramePositionUpdater，彻底消除高频 MethodChannel 轮询与微任务开销
+          player
+            ..positionUpdater = null
+            ..audioCache = FlameAudio.audioCache;
+          await player.setAudioContext(audioContext);
+          await player.setReleaseMode(ReleaseMode.stop);
+          await player.setPlayerMode(PlayerMode.lowLatency);
+          _pool.add(SoundSlot(i, player));
+        } catch (e, st) {
+          AppLogger.sound.warning('create pool slot $i failed', e, st);
+        }
+      }
+      if (_pool.length < _kPoolSize) {
+        // 池未补齐：复位 completer 以便下次调用重试，避免挂在一个已完成的 future 上永不重试
+        _poolInitCompleter = null;
       }
       completer.complete();
     } catch (e, st) {
@@ -287,14 +304,6 @@ class SoundService {
     if (_isTest && !bypassTestGuard) return;
     if (!ignoreMute && !GameRepository.instance.soundEnabled) return;
 
-    final now = DateTime.now().millisecondsSinceEpoch;
-    final throttle = _throttleMsFor(sfx);
-    final last = _lastPlayMs[sfx] ?? 0;
-    if (now - last < throttle) {
-      return;
-    }
-    _lastPlayMs[sfx] = now;
-
     final requestGen = _generation;
     unawaited(_dispatchPlay(sfx, requestGen: requestGen, volume: volume));
   }
@@ -311,31 +320,46 @@ class SoundService {
 
     SoundSlot? targetSlot;
     var currentSlotToken = 0;
+    var throttled = false;
     final file = _resolveFile(sfx);
     final vol = volume ?? _volumeFor(sfx);
 
-    // 锁内仅执行纳秒级内存分配与状态占用，绝不把 player.play 放在锁内，杜绝排队堵死
+    // 锁内仅执行纳秒级内存分配与状态占用，绝不把 player.play 放在锁内，杜绝排队堵死。
+    // 节流同样在锁内判定并在失败时回滚：超时熔断、原生播放失败或被抢占放弃都不消耗节流窗口，
+    // 否则一次失败会连带吞掉节流窗内的下一次真实触发（连续"没声音"）。
+    var nowMs = 0;
+    var prevLastMs = 0;
     await _lock.synchronized(() async {
       if (_generation != requestGen) return;
+      nowMs = DateTime.now().millisecondsSinceEpoch;
+      prevLastMs = _lastPlayMs[sfx] ?? 0;
+      if (nowMs - prevLastMs < _throttleMsFor(sfx)) {
+        throttled = true;
+        return;
+      }
+      _lastPlayMs[sfx] = nowMs;
 
       targetSlot = selectSlotForPlay(file);
       if (targetSlot != null) {
         targetSlot!.resetSync();
         targetSlot!.isBusy = true;
-        targetSlot!.playedAtMs = DateTime.now().millisecondsSinceEpoch;
+        targetSlot!.playedAtMs = nowMs;
         targetSlot!.currentFile = file;
         currentSlotToken = targetSlot!.playToken;
       }
     });
 
+    if (throttled) return;
     if (targetSlot == null || _generation != requestGen) return;
 
     final slot = targetSlot!;
     final token = currentSlotToken;
 
-    // 调用前二次检查：若在锁释放至此的间隙被 stopAll() 或抢占，立刻放弃
+    // 调用前二次检查：若在锁释放至此的间隙被 stopAll() 或抢占，槽位已易主，直接放弃。
+    // 绝不能在此 resetSync：那会踩掉新占用者刚写入的状态并使其 token 失效，
+    // 令本已抢槽成功的新请求被迫弃播（哑弹），甚至引发连环互踩。
     if (_generation != requestGen || slot.playToken != token) {
-      slot.resetSync();
+      _rollbackThrottle(sfx, nowMs, prevLastMs);
       return;
     }
 
@@ -344,11 +368,28 @@ class SoundService {
     );
 
     try {
+      // 起播前先复位原生状态，修复两类跨平台残留问题：
+      // - Android SoundPool（lowLatency）：播放自然结束无任何回调，streamId 与 playing
+      //   标志残留会让后续 play 退化为对已结束 stream 的无效 resume（audioplayers 已知
+      //   问题），同一槽位第二次起全部哑火；
+      // - Windows MediaEngine：被抢占的槽未自然结束时，同文件重播会从旧进度中段续播
+      //   （Resume 不回零），产生半截错位声。
+      await slot.player.stop().timeout(const Duration(milliseconds: 500));
+    } catch (_) {
+      // best-effort：复位失败不阻塞起播（stop 对空闲播放器是近零成本操作）
+    }
+    // stop 等待期间状态可能已易主（stopAll/抢占），复核后再起播
+    if (_generation != requestGen || slot.playToken != token) {
+      _rollbackThrottle(sfx, nowMs, prevLastMs);
+      return;
+    }
+
+    try {
       // 超时熔断，防止平台通道 prepared 事件丢失导致槽位永久卡死。
       // 音效已前置到同步逻辑之前调用，正常情况下平台通道在毫秒级返回；
-      // 800ms 足够覆盖极端 GC 抖动，同时避免长时间占用槽位。
+      // 800ms 足够覆盖极端 GC/IO 抖动，同时避免长时间占用槽位。
       await slot.player
-          .play(AssetSource(file), volume: vol, mode: PlayerMode.lowLatency)
+          .play(AssetSource(file), volume: vol)
           .timeout(const Duration(milliseconds: 800));
     } catch (e, st) {
       AppLogger.sound.warning(
@@ -359,6 +400,7 @@ class SoundService {
       if (_generation == requestGen && slot.playToken == token) {
         await slot.stopAndReset();
       }
+      _rollbackThrottle(sfx, nowMs, prevLastMs);
       return;
     }
 
@@ -431,15 +473,21 @@ class SoundService {
     return oldestNonVictory ?? oldestSlot;
   }
 
+  /// 回滚节流时间戳：仅当仍是本次写入值时生效，避免覆盖并发请求写入的更新时间戳
+  void _rollbackThrottle(Sfx sfx, int nowMs, int prevLastMs) {
+    if (_lastPlayMs[sfx] == nowMs) {
+      _lastPlayMs[sfx] = prevLastMs;
+    }
+  }
+
   /// 立即停止所有活跃声音，取消归还计时，作废全部在途播放（代际失效）
   void stopAll() {
     _generation++;
     for (final slot in _pool) {
-      final wasBusy = slot.isBusy;
       slot.resetSync();
-      if (wasBusy) {
-        unawaited(slot.player.stop().catchError((_) {}));
-      }
+      // 无条件补发 stop：时长估算早于实际播完时 isBusy 已归 false，
+      // 仅凭 wasBusy 判定会漏掉原生仍在播放的残留声
+      unawaited(slot.player.stop().catchError((_) {}));
     }
   }
 

@@ -16,16 +16,17 @@ GamePage / JigsawPuzzleGame / MainScreen Tab / Settings UI
         ↓  SoundService.I.play(Sfx.xxx)
 SoundService
    ├─ 静音拦截 (读取 GameRepository.instance.soundEnabled 实时静默)
-   ├─ 独立细粒度节流 (snap 80ms, place 60ms, tap 70ms, coinsFly 200ms, hint 300ms...)
    └─ 固定容量播放器池 (6 槽位 _SoundSlot)
-         ├─ 空闲槽位分配 / LRU 非胜利音效抢占
-         ├─ Random 变体 + 音量分级 + 预估时长自动归还 (兼容 Android SoundPool 无完成回调)
-         └─ onPlayerComplete 平台提前归还双保险
+         ├─ 锁内节流判定 + 失败回滚 (超时/失败/被抢占弃播不消耗节流窗口)
+         ├─ 空闲槽位分配 / LRU 非胜利音效抢占 (放弃路径不触碰已易主槽位)
+         ├─ stop-before-play (先 stop 复位原生 streamId/playing/进度，再起播)
+         ├─ Random 变体 + 音量分级 + 实测时长+100ms 自动归还
+         └─ onPlayerComplete 平台提前归还双保险 (Windows 有效；Android SoundPool 无完成回调，全靠时长表)
 ```
 
-- 初始化：`lib/main.dart` 中 `SoundService.I.init()` 仅预加载 27 个 wav 资源；6 个播放器池**按需懒建**（静音用户零原生播放器开销，首次发声才建池）
+- 初始化：`lib/main.dart` 中 `SoundService.I.init()` 仅预加载 27 个 wav 资源；6 个播放器池**按需懒建**（静音用户零原生播放器开销，首次发声才建池），建池支持自愈补齐（单槽失败跳过，池未满下次重试）
 - 单例：`SoundService.instance` / `SoundService.I`，`_initialized` 哨兵，`_rng` 内部持有，`_isTest` 静默
-- 生命周期：提供 `stopAll()`，在页面销毁与进入后台时立即切断挂起声音
+- 生命周期：提供 `stopAll()`，在页面销毁与真正离开前台（`paused/hidden/detached`）时立即切断挂起声音；`inactive`（Windows 失焦 / Android 通知栏下拉）**不**切断声音，仅暂停计时
 
 ## 三、API
 

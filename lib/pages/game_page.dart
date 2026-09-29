@@ -132,7 +132,11 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
       // 回调不一定成对到达。残留的 holdingPiece/isDragging/_pointerPositions 会让
       // 回到前台后的第一次点击变成"放下旧碎片"，或把单指手势误判为双指。
       _cancelActivePointerInteraction();
-      SoundService.I.stopAll();
+      // 仅真正离开前台才切断声音。inactive 在 Windows 桌面=窗口失焦、在 Android=
+      // 通知栏下拉/弹窗遮挡，此时游戏仍在前台交互中，stopAll 会误断正在播放的音效尾音。
+      if (state != AppLifecycleState.inactive) {
+        SoundService.I.stopAll();
+      }
       _reportPlaySeconds(); // 切后台/暂停：上报游玩时长增量（设计 §8.1）
       _flushSync();
     } else if (state == AppLifecycleState.resumed) {

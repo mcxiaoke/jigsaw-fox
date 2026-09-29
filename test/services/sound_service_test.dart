@@ -40,26 +40,27 @@ void main() {
     });
 
     test('calibrated durations match real asset lengths', () {
+      // 均为实测 header 时长 + 100ms 安全缓冲
       expect(
         SoundService.I.durationFor(Sfx.numbers),
-        const Duration(milliseconds: 100),
+        const Duration(milliseconds: 110),
       );
       expect(
         SoundService.I.durationFor(Sfx.place),
-        const Duration(milliseconds: 150),
+        const Duration(milliseconds: 120),
       );
       expect(
         SoundService.I.durationFor(Sfx.snap),
-        const Duration(milliseconds: 200),
+        const Duration(milliseconds: 140),
       );
       expect(
         SoundService.I.durationFor(Sfx.switchToggle),
-        const Duration(milliseconds: 200),
+        const Duration(milliseconds: 160),
       );
-      // win.wav 实盘 78.9KB @32kHz 单声道 16bit (~1.233s)，断言至少 1500ms 防止尾音被掐断
+      // win.wav 实盘 78.9KB @32kHz 单声道 16bit（实测 1.233s），断言至少 1200ms 防止尾音被掐断
       expect(
         SoundService.I.durationFor(Sfx.win),
-        const Duration(milliseconds: 1500),
+        const Duration(milliseconds: 1350),
       );
       expect(
         SoundService.I.durationFor(Sfx.win).inMilliseconds,
@@ -67,7 +68,7 @@ void main() {
       );
       expect(
         SoundService.I.durationFor(Sfx.winBig),
-        const Duration(milliseconds: 5000),
+        const Duration(milliseconds: 4900),
       );
     });
 
