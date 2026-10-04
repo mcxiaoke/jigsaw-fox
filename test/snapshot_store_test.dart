@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:jigsawpuzzle/data/progress_store.dart';
 import 'package:jigsawpuzzle/data/resume_helper.dart';
@@ -80,6 +82,106 @@ void main() {
 
       final oldSnapshot = await SnapshotStore.instance.load(cid, '2x2');
       expect(oldSnapshot, isNull);
+    });
+
+    test('save keeps .bak as previous version for rollback (D-1)', () async {
+      const cid = 'main:d1a';
+      PuzzleBoardState stateOf(int seed) => PuzzleBoardState(
+        canonicalId: cid,
+        difficultyKey: '2x2',
+        rows: 2,
+        cols: 2,
+        seed: seed,
+        pieces: [
+          const PieceState(id: 0, r: 0, c: 0, nx: 0, ny: 0, clusterId: 0),
+          const PieceState(id: 1, r: 0, c: 1, nx: 0.5, ny: 0, clusterId: 1),
+          const PieceState(id: 2, r: 1, c: 0, nx: 0, ny: 0.5, clusterId: 2),
+          const PieceState(id: 3, r: 1, c: 1, nx: 0.5, ny: 0.5, clusterId: 3),
+        ],
+      );
+
+      await SnapshotStore.instance.save(stateOf(100));
+      final file = SnapshotStore.instance.fileFor(cid, '2x2');
+      final bak = File('${file.path}.bak');
+      expect(bak.existsSync(), isFalse, reason: '首次保存无上一版本');
+
+      await SnapshotStore.instance.save(stateOf(200));
+      expect(bak.existsSync(), isTrue, reason: '第二次保存应保留上一版本备份');
+      final loaded = await SnapshotStore.instance.load(cid, '2x2');
+      expect(loaded, isNotNull);
+      expect(loaded!.seed, 200, reason: '正式文件应是新版本');
+    });
+
+    test('load recovers from .bak when main file corrupted (D-1)', () async {
+      const cid = 'main:d1b';
+      PuzzleBoardState stateOf(int seed) => PuzzleBoardState(
+        canonicalId: cid,
+        difficultyKey: '2x2',
+        rows: 2,
+        cols: 2,
+        seed: seed,
+        pieces: [
+          const PieceState(id: 0, r: 0, c: 0, nx: 0, ny: 0, clusterId: 0),
+          const PieceState(id: 1, r: 0, c: 1, nx: 0.5, ny: 0, clusterId: 1),
+          const PieceState(id: 2, r: 1, c: 0, nx: 0, ny: 0.5, clusterId: 2),
+          const PieceState(id: 3, r: 1, c: 1, nx: 0.5, ny: 0.5, clusterId: 3),
+        ],
+      );
+
+      await SnapshotStore.instance.save(stateOf(100));
+      await SnapshotStore.instance.save(stateOf(200));
+      final file = SnapshotStore.instance.fileFor(cid, '2x2');
+      // 模拟"写入成功但内容损坏"：正式文件写坏
+      await file.writeAsString('{corrupted', flush: true);
+
+      final recovered = await SnapshotStore.instance.load(cid, '2x2');
+      expect(recovered, isNotNull, reason: '应从 .bak 恢复上一版本');
+      expect(recovered!.seed, 100, reason: '恢复出的是上一成功版本');
+      expect(file.existsSync(), isTrue, reason: '.bak 应已顶替为正式文件');
+      expect(
+        File('${file.path}.corrupt').existsSync(),
+        isTrue,
+        reason: '损坏内容应保留为 .corrupt',
+      );
+
+      final jsonStr = await SnapshotStore.instance.loadJsonString(cid, '2x2');
+      expect(jsonStr, isNotNull);
+    });
+
+    test('load keeps corrupt file as .corrupt when no backup (D-1)', () async {
+      const cid = 'main:d1c';
+      final state = PuzzleBoardState(
+        canonicalId: cid,
+        difficultyKey: '2x2',
+        rows: 2,
+        cols: 2,
+        seed: 7,
+        pieces: [
+          const PieceState(id: 0, r: 0, c: 0, nx: 0, ny: 0, clusterId: 0),
+          const PieceState(id: 1, r: 0, c: 1, nx: 0.5, ny: 0, clusterId: 1),
+          const PieceState(id: 2, r: 1, c: 0, nx: 0, ny: 0.5, clusterId: 2),
+          const PieceState(id: 3, r: 1, c: 1, nx: 0.5, ny: 0.5, clusterId: 3),
+        ],
+      );
+      await SnapshotStore.instance.save(state);
+      final file = SnapshotStore.instance.fileFor(cid, '2x2');
+      await file.writeAsString('{corrupted', flush: true);
+      // 模拟无备份（首次保存即损坏）
+      final bak = File('${file.path}.bak');
+      if (bak.existsSync()) await bak.delete();
+
+      final loaded = await SnapshotStore.instance.load(cid, '2x2');
+      expect(loaded, isNull);
+      expect(
+        File('${file.path}.corrupt').existsSync(),
+        isTrue,
+        reason: '损坏文件应保留为 .corrupt 而非直接删除',
+      );
+      expect(file.existsSync(), isFalse, reason: '正式文件应已让位给 .corrupt');
+
+      // 玩家显式删除时应连 .corrupt 一并清理
+      await SnapshotStore.instance.delete(cid, '2x2');
+      expect(File('${file.path}.corrupt').existsSync(), isFalse);
     });
 
     test('ProgressStore reconcile self-heals when file missing', () async {

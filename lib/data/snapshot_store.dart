@@ -106,14 +106,8 @@ class SnapshotStore {
             if (f.existsSync()) await f.delete();
           } catch (_) {}
         } else if (name.endsWith('.bak')) {
-          final baseName = name.substring(0, name.length - 4); // 去掉 .bak
-          final snapshotFile = File(p.join(dir.path, baseName));
-          if (snapshotFile.existsSync()) {
-            try {
-              await f.delete();
-            } catch (_) {}
-          }
-          // 若 snapshot 不存在则保留 bak，下次启动有机会经 tmp 恢复逻辑处理
+          // D-1：.bak 是上一成功版本的回滚副本（读损坏时恢复用），
+          // 启动时不删——由下次 save 轮转覆盖，或 delete 时一并清理
         }
       }
     } catch (_) {}
@@ -148,6 +142,11 @@ class SnapshotStore {
         Directory(p.join(Directory.systemTemp.path, 'jigsaw_snapshots'));
     return File(p.join(dir.path, _safeFileName(canonicalId, difficultyKey)));
   }
+
+  /// 测试专用：暴露快照文件路径（.bak/.corrupt = 路径 + 对应后缀）
+  @visibleForTesting
+  File fileFor(String canonicalId, String difficultyKey) =>
+      _fileFor(canonicalId, difficultyKey);
 
   /// 供外部构造 canonicalId 时的辅助
   static String difficultyKeyFor(PuzzleDifficulty d) => '${d.rows}x${d.cols}';
@@ -194,11 +193,8 @@ class SnapshotStore {
       }
       try {
         await tmp.rename(file.path);
-        if (bak.existsSync()) {
-          try {
-            await bak.delete();
-          } catch (_) {}
-        }
+        // 保留 .bak 作为上一成功版本（轮转覆盖），供读损坏时回滚（D-1）；
+        // 仅在 delete / clearAll 时随正式文件一并清理
       } catch (e) {
         // 重命名失败，尝试恢复 .bak
         if (bak.existsSync()) {
@@ -262,11 +258,7 @@ class SnapshotStore {
       }
       try {
         tmp.renameSync(file.path);
-        if (bak.existsSync()) {
-          try {
-            bak.deleteSync();
-          } catch (_) {}
-        }
+        // 保留 .bak 作为上一成功版本（与 save 的轮转语义一致，D-1）
       } catch (e) {
         if (bak.existsSync()) {
           try {
@@ -304,7 +296,64 @@ class SnapshotStore {
     await save(enriched);
   }
 
-  /// 加载快照，损坏则删除并返回 null（P21 区分 IO 与格式错误）
+  /// 读损坏时的回滚恢复（D-1）：
+  /// 1. 优先用 `.bak`（上一成功版本）恢复：校验通过后把损坏文件改名 `.corrupt`
+  ///    保留、`.bak` 顶替为正式文件，返回其 JSON 字符串；
+  /// 2. 无可用备份时把损坏文件改名 `.corrupt` 保留（替代直接删除，留人工恢复机会），
+  ///    返回 null。
+  Future<String?> _recoverFromCorrupt(
+    File file,
+    String canonicalId,
+    String difficultyKey,
+  ) async {
+    final bak = File('${file.path}.bak');
+    if (bak.existsSync()) {
+      try {
+        final bakStr = await bak.readAsString();
+        final map = jsonDecode(bakStr) as Map<String, dynamic>;
+        PuzzleBoardState.fromJson(map); // 校验备份内容格式与完整性
+        final corrupt = File('${file.path}.corrupt');
+        try {
+          if (corrupt.existsSync()) await corrupt.delete();
+          if (file.existsSync()) await file.rename(corrupt.path);
+        } catch (_) {}
+        try {
+          await bak.rename(file.path);
+        } catch (_) {
+          // rename 失败（目标被占用等）：降级为把备份内容写回正式文件
+          try {
+            await file.writeAsString(bakStr, flush: true);
+          } catch (_) {}
+        }
+        AppLogger.repo.warning(
+          'SnapshotStore recovered from .bak cid=$canonicalId dkey=$difficultyKey',
+        );
+        return bakStr;
+      } catch (e, st) {
+        AppLogger.repo.warning(
+          'SnapshotStore .bak also unreadable cid=$canonicalId dkey=$difficultyKey',
+          e,
+          st,
+        );
+      }
+    }
+    // 无可用备份：损坏文件改名 .corrupt 保留；改名失败才真正删除
+    try {
+      final corrupt = File('${file.path}.corrupt');
+      if (corrupt.existsSync()) await corrupt.delete();
+      await file.rename(corrupt.path);
+      AppLogger.repo.warning(
+        'SnapshotStore corrupt file kept as .corrupt cid=$canonicalId dkey=$difficultyKey',
+      );
+    } catch (_) {
+      try {
+        if (file.existsSync()) await file.delete();
+      } catch (_) {}
+    }
+    return null;
+  }
+
+  /// 加载快照，损坏则尝试 .bak 回滚，仍无备份则改名 .corrupt 并返回 null
   Future<PuzzleBoardState?> load(
     String canonicalId,
     String difficultyKey,
@@ -321,17 +370,24 @@ class SnapshotStore {
       );
       return state;
     } catch (e, st) {
-      // 仅格式错误（JSON/结构损坏）才删文件；瞬时 IO（文件锁/杀毒扫描）保留
+      // 仅格式错误（JSON/结构损坏）才动文件；瞬时 IO（文件锁/杀毒扫描）保留
       final isFormat = e is FormatException || e is TypeError;
       if (isFormat) {
         AppLogger.repo.warning(
-          'SnapshotStore.load corrupted delete cid=$canonicalId dkey=$difficultyKey',
+          'SnapshotStore.load corrupted cid=$canonicalId dkey=$difficultyKey',
           e,
           st,
         );
-        try {
-          await file.delete();
-        } catch (_) {}
+        final recovered = await _recoverFromCorrupt(
+          file,
+          canonicalId,
+          difficultyKey,
+        );
+        if (recovered != null) {
+          return PuzzleBoardState.fromJson(
+            jsonDecode(recovered) as Map<String, dynamic>,
+          );
+        }
       } else {
         AppLogger.repo.warning(
           'SnapshotStore.load transient IO keep file cid=$canonicalId dkey=$difficultyKey',
@@ -365,13 +421,11 @@ class SnapshotStore {
       final isFormat = e is FormatException || e is TypeError;
       if (isFormat) {
         AppLogger.repo.warning(
-          'SnapshotStore.loadJsonString corrupted delete cid=$canonicalId dkey=$difficultyKey',
+          'SnapshotStore.loadJsonString corrupted cid=$canonicalId dkey=$difficultyKey',
           e,
           st,
         );
-        try {
-          await file.delete();
-        } catch (_) {}
+        return _recoverFromCorrupt(file, canonicalId, difficultyKey);
       } else {
         AppLogger.repo.warning(
           'SnapshotStore.loadJsonString transient IO keep cid=$canonicalId dkey=$difficultyKey',
@@ -431,8 +485,22 @@ class SnapshotStore {
     await _ensureInit();
     final file = _fileFor(canonicalId, difficultyKey);
     try {
-      if (file.existsSync()) {
-        await file.delete();
+      // 玩家显式丢弃残局：正式文件与回滚副本（.bak/.corrupt）一并清理
+      final sidecars = [
+        file,
+        File('${file.path}.bak'),
+        File('${file.path}.corrupt'),
+      ];
+      var removedAny = false;
+      for (final f in sidecars) {
+        try {
+          if (f.existsSync()) {
+            await f.delete();
+            removedAny = true;
+          }
+        } catch (_) {}
+      }
+      if (removedAny) {
         AppLogger.repo.info(
           'SnapshotStore.delete cid=$canonicalId dkey=$difficultyKey',
         );
