@@ -250,9 +250,11 @@ class PuzzleEngine {
         }).toList();
 
         didSnap = true;
-        AppLogger.engine.info(
-          'BoardSlot snap piece=${piece.id} r=${piece.r} c=${piece.c} dist=${dist.toStringAsFixed(4)} snapDist=${snapDist.toStringAsFixed(4)} cluster=$clusterId lockCascadeCount=$lockCount',
-        );
+        if (AppLogger.engine.isLoggable(Level.FINE)) {
+          AppLogger.engine.fine(
+            'BoardSlot snap piece=${piece.id} r=${piece.r} c=${piece.c} dist=${dist.toStringAsFixed(4)} snapDist=${snapDist.toStringAsFixed(4)} cluster=$clusterId lockCascadeCount=$lockCount',
+          );
+        }
         break;
       }
     }
@@ -368,9 +370,11 @@ class PuzzleEngine {
 
           didSnap = true;
           didMerge = true;
-          AppLogger.engine.info(
-            'ClusterMerge pA=${pA.id}(${pA.r},${pA.c}) pB=${pB.id}(${pB.r},${pB.c}) offsetErr=${offsetError.toStringAsFixed(4)} snapDist=${snapDist.toStringAsFixed(4)} countA=$countA countB=$countB',
-          );
+          if (AppLogger.engine.isLoggable(Level.FINE)) {
+            AppLogger.engine.fine(
+              'ClusterMerge pA=${pA.id}(${pA.r},${pA.c}) pB=${pB.id}(${pB.r},${pB.c}) offsetErr=${offsetError.toStringAsFixed(4)} snapDist=${snapDist.toStringAsFixed(4)} countA=$countA countB=$countB',
+            );
+          }
           break;
         }
       }
@@ -395,12 +399,11 @@ class PuzzleEngine {
     }
 
     final newState = state.copyWith(pieces: currentPieces);
-    if (didSnap || didMerge || newState.isSolved) {
-      AppLogger.engine.info(
+    // 每次松手都会走到这里，逐次拖拽 trace 统一降为 fine（审查 5.4）
+    if (AppLogger.engine.isLoggable(Level.FINE)) {
+      AppLogger.engine.fine(
         'resolveSnap result dragged=$draggedPieceId didSnap=$didSnap didMerge=$didMerge affected=${affectedIds.length} isCompleted=${newState.isSolved}',
       );
-    } else if (AppLogger.engine.isLoggable(Level.FINE)) {
-      AppLogger.engine.fine('resolveSnap no snap dragged=$draggedPieceId');
     }
     return BoardTransitionResult(
       state: newState,

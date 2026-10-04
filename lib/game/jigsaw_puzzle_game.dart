@@ -18,6 +18,7 @@ import 'package:jigsawpuzzle/logic/models/puzzle_state.dart';
 import 'package:jigsawpuzzle/logic/rendering/linen_texture_manager.dart';
 import 'package:jigsawpuzzle/services/app_logger.dart';
 import 'package:jigsawpuzzle/services/sound_service.dart';
+import 'package:logging/logging.dart';
 
 typedef PuzzleImage = ui.Image;
 
@@ -1254,7 +1255,8 @@ class JigsawPuzzleGame extends FlameGame
   /// 【为什么是"中心"而不是"整簇包围盒"】
   /// 旧实现（提交 `a5deb7b` 引入）要求整个集群的外接包围盒都塞进屏幕，
   /// 边界形如 `size - margin - clusterOffset`，其中 `clusterOffset` 含 `× _zoom`。
-  /// 当 `_zoom >= 2`（本项目各难度 `maxZoom` 恒为 2.0）且集群投影尺寸超过可用空间时，
+  /// 当 `_zoom >= 2`（`_maxZoom = max(2, 72/pieceMaxSide)`，恒 ≥ 2，密集拼图可 > 2）
+  /// 且集群投影尺寸超过可用空间时，
   /// 会出现 `safeMin > safeMax`，被 `min/max` 兜底退化成**一个点**：
   /// 碎片组完全拖不动、松手即被钉死（实测 4×4 盘 2×2 集群在 1200×800 下 Y 轴行程为 0）。
   ///
@@ -2097,9 +2099,13 @@ class JigsawPuzzleGame extends FlameGame
     final clusterPieces = _pieces.values
         .where((p) => p.clusterId == piece.clusterId)
         .toList();
-    AppLogger.game.info(
-      'dragEnd piece=${piece.id} cluster=${piece.clusterId} size=${clusterPieces.length} inTrayArea=$inTrayArea pos=${piece.position.x.toStringAsFixed(1)},${piece.position.y.toStringAsFixed(1)} isTabletop=$isTabletop',
-    );
+    // 逐次拖拽 trace 降为 fine：release 下根级别 INFO 且控制台/文件均开启，
+    // 每次 dragEnd 的 info 会产生同步 print + 文件 I/O（审查 5.4）
+    if (AppLogger.game.isLoggable(Level.FINE)) {
+      AppLogger.game.fine(
+        'dragEnd piece=${piece.id} cluster=${piece.clusterId} size=${clusterPieces.length} inTrayArea=$inTrayArea pos=${piece.position.x.toStringAsFixed(1)},${piece.position.y.toStringAsFixed(1)} isTabletop=$isTabletop',
+      );
+    }
 
     // 1. 如果拖回托盘区域且为单块碎片 -> 就近插入托盘槽位并平滑吸附就位，不触发棋盘吸附
     if (!isTabletop && inTrayArea && clusterPieces.length == 1) {
@@ -2199,9 +2205,11 @@ class JigsawPuzzleGame extends FlameGame
       onBoardPieceIds: onBoardPieceIds,
       customSnapDistance: effectiveSnapDistance(),
     );
-    AppLogger.game.info(
-      'dragEnd resolveSnap result piece=${piece.id} didSnap=${result.didSnap} didMerge=${result.didMerge} completed=${result.isCompleted} solved=${result.state.isSolved} affected=${result.affectedPieceIds.length}',
-    );
+    if (AppLogger.game.isLoggable(Level.FINE)) {
+      AppLogger.game.fine(
+        'dragEnd resolveSnap result piece=${piece.id} didSnap=${result.didSnap} didMerge=${result.didMerge} completed=${result.isCompleted} solved=${result.state.isSolved} affected=${result.affectedPieceIds.length}',
+      );
+    }
 
     if (result.didSnap ||
         result.didMerge ||
@@ -2979,9 +2987,11 @@ class JigsawPuzzleGame extends FlameGame
           ny: normOut[1],
         );
       }
-      AppLogger.game.info(
-        'missingPieceCheck cluster=$clusterId members=${members.length} shift=${shift.x.toStringAsFixed(1)},${shift.y.toStringAsFixed(1)}',
-      );
+      if (AppLogger.game.isLoggable(Level.FINE)) {
+        AppLogger.game.fine(
+          'missingPieceCheck cluster=$clusterId members=${members.length} shift=${shift.x.toStringAsFixed(1)},${shift.y.toStringAsFixed(1)}',
+        );
+      }
     }
 
     if (updatedPiecesMap.isEmpty) return;

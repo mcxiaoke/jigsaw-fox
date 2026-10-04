@@ -238,6 +238,8 @@ class EconomyService {
           'EconomyService.consumeHint fail: coins=$coins < price=$price',
         );
         return false;
+        // best-effort：扣费异常按未消费降级
+        // ignore: avoid_catches_without_on_clauses
       } catch (e, st) {
         // 扣费异常按"未消费"降级，且不得让锁链进入错误态阻断后续调用
         AppLogger.repo.warning('EconomyService.consumeHint failed', e, st);
