@@ -465,36 +465,53 @@ class PuzzlePieceComponent extends PositionComponent
     game.dropHoldingPiece();
   }
 
+  /// 在途位移动画的目标终点；无动画时为 null。
+  Vector2? _moveTarget;
+
+  /// 碎片的"已落定"位置：在途 MoveToEffect 存在时为其目标终点，否则等于 position。
+  ///
+  /// 权威状态派生（dragEnd 回写 / 快照导出 / pullback 包围盒计算）必须读取此值，
+  /// 而不是组件瞬时 position——后者在补间插值中途是中间值，会把动画中间态写进
+  /// `_boardState` 并破坏集群网格不变量（审查 G-3）。
+  Vector2 get settledPosition => _moveTarget ?? position;
+
   /// 立即清除所有正在运行的补间动画（如 MoveToEffect / ScaleEffect）
   void clearActiveEffects() {
     removeAll(children.whereType<Effect>());
+    _moveTarget = null;
   }
 
   /// 仅移除进行中的位移动画（保留缩放等其它效果）。
   ///
   /// 用于“整簇平移”这类会改写位置目标的路径：在途 `MoveToEffect` 的目标已失效，
   /// 若不清除会在下一帧把组件拽回旧目标；而 `clearActiveEffects` 会连缩放动画一起清掉。
+  /// 注意：清除后 position 停留在插值中间值，调用方应立即显式写入最终位置。
   void clearMoveEffects() {
     removeAll(children.whereType<MoveEffect>());
+    _moveTarget = null;
   }
 
   /// 带有平滑曲线的缓动平移位移动画
   void animateTo(Vector2 targetPos, {double duration = 0.15}) {
     if (!isMounted) {
       position.setFrom(targetPos);
+      _moveTarget = null;
       return;
     }
     removeAll(children.whereType<MoveEffect>());
+    _moveTarget = null;
     if ((position - targetPos).length < 0.5) {
       position.setFrom(targetPos);
       return;
     }
+    _moveTarget = targetPos.clone();
     // Flame add() 返回 FutureOr<void>（未加载时同步完成），帧循环内无需等待
     // ignore: discarded_futures
     add(
       MoveToEffect(
         targetPos,
         EffectController(duration: duration, curve: Curves.easeOutQuad),
+        onComplete: () => _moveTarget = null,
       ),
     );
   }

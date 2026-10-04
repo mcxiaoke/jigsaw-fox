@@ -557,6 +557,9 @@ class JigsawPuzzleGame extends FlameGame
         comp.scale.setAll(_trayPieceScale);
       } else {
         comp.scale.setAll(_zoom);
+        // 窗口缩放后旧在途动画目标已失效，先清除再落权威坐标，
+        // 否则补间会在后续帧把碎片拽回旧目标（G-3）
+        comp.clearMoveEffects();
         final pState = _boardState.pieceById(comp.id);
         comp.position.setFrom(_normalizedToScreen(pState.nx, pState.ny));
       }
@@ -1755,6 +1758,9 @@ class JigsawPuzzleGame extends FlameGame
       }
 
       final targetPos = _normalizedToScreen(pState.nx, pState.ny);
+      // 缩放/平移后旧在途动画目标（旧布局屏幕坐标）已失效，先清除再落位，
+      // 否则补间在后续帧把碎片拽回旧目标造成撕裂（G-3）
+      comp.clearMoveEffects();
       comp.position.setFrom(targetPos);
       comp.scale.setAll(_zoom);
     }
@@ -2176,8 +2182,10 @@ class JigsawPuzzleGame extends FlameGame
       final comp = _pieces[p.id];
       if (comp == null) return p;
       // 仅针对在棋盘上的碎片计算归一化坐标，托盘碎片保留原有状态
+      // 读 settledPosition 而非瞬时 position：其他碎片的在途落位动画
+      // （如 0.15s 吸附补间）中途松手时，瞬时值是插值中间态（G-3）
       if (!comp.isInTray) {
-        _screenToNormalized(comp.position, out);
+        _screenToNormalized(comp.settledPosition, out);
         return p.copyWith(
           nx: out[0],
           ny: out[1],
@@ -2347,10 +2355,14 @@ class JigsawPuzzleGame extends FlameGame
       for (final comp in cluster) {
         final w = comp.size.x * comp.scale.x;
         final h = comp.size.y * comp.scale.y;
-        minX = min(minX, comp.position.x);
-        maxX = max(maxX, comp.position.x + w);
-        minY = min(minY, comp.position.y);
-        maxY = max(maxY, comp.position.y + h);
+        // 包围盒基于 settledPosition：刚被 animateTo 的碎片（如扫把整理刚
+        // 分配的散落槽位）取动画终点，否则 shift 会按启动前旧位置计算并
+        // 覆盖刚写好的槽位坐标（G-2）
+        final pos = comp.settledPosition;
+        minX = min(minX, pos.x);
+        maxX = max(maxX, pos.x + w);
+        minY = min(minY, pos.y);
+        maxY = max(maxY, pos.y + h);
       }
 
       var shiftX = 0.0;
@@ -2392,10 +2404,11 @@ class JigsawPuzzleGame extends FlameGame
       if (shiftX.abs() > 1e-4 || shiftY.abs() > 1e-4) {
         final shift = Vector2(shiftX, shiftY);
         for (final comp in cluster) {
-          final target = comp.position + shift;
+          final target = comp.settledPosition + shift;
           if (animate) {
             comp.animateTo(target, duration: 0.25);
           } else {
+            comp.clearMoveEffects();
             comp.position.setFrom(target);
           }
           _screenToNormalized(target, normOut);
@@ -2563,7 +2576,8 @@ class JigsawPuzzleGame extends FlameGame
             ny: max(p.ny, 2.0),
           );
         }
-        _screenToNormalized(comp.position, out);
+        // 读 settledPosition：动画中途导出存档必须取动画终点而非插值中间值（G-3）
+        _screenToNormalized(comp.settledPosition, out);
         return p.copyWith(
           nx: out[0],
           ny: out[1],
@@ -2944,15 +2958,18 @@ class JigsawPuzzleGame extends FlameGame
       // 2. 位移取“越界最严重成员放回就近完整可见位置”所需向量；
       //    越界判据与目标位置公式与原实现完全一致（中心越出可视范围半个自身尺寸）。
       //    若簇内多成员需求方向冲突或整簇塞不进安全区，优先保证越界最严重者完整可见。
+      //    判据基于 settledPosition：本方法在 _applySnapSettlement 启动吸附动画后
+      //    立即执行，瞬时 position 还停在动画起点旧位置，会误判越界（G-3）。
       Vector2? shift;
       for (final comp in members) {
         final visualW = comp.size.x * comp.scale.x;
         final visualH = comp.size.y * comp.scale.y;
+        final pos = comp.settledPosition;
         final isOutOfBounds =
-            comp.position.x < -visualW * 0.5 ||
-            comp.position.x > size.x - visualW * 0.5 ||
-            comp.position.y < -visualH * 0.5 ||
-            comp.position.y > size.y - visualH * 0.5;
+            pos.x < -visualW * 0.5 ||
+            pos.x > size.x - visualW * 0.5 ||
+            pos.y < -visualH * 0.5 ||
+            pos.y > size.y - visualH * 0.5;
         if (!isOutOfBounds) continue;
 
         final horizontalLimit = max(
@@ -2964,20 +2981,23 @@ class JigsawPuzzleGame extends FlameGame
           (isTabletop ? size.y : trayPosition.y) - _sideMargin - visualH,
         );
         final safeTarget = Vector2(
-          comp.position.x.clamp(_sideMargin, horizontalLimit),
-          comp.position.y.clamp(44.0, verticalLimit),
+          pos.x.clamp(_sideMargin, horizontalLimit),
+          pos.y.clamp(44.0, verticalLimit),
         );
-        final candidate = safeTarget - comp.position;
+        final candidate = safeTarget - pos;
         if (shift == null || candidate.length2 > shift.length2) {
           shift = candidate;
         }
       }
       if (shift == null) continue;
 
-      // 3. 整簇原子平移：清掉在途位移动画（其目标已因本次平移失效），
-      //    并同步整簇 `nx/ny`，维持“集群内精确网格相对偏移”不变量。
+      // 3. 整簇原子平移：先把成员落到动画终点（清掉在途位移动画，其目标已因
+      //    本次平移失效），再按 shift 平移，并同步整簇 `nx/ny`，
+      //    维持“集群内精确网格相对偏移”不变量。
       for (final comp in members) {
+        final settled = comp.settledPosition;
         comp.clearMoveEffects();
+        comp.position.setFrom(settled);
         comp.position.add(shift);
         comp.triggerSnapGlow();
         _screenToNormalized(comp.position, normOut);

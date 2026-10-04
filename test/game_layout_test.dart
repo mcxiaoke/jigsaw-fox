@@ -2912,4 +2912,96 @@ void main() {
       expect(p.ny, greaterThanOrEqualTo(2.0));
     }
   });
+
+  test('settledPosition：动画在途时返回补间终点，清除后回落瞬时位置（G-3）', () async {
+    final img = await _decodePng();
+    final game = JigsawPuzzleGame(
+      image: img,
+      rows: 2,
+      cols: 2,
+      onSolved: () {},
+    );
+    game.onGameResize(Vector2(400, 800));
+    await game.onLoad();
+    game.mount();
+    game.update(0); // 驱动 Flame 挂起的生命周期事件，使碎片真正挂载
+
+    final comp = game.children.whereType<PuzzlePieceComponent>().first;
+    final start = comp.position.clone();
+    final target = start + Vector2(120, -80);
+
+    comp.animateTo(target, duration: 0.25);
+    expect(
+      comp.settledPosition.x,
+      closeTo(target.x, 1e-6),
+      reason: '动画在途时 settledPosition 必须是终点',
+    );
+    expect(
+      comp.settledPosition.y,
+      closeTo(target.y, 1e-6),
+    );
+    expect(
+      comp.position.x,
+      closeTo(start.x, 1e-6),
+      reason: '动画尚未推进帧时瞬时位置仍是起点',
+    );
+
+    comp.clearMoveEffects();
+    expect(
+      comp.settledPosition,
+      same(comp.position),
+      reason: '清除动画后 settledPosition 应回落为瞬时位置',
+    );
+  });
+
+  test('动画中途导出快照的坐标与"已在终点导出"完全一致（G-3）', () async {
+    final img = await _decodePng();
+    final game = JigsawPuzzleGame(
+      image: img,
+      rows: 2,
+      cols: 2,
+      onSolved: () {},
+    );
+    game.onGameResize(Vector2(400, 800));
+    await game.onLoad();
+    game.mount();
+    game.update(0); // 驱动 Flame 挂起的生命周期事件，使碎片真正挂载
+
+    final comp = game.children.whereType<PuzzlePieceComponent>().first;
+    final boardIndex = game.boardState.pieces.indexWhere(
+      (p) => p.id == comp.id,
+    );
+    expect(boardIndex, isNonNegative);
+    // 把该碎片放到棋盘上（脱离托盘防护分支），并移动到远离槽位的自由位置
+    comp
+      ..isInTray = false
+      ..position.setFrom(Vector2(120, 200));
+
+    final target = Vector2(180, 260);
+    comp.animateTo(target, duration: 0.25);
+
+    // 动画在途导出：瞬时 position 还在起点，权威坐标必须来自动画终点
+    final midSnapshot =
+        jsonDecode(game.exportSnapshotJson()) as Map<String, dynamic>;
+
+    // 基准：清除动画并直接落到终点后导出
+    comp.clearMoveEffects();
+    comp.position.setFrom(target);
+    final endSnapshot =
+        jsonDecode(game.exportSnapshotJson()) as Map<String, dynamic>;
+
+    final midPieces = (midSnapshot['pieces'] as List)
+        .cast<Map<String, dynamic>>();
+    final endPieces = (endSnapshot['pieces'] as List)
+        .cast<Map<String, dynamic>>();
+    expect(
+      midPieces[boardIndex]['nx'],
+      closeTo(endPieces[boardIndex]['nx'] as double, 1e-9),
+      reason: '动画中途导出不得写入插值起点（旧缺陷会写起点旧坐标）',
+    );
+    expect(
+      midPieces[boardIndex]['ny'],
+      closeTo(endPieces[boardIndex]['ny'] as double, 1e-9),
+    );
+  });
 }
