@@ -500,6 +500,72 @@ void main() {
     g.handlePieceDragEnd(p);
   }
 
+  test('effectiveSnapDistance 恒不低于 solvedEpsilonFor（G-1 判据同源钳制）', () async {
+    final img = await _decodePng();
+    for (final n in [2, 3, 5, 8, 12, 16]) {
+      final game = JigsawPuzzleGame(
+        image: img,
+        rows: n,
+        cols: n,
+        onSolved: () {},
+      );
+      game.onGameResize(Vector2(1920, 1080));
+      await game.onLoad();
+      final eps = solvedEpsilonFor(n, n);
+      for (final z in [1.0, game.maxZoom]) {
+        game.zoomAt(Vector2(960, 500), z - game.zoom);
+        expect(
+          game.effectiveSnapDistance(),
+          greaterThanOrEqualTo(eps),
+          reason: '$n×$n zoom=$z：吸附容差不得压缩到通关容差之下（死区）',
+        );
+      }
+    }
+  });
+
+  test('放大态死区：isSolved 的边缘碎片必须吸附并锁定（G-1）', () async {
+    final img = await _decodePng();
+    final game = JigsawPuzzleGame(
+      image: img,
+      rows: 4,
+      cols: 4,
+      onSolved: () {},
+    );
+    // 大窗口 + 放大使 48px 硬上限把未钳制吸附容差压到 solvedEpsilon 之下
+    game.onGameResize(Vector2(1920, 1080));
+    await game.onLoad();
+    game.zoomAt(Vector2(960, 500), game.maxZoom - game.zoom);
+
+    final minBoardPx = min(game.boardSize.x, game.boardSize.y);
+    final eps = solvedEpsilonFor(4, 4);
+    // 测试前提：确认当前处于死区（未钳制 48px 容差 < 0.9×eps 对应屏幕像素）
+    expect(
+      48.0,
+      lessThan(0.9 * eps * minBoardPx * game.zoom),
+      reason: '测试前提：当前窗口/缩放必须使 48px 上限落入死区，否则本测试无意义',
+    );
+
+    // 选放大后仍停留在视口内的左边缘中部碎片 (2,0)：(0,1) 这类顶部边缘槽位
+    // 在 2× 放大下必然被裁出视口，_clampDragTarget 防御限位会把测试位置拉走
+    final edge = pieceOf(game, 8); // (2,0) 左边缘非角块
+    final slot = game.normalizedToScreen(edge.c / 4, edge.r / 4);
+    final offsetPx = 0.9 * eps * minBoardPx * game.zoom;
+    edge
+      ..isInTray = false
+      ..scale.setAll(game.zoom)
+      ..position.setFrom(slot + Vector2(offsetPx, 0));
+    game.handlePieceDragEnd(edge);
+
+    // 修复前：dist=0.9eps 落在 [未钳制snap, eps) 死区——isSolved 计入进度
+    // 但既不吸附也不锁定、还能拖走；修复后吸附/锁定容差钳到 eps，必锁定
+    expect(edge.isLocked, isTrue, reason: 'isSolved 范围内的边缘碎片必须锁定');
+    expect(
+      (edge.position - slot).length,
+      lessThanOrEqualTo(2.0),
+      reason: '锁定必须伴随对齐到槽位',
+    );
+  });
+
   test('场景#1#2：中间杂物碎片及其中间组合应自由拖动(不锁定)', () async {
     final img = await _decodePng();
     final g = JigsawPuzzleGame(image: img, rows: 4, cols: 4, onSolved: () {});
@@ -2923,6 +2989,8 @@ void main() {
     );
     game.onGameResize(Vector2(400, 800));
     await game.onLoad();
+    // mount 是 Flame 的 @internal API，测试环境无 GameWidget，用它同步触发挂载
+    // ignore: invalid_use_of_internal_member
     game.mount();
     game.update(0); // 驱动 Flame 挂起的生命周期事件，使碎片真正挂载
 
@@ -2964,6 +3032,8 @@ void main() {
     );
     game.onGameResize(Vector2(400, 800));
     await game.onLoad();
+    // mount 是 Flame 的 @internal API，测试环境无 GameWidget，用它同步触发挂载
+    // ignore: invalid_use_of_internal_member
     game.mount();
     game.update(0); // 驱动 Flame 挂起的生命周期事件，使碎片真正挂载
 

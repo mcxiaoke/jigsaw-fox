@@ -1526,7 +1526,13 @@ class JigsawPuzzleGame extends FlameGame
     final minCellPx = minBoardPx * min(1.0 / cols, 1.0 / rows);
     final cellPx = minCellPx * _zoom; // 当前缩放下单格最小边屏幕像素
     final screenPx = min(cellPx * ratio, maxScreenPx);
-    return screenPx / (minBoardPx * _zoom);
+    final result = screenPx / (minBoardPx * _zoom);
+    // [判据同源 G-1] 48px 硬上限在"棋盘短边×zoom"足够大时会压缩吸附容差到
+    // solvedEpsilonFor 之下，形成"碎片已判 isSolved（计入进度/通关）却吸附不了、
+    // 锁不上、还能拖走"的死区（zoom 放大态必现）。下限钳到 solvedEpsilonFor，
+    // 保证 isSolved ⟹ 距离在本容差内 ⟹ 吸附与锁定判据一致；
+    // 死区场景对应的屏幕像素差在 1px 量级，吸附手感不变。
+    return max(result, solvedEpsilonFor(rows, cols));
   }
 
   /// 视口贴边包裹模型 (Viewport Containment - v1.1 终版)：
