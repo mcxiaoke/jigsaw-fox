@@ -75,16 +75,15 @@ Future<dynamic> _fetchWithRetry(
 }
 
 void main() {
+  // 未提供 manifest 时用动态 skip 显式标记，而不是无断言静默通过（审查 5.3 假绿）
+  final skipReason = _manifestEnv.isEmpty
+      ? '未提供 --dart-define=JIGSAWDATA_MANIFEST，跳过远端验证'
+      : null;
+
   test(
     'jigsaw-data 远端全链路: manifest → main/daily/events/collections 解析',
     () async {
       const manifestUrl = _manifestEnv;
-      if (manifestUrl.isEmpty) {
-        debugPrint(
-          'SKIP: 未提供 --dart-define=JIGSAWDATA_MANIFEST，跳过远端验证',
-        );
-        return;
-      }
       // 网络遵循本机系统代理（raw/jsDelivr/proxy 各通道由外部巡检脚本
       // validate_remote.py 单独验证，此处聚焦 App 数据模型解析契约）。
       final client = ContentHttpClient();
@@ -288,6 +287,7 @@ void main() {
       debugPrint('✅ jigsaw-data 远端全链路验证通过 (manifest=$manifestUrl)');
     },
     timeout: const Timeout(Duration(minutes: 5)),
+    skip: skipReason,
   );
 }
 

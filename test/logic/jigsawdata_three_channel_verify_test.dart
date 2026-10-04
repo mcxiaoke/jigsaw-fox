@@ -267,10 +267,6 @@ void main() {
     test(
       '三通道消费验证 [$channelId] $base',
       () async {
-        if (!_enabled) {
-          debugPrint('SKIP: 未设置 --dart-define=CHANNELS_VERIFY=true，跳过');
-          return;
-        }
         final client = ContentHttpClient();
         final tmpDir = await Directory.systemTemp.createTemp('jigsaw_chan_');
 
@@ -456,6 +452,8 @@ void main() {
         }
       },
       timeout: const Timeout(Duration(minutes: 15)),
+      // 未显式开启时用动态 skip 显式标记，而不是无断言静默通过（审查 5.3 假绿）
+      skip: _enabled ? null : '未设置 --dart-define=CHANNELS_VERIFY=true，跳过三通道验证',
     );
   }
 }

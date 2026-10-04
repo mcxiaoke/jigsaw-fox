@@ -24,19 +24,16 @@ const int _minSchema = 3;
 const int _maxSchema = 4;
 
 void main() {
+  // 条件不满足时用动态 skip 显式标记，而不是无断言静默通过（审查 5.3 假绿）
+  final dirPath = _localDataDirEnv.isNotEmpty
+      ? _localDataDirEnv
+      : 'F:/Pictures/JigsawGame/jigsaw-data/release';
+  final releaseDir = Directory(dirPath);
+  final skipReason = releaseDir.existsSync()
+      ? null
+      : '本地发布产物目录不存在: $dirPath（可通过 --dart-define=LOCAL_DATA_DIR 指定）';
+
   test('jigsaw-data 本地发布产物客户端模型解析全量契约测试', () {
-    final dirPath = _localDataDirEnv.isNotEmpty
-        ? _localDataDirEnv
-        : 'F:/Pictures/JigsawGame/jigsaw-data/release';
-
-    final releaseDir = Directory(dirPath);
-    if (!releaseDir.existsSync()) {
-      debugPrint(
-        'SKIP: 本地发布产物目录不存在: $dirPath（可通过 --dart-define=LOCAL_DATA_DIR 指定）',
-      );
-      return;
-    }
-
     debugPrint('[LocalContractTest] 正在核验本地发布目录: $dirPath');
 
     // 1. Root Manifest
@@ -242,5 +239,5 @@ void main() {
     );
 
     debugPrint('🎉 [LocalContractTest] 本地发布产物全部客户端模型契约校验通过！');
-  });
+  }, skip: skipReason);
 }
