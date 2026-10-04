@@ -201,34 +201,48 @@ class EconomyService {
     );
   }
 
+  /// 提示消费串行锁：读-改-写跨 await，并发双击会同时读到同一余额导致只扣一次
+  /// （审查项 D-3）；复用 GameRepository._snapStatsLock 的链式串行模式。
+  Future<void> _consumeLock = Future<void>.value();
+
   /// 提示消费判定与扣费（优先级：免费券 -> 金币 -> 失败）
-  Future<bool> consumeHint({required int tierIndex}) async {
-    await init();
-    // 1. 优先扣免费提示券
-    if (hintCoupons > 0) {
-      await putRaw(_box, _keyCoupons, hintCoupons - 1);
-      AppLogger.repo.info(
-        'EconomyService.consumeHint used coupon (remaining=${hintCoupons - 1})',
-      );
-      return true;
-    }
+  ///
+  /// 经 [_consumeLock] 串行化，保证并发调用逐次结算、不漏扣。
+  Future<bool> consumeHint({required int tierIndex}) {
+    return _consumeLock = _consumeLock.then<bool>((_) async {
+      try {
+        await init();
+        // 1. 优先扣免费提示券
+        if (hintCoupons > 0) {
+          await putRaw(_box, _keyCoupons, hintCoupons - 1);
+          AppLogger.repo.info(
+            'EconomyService.consumeHint used coupon (remaining=${hintCoupons - 1})',
+          );
+          return true;
+        }
 
-    // 2. 扣金币
-    final safeTier = tierIndex.clamp(0, kHintPrices.length - 1);
-    final price = kHintPrices[safeTier];
-    if (coins >= price) {
-      final newTotal = coins - price;
-      await putRaw(_box, _keyCoins, newTotal);
-      AppLogger.repo.info(
-        'EconomyService.consumeHint used coins -$price (remaining=$newTotal)',
-      );
-      return true;
-    }
+        // 2. 扣金币
+        final safeTier = tierIndex.clamp(0, kHintPrices.length - 1);
+        final price = kHintPrices[safeTier];
+        if (coins >= price) {
+          final newTotal = coins - price;
+          await putRaw(_box, _keyCoins, newTotal);
+          AppLogger.repo.info(
+            'EconomyService.consumeHint used coins -$price (remaining=$newTotal)',
+          );
+          return true;
+        }
 
-    // 3. 余额不足
-    AppLogger.repo.info(
-      'EconomyService.consumeHint fail: coins=$coins < price=$price',
-    );
-    return false;
+        // 3. 余额不足
+        AppLogger.repo.info(
+          'EconomyService.consumeHint fail: coins=$coins < price=$price',
+        );
+        return false;
+      } catch (e, st) {
+        // 扣费异常按"未消费"降级，且不得让锁链进入错误态阻断后续调用
+        AppLogger.repo.warning('EconomyService.consumeHint failed', e, st);
+        return false;
+      }
+    });
   }
 }

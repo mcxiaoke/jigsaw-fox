@@ -175,5 +175,27 @@ void main() {
       await EconomyService.instance.init();
       expect(await eco.consumeHint(tierIndex: 0), isFalse);
     });
+
+    test(
+      'Concurrent consumeHint calls settle serially without double spend (D-3)',
+      () async {
+        final eco = EconomyService.instance;
+        // 场景：0 张券 + 金币仅够一次 L1 提示（5 币）。修复前两次并发调用
+        // 都读到余额 5、双双成功扣到 0；修复后第二次必须看到扣减后的余额
+        await sm.state.put('econ:hintCoupons', 0);
+        await sm.state.put('econ:coins', 5);
+        await EconomyService.instance.init();
+        expect(eco.hintCoupons, equals(0));
+        expect(eco.coins, equals(5));
+
+        final results = await Future.wait([
+          eco.consumeHint(tierIndex: 0),
+          eco.consumeHint(tierIndex: 0),
+        ]);
+        expect(results[0], isTrue);
+        expect(results[1], isFalse, reason: '第二次调用必须看到扣减后的余额');
+        expect(eco.coins, equals(0));
+      },
+    );
   });
 }

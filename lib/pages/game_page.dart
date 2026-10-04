@@ -106,6 +106,10 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
 
   bool _isSaving = false;
 
+  /// 提示扣费在途标志（D-3 重入闸门）：consumeHint 为异步扣费，
+  /// 在途期间再触发会重复放提示片/重复计步
+  bool _isHintInFlight = false;
+
   /// 批量合并 UI 更新标志，避免 onProgressChanged + onStateUpdated 连续触发双重 setState
   bool _uiUpdateScheduled = false;
 
@@ -463,8 +467,10 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
         state = state.copyWith(canonicalId: canonicalId);
       }
       state = state.copyWith(difficultyKey: state.effectiveDifficultyKey);
-      SnapshotStore.instance.saveSync(state);
+      // D-5：canonicalId 为空时不落盘（否则经 effectiveCanonicalId 回落到
+      // 'default_level'，写出永远读不到的孤儿快照键），与下方进度路径守卫一致
       if (canonicalId.isNotEmpty) {
+        SnapshotStore.instance.saveSync(state);
         // Fire-and-forget: progress update is best-effort.
         // ignore: discarded_futures
         _repo.updateGenericProgress(
@@ -475,6 +481,10 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
         );
         AppLogger.game.info(
           'flushSync saved ok cid=$canonicalId percent=$percent',
+        );
+      } else {
+        AppLogger.game.warning(
+          'flushSync skipped save: empty canonicalId percent=$percent',
         );
       }
       // best-effort：记录后降级继续
@@ -784,31 +794,41 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
 
   Future<void> _onHintPressed() async {
     if (_game == null || _isSolved || _isPaused) return;
-
-    final tier = (_effectiveDifficulty ?? widget.difficulty).tierIndex;
-    final canUse = await EconomyService.instance.consumeHint(tierIndex: tier);
-    if (!canUse) {
-      if (mounted) {
-        final price = EconomyService
-            .kHintPrices[tier.clamp(0, EconomyService.kHintPrices.length - 1)];
-        GameToast.show(
-          context,
-          icon: PhosphorIconsRegular.coins,
-          message: LocaleSettings.instance.currentTranslations.game
-              .hintNotEnoughCoins(
-                price: price,
-                coins: EconomyService.instance.coins,
-              ),
-          type: GameToastType.warning,
-        );
+    if (_isHintInFlight) return; // 重入闸门（D-3）：扣费在途时忽略再次点击
+    _isHintInFlight = true;
+    if (mounted) setState(() {}); // 立即禁用提示按钮，给出在途视觉反馈
+    try {
+      final tier = (_effectiveDifficulty ?? widget.difficulty).tierIndex;
+      final canUse = await EconomyService.instance.consumeHint(tierIndex: tier);
+      if (!canUse) {
+        if (mounted) {
+          final price =
+              EconomyService.kHintPrices[tier.clamp(
+                0,
+                EconomyService.kHintPrices.length - 1,
+              )];
+          GameToast.show(
+            context,
+            icon: PhosphorIconsRegular.coins,
+            message: LocaleSettings.instance.currentTranslations.game
+                .hintNotEnoughCoins(
+                  price: price,
+                  coins: EconomyService.instance.coins,
+                ),
+            type: GameToastType.warning,
+          );
+        }
+        return;
       }
-      return;
-    }
 
-    // 提示动画期间暂停计时 1.5 秒
-    _hintPauseUntil = DateTime.now().add(const Duration(milliseconds: 1500));
-    _game?.hint();
-    SoundService.I.play(Sfx.hint);
+      // 提示动画期间暂停计时 1.5 秒
+      _hintPauseUntil = DateTime.now().add(const Duration(milliseconds: 1500));
+      _game?.hint();
+      SoundService.I.play(Sfx.hint);
+    } finally {
+      _isHintInFlight = false;
+      if (mounted) setState(() {});
+    }
   }
 
   String get _pageTitle {
@@ -1149,7 +1169,9 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
             color: (_game == null || _isSolved) ? Colors.grey : Colors.amber,
           ),
           tooltip: tr.game.tooltipHint,
-          onPressed: (_game == null || _isSolved) ? null : _onHintPressed,
+          onPressed: (_game == null || _isSolved || _isHintInFlight)
+              ? null
+              : _onHintPressed,
         ),
         // 3. 显示遮罩（底图透视 0%/20%/45%）
         IconButton(
