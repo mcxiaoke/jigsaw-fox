@@ -146,6 +146,7 @@ class DifficultyRecordUpdateResult {
     required this.deltaStars,
     required this.isFirstNoHintWin,
     required this.record,
+    required this.savedSuccessfully,
   });
 
   final int stars;
@@ -153,6 +154,11 @@ class DifficultyRecordUpdateResult {
   final int deltaStars;
   final bool isFirstNoHintWin;
   final DifficultyRecord record;
+
+  /// 本次成绩是否成功落盘（D-2）：磁盘故障时为 false，调用方不得据其
+  /// `record.playCount` 判定"首次通关"发全额奖励——落盘失败意味着计数
+  /// 未持久化，下一次通关读到的仍是旧值，会重复发放。
+  final bool savedSuccessfully;
 }
 
 /// 轻量进度索引（按 canonicalId 单条 Hive `game-progress-v1` JSON String）
@@ -269,19 +275,24 @@ class ProgressStore {
     return Map<String, LevelProgress>.from(_index!);
   }
 
-  Future<void> save(LevelProgress p) async {
+  Future<void> save(LevelProgress p) => trySave(p);
+
+  /// 落盘并返回是否成功（save 的可观测版本，D-2）。
+  ///
+  /// 内存先行（UI 立即响应）但失败回滚，避免内存/磁盘分裂（P21）。
+  Future<bool> trySave(LevelProgress p) async {
     await _ensureInit();
     final cid = p.canonicalId;
     if (cid.isEmpty) {
       AppLogger.repo.warning('ProgressStore.save skip empty canonicalId');
-      return;
+      return false;
     }
     final prev = _index![cid];
-    // 内存优先（UI 立即响应）但失败回滚，避免内存/磁盘分裂（P21）
     _index![cid] = p;
     try {
       await putJson(_box, cid, p.toJson());
       _notifyProgressChanged();
+      return true;
     } catch (e, st) {
       // 磁盘满等失败：回滚内存，保持一致
       if (prev == null) {
@@ -290,6 +301,7 @@ class ProgressStore {
         _index![cid] = prev;
       }
       AppLogger.repo.warning('ProgressStore.save fail cid=$cid', e, st);
+      return false;
     }
   }
 
@@ -416,13 +428,13 @@ class ProgressStore {
       firstCompletedAt: cur.firstCompletedAt ?? now,
       firstPlayedAt: cur.firstPlayedAt ?? now,
     );
-    await save(next);
+    final savedSuccessfully = await trySave(next);
 
     // 结算后刷新缓存，避免面板首帧读到旧值
     await refreshAggregatesCache();
 
     AppLogger.repo.info(
-      'ProgressStore.recordDifficultyCompletion cid=$canonicalId dkey=$difficultyKey stars=$stars (best=$newBestStars delta=$deltaStars) time=${timeSeconds}s minHints=$newMinHints firstNoHint=$isFirstNoHintWin',
+      'ProgressStore.recordDifficultyCompletion cid=$canonicalId dkey=$difficultyKey stars=$stars (best=$newBestStars delta=$deltaStars) time=${timeSeconds}s minHints=$newMinHints firstNoHint=$isFirstNoHintWin saved=$savedSuccessfully',
     );
 
     return DifficultyRecordUpdateResult(
@@ -431,6 +443,7 @@ class ProgressStore {
       deltaStars: deltaStars,
       isFirstNoHintWin: isFirstNoHintWin,
       record: updatedRecord,
+      savedSuccessfully: savedSuccessfully,
     );
   }
 

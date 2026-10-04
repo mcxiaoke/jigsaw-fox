@@ -718,7 +718,11 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
             .calculateAndAwardCompletion(
               tierIndex: tier,
               stars: stars,
-              isFirstCompletion: updateResult.record.playCount <= 1,
+              // D-2：落盘失败时 playCount 未持久化，按复玩保底处理，防止
+              // 磁盘故障期间每次通关都被误判"首次"重复发放全额奖励
+              isFirstCompletion:
+                  updateResult.savedSuccessfully &&
+                  updateResult.record.playCount <= 1,
               deltaStars: updateResult.deltaStars,
             );
 

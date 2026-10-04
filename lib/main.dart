@@ -196,6 +196,8 @@ void main() async {
     }),
     // P3-5：项目尚未发版，不存在旧版 thumbnail_cache 遗留目录，
     // 启动即删逻辑已移除（违反 R1/R5 的无必要自动删除）。
+    // D-6：启动后台对账快照索引，消除"索引有快照但文件丢失"的幽灵进度卡片
+    GameRepository.instance.startupSnapshotReconcile(),
   ];
   // 不阻塞首帧，后台并行；首帧先出壳由 contentUpdateNotifier 刷新
   unawaited(

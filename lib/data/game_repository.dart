@@ -137,6 +137,21 @@ class GameRepository {
     );
   }
 
+  /// 启动后台对账快照索引（D-6）：消除"索引 hasSnapshot=true 但文件丢失"的
+  /// 幽灵进度卡片，不必等玩家点进关卡才由 ResumeHelper 自愈。
+  ///
+  /// 由启动编排（main.dart Group1）显式调用、不阻塞启动；不放進 [init] 是
+  /// 因为测试直接调 init 且随后立即关闭 Hive box，后台任务会在 box 关闭后
+  /// 访问它而把错误泄漏进测试 zone。
+  Future<void> startupSnapshotReconcile() async {
+    try {
+      await ProgressStore.instance.reconcileSnapshots();
+      AppLogger.repo.info('startup snapshot reconcile done');
+    } catch (e, st) {
+      AppLogger.repo.warning('startup snapshot reconcile failed', e, st);
+    }
+  }
+
   // --- CanonicalId helpers (收敛至 CanonicalId SSOT) ---
   static String canonicalForLevel(int index) => CanonicalId.forMain(index);
   static String canonicalForDaily(String dateStr) =>

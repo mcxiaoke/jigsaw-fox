@@ -69,7 +69,17 @@ class ResumeHelper {
       await ProgressStore.instance.clearAllSnapshots(canonicalId);
       return null;
     }
-    if (percent >= 100 || snapshot.isSolved) return null;
+    if (percent >= 100 || snapshot.isSolved) {
+      // D-7：全盘已就位的快照不可续玩，也不应残留——否则它成为"既不可续玩、
+      // 又不被任何入口清理、还让卡片永远显示 100% 假进度"的僵尸记录。
+      // 清理文件与索引（与正常通关结算后的删除一致）；"已通关重玩"的正常残局
+      // 是 percent < 100 的快照，不受影响。
+      AppLogger.repo.info(
+        'ResumeHelper cleanup: solved snapshot cid=$canonicalId dkey=$usedDkey percent=$percent',
+      );
+      await clearResume(canonicalId, usedDkey);
+      return null;
+    }
     // 过滤“点进去即退”的无意义残局：0% 且无合并/提示/时长<5s则不视为可续玩，避免“只要点进去就有记录”
     final isTrivial =
         percent == 0 &&

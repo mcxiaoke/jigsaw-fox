@@ -184,6 +184,46 @@ void main() {
       expect(File('${file.path}.corrupt').existsSync(), isFalse);
     });
 
+    test(
+      'fetchResume clears fully-solved snapshot file and index (D-7)',
+      () async {
+        const cid = 'main:d7';
+        // 全盘精确就位（全部 isSolved）→ progressPercentOf = 100 的僵尸快照
+        final state = PuzzleBoardState(
+          canonicalId: cid,
+          difficultyKey: '2x2',
+          rows: 2,
+          cols: 2,
+          seed: 42,
+          elapsedSeconds: 300,
+          pieces: const [
+            PieceState(id: 0, r: 0, c: 0, nx: 0, ny: 0, clusterId: 0),
+            PieceState(id: 1, r: 0, c: 1, nx: 0.5, ny: 0, clusterId: 0),
+            PieceState(id: 2, r: 1, c: 0, nx: 0, ny: 0.5, clusterId: 0),
+            PieceState(id: 3, r: 1, c: 1, nx: 0.5, ny: 0.5, clusterId: 0),
+          ],
+        );
+        await SnapshotStore.instance.save(state);
+        await ProgressStore.instance.updateProgress(
+          canonicalId: cid,
+          progressPercent: 100,
+          hasSnapshot: true,
+          activeDifficultyKey: '2x2',
+          snapshotKeys: ['2x2'],
+        );
+
+        final file = SnapshotStore.instance.fileFor(cid, '2x2');
+        expect(file.existsSync(), isTrue);
+
+        const fallbackDiff = PuzzleDifficulty(label: '2x2', rows: 2, cols: 2);
+        final info = await ResumeHelper.fetchResume(cid, fallbackDiff);
+        expect(info, isNull, reason: '100% 快照不可续玩');
+        expect(file.existsSync(), isFalse, reason: '僵尸快照文件应被清理');
+        final p = await ProgressStore.instance.load(cid);
+        expect(p.hasSnapshot, isFalse, reason: '索引 hasSnapshot 应被清为 false');
+      },
+    );
+
     test('ProgressStore reconcile self-heals when file missing', () async {
       const cid = 'main:002';
       await ProgressStore.instance.updateProgress(
