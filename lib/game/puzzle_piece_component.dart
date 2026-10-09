@@ -4,6 +4,7 @@ import 'package:flame/components.dart';
 import 'package:flame/effects.dart';
 import 'package:flame/events.dart';
 import 'package:flutter/animation.dart';
+import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:flutter/painting.dart'
     show BlurStyle, Color, MaskFilter, Paint, PaintingStyle;
 import 'package:jigsawpuzzle/game/jigsaw_puzzle_game.dart';
@@ -178,6 +179,17 @@ class PuzzlePieceComponent extends PositionComponent
     ..color = const Color(0x70000000)
     ..isAntiAlias = true;
 
+  /// 已吸附归位碎片的统一弱化浅灰接缝画笔：
+  /// - 消除背光黑线与迎光白线在公共咬合边上的覆盖冲突与深浅斑驳；
+  /// - 线宽 0.8px，颜色由 game.pieceSeamColor 统一驱动（融合原图色温）。
+  static final Paint _lockedSeamPaint = Paint()
+    ..style = PaintingStyle.stroke
+    ..strokeWidth = 0.8
+    ..isAntiAlias = true;
+
+  @visibleForTesting
+  static Paint get testLockedSeamPaint => _lockedSeamPaint;
+
   /// 吸附成功高亮画笔（鲜艳绿色光晕）
   static final Paint _snapHighlightPaint = Paint()
     ..style = PaintingStyle.stroke
@@ -251,6 +263,8 @@ class PuzzlePieceComponent extends PositionComponent
     _highlightOutlinePaint.strokeWidth = screenInvariantValue(0.8, scale.x);
     _cardboardBottomEdgePaint.strokeWidth = screenInvariantValue(0.8, scale.x);
     _snapHighlightPaint.strokeWidth = screenInvariantValue(2.5, scale.x);
+    _lockedSeamPaint.strokeWidth = screenInvariantValue(0.8, scale.x);
+    _lockedSeamPaint.color = game.pieceSeamColor;
 
     // 1. 第一层：根据当前物理状态绘制 3D 软阴影（在剪裁外部）
     canvas.save();
@@ -260,7 +274,9 @@ class PuzzlePieceComponent extends PositionComponent
         screenInvariantValue(6.0, scale.x),
       );
       canvas.drawPath(shape.path, _dragShadowBlurPaintFor(s));
-    } else {
+    } else if (!isLocked) {
+      // 仅未归位锁定的散落/托盘碎片绘制接触微阴影；
+      // 已归位锁定的碎片已平铺在底板且与其他碎片紧密咬合，不投射向下 0.8px 黑色阴影（防止下方邻接碎片被染黑）
       canvas.translate(0, screenInvariantValue(0.8, scale.x));
       canvas.drawPath(shape.path, _contactShadowPaint);
     }
@@ -291,10 +307,14 @@ class PuzzlePieceComponent extends PositionComponent
     }
     canvas.restore();
 
-    // 4. 第四层：绘制表面定向冲压光影切线或吸附高亮光效
+    // 4. 第四层：绘制表面定向冲压光影切线、吸附高亮光效或已吸附统一浅灰接缝
     if (isHighlight) {
       canvas.drawPath(shape.path, _snapHighlightPaint);
+    } else if (isLocked) {
+      // 已吸附归位碎片：沿闭合轮廓绘制统一的弱化浅灰接缝，消除 Z-Order 覆盖带来的黑灰斑驳
+      canvas.drawPath(shape.path, _lockedSeamPaint);
     } else {
+      // 未归位碎片：保持 135° 定向物理光影（迎光高光微边 + 背光冲压暗线）
       // 迎光面（Top & Left）柔白高光微边
       canvas.drawPath(shape.highlightPath, _highlightOutlinePaint);
       // 背光面（Bottom & Right）深黑冲压暗线
@@ -538,22 +558,32 @@ class PuzzlePieceComponent extends PositionComponent
   }
 
   /// 吸附流光反馈代数令牌：每次触发自增，延迟回调仅在令牌未被刷新时生效。
-  /// 消除"连续两次吸附时，前一次的回调提前熄灭后一次流光"的竞态。
-  int _snapGlowToken = 0;
+  /// 消除"连续两次吸附时，前一次的回调提前熄灭后一次流光"的竞态。（方案 2 随绿框一并注释保留）
+  // int _snapGlowToken = 0;
 
-  /// 碎片成功吸附就位时触发短暂的流光反馈特效（约 380ms 后自动熄灭）
+  /// 碎片成功吸附就位时的反馈逻辑。
   ///
-  /// 【为何移除边缘筛选复辟】原实现在倒计时结束后会把 [isHighlight] 重新置为
-  /// "筛选开启且本片属边缘"，导致边缘碎片在筛选期间常驻绿框，400 片下极度嘈杂。
-  /// 边缘筛选的区分职责由 `JigsawPuzzleGame.updatePieceVisibility`（通过
-  /// `isFilteredOut` 直接隐藏非边缘碎片）承担，不依赖此绿框，故移除后无功能空洞。
+  /// 【当前策略：方案 2 纯物理沉降（已停用原绿框特效）】：
+  /// 用户反馈原 380ms 绿色高亮边框视觉突兀且破坏拼图艺术沉浸感。现已默认停用
+  /// 绿色边框绘制，依靠平滑对齐动画（`animateTo`）、音效（`SoundService.I.play(Sfx.snap)`）
+  /// 及已吸附弱化浅灰接缝（`_lockedSeamPaint`）提供克制自然的落槽体验。
+  ///
+  /// 【后续若升级方案 1（Easybrain 式柔白微光平滑淡出）的参考方案】：
+  /// 1. 在本组件内维护局部标量 `double _snapGlowAlpha = 0.0;`；
+  /// 2. 覆写 `void update(double dt) { super.update(dt); if (_snapGlowAlpha > 0) _snapGlowAlpha = (_snapGlowAlpha - dt / 0.22).clamp(0.0, 1.0); }`；
+  /// 3. 本方法直接赋值 `_snapGlowAlpha = 1.0;`（零 Controller、零 Timer、零 GC 分配）；
+  /// 4. 在 `render(canvas)` 绘制完 `_lockedSeamPaint` 后，若 `_snapGlowAlpha > 0`，以
+  ///    `Color.fromRGBO(255, 255, 255, _snapGlowAlpha * 0.6)` 叠加沿 `shape.path` 绘制一圈柔白微光。
   void triggerSnapGlow() {
+    // 方案 2：停用硬性绿色高亮边框，保留空实现与调用桩供后续无缝扩展方案 1
+    /*
     isHighlight = true;
     final token = ++_snapGlowToken;
     Future.delayed(const Duration(milliseconds: 380), () {
       if (isRemoved || token != _snapGlowToken) return;
       isHighlight = false;
     });
+    */
   }
 
   /// 屏幕恒定（视口逻辑像素）逆缩放：把目标屏幕值换算为组件局部坐标系下的值。

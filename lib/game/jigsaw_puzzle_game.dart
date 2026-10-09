@@ -15,6 +15,7 @@ import 'package:jigsawpuzzle/logic/engine/undo_manager.dart';
 import 'package:jigsawpuzzle/logic/geometry/edge_layout.dart';
 import 'package:jigsawpuzzle/logic/geometry/piece_shape.dart';
 import 'package:jigsawpuzzle/logic/models/puzzle_state.dart';
+import 'package:jigsawpuzzle/logic/rendering/image_tone_extractor.dart';
 import 'package:jigsawpuzzle/logic/rendering/linen_texture_manager.dart';
 import 'package:jigsawpuzzle/services/app_logger.dart';
 import 'package:jigsawpuzzle/services/sound_service.dart';
@@ -109,7 +110,9 @@ class JigsawPuzzleGame extends FlameGame
     this.onProgressChanged,
     this.onStateUpdated,
     this.onMoveMade,
+    Color? pieceSeamColor,
   }) : seed = seed ?? (DateTime.now().millisecondsSinceEpoch % 1000000),
+       pieceSeamColor = pieceSeamColor ?? ImageToneExtractor.defaultSeamColor,
        _boardGhostOpacity = initialGhostOpacity,
        undoManager = UndoManager();
 
@@ -126,6 +129,9 @@ class JigsawPuzzleGame extends FlameGame
   final ValueChanged<int>? onProgressChanged;
   final VoidCallback? onStateUpdated;
   final VoidCallback? onMoveMade;
+
+  /// 已吸附碎片的统一弱化浅灰接缝色（可由拼图原图色温微调融入）
+  Color pieceSeamColor;
 
   final UndoManager undoManager;
 
@@ -1935,7 +1941,8 @@ class JigsawPuzzleGame extends FlameGame
         // [一致性] 锁定即强制把视觉对齐到正确槽位，确保“锁定 ⟺ 已吸到槽位”。
         comp.position.setFrom(_normalizedToScreen(pState.nx, pState.ny));
         if (!wasLocked && triggerGlow) {
-          comp.triggerSnapGlow(); // 仅显式请求时补绿框（避免读档恢复误闪）
+          // 方案 2：停用硬性绿色高亮边框，依靠落位平滑对齐与音效
+          // comp.triggerSnapGlow();
         }
       } else {
         comp.isLocked = false;
@@ -2081,7 +2088,8 @@ class JigsawPuzzleGame extends FlameGame
       } else {
         comp.animateTo(targetScreenPos, duration: animateDuration);
       }
-      comp.triggerSnapGlow();
+      // 方案 2：停用硬性绿色高亮边框，依靠落位平滑对齐与音效
+      // comp.triggerSnapGlow();
     }
 
     updatePieceVisibility();
@@ -3005,7 +3013,8 @@ class JigsawPuzzleGame extends FlameGame
         comp.clearMoveEffects();
         comp.position.setFrom(settled);
         comp.position.add(shift);
-        comp.triggerSnapGlow();
+        // 方案 2：停用硬性绿色高亮边框，依靠落位平滑对齐与音效
+        // comp.triggerSnapGlow();
         _screenToNormalized(comp.position, normOut);
         final pState = _boardState.pieceById(comp.id);
         updatedPiecesMap[comp.id] = pState.copyWith(

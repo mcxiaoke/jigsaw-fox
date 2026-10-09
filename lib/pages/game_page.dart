@@ -14,6 +14,7 @@ import 'package:jigsawpuzzle/game/jigsaw_puzzle_game.dart';
 import 'package:jigsawpuzzle/l10n/gen/strings.g.dart';
 import 'package:jigsawpuzzle/logic/models/puzzle_state.dart';
 import 'package:jigsawpuzzle/logic/puzzle_model.dart';
+import 'package:jigsawpuzzle/logic/rendering/image_tone_extractor.dart';
 import 'package:jigsawpuzzle/logic/star_calculator.dart';
 import 'package:jigsawpuzzle/services/achievement_service.dart';
 import 'package:jigsawpuzzle/services/app_logger.dart';
@@ -380,6 +381,15 @@ class _GamePageState extends State<GamePage> with WidgetsBindingObserver {
         _markNeedsUIUpdate();
         _scheduleSave();
       },
+    );
+
+    // 异步提取原图色调并调和接缝色（不阻塞游戏启动与首帧组件挂载）
+    unawaited(
+      ImageToneExtractor.extractAverageColor(widget.imageBytes).then((tone) {
+        if (tone != null && mounted) {
+          game.pieceSeamColor = ImageToneExtractor.resolveSeamColor(tone);
+        }
+      }),
     );
 
     AppLogger.game.info(
